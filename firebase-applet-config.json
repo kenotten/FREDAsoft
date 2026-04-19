@@ -1,0 +1,11 @@
+{
+  "projectId": "path-recovery",
+  "appId": "1:702924902097:web:2eca6b418a7c6055117ff0",
+  "apiKey": "AIzaSyDG5r2VGAVAk4jY7-v3FspSnYajSqoZ4Kw",
+  "authDomain": "path-recovery.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "databaseId": "(default)",
+  "storageBucket": "path-recovery.appspot.com",
+  "messagingSenderId": "702924902097",
+  "measurementId": ""
+}

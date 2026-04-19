@@ -1,0 +1,6 @@
+{
+  "name": "FREDAsoft",
+  "description": "Facility Reporting & Data Analytics",
+  "requestFramePermissions": ["camera"],
+  "version": "1.0.1"
+}

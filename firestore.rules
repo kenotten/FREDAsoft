@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    // Check if user is signed in
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user is the owner of the document (matching UID)
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Admin check: Database role or hardcoded system administrator
+    function isAdmin() {
+      return isAuthenticated() && 
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+          (request.auth.token.email == "kenotten@statereview.com" && request.auth.token.email_verified == true)
+        );
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // Default Deny: All collections are protected by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // userPreferences: Strictly private data, only accessible by the owner
+    match /userPreferences/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // users: Owner can read own profile; Admins have full access
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Project & Inspection Data: Core workflow accessible to all authenticated inspectors
+    match /projects/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /projectData/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /locations/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Portfolio Entities: Clients, Facilities, DesignFirms, etc. managed by inspectors
+    match /clients/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /facilities/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /designFirms/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /inspectors/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Glossary & Master Data: Template libraries (Read by all, Managed by Admins)
+    match /glossary/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /categories/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /items/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /findings/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /recommendations/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /unitTypes/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Standards Library: Master compliance citations and snapshots
+    match /master_standards/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /tas_standards/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /tas_images/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /tas_image_associations/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // System Documents & Reports
+    match /documents/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

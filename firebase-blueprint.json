@@ -1,0 +1,288 @@
+{
+  "entities": {
+    "Inspector": {
+      "title": "Inspector",
+      "description": "A table to record inspector names.",
+      "type": "object",
+      "properties": {
+        "fldInspID": { "type": "string", "description": "UUID for the inspector" },
+        "fldInspName": { "type": "string", "description": "Inspector name" },
+        "fldTitle": { "type": "string", "description": "Professional title" },
+        "fldCredentials": { "type": "string", "description": "Professional credentials" }
+      },
+      "required": ["fldInspID", "fldInspName"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "A table to record client information.",
+      "type": "object",
+      "properties": {
+        "fldClientID": { "type": "string", "description": "UUID for the client" },
+        "fldClientName": { "type": "string", "description": "Client name" },
+        "fldClientAddress": { "type": "string" },
+        "fldClientCity": { "type": "string" },
+        "fldClientState": { "type": "string" },
+        "fldClientZIP": { "type": "string", "description": "5 digit zip code" }
+      },
+      "required": ["fldClientID", "fldClientName"]
+    },
+    "Facility": {
+      "title": "Facility",
+      "description": "A table to record facilities being inspected.",
+      "type": "object",
+      "properties": {
+        "fldFacID": { "type": "string", "description": "UUID for the facility" },
+        "fldFacName": { "type": "string" },
+        "fldFacAddress": { "type": "string" },
+        "fldFacCity": { "type": "string" },
+        "fldFacState": { "type": "string" },
+        "fldFacZip": { "type": "string" },
+        "fldInspectionDate": { "type": "string", "description": "Date of inspection" },
+        "fldClient": { "type": "string", "description": "FK to tblClient.fldClientID" }
+      },
+      "required": ["fldFacID", "fldFacName", "fldClient"]
+    },
+    "DesignFirm": {
+      "title": "Design Firm",
+      "description": "A table to record design firms associated with a project.",
+      "type": "object",
+      "properties": {
+        "fldDesignID": { "type": "string", "description": "UUID for the design firm" },
+        "fldDesignFirmName": { "type": "string" }
+      },
+      "required": ["fldDesignID", "fldDesignFirmName"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A table to record project information.",
+      "type": "object",
+      "properties": {
+        "fldProjID": { "type": "string", "description": "UUID for the project" },
+        "fldClient": { "type": "string", "description": "FK from tblClient.fldClientID" },
+        "fldDesigner": { "type": "string", "description": "FK from tblDesignFirm.fldDesignID" },
+        "fldInspector": { "type": "string", "description": "FK from tblInspectors.fldInspID" },
+        "fldProjName": { "type": "string" },
+        "fldProjNumber": { "type": "string" },
+        "fldExternalRef": { "type": "string" },
+        "fldProjType": { "type": "string", "enum": ["Assessment", "TAS/RAS"] },
+        "fldProjDescription": { "type": "string" },
+        "fldFacilities": { "type": "array", "items": { "type": "string" } },
+        "fldPDDate": { "type": "string", "description": "Date field formatted as mm/dd/yyyy" },
+        "fldCostMultiplier": { "type": "number" }
+      },
+      "required": ["fldProjID", "fldProjName", "fldClient"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "A table for categories of inspection items.",
+      "type": "object",
+      "properties": {
+        "fldCategoryID": { "type": "string", "description": "UUID for the category" },
+        "fldCategoryName": { "type": "string" },
+        "fldOrder": { "type": "integer", "description": "Display and sorting order" }
+      },
+      "required": ["fldCategoryID", "fldCategoryName"]
+    },
+    "Item": {
+      "title": "Item",
+      "description": "A table for inspection items within a category.",
+      "type": "object",
+      "properties": {
+        "fldItemID": { "type": "string", "description": "UUID for the item" },
+        "fldItemName": { "type": "string" },
+        "fldCatID": { "type": "string", "description": "FK from tblCategories.fldCategoryID" },
+        "fldOrder": { "type": "integer", "description": "Display and sorting order" }
+      },
+      "required": ["fldItemID", "fldItemName", "fldCatID"]
+    },
+    "Location": {
+      "title": "Location",
+      "description": "A table for locations within a facility.",
+      "type": "object",
+      "properties": {
+        "fldLocID": { "type": "string", "description": "UUID for the location" },
+        "fldLocName": { "type": "string" },
+        "fldFacID": { "type": "string", "description": "FK to tblFacility.fldFacID" },
+        "fldProjectID": { "type": "string", "description": "FK to tblProject.fldProjID" }
+      },
+      "required": ["fldLocID", "fldLocName", "fldFacID", "fldProjectID"]
+    },
+    "Finding": {
+      "title": "Finding",
+      "description": "A table for inspection findings.",
+      "type": "object",
+      "properties": {
+        "fldFindID": { "type": "string", "description": "UUID for the finding" },
+        "fldItem": { "type": "string", "description": "FK to tblItems.fldItemID" },
+        "fldFindShort": { "type": "string" },
+        "fldFindLong": { "type": "string" },
+        "fldUnitType": { "type": "string", "description": "Type of measurement (e.g., Inches, Seconds, Percentage)" },
+        "fldStandards": { "type": "array", "items": { "type": "string" }, "description": "Array of MasterStandard IDs" },
+        "fldSuggestedRecs": { "type": "array", "items": { "type": "string" }, "description": "Array of MasterRecommendation IDs" },
+        "fldOrder": { "type": "integer", "description": "Display and sorting order" }
+      },
+      "required": ["fldFindID", "fldItem", "fldFindShort"]
+    },
+    "UnitType": {
+      "title": "Unit Type",
+      "description": "A table for a list of unit types.",
+      "type": "object",
+      "properties": {
+        "fldUTID": { "type": "string" },
+        "fldUTName": { "type": "string" },
+        "fldUTAbbr": { "type": "string" },
+        "fldUTdataType": { "type": "string" }
+      },
+      "required": ["fldUTID", "fldUTName", "fldUTAbbr", "fldUTdataType"]
+    },
+    "MasterRecommendation": {
+      "title": "Master Recommendation",
+      "description": "A global library of inspection recommendations.",
+      "type": "object",
+      "properties": {
+        "fldRecID": { "type": "string", "description": "UUID for the recommendation" },
+        "fldRecShort": { "type": "string" },
+        "fldRecLong": { "type": "string" },
+        "fldUnit": { "type": "number", "description": "Unit Cost (Currency)" },
+        "fldUOM": { "type": "string", "description": "Unit of Measure (EA, LF, etc.)" },
+        "fldCitation": { "type": "string" },
+        "fldStandards": { "type": "array", "items": { "type": "string" }, "description": "Array of MasterStandard IDs" },
+        "fldOrder": { "type": "integer", "description": "Display and sorting order" }
+      },
+      "required": ["fldRecID", "fldRecShort"]
+    },
+    "Glossary": {
+      "title": "Glossary",
+      "description": "A list of typical findings and associated recommendations.",
+      "type": "object",
+      "properties": {
+        "fldGlosId": { "type": "string", "description": "UUID for the glossary record" },
+        "fldCat": { "type": "string", "description": "FK from tblCategories.fldCategoryID" },
+        "fldItem": { "type": "string", "description": "FK from tblItems.fldItemID" },
+        "fldFind": { "type": "string", "description": "FK from tblFindings.fldFindID" },
+        "fldRec": { "type": "string", "description": "FK from tblRecommendations.fldRecID" },
+        "fldStandards": { "type": "array", "items": { "type": "string" }, "description": "Array of MasterStandard IDs" },
+        "fldImages": { "type": "array", "items": { "type": "string" }, "description": "Array of up to 4 image URLs" }
+      },
+      "required": ["fldGlosId", "fldCat", "fldItem", "fldFind", "fldRec"]
+    },
+    "MasterStandard": {
+      "title": "Master Standard",
+      "description": "Global master standards library (TAS, ADA, etc.).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "UUID for the standard" },
+        "order": { "type": "integer", "description": "Display and reporting order" },
+        "chapter_name": { "type": "string" },
+        "section_num": { "type": "string" },
+        "section_name": { "type": "string" },
+        "citation_num": { "type": "string" },
+        "citation_name": { "type": "string" },
+        "content_text": { "type": "string" },
+        "relation_type": { "type": "string", "enum": ["Standard", "Advisory", "Exception", "Figure", "Table", "Exception Advisory"] },
+        "fldStandardType": { "type": "string", "description": "e.g., TAS, ADA" },
+        "fldStandardVersion": { "type": "string", "description": "e.g., 2012, 2010" },
+        "fldIsArchived": { "type": "boolean" },
+        "sub_sequence": { "type": "integer" },
+        "image_url": { "type": "string" }
+      },
+      "required": ["id", "order", "chapter_name", "section_num", "section_name", "fldStandardType", "fldStandardVersion"]
+    },
+    "TASImage": {
+      "title": "TAS Image",
+      "description": "Official TAS diagrams and associated images.",
+      "type": "object",
+      "properties": {
+        "image_id": { "type": "string", "description": "UUID for the image" },
+        "file_path": { "type": "string", "description": "Path in Firebase Storage" },
+        "caption": { "type": "string" },
+        "is_official_diagram": { "type": "boolean" }
+      },
+      "required": ["image_id", "file_path"]
+    },
+    "TASImageAssociation": {
+      "title": "TAS Image Association",
+      "description": "Many-to-many link between citations and images.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "citation_num": { "type": "string" },
+        "image_id": { "type": "string" }
+      },
+      "required": ["id", "citation_num", "image_id"]
+    },
+    "ProjectData": {
+      "title": "Project Data",
+      "description": "Where the data from inspections is recorded.",
+      "type": "object",
+      "properties": {
+        "fldPDataID": { "type": "string", "description": "UUID for the project data record" },
+        "fldPDataProject": { "type": "string", "description": "FK from tblProject.fldProjID" },
+        "fldFacility": { "type": "string", "description": "FK from tblFacility.fldFacID" },
+        "fldData": { "type": "string", "description": "FK from tblGlossary.fldGlosID" },
+        "fldLocation": { "type": "string", "description": "FK to tblLocation.fldLocID" },
+        "fldFindShort": { "type": "string" },
+        "fldFindLong": { "type": "string" },
+        "fldRecShort": { "type": "string" },
+        "fldRecLong": { "type": "string" },
+        "fldQTY": { "type": "number" },
+        "fldMeasurement": { "type": "number", "description": "Actual recorded measurement" },
+        "fldUnitType": { "type": "string", "description": "Type of measurement (e.g., Inches, Seconds, Percentage)" },
+        "fldImages": { "type": "array", "items": { "type": "string" }, "description": "Array of up to 4 image URLs" },
+        "fldStandards": { "type": "array", "items": { "type": "string" }, "description": "FKs to tblMasterStandard.id (Snapshot)" },
+        "fldInspID": { "type": "string", "description": "FK to tblInspector.fldInspID" },
+        "fldTimestamp": { "type": "string", "description": "ISO timestamp of entry" }
+      },
+      "required": ["fldPDataID", "fldPDataProject", "fldFacility", "fldData", "fldInspID"]
+    },
+    "UserPreference": {
+      "title": "User Preference",
+      "description": "Stores user-specific settings like filters, sorts, and active selections.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "portfolioClientId": { "type": "string" },
+        "portfolioViewMode": { "type": "string", "enum": ["projects", "facilities"] },
+        "dataEntrySelections": { "type": "object" },
+        "glossaryBuilderSelections": { "type": "object" },
+        "activeTab": { "type": "string" },
+        "isSidebarOpen": { "type": "boolean" }
+      },
+      "required": ["uid"]
+    },
+    "AppDocument": {
+      "title": "App Document",
+      "description": "A repository for system documents like user manuals, reports, and templates.",
+      "type": "object",
+      "properties": {
+        "fldDocID": { "type": "string", "description": "UUID for the document" },
+        "fldDocName": { "type": "string" },
+        "fldDocType": { "type": "string", "enum": ["html", "pdf", "other"] },
+        "fldContent": { "type": "string", "description": "Base64 or HTML content" },
+        "fldCreatedAt": { "type": "string" },
+        "fldUploadedBy": { "type": "string" }
+      },
+      "required": ["fldDocID", "fldDocName", "fldDocType", "fldCreatedAt"]
+    }
+  },
+  "firestore": {
+    "inspectors": { "schema": "Inspector", "description": "Inspectors list" },
+    "clients": { "schema": "Client", "description": "Clients list" },
+    "facilities": { "schema": "Facility", "description": "Facilities list" },
+    "designFirms": { "schema": "DesignFirm", "description": "Design firms list" },
+    "projects": { "schema": "Project", "description": "Projects list" },
+    "categories": { "schema": "Category", "description": "Categories list" },
+    "items": { "schema": "Item", "description": "Items list" },
+    "locations": { "schema": "Location", "description": "Locations list" },
+    "findings": { "schema": "Finding", "description": "Findings list" },
+    "unitTypes": { "schema": "UnitType", "description": "Unit types list" },
+    "recommendations": { "schema": "MasterRecommendation", "description": "Global master recommendations library" },
+    "glossary": { "schema": "Glossary", "description": "Glossary list" },
+    "master_standards": { "schema": "MasterStandard", "description": "Global master standards library" },
+    "tas_images": { "schema": "TASImage", "description": "TAS diagrams repository" },
+    "tas_image_associations": { "schema": "TASImageAssociation", "description": "Links citations to images" },
+    "projectData": { "schema": "ProjectData", "description": "Project data records" },
+    "userPreferences": { "schema": "UserPreference", "description": "User preferences" },
+    "documents": { "schema": "AppDocument", "description": "System documents repository" }
+  }
+}

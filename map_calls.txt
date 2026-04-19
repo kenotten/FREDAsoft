@@ -1,0 +1,84 @@
+170:      const [num, den] = part.split('/').map(Number);
+178:      const [num, den] = fractionPart.split('/').map(Number);
+216:      providerInfo: auth.currentUser?.providerData.map(provider => ({
+343:        {options.map((opt: any) => (
+551:        return lines.slice(1).map(line => {
+951:      { name: 'documents', setter: (data: any[]) => setDocuments(data.map(d => ({ fldDocID: d.id, ...d })) as AppDocument[]) },
+955:    const unsubscribes = collections.map(col => {
+957:        col.setter(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
+1204:              setProjects(prev => prev.map(p => p.fldProjID === updatedProject.fldProjID ? updatedProject : p));
+1522:      const clientProjectIds = projects.filter((p: any) => filters.clients.includes(p.fldClient)).map((p: any) => p.fldProjID);
+1641:                const rows = filteredData.map(record => {
+1661:                  ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))
+1707:                    onClick={() => setFilters({ clients: clients.map(c => c.fldClientID) })}
+1721:                {[...clients].sort((a: any, b: any) => a.fldClientName.localeCompare(b.fldClientName)).map((c: any) => (
+1746:                      setFilters({ facilities: available.map(f => f.fldFacID) });
+1764:                  .map((f: any) => (
+1789:                      setFilters({ projects: available.map(p => p.fldProjID) });
+1807:                  .map((p: any) => (
+1848:                      .map((c: any) => <option key={c.fldCategoryID} value={c.fldCategoryID}>{c.fldCategoryName}</option>)
+1860:                      .map((l: any) => <option key={l.fldLocID} value={l.fldLocID}>{l.fldLocName}</option>)
+1889:              {filteredData.map((record) => (
+1904:                      {record.fldImages?.slice(0, 3).map((img, i) => (
+2059:      ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))
+2240:                {[...clients].sort((a, b) => a.fldClientName.localeCompare(b.fldClientName)).map(c => (
+2298:                {projects.map((p: any) => {
+2376:                  clientProjects.map((p: any) => {
+2377:                    const associatedFacIds = [...new Set(projectData.filter((d: any) => d.fldPDataProject === p.fldProjID).map((d: any) => d.fldFacility))];
+2426:                                    {associatedFacs.map(f => (
+2448:                  clientFacilities.map((f: any) => {
+2449:                    const associatedProjIds = [...new Set(projectData.filter((d: any) => d.fldFacility === f.fldFacID).map((d: any) => d.fldPDataProject))];
+2498:                                    {associatedProjs.map(p => (
+2575:                options={[...clients].sort((a, b) => a.fldClientName.localeCompare(b.fldClientName)).map((c: any) => ({ value: c.fldClientID, label: c.fldClientName }))} 
+2582:                options={[...inspectors].sort((a, b) => a.fldInspName.localeCompare(b.fldInspName)).map((i: any) => ({ value: i.fldInspID, label: i.fldInspName }))} 
+2588:                options={[...designFirms].sort((a, b) => a.fldDesignFirmName.localeCompare(b.fldDesignFirmName)).map((d: any) => ({ value: d.fldDesignID, label: d.fldDesignFirmName }))} 
+2733:      const itemRows = lines.slice(1).map(line => {
+2836:      const headers = rawHeaders.map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+2997:          fldStandards: selectedStandards.map(s => s.id),
+3010:          fldStandards: selectedStandards.map(s => s.id),
+3110:    const uploadPromises = Array.from(files).map(async (file) => {
+3278:        fldStandards: selectedStandards.map(s => s.id),
+3304:        fldStandards: selectedStandards.map(s => s.id),
+3598:                      }).map((c: any) => ({ value: c.fldCategoryID, label: c.fldCategoryName }))} 
+3626:                      options={[...filteredItems].sort((a: any, b: any) => (a.fldOrder ?? 0) - (b.fldOrder ?? 0) || a.fldItemName.localeCompare(b.fldItemName)).map((i: any) => ({ value: i.fldItemID, label: i.fldItemName }))} 
+3654:                    options={[...filteredFindings].sort((a: any, b: any) => a.fldFindShort.localeCompare(b.fldFindShort)).map((f: any) => ({ value: f.fldFindID, label: f.fldFindShort }))} 
+3688:                    options={[...filteredRecs].sort((a: any, b: any) => a.fldRecShort.localeCompare(b.fldRecShort)).map((r: any) => ({ value: r.fldRecID, label: r.fldRecShort }))} 
+3727:                  selectedStandards.map(s => {
+3811:                {images.map((img, idx) => (
+3899:                              {selectedStandards.map(s => (
+4057:                      options={unitTypes.map(ut => ({ 
+4132:    const updatedLocs = locations.map(l => l.fldLocID === locId ? { ...l, fldLocName: editName } : l);
+4148:        {facilityLocations.map(loc => (
+4312:    return fuse.search(findingSearch).map(r => r.item);
+4324:    return fuse.search(recommendationSearch).map(r => r.item);
+4580:    const uploadPromises = Array.from(files).map(async (file) => {
+4663:                  options={[...clients].sort((a: any, b: any) => a.fldClientName.localeCompare(b.fldClientName)).map((c: any) => ({ value: c.fldClientID, label: c.fldClientName }))} 
+4682:                options={[...filteredFacilities].sort((a: any, b: any) => a.fldFacName.localeCompare(b.fldFacName)).map((f: any) => ({ value: f.fldFacID, label: f.fldFacName }))} 
+4691:                options={[...filteredProjects].sort((a: any, b: any) => a.fldProjName.localeCompare(b.fldProjName)).map((p: any) => ({ value: p.fldProjID, label: p.fldProjName }))} 
+4724:                  .map(l => (
+4738:                options={[...mergedCategories].sort((a: any, b: any) => (a.fldOrder ?? 0) - (b.fldOrder ?? 0) || a.fldCategoryName.localeCompare(b.fldCategoryName)).map((c: any) => ({ value: c.fldCategoryID, label: c.fldCategoryName }))} 
+4747:                options={[...filteredItems].sort((a: any, b: any) => (a.fldOrder ?? 0) - (b.fldOrder ?? 0) || a.fldItemName.localeCompare(b.fldItemName)).map((i: any) => ({ value: i.fldItemID, label: i.fldItemName }))} 
+4761:                  options={filteredFindings.map((f: any) => ({ value: f.fldFindID, label: f.fldFindShort }))} 
+4784:                  options={filteredRecs.map((r: any) => ({ value: r.fldRecID, label: r.fldRecShort }))} 
+4916:                    {[0, 0.25, 0.5, 0.75].map(f => (
+5089:              {localImages.map((img, i) => (
+5115:              {Array.from({ length: Math.max(0, 4 - localImages.length - (localImages.length < 4 ? 1 : 0)) }).map((_, i) => (
+5145:                  filtered = fuse.search(recentRecordsSearch).map(r => r.item);
+5151:                }).slice(0, 10).map((d: any) => (
+5572:    const searchableData = glossary.map((entry: any) => {
+5610:      result = fuse.search(filters.global).map(r => r.item);
+5674:    ...unitTypes.map(ut => ut.fldUTAbbr),
+5675:    ...recommendations.map((r: any) => r.fldUOM).filter(Boolean)
+5900:                  {sortedGlossary.map((entry: any) => {
+5942:                                  {mergedCategories.sort((a: any, b: any) => (a.fldOrder ?? 0) - (b.fldOrder ?? 0) || a.fldCategoryName.localeCompare(b.fldCategoryName)).map((c: any) => (
+5992:                                    .map((i: any) => (
+6059:                                    .map((f: any) => (
+6217:                                    .map((r: any) => (
+6429:                {allUOMs.map(uom => (
+6448:                {mergedCategories.sort((a, b) => (a.fldOrder ?? 0) - (b.fldOrder ?? 0) || a.fldCategoryName.localeCompare(b.fldCategoryName)).map((cat: any) => (
+6534:                }).map((item: any) => (
+6567:                        {mergedCategories.sort((a, b) => (a.fldOrder ?? 0) - (b.fldOrder ?? 0) || a.fldCategoryName.localeCompare(b.fldCategoryName)).map(c => (
+6615:              orphanedFindings.map((find: any) => (
+6637:                          {sortedItemsForSelect.map(item => {
+6667:              orphanedRecommendations.map((rec: any) => (
+6689:                          {sortedFindingsForSelect.map(find => (
