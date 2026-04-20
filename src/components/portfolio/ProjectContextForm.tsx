@@ -144,7 +144,11 @@ export function ProjectContextForm({ selectionProps, entityProps }: ProjectConte
             value={selections.projectId}
             onChange={(e: any) => setSelections({ ...selections, projectId: e.target.value })}
             options={projects
-              .filter(p => p && p.fldProjID && p.fldClient === selections.clientId && (!selections.facilityId || (Array.isArray(p.fldFacilities) && p.fldFacilities.includes(selections.facilityId))))
+              .filter(p => 
+                p && 
+                p.fldProjID && 
+                p.fldClient === selections.clientId
+              )
               .map(p => ({ 
                 value: p.fldProjID, 
                 label: p.fldProjName,
