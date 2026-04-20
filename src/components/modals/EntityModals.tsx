@@ -126,7 +126,7 @@ export const ProjectModal = ({
     >
       <div className="space-y-4">
         {/* NEW CLIENT SELECTION BLOCK */}
-        {allowClientChange && (
+        {allowClientChange ? (
           <Select 
             label="Project Client" 
             name="client" 
@@ -134,6 +134,8 @@ export const ProjectModal = ({
             options={clients.map(c => ({ value: c.fldClientID, label: c.fldClientName }))}
             required
           />
+        ) : (
+          <input type="hidden" name="client" value={editingProject?.fldClient || selections.clientId || ''} />
         )}
         {/* END NEW BLOCK */}
 

@@ -1,6 +1,7 @@
 import { firestoreService } from './firestoreService';
 import { toast } from 'sonner';
 import { Client, Facility, Project, Inspector } from '../types';
+import { v4 as uuidv4 } from 'uuid';
 
 export const entityService = {
   handleEditClient: (client: Client, setEditingClient: (c: Client) => void, setIsAddingClient: (b: boolean) => void) => {
@@ -47,9 +48,9 @@ export const entityService = {
       onConfirm: async () => {
         try {
           const collectionName = type === 'client' ? 'clients' :
-                               type === 'facility' ? 'facilities' :
-                               type === 'project' ? 'projects' :
-                               'inspectors';
+                                type === 'facility' ? 'facilities' :
+                                type === 'project' ? 'projects' :
+                                'inspectors';
           
           await firestoreService.softDelete(collectionName, id);
           
@@ -81,15 +82,17 @@ export const entityService = {
   ) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const data = {
-      fldClientName: formData.get('name'),
-      fldClientAddress: formData.get('address'),
-      fldClientCity: formData.get('city'),
-      fldClientState: formData.get('state'),
-      fldClientZIP: formData.get('zip'),
-    };
     try {
-      await firestoreService.save('clients', data, editingClient?.fldClientID);
+      const id = editingClient?.fldClientID || uuidv4();
+      const data = {
+        fldClientID: id,
+        fldClientName: formData.get('name'),
+        fldClientAddress: formData.get('address'),
+        fldClientCity: formData.get('city'),
+        fldClientState: formData.get('state'),
+        fldClientZIP: formData.get('zip'),
+      };
+      await firestoreService.save('clients', data, id);
       toast.success(editingClient ? 'Client updated' : 'Client added');
       setIsAddingClient(false);
       setEditingClient(null);
@@ -107,17 +110,19 @@ export const entityService = {
   ) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const data = {
-      fldFacName: formData.get('name'),
-      fldFacAddress: formData.get('address'),
-      fldFacCity: formData.get('city'),
-      fldFacState: formData.get('state'),
-      fldFacZip: formData.get('zip'),
-      fldInspectionDate: formData.get('inspectionDate'),
-      fldClient: editingFacility?.fldClient || clientId
-    };
     try {
-      await firestoreService.save('facilities', data, editingFacility?.fldFacID);
+      const id = editingFacility?.fldFacID || uuidv4();
+      const data = {
+        fldFacID: id,
+        fldFacName: formData.get('name'),
+        fldFacAddress: formData.get('address'),
+        fldFacCity: formData.get('city'),
+        fldFacState: formData.get('state'),
+        fldFacZip: formData.get('zip'),
+        fldInspectionDate: formData.get('inspectionDate'),
+        fldClient: editingFacility?.fldClient || clientId
+      };
+      await firestoreService.save('facilities', data, id);
       toast.success(editingFacility ? 'Facility updated' : 'Facility added');
       setIsAddingFacility(false);
       setEditingFacility(null);
@@ -135,23 +140,43 @@ export const entityService = {
   ) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const data = {
-      fldProjName: formData.get('name'),
-      fldProjNumber: formData.get('projNumber'),
-      fldExternalRef: formData.get('externalRef'),
-      fldPDDate: formData.get('date'),
-      fldInspector: formData.get('inspector'),
-      fldProjType: formData.get('projType'),
-      fldProjDescription: formData.get('projDescription'),
-      fldClient: formData.get('client') || editingProject?.fldClient || clientId,
-      fldFacilities: formData.getAll('facilities')
-    };
+    console.log("SUBMIT HIT");
     try {
-      await firestoreService.save('projects', data, editingProject?.fldProjID);
-      toast.success(editingProject ? 'Project updated' : 'Project added');
-      setIsAddingProject(false);
-      setEditingProject(null);
+      const id = editingProject?.fldProjID || uuidv4();
+      
+      // Prioritize form-selected client, then fallback to editing context, then app context
+      // This ensures the project is ALWAYS explicitly linked to a client
+      const finalClientId = (formData.get('client') as string) || editingProject?.fldClient || clientId;
+
+      if (!finalClientId) {
+        toast.error("Cannot save project: No client selected.");
+        return;
+      }
+
+      const data = {
+        fldProjID: id,
+        fldProjName: formData.get('name'),
+        fldProjNumber: formData.get('projNumber'),
+        fldExternalRef: formData.get('externalRef'),
+        fldPDDate: formData.get('date'),
+        fldInspector: formData.get('inspector'),
+        fldProjType: formData.get('projType'),
+        fldProjDescription: formData.get('projDescription'),
+        fldClient: finalClientId,
+        fldFacilities: formData.getAll('facilities')
+      };
+      
+     console.log("ABOUT TO SAVE PROJECT", { id, data, editingProject, clientId });
+
+      const savedId = await firestoreService.save('projects', data, id);
+
+        console.log("SAVE RETURNED", savedId);
+
+        toast.success(editingProject ? 'Project updated' : 'Project added');
+        setIsAddingProject(false);
+        setEditingProject(null);
     } catch (error) {
+      console.error("PROJECT SAVE FAILED", error);
       toast.error('Failed to save project');
     }
   },
@@ -164,13 +189,15 @@ export const entityService = {
   ) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const data = {
-      fldInspName: formData.get('name'),
-      fldTitle: formData.get('title'),
-      fldCredentials: formData.get('credentials'),
-    };
     try {
-      await firestoreService.save('inspectors', data, editingInspector?.fldInspID);
+      const id = editingInspector?.fldInspID || uuidv4();
+      const data = {
+        fldInspID: id,
+        fldInspName: formData.get('name'),
+        fldTitle: formData.get('title'),
+        fldCredentials: formData.get('credentials'),
+      };
+      await firestoreService.save('inspectors', data, id);
       toast.success(editingInspector ? 'Inspector updated' : 'Inspector added');
       setIsAddingInspector(false);
       setEditingInspector(null);

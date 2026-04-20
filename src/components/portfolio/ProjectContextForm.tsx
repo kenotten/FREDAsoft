@@ -17,6 +17,9 @@ export function ProjectContextForm({ selectionProps, entityProps }: ProjectConte
     setIsAddingClient, 
     setIsAddingFacility, 
     setIsAddingProject,
+    setEditingClient,
+    setEditingFacility,
+    setEditingProject,
     handleEditClient,
     handleEditFacility,
     handleEditProject,
@@ -29,7 +32,7 @@ export function ProjectContextForm({ selectionProps, entityProps }: ProjectConte
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Active Client</label>
-          <Button variant="ghost" size="sm" onClick={() => setIsAddingClient(true)} className="h-6 text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+          <Button variant="ghost" size="sm" onClick={() => { setEditingClient(null); setIsAddingClient(true); }} className="h-6 text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50">
             <Plus size={12} className="mr-1" /> New Client
           </Button>
         </div>
@@ -77,7 +80,7 @@ export function ProjectContextForm({ selectionProps, entityProps }: ProjectConte
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={() => setIsAddingFacility(true)} 
+            onClick={() => { setEditingFacility(null); setIsAddingFacility(true); }} 
             disabled={!selections.clientId}
             className="h-6 text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 disabled:opacity-50"
           >
@@ -129,7 +132,7 @@ export function ProjectContextForm({ selectionProps, entityProps }: ProjectConte
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={() => setIsAddingProject(true)} 
+            onClick={() => { setEditingProject(null); setIsAddingProject(true); }} 
             disabled={!selections.clientId}
             className="h-6 text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 disabled:opacity-50"
           >
@@ -141,7 +144,7 @@ export function ProjectContextForm({ selectionProps, entityProps }: ProjectConte
             value={selections.projectId}
             onChange={(e: any) => setSelections({ ...selections, projectId: e.target.value })}
             options={projects
-              .filter(p => p && p.fldProjID && p.fldClient === selections.clientId)
+              .filter(p => p && p.fldProjID && p.fldClient === selections.clientId && (!selections.facilityId || (Array.isArray(p.fldFacilities) && p.fldFacilities.includes(selections.facilityId))))
               .map(p => ({ 
                 value: p.fldProjID, 
                 label: p.fldProjName,
