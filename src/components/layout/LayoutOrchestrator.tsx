@@ -127,7 +127,6 @@ export interface ProjectContextProps {
   selectedFacility: Facility | null;
   selectedClient: Client | null;
   selectedInspector: Inspector | null;
-  currentRecord: ProjectData | null;
   documents: AppDocument[];
   handleSaveRecord: (data: any) => Promise<void> | void;
   handleDeleteRecord: (id: string) => Promise<void> | void;

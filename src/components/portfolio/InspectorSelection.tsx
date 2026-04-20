@@ -13,6 +13,7 @@ export function InspectorSelection({ selectionProps, entityProps }: InspectorSel
   const { 
     inspectors, 
     setIsAddingInspector, 
+    setEditingInspector,
     handleEditInspector, 
     initiateDelete 
   } = entityProps;
@@ -24,7 +25,7 @@ export function InspectorSelection({ selectionProps, entityProps }: InspectorSel
       <div className="flex items-center justify-between">
         <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Inspector</label>
         <button 
-          onClick={() => setIsAddingInspector(true)}
+          onClick={() => { setEditingInspector(null); setIsAddingInspector(true); }}
           className="text-[10px] font-bold text-blue-600 uppercase tracking-widest hover:underline flex items-center gap-1"
         >
           <Plus size={12} /> Add Inspector

@@ -403,8 +403,6 @@ export default function App() {
   const handleSubmitInspector = (e: React.FormEvent<HTMLFormElement>) => 
     entityService.handleSubmitInspector(e, editingInspector, setIsAddingInspector, setEditingInspector);
 
-  const currentRecord = useMemo(() => projectData.find(d => d.fldPDataID === selections.editingRecordId) || null, [projectData, selections.editingRecordId]);
-
   const selectedProject = useMemo(() => projects.find(p => p.fldProjID === selections.projectId) || null, [projects, selections.projectId]);
   const selectedFacility = useMemo(() => facilities.find(f => f.fldFacID === selections.facilityId) || null, [facilities, selections.facilityId]);
   const selectedClient = useMemo(() => clients.find(c => c.fldClientID === selections.clientId) || null, [clients, selections.clientId]);
@@ -552,7 +550,6 @@ export default function App() {
     selectedFacility,
     selectedClient,
     selectedInspector,
-    currentRecord,
     documents,
     handleSaveRecord,
     handleDeleteRecord,

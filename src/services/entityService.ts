@@ -48,9 +48,9 @@ export const entityService = {
       onConfirm: async () => {
         try {
           const collectionName = type === 'client' ? 'clients' :
-                                type === 'facility' ? 'facilities' :
-                                type === 'project' ? 'projects' :
-                                'inspectors';
+                               type === 'facility' ? 'facilities' :
+                               type === 'project' ? 'projects' :
+                               'inspectors';
           
           await firestoreService.softDelete(collectionName, id);
           
@@ -140,7 +140,6 @@ export const entityService = {
   ) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    console.log("SUBMIT HIT");
     try {
       const id = editingProject?.fldProjID || uuidv4();
       
@@ -166,17 +165,11 @@ export const entityService = {
         fldFacilities: formData.getAll('facilities')
       };
       
-     console.log("ABOUT TO SAVE PROJECT", { id, data, editingProject, clientId });
-
-      const savedId = await firestoreService.save('projects', data, id);
-
-        console.log("SAVE RETURNED", savedId);
-
-        toast.success(editingProject ? 'Project updated' : 'Project added');
-        setIsAddingProject(false);
-        setEditingProject(null);
+      await firestoreService.save('projects', data, id);
+      toast.success(editingProject ? 'Project updated' : 'Project added');
+      setIsAddingProject(false);
+      setEditingProject(null);
     } catch (error) {
-      console.error("PROJECT SAVE FAILED", error);
       toast.error('Failed to save project');
     }
   },

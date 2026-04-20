@@ -55,12 +55,19 @@ function Modal({ title, children, onClose }: any) {
 }
 
 export default function ProjectDataEntry({ 
-  project = {}, facility = {}, inspector = {}, glossary = [], standards = [], activeRecord = null,
+  project = {}, facility = {}, inspector = {}, glossary = [], standards = [], projectData = [],
   onSave, onReset, items = [], findings = [], recommendations = [], masterRecommendations = [],
   unitTypes = [], mergedCategories = [], locations = [], selections = {}, onSelectionChange
 }: any) {
   const [isSearchingAll, setIsSearchingAll] = useState(false);
-  const editingRecordId = activeRecord?.fldPDataID || selections.editingRecordId;
+  
+  // Localized state management for the active record
+  const activeRecord = useMemo(() => 
+    (projectData || []).find((d: any) => d.fldPDataID === selections.editingRecordId) || null, 
+    [projectData, selections.editingRecordId]
+  );
+
+  const editingRecordId = selections.editingRecordId;
   
   const selectedCat = selections.categoryId;
   const setSelectedCat = (val: string) => {
@@ -157,6 +164,14 @@ export default function ProjectDataEntry({
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [savedDraft, setSavedDraft] = useState<any>(null);
   const [standardSearch, setStandardSearch] = useState('');
+
+  // Project Safety: Reset form state when switching projects to prevent data contamination
+  useEffect(() => {
+    if (project?.fldProjID && activeRecord && activeRecord.fldPDataProject !== project.fldProjID) {
+      console.log("[ProjectDataEntry] Project misalignment detected. Clearing active record.");
+      onReset();
+    }
+  }, [project?.fldProjID, activeRecord, onReset]);
 
   // Recovery Protocol: Check for draft on mount
   useEffect(() => {
