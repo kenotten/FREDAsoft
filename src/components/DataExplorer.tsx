@@ -80,7 +80,8 @@ export function DataExplorer({
   // 🧩 BLUEPRINT-ACCURATE LOOKUP
   const getGlossaryContext = (d: any) => {
     if (!d.fldData) return null;
-    return glossary.find(g => g.fldGlosId === d.fldData);
+    const cleanKey = d.fldData.trim().toLowerCase();
+    return glossary.find(g => g.fldGlosId?.trim().toLowerCase() === cleanKey);
   };
 
   const toggleSelection = (id: string) => {

@@ -18,7 +18,9 @@ import {
   ShieldAlert,
   Loader2,
   Copy,
-  Pencil
+  Pencil,
+  X,
+  FlaskConical
 } from 'lucide-react';
 import { Button, Input, Select, Card } from './ui/core';
 import { cn } from '../lib/utils';
@@ -27,6 +29,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { firestoreService } from '../services/firestoreService';
 import { db } from '../firebase';
 import { writeBatch, doc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
+
+import { stabilizationService } from '../services/stabilizationService';
+import { migrationService, MigrationResults } from '../services/migrationService';
 
 export default function GlossaryExplorer({
   categories = [], 
@@ -44,6 +49,10 @@ export default function GlossaryExplorer({
   setGlossary
 }: any) {
   const [localMasterRecs, setLocalMasterRecs] = useState<any[]>([]);
+  const [stabilizationReport, setStabilizationReport] = useState<any>(null);
+  const [isStabilizing, setIsStabilizing] = useState(false);
+  const [migrationResults, setMigrationResults] = useState<MigrationResults | null>(null);
+  const [isMigrating, setIsMigrating] = useState(false);
   
   useEffect(() => {
     const fetchMasterRecs = async () => {
@@ -252,6 +261,62 @@ export default function GlossaryExplorer({
       toast.error('Failed to retire');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const runStabilization = async () => {
+    setIsStabilizing(true);
+    try {
+      toast.info("Starting Phase 2: Data Hygiene...");
+      const hygieneResults = await stabilizationService.runDataHygiene();
+      
+      toast.info("Starting Phase 3: Glossary Repair...");
+      await stabilizationService.runGlossaryRepair();
+      
+      toast.info("Starting Phase 3.5: Gap Analysis...");
+      const gapReport = await stabilizationService.generateGapReport();
+      
+      setStabilizationReport({
+        hygiene: hygieneResults,
+        gap: gapReport
+      });
+
+      toast.success("Stabilization Sequence Complete!");
+    } catch (error: any) {
+      toast.error("Stabilization Failed: " + error.message);
+    } finally {
+      setIsStabilizing(false);
+    }
+  };
+
+  const runFallbackAnchors = async () => {
+    if (!stabilizationReport?.gap?.missingItems || stabilizationReport.gap.missingItems.length === 0) {
+      toast.info("No missing anchors identified.");
+      return;
+    }
+    setIsStabilizing(true);
+    try {
+      await stabilizationService.createFallbackAnchors(stabilizationReport.gap.missingItems);
+      // Refresh report
+      const gapReport = await stabilizationService.generateGapReport();
+      setStabilizationReport((prev: any) => ({ ...prev, gap: gapReport }));
+    } catch (error: any) {
+      toast.error("Fallback creation failed.");
+    } finally {
+      setIsStabilizing(false);
+    }
+  };
+
+  const runMigrationDryRun = async () => {
+    setIsMigrating(true);
+    try {
+      const results = await migrationService.runDryRun();
+      setMigrationResults(results);
+      toast.success("Migration Dry Run Complete!");
+    } catch (error: any) {
+      toast.error("Migration Dry Run Failed: " + error.message);
+    } finally {
+      setIsMigrating(false);
     }
   };
 
@@ -552,34 +617,171 @@ export default function GlossaryExplorer({
           </div>
           <p className="text-sm text-zinc-500">Production-ready data management dashboard</p>
         </div>
-        <div className="flex items-center bg-zinc-100 p-1 rounded-xl">
+        <div className="flex items-center gap-2">
           <Button 
-            onClick={runHealthAudit}
-            variant="ghost"
+            onClick={runStabilization}
+            disabled={isStabilizing}
+            variant="outline"
             size="sm"
-            className="px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all text-zinc-500 hover:text-zinc-700 flex items-center gap-2"
+            className="text-[10px] font-bold uppercase tracking-widest"
           >
-            <RefreshCw size={10} className={cn(isSaving && "animate-spin")} />
-            Run Health Audit
+            {isStabilizing ? <Loader2 size={12} className="animate-spin mr-2" /> : <RefreshCw size={12} className="mr-2" />}
+            Stabilize & Audit
           </Button>
-          {/* TODO: Admin Only Button - Gate access by user.role */}
-          <div className="w-px h-4 bg-zinc-200 mx-1" />
-          <button 
-            onClick={() => setSortMode('order')}
-            className={cn(
-              "px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all",
-              sortMode === 'order' ? "bg-white text-black shadow-sm" : "text-zinc-500 hover:text-zinc-700"
-            )}
-          >Sort by Order</button>
-          <button 
-            onClick={() => setSortMode('alpha')}
-            className={cn(
-              "px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all",
-              sortMode === 'alpha' ? "bg-white text-black shadow-sm" : "text-zinc-500 hover:text-zinc-700"
-            )}
-          >Sort Alphabetically</button>
+          <Button 
+            onClick={runFallbackAnchors}
+            disabled={isStabilizing || !stabilizationReport}
+            variant="secondary"
+            size="sm"
+            className="text-[10px] font-bold uppercase tracking-widest"
+          >
+            Create Anchors ({stabilizationReport?.gap?.missingItemsCount || 0})
+          </Button>
+          <Button 
+            onClick={runMigrationDryRun}
+            disabled={isMigrating}
+            variant="primary"
+            size="sm"
+            className="text-[10px] font-bold uppercase tracking-widest bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {isMigrating ? <Loader2 size={12} className="animate-spin mr-2" /> : <FlaskConical size={12} className="mr-2" />}
+            Migration Dry Run
+          </Button>
         </div>
       </div>
+
+      {migrationResults && (
+        <Card className="p-6 bg-zinc-900 text-white border-none shadow-2xl space-y-6">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="flex items-center gap-3">
+              <FlaskConical className="text-amber-500" />
+              <div>
+                <h3 className="font-bold">Harris Center Backfill: Dry Run Report</h3>
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Stage 1 - Preview Mode</p>
+              </div>
+            </div>
+            <button onClick={() => setMigrationResults(null)} className="text-zinc-500 hover:text-white">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-6">
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Analyzed</p>
+              <div className="text-xl font-bold">{migrationResults.totalAnalyzed}</div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Clean (Short)</p>
+              <div className="text-xl font-bold text-green-500">{migrationResults.cleanMatchesShort}</div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Clean (Long)</p>
+              <div className="text-xl font-bold text-blue-500">{migrationResults.cleanMatchesLong}</div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Ambiguous</p>
+              <div className="text-xl font-bold text-amber-500">{migrationResults.ambiguous}</div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Unmatched</p>
+              <div className="text-xl font-bold text-red-500">{migrationResults.unmatched}</div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Resolvable</p>
+              <div className="text-2xl font-black text-blue-400">{migrationResults.resolvable}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-3">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Top Resolvable Samples</p>
+              <div className="space-y-2">
+                {migrationResults.samples.matched.map((s, i) => (
+                  <div key={i} className="p-2 bg-white/5 rounded border border-white/5 flex flex-col gap-1">
+                    <div className="text-[10px] font-bold text-blue-400 truncate">{s.originalText}</div>
+                    <div className="text-[9px] text-zinc-500">→ GLOS: {s.proposedGlosId}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Ambiguity Conflict Samples</p>
+              <div className="space-y-2">
+                {migrationResults.samples.ambiguous.map((s, i) => (
+                  <div key={i} className="p-2 bg-white/5 rounded border border-white/5 flex flex-col gap-1 text-amber-500">
+                    <div className="text-[10px] font-bold truncate">{s.text}</div>
+                    <div className="text-[9px] text-zinc-500 italic">Found {s.matches.length} library matches</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Unmatched Samples</p>
+              <div className="space-y-2">
+                {migrationResults.samples.unmatched.map((s, i) => (
+                  <div key={i} className="p-2 bg-white/5 rounded border border-white/5 text-red-400 text-[10px]">
+                    {s.text}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center gap-3">
+            <AlertCircle size={16} className="text-blue-400" />
+            <p className="text-xs text-blue-200">
+              This report is a simulation. No writes have been performed. Approval required for Stage 2.
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {stabilizationReport && (
+        <Card className="p-6 bg-zinc-900 text-white border-none shadow-2xl space-y-6">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="text-blue-500" />
+              <div>
+                <h3 className="font-bold">Stabilization Command Console</h3>
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Phase 2 - 3.5 Results</p>
+              </div>
+            </div>
+            <button onClick={() => setStabilizationReport(null)} className="text-zinc-500 hover:text-white">
+              <X size={16} />
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Hygiene (Mod/Skip)</p>
+              <div className="text-xl font-bold">{stabilizationReport.hygiene.modified} / {stabilizationReport.hygiene.skipped}</div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">PData Linkage (Clean)</p>
+              <div className="text-xl font-bold text-green-500">{stabilizationReport.gap.clean}</div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Unmatchable</p>
+              <div className="text-xl font-bold text-red-500">{stabilizationReport.gap.unmatchable}</div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Missing Anchors</p>
+              <div className="text-xl font-bold text-amber-500">{stabilizationReport.gap.missingItemsCount}</div>
+            </div>
+          </div>
+
+          {stabilizationReport.gap.missingItemsCount > 0 && (
+            <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Isolated Coverage Gaps:</p>
+              <div className="flex flex-wrap gap-2">
+                {stabilizationReport.gap.missingItems.map((item: string, i: number) => (
+                  <span key={i} className="px-2 py-1 bg-white/10 rounded text-[10px] transition-colors hover:bg-white/20">{item}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       <div className="flex flex-col gap-4">
         {healthAudit && (

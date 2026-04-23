@@ -12,6 +12,7 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { v4 as uuidv4 } from 'uuid';
 
 export enum OperationType {
   CREATE = 'create',
@@ -137,19 +138,30 @@ export const firestoreService = {
    */
   async save(collectionName: string, data: any, id?: string, includeTimestamps = true) {
     try {
+      // 🛡️ TASK 110: ID STAMP HARDENING
+      // Use provided ID or generate a new one if missing
+      const finalId = id || data.fldPDataID || (collectionName === 'projectData' ? uuidv4() : id);
+      
       const timestampData = includeTimestamps ? {
         fldLastModified: serverTimestamp(),
-        ...(id ? {} : { fldCreatedAt: serverTimestamp() })
+        ...(finalId && id ? {} : { fldCreatedAt: serverTimestamp() })
       } : {};
 
-      const finalData = this.sanitize({ ...data, ...timestampData });
+      // If it's projectData, ensure the internal ID matches the document ID
+      const enrichedData = { ...data };
+      if (collectionName === 'projectData' && finalId) {
+        enrichedData.fldPDataID = finalId;
+      }
 
-      if (id) {
-        const docRef = doc(db, collectionName, id);
+      const finalData = this.sanitize({ ...enrichedData, ...timestampData });
+
+      if (finalId) {
+        const docRef = doc(db, collectionName, finalId);
         await setDoc(docRef, finalData, { merge: true });
         firestoreService.incrementWrites(1);
-        return id;
+        return finalId;
       } else {
+        // Fallback for other collections that might not use manual IDs
         const docRef = await addDoc(collection(db, collectionName), finalData);
         firestoreService.incrementWrites(1);
         return docRef.id;

@@ -82,10 +82,6 @@ export const sanitizeData = (data: any) => {
         sanitized[key] = null;
       }
     }
-    // Ensure fldStandards is never saved in glossary records
-    if (key === 'fldStandards' && data.fldGlosId) {
-      delete sanitized[key];
-    }
   });
   return sanitized;
 };

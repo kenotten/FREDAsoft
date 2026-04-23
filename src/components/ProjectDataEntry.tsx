@@ -252,7 +252,8 @@ export default function ProjectDataEntry({
     if (activeRecord) {
       console.log("Hydrating Form with:", activeRecord);
       // BLUEPRINT-ACCURATE POPULATION
-      const glos = (glossary || []).find((g: any) => (g.id || g.fldGlosId || "").toLowerCase() === (activeRecord.fldData || "").toLowerCase());
+      const targetId = (activeRecord.fldData || "").trim().toLowerCase();
+      const glos = (glossary || []).find((g: any) => (g.id || g.fldGlosId || "").trim().toLowerCase() === targetId);
       
       const newSelections = {
         ...selections,
@@ -298,8 +299,11 @@ export default function ProjectDataEntry({
     if (!fldLocation) { toast.error('Location is required'); return; }
     if (!inspector?.fldInspID) { toast.error('Inspector context is missing. Please select an inspector in Setup.'); return; }
     
+    // Ensure we have a valid ID before saving
+    const finalizedId = editingRecordId || uuidv4();
+    
     onSave({
-      fldPDataID: editingRecordId,
+      fldPDataID: finalizedId,
       fldPDataProject: selections.projectId,
       fldFacility: facility?.fldFacID || activeRecord?.fldFacility,
       fldData: activeRecord?.fldData || selections.glosId || "",
@@ -317,7 +321,7 @@ export default function ProjectDataEntry({
       fldTimestamp: new Date().toISOString()
     });
     // Update selections for sticky behavior
-    onSelectionChange({ ...selections, locationId: fldLocation, isDirty: false });
+    onSelectionChange({ ...selections, locationId: fldLocation, editingRecordId: finalizedId, isDirty: false });
     localStorage.removeItem('fredasoft_draft');
     setIsDirty(false);
   };
@@ -481,20 +485,92 @@ export default function ProjectDataEntry({
 
   const activeGlossaryEntry = useMemo(() => {
     if (!selections.categoryId || !selections.itemId || !selections.findId || !selections.recId) return null;
+    const targetGlosId = (activeRecord?.fldData || "").trim().toLowerCase();
     return (glossary || []).find(g => 
-      (g.id || g.fldGlosId || "").toLowerCase().trim() === (activeRecord?.fldPDataID || "").toLowerCase().trim() || 
-      (String(g.fldCat || "").toLowerCase().trim() === String(selections.categoryId || "").toLowerCase().trim() && 
-       String(g.fldItem || "").toLowerCase().trim() === String(selections.itemId || "").toLowerCase().trim() && 
-       String(g.fldFind || "").toLowerCase().trim() === String(selections.findId || "").toLowerCase().trim() && 
-       (g.fldRec || g.fldRecID || "").toLowerCase().trim() === (selections.recId || "").toLowerCase().trim())
+      (g.id || g.fldGlosId || "").trim().toLowerCase() === targetGlosId || 
+      (String(g.fldCat || "").trim().toLowerCase() === String(selections.categoryId || "").trim().toLowerCase() && 
+       String(g.fldItem || "").trim().toLowerCase() === String(selections.itemId || "").trim().toLowerCase() && 
+       String(g.fldFind || "").trim().toLowerCase() === String(selections.findId || "").trim().toLowerCase() && 
+       (g.fldRec || g.fldRecID || "").trim().toLowerCase() === (selections.recId || "").trim().toLowerCase())
     );
-  }, [glossary, selections]);
+  }, [glossary, selections, activeRecord?.fldData]);
 
   const filteredStandards = useMemo(() => {
     if (!activeGlossaryEntry || !activeGlossaryEntry.fldStandards) return [];
     const allowedIds = activeGlossaryEntry.fldStandards;
     return (standards || []).filter(s => allowedIds.includes(s.id));
   }, [standards, activeGlossaryEntry]);
+
+  // TIERED RECOMMENDATION LOGIC
+  const recommendationOptions = useMemo(() => {
+    if (isSearchingAll) {
+      return (masterRecommendations || [])
+        .sort((a: any, b: any) => (a.fldRecShort || '').localeCompare(b.fldRecShort || ''))
+        .map((r: any) => ({ value: r.fldRecID || r.id, label: r.fldRecShort, key: `rec-${r.fldRecID || r.id}` }));
+    }
+
+    const currentFindId = (selections.findId || '').toLowerCase().trim();
+    const currentItemId = (selections.itemId || '').toLowerCase().trim();
+    const currentCatId = (selections.categoryId || '').toLowerCase().trim();
+
+    if (!currentFindId) return [];
+
+    // TIER 1: Glossary Precision (Exact path match)
+    const glossaryMatches = (glossary || []).filter(g => 
+      (g.fldFind || '').toLowerCase().trim() === currentFindId &&
+      (g.fldItem || '').toLowerCase().trim() === currentItemId &&
+      (g.fldCat || '').toLowerCase().trim() === currentCatId
+    ).map(g => (g.fldRec || g.fldRecID || '').toLowerCase().trim());
+
+    // TIER 2: Finding Library Suggestions
+    const finding = (findings || []).find(f => (f.fldFindID || f.id || '').toLowerCase().trim() === currentFindId);
+    const suggestedRecs = (finding?.fldSuggestedRecs || []).map((id: string) => id.toLowerCase().trim());
+
+    // TIER 3: Item Context (Broad Glossary) - Any rec used for this item
+    const itemRecs = glossaryMatches.length === 0 ? (glossary || [])
+      .filter(g => (g.fldItem || '').toLowerCase().trim() === currentItemId)
+      .map(g => (g.fldRec || g.fldRecID || '').toLowerCase().trim()) : [];
+
+    const combinedRecIds = new Set([...glossaryMatches, ...suggestedRecs, ...itemRecs]);
+    
+    const results = (masterRecommendations || [])
+      .filter(r => combinedRecIds.has((r.fldRecID || r.id || '').toLowerCase().trim()))
+      .sort((a: any, b: any) => (a.fldRecShort || '').localeCompare(b.fldRecShort || ''));
+
+    if (results.length > 0) return results.map(r => ({ value: r.fldRecID || r.id, label: r.fldRecShort, key: `rec-${r.fldRecID || r.id}` }));
+
+    return [];
+  }, [isSearchingAll, masterRecommendations, selections.findId, selections.itemId, selections.categoryId, glossary, findings]);
+
+  // Handle auto-selection of recommendation
+  useEffect(() => {
+    if (!selections.findId || selections.recId || isSearchingAll || recommendationOptions.length === 0) return;
+    
+    // If only one recommendation is suggested, auto-select it
+    if (recommendationOptions.length === 1) {
+      const recId = recommendationOptions[0].value;
+      const rec = (masterRecommendations || []).find(r => (r.id || r.fldRecID || "").toLowerCase() === (recId || "").toLowerCase());
+      if (rec) {
+        setFldRecShort(rec.fldRecShort);
+        setFldRecLong(rec.fldRecLong);
+        setFldStandards(rec.fldStandards || []);
+        
+        // Find Glossary Link
+        const glos = (glossary || []).find(g => 
+          (g.fldFind || '').toLowerCase().trim() === (selections.findId || '').toLowerCase().trim() &&
+          (g.fldRec || '').toLowerCase().trim() === (recId || '').toLowerCase().trim() &&
+          (g.fldItem || '').toLowerCase().trim() === (selections.itemId || '').toLowerCase().trim()
+        );
+
+        onSelectionChange({
+          ...selections,
+          recId: recId,
+          glosId: glos?.fldGlosId || glos?.id || selections.glosId || '',
+          isDirty: true
+        });
+      }
+    }
+  }, [selections.findId, recommendationOptions, masterRecommendations, isSearchingAll]);
 
   return (
     <div className="flex flex-col h-full bg-transparent overflow-hidden">
@@ -664,29 +740,31 @@ export default function ProjectDataEntry({
              <Select 
               value={selections.recId || ''}
               onChange={(e: any) => {
-                 const rec = (masterRecommendations || []).find(r => (r.id || r.fldRecID || "").toLowerCase() === (e.target.value || "").toLowerCase());
+                 const recId = e.target.value;
+                 const rec = (masterRecommendations || []).find(r => (r.id || r.fldRecID || "").toLowerCase() === (recId || "").toLowerCase());
+                 
                  if(rec) { 
                    setFldRecShort(rec.fldRecShort); 
                    setFldRecLong(rec.fldRecLong); 
-                   // Pull standards from master recommendation
                    setFldStandards(rec.fldStandards || []);
                  }
-                 onSelectionChange({...selections, recId: e.target.value, isDirty: true});
+
+                 // Find or derive Glossary Link
+                 const glos = (glossary || []).find(g => 
+                   (g.fldFind || '').toLowerCase().trim() === (selections.findId || '').toLowerCase().trim() &&
+                   (g.fldRec || '').toLowerCase().trim() === (recId || '').toLowerCase().trim() &&
+                   (g.fldItem || '').toLowerCase().trim() === (selections.itemId || '').toLowerCase().trim()
+                 );
+
+                 onSelectionChange({
+                   ...selections, 
+                   recId: recId, 
+                   glosId: glos?.fldGlosId || glos?.id || selections.glosId || '',
+                   isDirty: true
+                 });
               }}
               selectClassName={focusClasses}
-              options={isSearchingAll ? (
-                (masterRecommendations || [])
-                  .sort((a, b) => a.fldRecShort.localeCompare(b.fldRecShort))
-                  .map(r => ({ value: r.fldRecID, label: r.fldRecShort, key: `rec-${r.fldRecID}` }))
-              ) : (
-                (masterRecommendations || [])
-                  .filter(r => {
-                    const finding = (findings || []).find(f => (f.id || f.fldFindID || "").toLowerCase() === (selections.findId || "").toLowerCase());
-                    return finding?.fldSuggestedRecs?.some((recId: string) => recId.toLowerCase() === (r.fldRecID || r.id || "").toLowerCase());
-                  })
-                  .sort((a, b) => a.fldRecShort.localeCompare(b.fldRecShort))
-                  .map(r => ({ value: r.fldRecID, label: r.fldRecShort, key: `rec-${r.fldRecID}` }))
-              )}
+              options={recommendationOptions}
             />
             <div className="space-y-4">
               <Input 

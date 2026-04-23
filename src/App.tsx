@@ -71,15 +71,6 @@ import {
   AppDocument
 } from './types';
 
-const handleSaveRecord = async (data: any) => {
-  try {
-    await firestoreService.data.save(data, data.fldPDataID);
-    toast.success('Record saved successfully!');
-  } catch (error) {
-    console.error('Error saving record:', error);
-    toast.error('Failed to save record.');
-  }
-};
 
 import { Button, Card } from './components/ui/core';
 import { ClientModal, FacilityModal, ProjectModal, InspectorModal, DeleteConfirmationModal } from './components/modals/EntityModals';
@@ -433,6 +424,35 @@ export default function App() {
   const mergedFindings = useMemo(() => findings, [findings]);
   const mergedRecommendations = useMemo(() => recommendations, [recommendations]);
   const mergedGlossary = useMemo(() => glossary, [glossary]);
+
+  const handleSaveRecord = async (data: any) => {
+    try {
+      // ✅ TASK 102.R8: Auto-link Facility to Project on Save
+      if (selections.projectId && selections.facilityId) {
+        const targetProject = projects.find(p => p.fldProjID === selections.projectId);
+        if (targetProject) {
+          const currentFacilities = Array.isArray(targetProject.fldFacilities) 
+            ? targetProject.fldFacilities 
+            : [];
+          
+          if (!currentFacilities.includes(selections.facilityId)) {
+            const updatedFacilities = [...currentFacilities, selections.facilityId];
+            await firestoreService.save(
+              'projects',
+              { fldFacilities: updatedFacilities },
+              selections.projectId
+            );
+          }
+        }
+      }
+
+      await firestoreService.data.save(data, data.fldPDataID);
+      toast.success('Record saved successfully!');
+    } catch (error) {
+      console.error('Error saving record:', error);
+      toast.error('Failed to save record.');
+    }
+  };
 
   const handleDeleteRecord = async (id: string) => {
     setDeleteConfirmation({

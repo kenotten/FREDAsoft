@@ -104,15 +104,18 @@ export function ReportPreview({
     const multiplier = project.fldCostMultiplier || 1;
 
     const enriched = data.map(record => {
-      const glos = glossary.find(g => g.fldGlosId === record.fldData);
+      const cleanKey = (record.fldData || "").trim().toLowerCase();
+      const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
       const unitCost = 0;
       const cost = 0;
       return { ...record, totalCost: cost, displayUnitCost: unitCost };
     });
     
     return enriched.sort((a, b) => {
-      const glosA = glossary.find(g => g.fldGlosId === a.fldData);
-      const glosB = glossary.find(g => g.fldGlosId === b.fldData);
+      const keyA = (a.fldData || "").trim().toLowerCase();
+      const keyB = (b.fldData || "").trim().toLowerCase();
+      const glosA = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === keyA);
+      const glosB = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === keyB);
       const catA = categories.find(c => c.fldCategoryID === glosA?.fldCat);
       const catB = categories.find(c => c.fldCategoryID === glosB?.fldCat);
       const catOrderA = catA?.fldOrder ?? 999;
@@ -134,7 +137,8 @@ export function ReportPreview({
   const referencedStandards = useMemo(() => {
     const standardsMap = new Map<string, any>();
     filteredData.forEach(d => {
-      const glos = glossary.find(g => g.fldGlosId === d.fldData);
+      const cleanKey = (d.fldData || "").trim().toLowerCase();
+      const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
       const rawIds = glos?.fldStandards || [];
       const ids = Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' && rawIds ? [rawIds] : []);
       ids.forEach(id => {
@@ -160,7 +164,8 @@ export function ReportPreview({
   const financialData = useMemo(() => {
     const groups: Record<string, { category: string, records: any[], subtotal: number }> = {};
     filteredData.forEach(record => {
-      const glos = glossary.find(g => g.fldGlosId === record.fldData);
+      const cleanKey = (record.fldData || "").trim().toLowerCase();
+      const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
       const cat = categories.find(c => c.fldCategoryID === glos?.fldCat);
       const catName = cat?.fldCategoryName || 'Uncategorized';
       if (!groups[catName]) {
@@ -738,7 +743,8 @@ function InfoRow({ label, value }: { label: string, value: string }) {
 }
 
 function DocumentationCard({ record, index, glossary, standards, locations, categories, items }: { record: any, index: number, glossary: Glossary[], standards: MasterStandard[], locations: Location[], categories: Category[], items: Item[] }) {
-  const glos = glossary.find(g => g.fldGlosId === record.fldData);
+  const cleanKey = (record.fldData || "").trim().toLowerCase();
+  const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
   const cat = categories.find(c => c.fldCategoryID === glos?.fldCat);
   const item = items.find(i => i.fldItemID === glos?.fldItem);
   const location = locations.find(l => l.fldLocID === record.fldLocation);
