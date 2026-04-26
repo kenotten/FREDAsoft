@@ -111,6 +111,7 @@ export interface MasterRecommendation {
   fldRecID: string;
   fldRecShort: string;
   fldRecLong: string;
+  fldItem?: string;
   fldOrder?: number;
   fldUnit: number; // Unit Cost (Currency)
   fldUOM: string; // Unit of Measure (EA, LF, etc.)
@@ -131,6 +132,8 @@ export interface Glossary {
   fldItem: string; // FK from tblItems.fldItemID
   fldFind: string; // FK from tblFindings.fldFindID
   fldRec: string; // FK from tblRecommendations.fldRecID
+  fldUnitCost?: number; // Optional Override
+  fldUnitType?: string; // Optional Override
   fldStandards?: string[]; // Array of MasterStandard IDs
   fldImages?: string[]; // Array of up to 4 image URLs
   fldDeleted?: boolean;
@@ -179,7 +182,10 @@ export interface ProjectData {
   fldRecLong: string;
   fldQTY: number;
   fldMeasurement?: number;
+  fldMeasurementUnit?: string;
+  fldUnitCost?: number;
   fldUnitType?: string;
+  fldTotalCost?: number;
   fldImages: string[];
   fldStandards?: string[]; // FKs to tblMasterStandard.id (Snapshot)
   fldInspID: string; // FK to tblInspector.fldInspID

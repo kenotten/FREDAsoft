@@ -20,7 +20,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { Button, Input, Select, Card } from './ui/core';
-import { cn } from '../lib/utils';
+import { cn, sortEntities, compareEntities } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, writeBatch, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -66,6 +66,8 @@ export function DataExplorer({
   const [filterFacility, setFilterFacility] = useState('');
   const [filterProject, setFilterProject] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  const [filterItem, setFilterItem] = useState('');
+  const [filterFinding, setFilterFinding] = useState('');
   const [sortMode, setSortMode] = useState<'structural' | 'standardized'>('structural');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
@@ -174,6 +176,7 @@ export function DataExplorer({
       const project = projects.find((p: any) => p.fldProjID === d.fldPDataProject);
       const glos = getGlossaryContext(d);
       const catId = glos?.fldCat || 'uncategorized';
+      const itemId = glos?.fldItem || 'unspecified-item';
       const findId = glos?.fldFind || 'unspecified-finding';
       const finding = (findings || []).find((f: any) => f.fldFindID === findId);
 
@@ -187,8 +190,10 @@ export function DataExplorer({
       const matchesFacility = !filterFacility || d.fldFacility === filterFacility;
       const matchesProject = !filterProject || d.fldPDataProject === filterProject;
       const matchesCategory = !filterCategory || catId === filterCategory;
+      const matchesItem = !filterItem || itemId === filterItem;
+      const matchesFinding = !filterFinding || findId === filterFinding;
 
-      return matchesSearch && matchesClient && matchesFacility && matchesProject && matchesCategory;
+      return matchesSearch && matchesClient && matchesFacility && matchesProject && matchesCategory && matchesItem && matchesFinding;
     });
 
     return [...filtered].sort((a: any, b: any) => {
@@ -197,8 +202,8 @@ export function DataExplorer({
       
       const catA = categories.find(c => c.fldCategoryID === glosA?.fldCat);
       const catB = categories.find(c => c.fldCategoryID === glosB?.fldCat);
-      const orderCat = (catA?.fldOrder || 999) - (catB?.fldOrder || 999);
-      if (orderCat !== 0) return orderCat;
+      const resCat = compareEntities(catA, catB, 'fldCategoryName');
+      if (resCat !== 0) return resCat;
 
       if (sortMode === 'structural') {
         const locA = (locations.find(l => l.fldLocID === a.fldLocation)?.fldLocName || '').toLowerCase();
@@ -208,11 +213,11 @@ export function DataExplorer({
 
         const itemA = items.find(i => i.fldItemID === glosA?.fldItem);
         const itemB = items.find(i => i.fldItemID === glosB?.fldItem);
-        return (itemA?.fldItemID || '').localeCompare(itemB?.fldItemID || '');
+        return compareEntities(itemA, itemB, 'fldItemID');
       } else {
         const itemA = items.find(i => i.fldItemID === glosA?.fldItem);
         const itemB = items.find(i => i.fldItemID === glosB?.fldItem);
-        const orderItem = (itemA?.fldItemID || '').localeCompare(itemB?.fldItemID || '');
+        const orderItem = compareEntities(itemA, itemB, 'fldItemID');
         if (orderItem !== 0) return orderItem;
 
         const locA = (locations.find(l => l.fldLocID === a.fldLocation)?.fldLocName || '').toLowerCase();
@@ -373,6 +378,8 @@ export function DataExplorer({
               setFilterFacility('');
               setFilterProject('');
               setFilterCategory('');
+              setFilterItem('');
+              setFilterFinding('');
               setSortMode('structural');
             }}>
               <RotateCcw size={14} className="mr-2" /> Reset
@@ -385,7 +392,7 @@ export function DataExplorer({
       </div>
 
       <Card className="p-4 bg-zinc-50/50 border-dashed">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
             <input 
@@ -410,8 +417,8 @@ export function DataExplorer({
             onChange={(e) => setFilterFacility(e.target.value)}
           >
             <option value="">All Facilities</option>
-            {(facilities || []).filter((f: any) => f.fldFacID && (!filterClient || f.fldClient === filterClient)).map((f: any) => (
-              <option key={f.fldFacID} value={f.fldFacID}>{f.fldFacName}</option>
+            {(facilities || []).filter((f: any) => f.fldFacID && (!filterClient || f.fldClient === filterClient)).map((f: any, idx: number) => (
+              <option key={`${f.fldFacID}-${idx}`} value={f.fldFacID}>{f.fldFacName}</option>
             ))}
           </select>
           <select 
@@ -420,17 +427,44 @@ export function DataExplorer({
             onChange={(e) => setFilterProject(e.target.value)}
           >
             <option value="">All Projects</option>
-            {(projects || []).filter((p: any) => p.fldProjID && (!filterClient || p.fldClient === filterClient)).map((p: any) => (
-              <option key={p.fldProjID} value={p.fldProjID}>{p.fldProjName}</option>
+            {(projects || []).filter((p: any) => p.fldProjID && (!filterClient || p.fldClient === filterClient)).map((p: any, idx: number) => (
+              <option key={`${p.fldProjID}-${idx}`} value={p.fldProjID}>{p.fldProjName}</option>
             ))}
           </select>
           <select 
             className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
             value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
+            onChange={(e) => {
+              setFilterCategory(e.target.value);
+              setFilterItem('');
+              setFilterFinding('');
+            }}
           >
             <option value="">All Categories</option>
-            {(categories || []).filter((c: any) => c.fldCategoryID).map((c: any) => <option key={c.fldCategoryID} value={c.fldCategoryID}>{c.fldCategoryName}</option>)}
+            {sortEntities(categories || [], 'fldCategoryName').filter((c: any) => c.fldCategoryID).map((c: any, idx: number) => <option key={`${c.fldCategoryID}-${idx}`} value={c.fldCategoryID}>{c.fldCategoryName}</option>)}
+          </select>
+          <select 
+            className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+            value={filterItem}
+            onChange={(e) => {
+              setFilterItem(e.target.value);
+              setFilterFinding('');
+            }}
+          >
+            <option value="">All Items</option>
+            {sortEntities(items.filter((i: any) => !filterCategory || i.fldCatID === filterCategory), 'fldItemName').map((i: any, idx: number) => (
+              <option key={`${i.fldItemID}-${idx}`} value={i.fldItemID}>{i.fldItemName}</option>
+            ))}
+          </select>
+          <select 
+            className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+            value={filterFinding}
+            onChange={(e) => setFilterFinding(e.target.value)}
+          >
+            <option value="">All Findings</option>
+            {sortEntities(findings.filter((f: any) => !filterItem || f.fldItem === filterItem), 'fldFindShort').map((f: any, idx: number) => (
+              <option key={`${f.fldFindID}-${idx}`} value={f.fldFindID}>{f.fldFindShort}</option>
+            ))}
           </select>
         </div>
       </Card>
@@ -445,7 +479,7 @@ export function DataExplorer({
           Object.keys(groupedData).sort((a, b) => {
             const catA = categories.find(c => c.fldCategoryID === a);
             const catB = categories.find(c => c.fldCategoryID === b);
-            return (catA?.fldOrder || 999) - (catB?.fldOrder || 999);
+            return compareEntities(catA, catB, 'fldCategoryName');
           }).map(catId => {
             const cat = categories.find(c => c.fldCategoryID === catId);
             const catName = cat?.fldCategoryName || 'Uncategorized';

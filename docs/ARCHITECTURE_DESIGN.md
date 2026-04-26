@@ -202,6 +202,30 @@ Public read access will be restricted in Phase P1.
 
 ---
 
+## 8. Product Direction: FREDA Platform Evolution
+
+**FREDA (Facility Reporting and Data Analytics)** is designed as a platform for managing compliance-related data across facilities.
+
+While the current system focuses on structured report generation, it is intentionally architected to support multiple workflows, including:
+
+* inspections
+* plan reviews
+* assessments
+
+Future development will expand FREDA into a client-facing platform that enables interaction with project data beyond static reports. This includes:
+
+* client access to project data via a secure portal
+* tracking and responding to findings or review comments
+* communication between clients and professionals
+* filtered views across facilities and projects
+* generation of dynamic, data-driven reports
+
+This direction establishes FREDA as a **data-centric compliance platform**, not limited to static reporting.
+
+No implementation of these features is part of the current phase. This section defines long-term direction only and should guide future architectural decisions.
+
+---
+
 ## Appendix: Schema Notes
 
 - `projectData` → inspection findings  

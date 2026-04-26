@@ -386,7 +386,7 @@
   }
 
   /* Hide UI elements in print */
-  .print\:hidden, [id^="react-hot-toast"] {
+  .print\:hidden, [id^="react-hot-toast"], [data-sonner-toaster] {
     display: none !important;
   }
 }

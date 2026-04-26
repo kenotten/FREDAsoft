@@ -217,7 +217,7 @@ export const stabilizationService = {
           fldFindShort: `Generic Finding: ${item.fldItemName}`,
           fldFindLong: `Inherited finding for ${item.fldItemName}. Refer to legacy records for original text.`,
           fldItem: item.fldItemID || item.id,
-          fldOrder: 9999
+          fldOrder: 999
         });
 
         // Create a generic Recommendation
@@ -226,7 +226,7 @@ export const stabilizationService = {
           fldRecID: recId,
           fldRecShort: `General Recommendation`,
           fldRecLong: `Address accessibility requirements for ${item.fldItemName} as documented in the field findings.`,
-          fldOrder: 9999
+          fldOrder: 999
         });
 
         // Create the Glossary Anchor

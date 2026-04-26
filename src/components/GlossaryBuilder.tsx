@@ -25,7 +25,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { cn, sanitizeData } from '../lib/utils';
+import { cn, sanitizeData, sortEntities, compareEntities } from '../lib/utils';
 import { Button, Select, Card, Input, Modal } from './ui/core';
 import { toast } from 'sonner';
 import { firestoreService, OperationType, handleFirestoreError } from '../services/firestoreService';
@@ -110,6 +110,38 @@ export function GlossaryBuilder({
     setTimeout(() => { isUpdatingRef.current = false; }, 500);
   };
 
+  // Sync glossary overrides to selections when combination changes
+  useEffect(() => {
+    if (selectedCat && selectedItem && selectedFind && selectedRec && !isDirty) {
+      const existing = glossary.find((g: any) => 
+        String(g.fldCat || "").toLowerCase().trim() === String(selectedCat || "").toLowerCase().trim() && 
+        String(g.fldItem || "").toLowerCase().trim() === String(selectedItem || "").toLowerCase().trim() && 
+        String(g.fldFind || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim() && 
+        (g.fldRec || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim()
+      );
+      
+      if (existing) {
+        onSelectionChange({
+          ...selections,
+          fldUnitCost: existing.fldUnitCost ?? undefined,
+          fldUnitType: existing.fldUnitType ?? undefined,
+          editingGlossaryId: existing.fldGlosId,
+          images: existing.fldImages || [],
+          isDirty: false
+        });
+      } else {
+        onSelectionChange({
+          ...selections,
+          fldUnitCost: undefined,
+          fldUnitType: undefined,
+          editingGlossaryId: '',
+          images: [],
+          isDirty: false
+        });
+      }
+    }
+  }, [selectedCat, selectedItem, selectedFind, selectedRec, glossary]);
+
   const [newType, setNewType] = useState<'category' | 'item' | 'finding' | 'recommendation' | 'glossary_record' | 'link_recommendation' | null>(null);
   const [hydratedMasterRecs, setHydratedMasterRecs] = useState<MasterRecommendation[]>([]);
 
@@ -137,7 +169,8 @@ export function GlossaryBuilder({
   }, [masterRecommendations]);
 
   const [formData, setFormData] = useState({
-    catName: '', catOrder: '', itemName: '', itemOrder: '', findShort: '', findLong: '', findOrder: '', fldUnitType: '', recShort: '', recLong: '', recOrder: '', unit: '', uom: ''
+    catName: '', catOrder: '', itemName: '', itemOrder: '', findShort: '', findLong: '', findOrder: '', fldUnitType: '', recShort: '', recLong: '', recOrder: '', unit: '', uom: '',
+    fldUnitCostOverride: '', fldUnitTypeOverride: ''
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, collection: string, label: string, type: 'delete' | 'unassociate', isAssociated?: boolean } | null>(null);
@@ -292,25 +325,28 @@ export function GlossaryBuilder({
 
     try {
       setIsSynced(false);
+      const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
+      
+      // Use existing selections if we're just updating the linked rec, 
+      // but if we have explicit form data (e.g. from a modal), use that.
+      const payload: any = { 
+        fldCat: selectedCat,
+        fldItem: selectedItem,
+        fldFind: selectedFind,
+        fldRec: selectedRec,
+        fldImages: images,
+        fldUnitCost: selections.fldUnitCost !== undefined ? selections.fldUnitCost : null,
+        fldUnitType: selections.fldUnitType !== undefined ? selections.fldUnitType : null
+      };
+
       if (isUpdate && targetGlosId) {
-        const updatePayload = sanitizeData({ 
-          fldCat: selectedCat,
-          fldItem: selectedItem,
-          fldFind: selectedFind,
-          fldRec: selectedRec,
-          fldImages: images 
-        });
-        await firestoreService.glossary.save(updatePayload, targetGlosId);
+        await firestoreService.glossary.save(sanitizeData(payload), targetGlosId);
         toast.success('Glossary record updated!');
       } else {
         const glosId = uuidv4();
         const newGlos = sanitizeData({
-          fldGlosId: glosId, 
-          fldCat: selectedCat || '', 
-          fldItem: selectedItem || '', 
-          fldFind: selectedFind || '', 
-          fldRec: selectedRec || '', 
-          fldImages: images
+          ...payload,
+          fldGlosId: glosId
         });
         await firestoreService.glossary.save(newGlos, glosId);
         toast.success('Glossary record created and linked!');
@@ -344,7 +380,7 @@ export function GlossaryBuilder({
           fldItem: selectedItem || '', 
           fldFindShort: formData.findShort || '', 
           fldFindLong: formData.findLong || '', 
-          fldOrder: parseInt(formData.findOrder) || 0,
+          fldOrder: formData.findOrder === '' ? 999 : (parseInt(formData.findOrder) || 999),
           fldUnitType: formData.fldUnitType || '', 
           fldStandards: [],
           fldSuggestedRecs: []
@@ -357,7 +393,7 @@ export function GlossaryBuilder({
         fldRecID: recId, 
         fldRecShort: formData.recShort || '', 
         fldRecLong: formData.recLong || '', 
-        fldOrder: parseInt(formData.recOrder) || 0,
+        fldOrder: formData.recOrder === '' ? 999 : (parseInt(formData.recOrder) || 999),
         fldUnit: Number(formData.unit) || 0, 
         fldUOM: formData.uom || 'EA', 
         fldStandards: []
@@ -467,7 +503,7 @@ export function GlossaryBuilder({
         fldRecID: id, 
         fldRecShort: formData.recShort, 
         fldRecLong: formData.recLong, 
-        fldOrder: parseInt(formData.recOrder) || 0,
+        fldOrder: formData.recOrder === '' ? 999 : (parseInt(formData.recOrder) || 999),
         fldUnit: Number(formData.unit) || 0, 
         fldUOM: formData.uom,
         fldStandards: editingId ? (masterRecommendations?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (id || "").toLowerCase().trim())?.fldStandards || []) : []
@@ -643,7 +679,13 @@ export function GlossaryBuilder({
       const r = masterRecsSource.find((r: any) => (r.id || r.fldRecID || "").toLowerCase() === (selectedRec || "").toLowerCase());
       if (r) setFormData({ ...formData, recShort: r.fldRecShort + ' (Copy)', recLong: r.fldRecLong, recOrder: (r.fldOrder || 0).toString(), unit: r.fldUnit?.toString() || '0', uom: r.fldUOM || 'EA' });
     } else {
-      setFormData({ catName: '', catOrder: '', itemName: '', itemOrder: '', findShort: '', findLong: '', findOrder: '', fldUnitType: '', recShort: '', recLong: '', recOrder: '', unit: '', uom: '' });
+      setFormData({ 
+        catName: '', catOrder: '', itemName: '', itemOrder: '', 
+        findShort: '', findLong: '', findOrder: '', fldUnitType: '', 
+        recShort: '', recLong: '', recOrder: '', 
+        unit: '', uom: '',
+        fldUnitCostOverride: '', fldUnitTypeOverride: '' 
+      });
     }
     setNewType(type);
   };
@@ -656,18 +698,20 @@ export function GlossaryBuilder({
     
     setFormData({
       catName: cat?.fldCategoryName || '', 
-      catOrder: (cat?.fldOrder || 0).toString(), 
+      catOrder: (cat?.fldOrder ?? 999).toString(), 
       itemName: item?.fldItemName || '', 
-      itemOrder: (item?.fldOrder || 0).toString(), 
+      itemOrder: (item?.fldOrder ?? 999).toString(), 
       findShort: find?.fldFindShort || '', 
       findLong: find?.fldFindLong || '', 
-      findOrder: (find?.fldOrder || 0).toString(),
+      findOrder: (find?.fldOrder ?? 999).toString(),
       fldUnitType: find?.fldUnitType || '', 
       recShort: rec?.fldRecShort || '', 
       recLong: rec?.fldRecLong || '', 
-      recOrder: (rec?.fldOrder || 0).toString(),
+      recOrder: (rec?.fldOrder ?? 999).toString(),
       unit: rec?.fldUnit?.toString() || '0', 
-      uom: rec?.fldUOM || 'EA'
+      uom: rec?.fldUOM || 'EA',
+      fldUnitCostOverride: '',
+      fldUnitTypeOverride: ''
     });
     setNewType('glossary_record');
   };
@@ -743,14 +787,14 @@ export function GlossaryBuilder({
               onChange={(e: any) => setSelectedCat(e.target.value)} 
               options={(() => {
                 const seen = new Set();
-                return (Array.isArray(categories) ? [...categories] : [])
+                const filtered = (Array.isArray(categories) ? [...categories] : [])
                   .filter(c => {
                     const id = c.fldCategoryID;
                     if (!id || seen.has(id)) return false;
                     seen.add(id);
                     return true;
-                  })
-                  .sort((a: any, b: any) => (a.fldOrder ?? 0) - (b.fldOrder ?? 0) || (a.fldCategoryName || "").localeCompare(b.fldCategoryName || ""))
+                  });
+                return sortEntities(filtered, 'fldCategoryName')
                   .map((c: any) => ({ value: c.fldCategoryID, label: c.fldCategoryName }));
               })() || []} 
             />
@@ -770,14 +814,14 @@ export function GlossaryBuilder({
               onChange={(e: any) => setSelectedItem(e.target.value)} 
               options={(() => {
                 const seen = new Set();
-                return (Array.isArray(filteredItems) ? [...filteredItems] : [])
+                const filtered = (Array.isArray(filteredItems) ? [...filteredItems] : [])
                   .filter(i => {
                     const id = i.fldItemID;
                     if (!id || seen.has(id)) return false;
                     seen.add(id);
                     return true;
-                  })
-                  .sort((a: any, b: any) => (a.fldOrder ?? 0) - (b.fldOrder ?? 0) || (a.fldItemName || "").localeCompare(b.fldItemName || ""))
+                  });
+                return sortEntities(filtered, 'fldItemName')
                   .map((i: any) => ({ value: i.fldItemID, label: i.fldItemName }));
               })() || []} 
             />
@@ -797,15 +841,15 @@ export function GlossaryBuilder({
               onChange={(e: any) => setSelectedFind(e.target.value)} 
               options={(() => {
                 const seen = new Set();
-                return (Array.isArray(findings) ? findings : [])
+                const filtered = (Array.isArray(findings) ? findings : [])
                   .filter((f: any) => f.fldItem === selectedItem)
                   .filter(f => {
                     const id = f.fldFindID;
                     if (!id || seen.has(id)) return false;
                     seen.add(id);
                     return true;
-                  })
-                  .sort((a: any, b: any) => (a.fldOrder ?? 0) - (b.fldOrder ?? 0) || (a.fldFindShort || "").localeCompare(b.fldFindShort || ""))
+                  });
+                return sortEntities(filtered, 'fldFindShort')
                   .map((f: any) => ({ value: f.fldFindID, label: f.fldFindShort }));
               })() || []} 
             />
@@ -874,8 +918,7 @@ export function GlossaryBuilder({
 
                     if (otherRecs.length > 0) {
                       allOptions.push({ label: '--- Item Recommendations ---', value: 'header-all', disabled: true });
-                      [...otherRecs]
-                        .sort((a: any, b: any) => (a.fldOrder ?? 0) - (b.fldOrder ?? 0) || (a.fldRecShort || "").localeCompare(b.fldRecShort || ""))
+                      sortEntities([...otherRecs], 'fldRecShort')
                         .slice(0, 100) 
                         .forEach(r => {
                           const rid = String(r.id || r.fldRecID || "").toLowerCase().trim();
@@ -938,20 +981,78 @@ export function GlossaryBuilder({
                   <h3 className="text-xs font-bold uppercase tracking-wider">Recommendation Preview</h3>
                 </div>
                 {selectedRec ? (
-                  <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
-                    <div className="flex justify-between items-start mb-1">
+                  <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm space-y-4">
+                    <div className="flex justify-between items-start">
                       <h4 className="font-bold text-zinc-900">{matchedRec?.fldRecShort || "Link to new..."}</h4>
-                      <div className="flex items-center gap-2">
-                         <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 p-1" onClick={() => handleUnlinkSuggestion(selectedFind, selectedRec)}>
-                            <X size={14} />
-                          </Button>
-                        <div className="flex gap-2">
-                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded uppercase">{matchedRec?.fldUOM || "N/A"}</span>
-                          <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[10px] font-bold rounded uppercase">${matchedRec?.fldUnit || 0}</span>
+                      <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 p-1" onClick={() => handleUnlinkSuggestion(selectedFind, selectedRec)}>
+                        <X size={14} />
+                      </Button>
+                    </div>
+                    
+                    <p className="text-sm text-zinc-600 leading-relaxed">{matchedRec?.fldRecLong || "Please select a recommendation from the library..."}</p>
+
+                    <div className="pt-3 mt-3 border-t border-zinc-100 space-y-3">
+                      <div className="flex items-center justify-between">
+                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Cost Configuration Override</span>
+                         {(selections.fldUnitCost !== undefined || selections.fldUnitType !== undefined) && (
+                           <button 
+                             onClick={() => onSelectionChange({ ...selections, fldUnitCost: undefined, fldUnitType: undefined, isDirty: true })}
+                             className="text-[9px] font-bold text-blue-600 hover:underline flex items-center gap-1"
+                           >
+                             <RotateCcw size={10} /> CLEAR OVERRIDE
+                           </button>
+                         )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                             <label className="text-[9px] font-bold text-zinc-500">UNIT COST ($)</label>
+                             <span className={cn("text-[8px] font-black uppercase", selections.fldUnitCost !== undefined ? "text-indigo-600" : "text-zinc-300")}>
+                               {selections.fldUnitCost !== undefined ? "Glossary Override" : "Inherited from Library"}
+                             </span>
+                          </div>
+                          <input 
+                            type="number"
+                            placeholder={matchedRec?.fldUnit?.toString() || '0'}
+                            value={selections.fldUnitCost ?? ''}
+                            onChange={(e) => onSelectionChange({ ...selections, fldUnitCost: e.target.value === '' ? undefined : Number(e.target.value), isDirty: true })}
+                            className={cn(
+                              "w-full bg-zinc-50 border border-zinc-200 rounded-lg py-1.5 px-3 text-xs outline-none focus:ring-1 focus:ring-indigo-500 transition-all",
+                              selections.fldUnitCost !== undefined ? "font-bold text-zinc-900 border-indigo-200 bg-white" : "text-zinc-400 font-normal"
+                            )}
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                             <label className="text-[9px] font-bold text-zinc-500">COST UNIT TYPE</label>
+                             <span className={cn("text-[8px] font-black uppercase", selections.fldUnitType !== undefined ? "text-indigo-600" : "text-zinc-300")}>
+                               {selections.fldUnitType !== undefined ? "Glossary Override" : "Inherited from Library"}
+                             </span>
+                          </div>
+                          <div className="flex gap-1">
+                            <select
+                              value={selections.fldUnitType ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value || undefined;
+                                onSelectionChange({ ...selections, fldUnitType: val, isDirty: true });
+                              }}
+                              className={cn(
+                                "w-full bg-zinc-50 border border-zinc-200 rounded-lg py-1.5 px-2 text-xs outline-none focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer",
+                                selections.fldUnitType !== undefined ? "font-bold text-zinc-900 border-indigo-200 bg-white" : "text-zinc-400 font-normal"
+                              )}
+                            >
+                               <option value="">{matchedRec?.fldUOM || '(Unit)'}</option>
+                               <option value="EA">EA</option>
+                               <option value="LF">LF</option>
+                               <option value="SF">SF</option>
+                               <option value="LS">LS</option>
+                            </select>
+                          </div>
                         </div>
                       </div>
                     </div>
-                    <p className="text-sm text-zinc-600 leading-relaxed">{matchedRec?.fldRecLong || "Please select a recommendation from the library or use the Search tool."}</p>
                   </div>
                 ) : (
                   <div className="bg-white p-4 rounded-xl border border-dashed border-zinc-200 flex items-center justify-center min-h-[100px]">
@@ -1002,7 +1103,7 @@ export function GlossaryBuilder({
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <Select label="Unit Type" value={formData.fldUnitType} onChange={(e: any) => setFormData({ ...formData, fldUnitType: e.target.value })} options={unitTypes.map(u => ({ value: u.fldUTName, label: u.fldUTName })) || []} />
+                    <Select label="Unit Type" value={formData.fldUnitType} onChange={(e: any) => setFormData({ ...formData, fldUnitType: e.target.value })} options={['IN', 'FT', 'LF', 'SF', '%', 'lbf', 'SEC'].map(u => ({ value: u, label: u }))} />
                     <Input label="Sort Order" type="number" value={formData.findOrder} onChange={(e) => setFormData({ ...formData, findOrder: e.target.value })} />
                   </div>
                 </div>
@@ -1019,8 +1120,8 @@ export function GlossaryBuilder({
                     />
                   </div>
                   <div className="grid grid-cols-3 gap-4">
-                    <Input label="Unit Cost" type="number" value={formData.unit} onChange={(e) => setFormData({ ...formData, unit: e.target.value })} />
-                    <Input label="UOM" value={formData.uom} onChange={(e) => setFormData({ ...formData, uom: e.target.value })} />
+                    <Input label="Unit Cost ($)" type="number" value={formData.unit} onChange={(e) => setFormData({ ...formData, unit: e.target.value })} />
+                    <Select label="Cost Unit Type" value={formData.uom} onChange={(e: any) => setFormData({ ...formData, uom: e.target.value })} options={['EA', 'LF', 'SF', 'LS'].map(u => ({ value: u, label: u }))} />
                     <Input label="Sort Order" type="number" value={formData.recOrder} onChange={(e) => setFormData({ ...formData, recOrder: e.target.value })} />
                   </div>
                 </div>
@@ -1042,7 +1143,7 @@ export function GlossaryBuilder({
                       onChange={(e) => setFormData({ ...formData, findLong: e.target.value })}
                     />
                     <div className="grid grid-cols-2 gap-4">
-                      <Select label="Unit Type" value={formData.fldUnitType} onChange={(e: any) => setFormData({ ...formData, fldUnitType: e.target.value })} options={unitTypes.map(u => ({ value: u.fldUTName, label: u.fldUTName })) || []} />
+                      <Select label="Unit Type" value={formData.fldUnitType} onChange={(e: any) => setFormData({ ...formData, fldUnitType: e.target.value })} options={['IN', 'FT', 'LF', 'SF', '%', 'lbf', 'SEC'].map(u => ({ value: u, label: u }))} />
                       <Input label="Finding Sort Order" type="number" value={formData.findOrder} onChange={(e) => setFormData({ ...formData, findOrder: e.target.value })} />
                     </div>
                   </div>
@@ -1056,8 +1157,8 @@ export function GlossaryBuilder({
                       onChange={(e) => setFormData({ ...formData, recLong: e.target.value })}
                     />
                     <div className="grid grid-cols-3 gap-4">
-                      <Input label="Unit Cost" type="number" value={formData.unit} onChange={(e) => setFormData({ ...formData, unit: e.target.value })} />
-                      <Input label="UOM" value={formData.uom} onChange={(e) => setFormData({ ...formData, uom: e.target.value })} />
+                      <Input label="Unit Cost ($)" type="number" value={formData.unit} onChange={(e) => setFormData({ ...formData, unit: e.target.value })} />
+                      <Select label="Cost Unit Type" value={formData.uom} onChange={(e: any) => setFormData({ ...formData, uom: e.target.value })} options={['EA', 'LF', 'SF', 'LS'].map(u => ({ value: u, label: u }))} />
                       <Input label="Rec Sort Order" type="number" value={formData.recOrder} onChange={(e) => setFormData({ ...formData, recOrder: e.target.value })} />
                     </div>
                   </div>

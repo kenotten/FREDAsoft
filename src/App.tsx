@@ -114,8 +114,10 @@ const tabNames: Record<string, string> = {
   maintenance: 'Glossary Builder',
   glossary_explorer: 'Glossary Explorer',
   standards_manager: 'Standards Manager',
+  sequence_manager: 'Sequence Manager',
   data: 'Project Data Entry',
   explorer: 'Data Explorer',
+  library_manager: 'Library Manager',
   documents: 'Documents',
   settings: 'Settings & Billing'
 };
@@ -308,7 +310,12 @@ export default function App() {
   const clients = useMemo(() => rawClients.filter(c => !c.fldDeleted && !c.fldIsDeleted), [rawClients]);
   const facilities = useMemo(() => rawFacilities.filter(f => !f.fldDeleted && !f.fldIsDeleted), [rawFacilities]);
   const projects = useMemo(() => rawProjects.filter(p => !p.fldDeleted && !p.fldIsDeleted), [rawProjects]);
-  const projectData = useMemo(() => rawProjectData.filter(d => !d.fldDeleted && !d.fldIsDeleted && (!selections.projectId || d.fldPDataProject === selections.projectId)), [rawProjectData, selections.projectId]);
+  const projectData = useMemo(() => rawProjectData.filter(d => 
+    !d.fldDeleted && 
+    !d.fldIsDeleted && 
+    d.fldPDataID && // 🛡️ Task 111.B: Ensure identity exists to avoid ghost records
+    (!selections.projectId || d.fldPDataProject === selections.projectId)
+  ), [rawProjectData, selections.projectId]);
   const inspectors = useMemo(() => rawInspectors.filter(i => !i.fldDeleted && !i.fldIsDeleted), [rawInspectors]);
   const categories = useMemo(() => rawCategories.filter(c => !c.fldDeleted && !c.fldIsDeleted), [rawCategories]);
   const items = useMemo(() => rawItems.filter(i => !i.fldDeleted && !i.fldIsDeleted), [rawItems]);

@@ -62,7 +62,9 @@ export const migrateUomToUnit = async (rawRecommendations: any[], rawUnitTypes: 
         const unitType = rawUnitTypes.find(ut => ut.fldUTAbbr === rec.fldUOM);
         if (unitType) {
           const docRef = doc(db, 'recommendations', rec.id || rec.fldRecID);
-          batch.update(docRef, { fldUnit: unitType.fldUTID });
+          // FIX (Task 124): fldUnit is a numeric cost field. fldUOM is the unit type string.
+          // Do not write string fldUTID into numeric fldUnit.
+          batch.update(docRef, { fldUOM: unitType.fldUTAbbr });
           count++;
           if (count % 500 === 0) {
             await batch.commit();

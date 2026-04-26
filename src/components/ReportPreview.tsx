@@ -12,10 +12,11 @@ import {
   Glossary,
   Category,
   Item,
+  Finding,
   Location,
   Recommendation
 } from '../types';
-import { cn, formatMeasurement } from '../lib/utils';
+import { cn, formatMeasurement, formatCurrency } from '../lib/utils';
 import { Printer, Download, X, ChevronLeft, ChevronRight, FileText, Menu, ExternalLink, FlaskConical, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
@@ -32,6 +33,7 @@ interface ReportPreviewProps {
   items: Item[];
   locations: Location[];
   recommendations: Recommendation[];
+  findings: Finding[];
   onClose: () => void;
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
@@ -78,6 +80,7 @@ export function ReportPreview({
   items,
   locations,
   recommendations,
+  findings,
   onClose,
   isSidebarOpen,
   toggleSidebar
@@ -104,11 +107,17 @@ export function ReportPreview({
     const multiplier = project.fldCostMultiplier || 1;
 
     const enriched = data.map(record => {
-      const cleanKey = (record.fldData || "").trim().toLowerCase();
-      const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
-      const unitCost = 0;
-      const cost = 0;
-      return { ...record, totalCost: cost, displayUnitCost: unitCost };
+      const multiplier = project.fldCostMultiplier || 1;
+      const unitCost = record.fldUnitCost || 0;
+      const baseTotal = record.fldTotalCost || (unitCost * (record.fldQTY || 0));
+      const cost = baseTotal * multiplier;
+      return { 
+        ...record, 
+        totalCost: cost, 
+        displayUnitCost: unitCost * multiplier,
+        // Ensure unit type is passed through or fallback
+        displayUnitType: record.fldUnitType || 'N/A'
+      };
     });
     
     return enriched.sort((a, b) => {
@@ -130,9 +139,14 @@ export function ReportPreview({
       const itemOrderA = itemA?.fldOrder ?? 999;
       const itemOrderB = itemB?.fldOrder ?? 999;
       if (itemOrderA !== itemOrderB) return itemOrderA - itemOrderB;
+      const findA = findings.find(f => f.fldFindID === glosA?.fldFind);
+      const findB = findings.find(f => f.fldFindID === glosB?.fldFind);
+      const findOrderA = findA?.fldOrder ?? 999;
+      const findOrderB = findB?.fldOrder ?? 999;
+      if (findOrderA !== findOrderB) return findOrderA - findOrderB;
       return (itemA?.fldItemName || '').localeCompare(itemB?.fldItemName || '');
     });
-  }, [projectData, project.fldProjID, glossary, categories, items, locations]);
+  }, [projectData, project.fldProjID, glossary, categories, items, locations, findings]);
 
   const referencedStandards = useMemo(() => {
     const standardsMap = new Map<string, any>();
@@ -339,16 +353,11 @@ export function ReportPreview({
   }, [referencedStandards, measuredAddendumHeights, isMeasuring]);
 
   const handlePrint = () => {
-    const isInIframe = window.self !== window.top;
-    if (isInIframe) {
-      toast.info('Opening report in a new tab for printing...');
-      const url = new URL(window.location.href);
-      url.searchParams.set('report', 'true');
-      url.searchParams.set('projectId', project.fldProjID);
-      window.open(url.toString(), '_blank');
-      return;
-    }
-    window.print();
+    // Current-window print flow consolidation (Task 125.D)
+    // We no longer use the new-tab flow as print CSS is now hardened.
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
   const formatDate = (dateStr: string) => {
@@ -365,8 +374,8 @@ export function ReportPreview({
   return (
     <div className={cn(
       "fixed inset-0 bg-zinc-900 z-50 flex flex-col transition-all duration-300",
-      "print:bg-white print:relative print:inset-auto print:z-0 print:h-auto print:w-full print:block print:left-0 print:overflow-visible",
-      isSidebarOpen && "left-64"
+      "print:bg-white print:absolute print:top-0 print:left-0 print:z-0 print:h-auto print:w-full print:block print:overflow-visible",
+      isSidebarOpen && "left-64 print:left-0"
     )}>
       {/* Measurement Pass (Hidden) */}
       <div 
@@ -592,6 +601,8 @@ export function ReportPreview({
                             <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Item</th>
                             <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Location</th>
                             <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">QTY</th>
+                            <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">UNIT COST</th>
+                            <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">TOTAL</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
@@ -599,7 +610,7 @@ export function ReportPreview({
                             if (row.type === 'header') {
                               return (
                                 <tr key={rIdx} className="bg-zinc-100 break-inside-avoid">
-                                  <td colSpan={3} className="py-2 px-3 text-xs font-black text-zinc-900 uppercase tracking-tight">
+                                  <td colSpan={5} className="py-2 px-3 text-xs font-black text-zinc-900 uppercase tracking-tight">
                                     {row.content}
                                   </td>
                                 </tr>
@@ -611,18 +622,20 @@ export function ReportPreview({
                                 <tr key={rIdx} className="text-xs break-inside-avoid">
                                   <td className="py-2 px-3 text-zinc-700">{rec.itemName}</td>
                                   <td className="py-2 px-3 text-zinc-500 italic">{rec.locationName}</td>
-                                  <td className="py-2 px-3 text-right text-zinc-700">{rec.fldQTY}</td>
+                                  <td className="py-2 px-3 text-right text-zinc-700">{rec.fldQTY} {rec.displayUnitType}</td>
+                                  <td className="py-2 px-3 text-right text-zinc-700">{formatCurrency(rec.displayUnitCost)}</td>
+                                  <td className="py-2 px-3 text-right font-bold text-zinc-900">{formatCurrency(rec.totalCost)}</td>
                                 </tr>
                               );
                             }
                             if (row.type === 'subtotal') {
                               return (
                                 <tr key={rIdx} className="bg-zinc-50 break-inside-avoid">
-                                  <td colSpan={2} className="py-2 px-3 text-right text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                                  <td colSpan={4} className="py-2 px-3 text-right text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
                                     Subtotal {row.category}:
                                   </td>
                                   <td className="py-2 px-3 text-right font-black text-zinc-900 border-t border-zinc-200">
-                                    -
+                                    {formatCurrency(row.subtotal)}
                                   </td>
                                 </tr>
                               );
@@ -633,11 +646,11 @@ export function ReportPreview({
                         {pIdx === financialPages.length - 1 && (
                           <tfoot>
                             <tr className="border-t-2 border-zinc-900 break-inside-avoid">
-                              <td colSpan={2} className="py-4 px-3 text-right text-sm font-black text-zinc-900 uppercase tracking-widest">
+                              <td colSpan={4} className="py-4 px-3 text-right text-sm font-black text-zinc-900 uppercase tracking-widest">
                                 Grand Total:
                               </td>
                               <td className="py-4 px-3 text-right text-lg font-black text-blue-600">
-                                -
+                                {formatCurrency(financialData.reduce((sum, g) => sum + g.subtotal, 0))}
                               </td>
                             </tr>
                           </tfoot>
@@ -805,7 +818,9 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
           </div>
           <div className="w-32 flex flex-col shrink-0">
             <div className="bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase border-b border-zinc-300">Measurement</div>
-            <div className="flex-1 flex items-center justify-center text-xs font-bold p-2">{formatMeasurement(record.fldMeasurement, record.fldUnitType)}</div>
+            <div className="flex-1 flex items-center justify-center text-xs font-bold p-2">
+              {formatMeasurement(record.fldMeasurement, record.fldMeasurementUnit || record.fldUnitType)}
+            </div>
           </div>
         </div>
 

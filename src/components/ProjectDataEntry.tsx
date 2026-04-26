@@ -25,7 +25,7 @@ import { Input } from './ui/input';
 import { Select } from './ui/select';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
-import { cn } from '../lib/utils';
+import { cn, sortEntities, formatCurrency, COST_UNIT_TYPES, MEASUREMENT_UNITS } from '../lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { resizeImage } from '../lib/imageUtils';
 import { toFraction, fromFraction } from '../lib/utils';
@@ -62,10 +62,10 @@ export default function ProjectDataEntry({
   const [isSearchingAll, setIsSearchingAll] = useState(false);
   
   // Localized state management for the active record
-  const activeRecord = useMemo(() => 
-    (projectData || []).find((d: any) => d.fldPDataID === selections.editingRecordId) || null, 
-    [projectData, selections.editingRecordId]
-  );
+  const activeRecord = useMemo(() => {
+    if (!selections.editingRecordId) return null;
+    return (projectData || []).find((d: any) => d.fldPDataID === selections.editingRecordId) || null;
+  }, [projectData, selections.editingRecordId]);
 
   const editingRecordId = selections.editingRecordId;
   
@@ -103,7 +103,10 @@ export default function ProjectDataEntry({
   const [fldStandards, setFldStandards] = useState<string[]>([]);
   const [fldQTY, setFldQTY] = useState<number | ''>(0);
   const [fldMeasurement, setFldMeasurement] = useState<number | ''>('');
+  const [fldMeasurementUnit, setFldMeasurementUnit] = useState('');
   const [fldUnitType, setFldUnitType] = useState('Decimal');
+  const [fldUnitCost, setFldUnitCost] = useState<number | ''>(0);
+  const [fldTotalCost, setFldTotalCost] = useState<number | ''>(0);
   const [fldFindShort, setFldFindShort] = useState('');
   const [fldFindLong, setFldFindLong] = useState('');
   const [fldRecShort, setFldRecShort] = useState('');
@@ -133,7 +136,10 @@ export default function ProjectDataEntry({
         fldRecLong !== (activeRecord.fldRecLong || '') ||
         (fldQTY === '' ? 0 : Number(fldQTY)) !== (activeRecord.fldQTY || 0) ||
         (fldMeasurement === '' ? null : Number(fldMeasurement)) !== (activeRecord.fldMeasurement ?? null) ||
+        fldMeasurementUnit !== (activeRecord.fldMeasurementUnit || '') ||
         fldUnitType !== (activeRecord.fldUnitType || 'Decimal') ||
+        (fldUnitCost === '' ? 0 : Number(fldUnitCost)) !== (activeRecord.fldUnitCost || 0) ||
+        (fldTotalCost === '' ? 0 : Number(fldTotalCost)) !== (activeRecord.fldTotalCost || 0) ||
         fldLocation !== (activeRecord.fldLocation || '') ||
         JSON.stringify(fldImages) !== JSON.stringify(activeRecord.fldImages || []) ||
         JSON.stringify(fldStandards) !== JSON.stringify(activeRecord.fldStandards || [])
@@ -173,6 +179,67 @@ export default function ProjectDataEntry({
     }
   }, [project?.fldProjID, activeRecord, onReset]);
 
+  // 124 CONSOLIDATED HYDRATION
+  const hydrateRecommendationSelection = (recId: string, forceHydrateCosts = false) => {
+    if (!recId) return;
+
+    const rec = (masterRecommendations || []).find(r => 
+      (r.id || r.fldRecID || "").toLowerCase().trim() === (recId || "").toLowerCase().trim()
+    );
+    
+    if (!rec) return;
+
+    // 1. Text and Standards (Atomic update)
+    setFldRecShort(rec.fldRecShort || '');
+    setFldRecLong(rec.fldRecLong || '');
+    setFldStandards(rec.fldStandards || []);
+
+    // 2. Glossary Context Lookup (Full path)
+    const glos = (glossary || []).find(g => 
+      (g.fldCat || "").toLowerCase().trim() === (selections.categoryId || "").toLowerCase().trim() &&
+      (g.fldItem || "").toLowerCase().trim() === (selections.itemId || "").toLowerCase().trim() &&
+      (g.fldFind || "").toLowerCase().trim() === (selections.findId || "").toLowerCase().trim() &&
+      (g.fldRec || "").toLowerCase().trim() === (recId || "").toLowerCase().trim()
+    );
+
+    // 3. Fiscal Hydration Logic
+    // Only hydrate costs if:
+    // - New record (!activeRecord)
+    // - Explicitly forced (user selection change / forceHydrateCosts=true)
+    const shouldHydrateCosts = forceHydrateCosts || !activeRecord;
+
+    if (shouldHydrateCosts) {
+      // Priority: Glossary Override > Library Default > Safe Fallback
+      const unitCost = glos?.fldUnitCost ?? rec.fldUnit ?? 0;
+      const unitType = glos?.fldUnitType ?? rec.fldUOM ?? 'EA'; // Default to EA if missing
+      
+      setFldUnitCost(unitCost);
+      setFldUnitType(unitType);
+      
+      // LUMP SUM BEHAVIOR: Force QTY to 1 for LS
+      if (unitType === 'LS') {
+        setFldQTY(1);
+        setFldTotalCost(unitCost);
+      } else {
+        // Live calculation of Total Cost
+        // If QTY is 0 or empty, default to 1 for new selections
+        const currentQty = (fldQTY === 0 || fldQTY === '') ? 1 : Number(fldQTY);
+        if (fldQTY === 0 || fldQTY === '') setFldQTY(1);
+        setFldTotalCost(unitCost * currentQty);
+      }
+    }
+
+    // 4. Update Selections (Atomic)
+    onSelectionChange({
+      ...selections,
+      recId: recId,
+      glosId: glos?.fldGlosId || glos?.id || '',
+      isDirty: true
+    });
+    
+    setIsDirty(true);
+  };
+
   // Recovery Protocol: Check for draft on mount
   useEffect(() => {
     const draft = localStorage.getItem('fredasoft_draft');
@@ -194,9 +261,10 @@ export default function ProjectDataEntry({
       const draftData = {
         timestamp: new Date().toISOString(),
         fldFindShort, fldFindLong, fldRecShort, fldRecLong,
-        fldQTY, fldMeasurement, fldUnitType,
+        fldQTY, fldMeasurement, fldMeasurementUnit, fldUnitType,
         fldLocation,
         fldImages, fldStandards,
+        fldUnitCost, fldTotalCost,
         selections: {
           categoryId: selections.categoryId,
           itemId: selections.itemId,
@@ -211,6 +279,7 @@ export default function ProjectDataEntry({
   }, [
     isDirty, fldFindShort, fldFindLong, fldRecShort, fldRecLong,
     fldQTY, fldMeasurement, fldUnitType,
+    fldUnitCost, fldTotalCost,
     fldLocation,
     fldImages, fldStandards, selections
   ]);
@@ -223,7 +292,10 @@ export default function ProjectDataEntry({
     setFldRecLong(savedDraft.fldRecLong || '');
     setFldQTY(savedDraft.fldQTY || 0);
     setFldMeasurement(savedDraft.fldMeasurement || '');
+    setFldMeasurementUnit(savedDraft.fldMeasurementUnit || '');
     setFldUnitType(savedDraft.fldUnitType || 'Decimal');
+    setFldUnitCost(savedDraft.fldUnitCost || 0);
+    setFldTotalCost(savedDraft.fldTotalCost || 0);
     setFldLocation(savedDraft.fldLocation || '');
     setFldImages(savedDraft.fldImages || []);
     setFldStandards(savedDraft.fldStandards || []);
@@ -273,7 +345,10 @@ export default function ProjectDataEntry({
       setFldRecLong(activeRecord.fldRecLong || '');
       setFldQTY(activeRecord.fldQTY || 0);
       setFldMeasurement(activeRecord.fldMeasurement || '');
+      setFldMeasurementUnit(activeRecord.fldMeasurementUnit || '');
       setFldUnitType(activeRecord.fldUnitType || 'Decimal');
+      setFldUnitCost(activeRecord.fldUnitCost || 0);
+      setFldTotalCost(activeRecord.fldTotalCost || 0);
       setFldLocation(activeRecord.fldLocation || '');
       setFldImages(Array.isArray(activeRecord.fldImages) ? activeRecord.fldImages : []);
       setFldStandards(Array.isArray(activeRecord.fldStandards) ? activeRecord.fldStandards : []);
@@ -284,16 +359,12 @@ export default function ProjectDataEntry({
     }
   }, [activeRecord?.fldPDataID, glossary]);
 
+  // Live calculation logic
   useEffect(() => {
-    if (selections.recId && !isDirty && !activeRecord) {
-      const rec = (masterRecommendations || []).find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selections.recId || "").toLowerCase().trim());
-      if (rec) {
-        setFldRecShort(rec.fldRecShort || '');
-        setFldRecLong(rec.fldRecLong || '');
-        setFldStandards(rec.fldStandards || []);
-      }
-    }
-  }, [selections.recId, masterRecommendations, isDirty, activeRecord]);
+    const cost = Number(fldUnitCost) || 0;
+    const qty = Number(fldQTY) || 0;
+    setFldTotalCost(cost * qty);
+  }, [fldUnitCost, fldQTY]);
 
   const handleSave = () => {
     if (!fldLocation) { toast.error('Location is required'); return; }
@@ -314,7 +385,10 @@ export default function ProjectDataEntry({
       fldRecLong,
       fldQTY: Number(fldQTY) || 0,
       fldMeasurement: fldMeasurement === '' ? null : Number(fldMeasurement),
+      fldMeasurementUnit,
+      fldUnitCost: Number(fldUnitCost) || 0,
       fldUnitType,
+      fldTotalCost: Number(fldTotalCost) || 0,
       fldImages,
       fldStandards: fldStandards,
       fldInspID: inspector.fldInspID,
@@ -347,29 +421,38 @@ export default function ProjectDataEntry({
       "Clear Form",
       "You have unsaved changes. Are you sure you want to discard them and clear the form?",
       () => {
+        // 1. Wipe all record-specific local state
         setFldFindShort('');
         setFldFindLong('');
         setFldRecShort('');
         setFldRecLong('');
         setFldQTY(0);
         setFldMeasurement('');
+        setFldMeasurementUnit('');
         setFldUnitType('Decimal');
+        setFldUnitCost(0);
+        setFldTotalCost(0);
         setFldImages([]);
         setFldStandards([]);
+        
+        // 2. Reset baseline for unsaved changes baseline
         setIsDirty(false);
         localStorage.removeItem('fredasoft_draft');
         
-        // Reset the Cascade: Clear downstream selections
+        // 3. Update global selections to drop identity and downstream links
+        // Retain: projectId, facilityId, categoryId, locationId, inspectorId
         onSelectionChange({
           ...selections,
-          itemId: '',
-          findId: '',
+          editingRecordId: '', // Drops the link to the existing record
+          itemId: '', 
+          findId: '', 
           recId: '',
           standards: [],
+          images: [],
           isDirty: false
         });
         
-        toast.info('Form cleared');
+        toast.info('Form reset to brand-new record state');
       }
     );
   };
@@ -386,7 +469,10 @@ export default function ProjectDataEntry({
         setFldRecLong(activeRecord.fldRecLong || '');
         setFldQTY(activeRecord.fldQTY || 0);
         setFldMeasurement(activeRecord.fldMeasurement || '');
+        setFldMeasurementUnit(activeRecord.fldMeasurementUnit || '');
         setFldUnitType(activeRecord.fldUnitType || 'Decimal');
+        setFldUnitCost(activeRecord.fldUnitCost || 0);
+        setFldTotalCost(activeRecord.fldTotalCost || 0);
         setFldLocation(activeRecord.fldLocation || '');
         setFldImages(Array.isArray(activeRecord.fldImages) ? activeRecord.fldImages : []);
         setFldStandards(Array.isArray(activeRecord.fldStandards) ? activeRecord.fldStandards : []);
@@ -408,6 +494,9 @@ export default function ProjectDataEntry({
         setFldRecLong('');
         setFldQTY(0);
         setFldMeasurement('');
+        setFldMeasurementUnit('');
+        setFldUnitCost(0);
+        setFldTotalCost(0);
         setFldImages([]);
         setFldStandards([]);
         setIsDirty(false);
@@ -546,31 +635,26 @@ export default function ProjectDataEntry({
   useEffect(() => {
     if (!selections.findId || selections.recId || isSearchingAll || recommendationOptions.length === 0) return;
     
-    // If only one recommendation is suggested, auto-select it
+    // Task 124: If only one recommendation is suggested, auto-select it using consolidated hydration
     if (recommendationOptions.length === 1) {
-      const recId = recommendationOptions[0].value;
-      const rec = (masterRecommendations || []).find(r => (r.id || r.fldRecID || "").toLowerCase() === (recId || "").toLowerCase());
-      if (rec) {
-        setFldRecShort(rec.fldRecShort);
-        setFldRecLong(rec.fldRecLong);
-        setFldStandards(rec.fldStandards || []);
-        
-        // Find Glossary Link
-        const glos = (glossary || []).find(g => 
-          (g.fldFind || '').toLowerCase().trim() === (selections.findId || '').toLowerCase().trim() &&
-          (g.fldRec || '').toLowerCase().trim() === (recId || '').toLowerCase().trim() &&
-          (g.fldItem || '').toLowerCase().trim() === (selections.itemId || '').toLowerCase().trim()
-        );
-
-        onSelectionChange({
-          ...selections,
-          recId: recId,
-          glosId: glos?.fldGlosId || glos?.id || selections.glosId || '',
-          isDirty: true
-        });
-      }
+      hydrateRecommendationSelection(recommendationOptions[0].value);
     }
   }, [selections.findId, recommendationOptions, masterRecommendations, isSearchingAll]);
+
+  const sortedCategories = useMemo(() => 
+    sortEntities(Array.isArray(mergedCategories) ? mergedCategories : [], 'fldCategoryName'),
+    [mergedCategories]
+  );
+
+  const sortedItems = useMemo(() => 
+    sortEntities((Array.isArray(items) ? items : []).filter(i => i && i.fldCatID === selectedCat), 'fldItemName'),
+    [items, selectedCat]
+  );
+
+  const sortedFindings = useMemo(() => 
+    sortEntities((Array.isArray(findings) ? findings : []).filter(f => f && f.fldFindID && f.fldItem === selectedItem), 'fldFindShort'),
+    [findings, selectedItem]
+  );
 
   return (
     <div className="flex flex-col h-full bg-transparent overflow-hidden">
@@ -613,12 +697,11 @@ export default function ProjectDataEntry({
                     value={selectedCat}
                     onChange={(e: any) => setSelectedCat(e.target.value)}
                     selectClassName={focusClasses}
-                    options={(Array.isArray(mergedCategories) ? mergedCategories : [])
-                      .map((c, index) => ({ 
-                        value: c.fldCategoryID || c.fldCatID || `missing-${index}`, 
-                        label: c.fldCategoryName || c.fldCatName || 'Select Category',
-                        key: `cat-${c.fldCategoryID || c.fldCatID || index}` 
-                      }))}
+                    options={sortedCategories.map((c, index) => ({ 
+                      value: c.fldCategoryID || c.fldCatID || `missing-${index}`, 
+                      label: c.fldCategoryName || c.fldCatName || 'Select Category',
+                      key: `cat-${c.fldCategoryID || c.fldCatID || index}-${index}` 
+                    }))}
                   />
                   {selectedCat && (
                     <button 
@@ -637,13 +720,11 @@ export default function ProjectDataEntry({
                     value={selectedItem}
                     onChange={(e: any) => setSelectedItem(e.target.value)}
                     selectClassName={focusClasses}
-                    options={(Array.isArray(items) ? items : [])
-                      .filter(i => i && i.fldCatID === selectedCat)
-                      .map((i, index) => ({ 
-                        value: i.fldItemID || `missing-item-${index}`, 
-                        label: i.fldItemName || 'Select Item',
-                        key: `item-${i.fldItemID || index}` 
-                      }))}
+                    options={sortedItems.map((i, index) => ({ 
+                      value: i.fldItemID || `missing-item-${index}`, 
+                      label: i.fldItemName || 'Select Item',
+                      key: `item-${i.fldItemID || index}-${index}` 
+                    }))}
                   />
                 </div>
                 <div className="flex-1 min-w-[240px] flex items-end gap-2">
@@ -696,14 +777,20 @@ export default function ProjectDataEntry({
               value={selections.findId || ''}
               onChange={(e: any) => {
                  const find = (findings || []).find(f => (f.id || f.fldFindID || "").toLowerCase() === (e.target.value || "").toLowerCase());
-                 if(find) { setFldFindShort(find.fldFindShort); setFldFindLong(find.fldFindLong); }
+                 if(find) { 
+                   setFldFindShort(find.fldFindShort); 
+                   setFldFindLong(find.fldFindLong); 
+                   setFldMeasurementUnit(find.fldUnitType || '');
+                 }
                  setFldStandards([]); // Clear standards on finding change
                  onSelectionChange({...selections, findId: e.target.value, isDirty: true});
               }}
               selectClassName={focusClasses}
-              options={(Array.isArray(findings) ? findings : [])
-                .filter(f => f && f.fldFindID && f.fldItem === selectedItem)
-                .map(f => ({ value: f.fldFindID, label: f.fldFindShort, key: `find-${f.fldFindID}` }))}
+              options={sortedFindings.map((f, index) => ({ 
+                value: f.fldFindID || `missing-find-${index}`, 
+                label: f.fldFindShort || 'Select Finding', 
+                key: `find-${f.fldFindID || index}-${index}` 
+              }))}
             />
             <div className="space-y-4">
               <Input 
@@ -722,6 +809,24 @@ export default function ProjectDataEntry({
                   placeholder="Detailed finding description..."
                 />
               </div>
+              
+              {/* Finding Footer Row: Measurement and Measurement Unit */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-zinc-100">
+                <Input 
+                  label="Measurement"
+                  value={fldMeasurement}
+                  onChange={(e: any) => { setFldMeasurement(e.target.value); setIsDirty(true); }}
+                  className={focusClasses}
+                  placeholder="Actual recorded value"
+                />
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Unit</label>
+                  <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
+                    {/* ENFORCE CONTROLLED VOCABULARY */}
+                    {MEASUREMENT_UNITS.includes(fldMeasurementUnit) ? fldMeasurementUnit : (fldMeasurementUnit || 'None')}
+                  </div>
+                </div>
+              </div>
             </div>
           </Card>
 
@@ -739,30 +844,7 @@ export default function ProjectDataEntry({
              </div>
              <Select 
               value={selections.recId || ''}
-              onChange={(e: any) => {
-                 const recId = e.target.value;
-                 const rec = (masterRecommendations || []).find(r => (r.id || r.fldRecID || "").toLowerCase() === (recId || "").toLowerCase());
-                 
-                 if(rec) { 
-                   setFldRecShort(rec.fldRecShort); 
-                   setFldRecLong(rec.fldRecLong); 
-                   setFldStandards(rec.fldStandards || []);
-                 }
-
-                 // Find or derive Glossary Link
-                 const glos = (glossary || []).find(g => 
-                   (g.fldFind || '').toLowerCase().trim() === (selections.findId || '').toLowerCase().trim() &&
-                   (g.fldRec || '').toLowerCase().trim() === (recId || '').toLowerCase().trim() &&
-                   (g.fldItem || '').toLowerCase().trim() === (selections.itemId || '').toLowerCase().trim()
-                 );
-
-                 onSelectionChange({
-                   ...selections, 
-                   recId: recId, 
-                   glosId: glos?.fldGlosId || glos?.id || selections.glosId || '',
-                   isDirty: true
-                 });
-              }}
+              onChange={(e: any) => hydrateRecommendationSelection(e.target.value, true)}
               selectClassName={focusClasses}
               options={recommendationOptions}
             />
@@ -783,39 +865,50 @@ export default function ProjectDataEntry({
                   placeholder="Detailed recommendation description..."
                 />
               </div>
-            </div>
-          </Card>
 
-          {/* MEASUREMENTS & QUANTITY */}
-          <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
-            <h3 className="text-sm font-bold text-zinc-900 border-b border-zinc-100 pb-2">Measurements & Quantity</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Input 
-                label="Quantity (fldQTY)"
-                type="number"
-                value={fldQTY}
-                onChange={(e: any) => { setFldQTY(e.target.value); setIsDirty(true); }}
-                className={focusClasses}
-              />
-              <Select 
-                label="Unit Type (fldUnitType)"
-                value={fldUnitType}
-                onChange={(e: any) => { setFldUnitType(e.target.value); setIsDirty(true); }}
-                selectClassName={focusClasses}
-                options={[
-                  { value: 'Decimal', label: 'Decimal' },
-                  { value: 'Fraction', label: 'Fraction' },
-                  { value: 'Seconds', label: 'Seconds' },
-                  { value: 'Percentage', label: 'Percentage' }
-                ]}
-              />
-              <Input 
-                label="Measurement (fldMeasurement)"
-                value={fldMeasurement}
-                onChange={(e: any) => { setFldMeasurement(e.target.value); setIsDirty(true); }}
-                className={focusClasses}
-                placeholder="Actual recorded value"
-              />
+                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t border-zinc-100">
+                  <div className="space-y-1">
+                    <Input 
+                      label="Quantity"
+                      type="number"
+                      value={fldQTY}
+                      onChange={(e: any) => { setFldQTY(e.target.value); setIsDirty(true); }}
+                      disabled={fldUnitType === 'LS'}
+                      className={cn(focusClasses, fldUnitType === 'LS' && "bg-zinc-100 text-zinc-500 italic")}
+                    />
+                    {fldUnitType === 'LS' && (
+                      <p className="text-[10px] text-zinc-400 mt-0.5 ml-1 italic">Lump Sum: quantity treated as 1</p>
+                    )}
+                  </div>
+                <Input 
+                  label="Unit Cost ($)"
+                  type="number"
+                  value={fldUnitCost}
+                  onChange={(e: any) => { setFldUnitCost(e.target.value); setIsDirty(true); }}
+                  className={focusClasses}
+                />
+                <div className="space-y-1.5 flex-1">
+                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Cost Unit Type</label>
+                  <Select 
+                    value={fldUnitType}
+                    onChange={(e: any) => { 
+                      const val = e.target.value;
+                      setFldUnitType(val); 
+                      // LUMP SUM BEHAVIOR: Set QTY to 1 on manual selection
+                      if (val === 'LS') setFldQTY(1);
+                      setIsDirty(true); 
+                    }}
+                    selectClassName={focusClasses}
+                    options={COST_UNIT_TYPES.map(unit => ({ value: unit, label: unit }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Total Cost</label>
+                  <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-bold text-zinc-900">
+                    {formatCurrency(Number(fldTotalCost))}
+                  </div>
+                </div>
+              </div>
             </div>
           </Card>
 

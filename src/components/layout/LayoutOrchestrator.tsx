@@ -9,10 +9,12 @@ import {
   Table, 
   FileText, 
   Settings, 
+  BookOpen,
   LogOut, 
   X, 
   ChevronDown,
-  ShieldAlert
+  ShieldAlert,
+  Hash
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button, Select, Card } from '../ui/core';
@@ -43,6 +45,8 @@ import {
   AppDocument,
   Location 
 } from '../../types';
+import { UnsavedChangesModal } from '../modals/UnsavedChangesModal';
+import { LibraryManagerHandle } from '../LibraryManager';
 
 export interface SelectionProps {
   selections: any;
@@ -193,27 +197,62 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
   // Destructure for Shell Header/Sidebar needs
   const { selections, isTrayOpen, setIsTrayOpen, traySelections, setTraySelections, handleApplyTraySelections } = selectionProps;
   const { projects, clients, facilities, rawInspectors, isAddingClient, editingClient, setIsAddingClient, setEditingClient, handleSubmitClient, isAddingFacility, editingFacility, setIsAddingFacility, setEditingFacility, handleSubmitFacility, isAddingProject, editingProject, setIsAddingProject, setEditingProject, handleSubmitProject, isAddingInspector, editingInspector, setIsAddingInspector, setEditingInspector, handleSubmitInspector, deleteConfirmation, setDeleteConfirmation } = entityProps; 
-  const { selectedProject, selectedClient, selectedFacility, selectedInspector, rawProjectData } = projectProps;
+  const { selectedProject, selectedClient, selectedFacility, selectedInspector, projectData } = projectProps;
   const { standards, glossary, categories, items, locations, activeGlossary, recommendations, findings } = masterDataProps;
   const { isDeduplicating, dedupStatus, setIsDeduplicating, setDedupStatus } = opsProps;
+
+  const [isLibraryDirty, setIsLibraryDirty] = React.useState(false);
+  const [pendingTab, setPendingTab] = React.useState<string | null>(null);
+  const [isLibrarySaving, setIsLibrarySaving] = React.useState(false);
+  const libRef = React.useRef<LibraryManagerHandle>(null);
+
+  const handleGuardedTabSwitch = (newTab: string) => {
+    if (activeTab === 'library_manager' && isLibraryDirty && newTab !== activeTab) {
+      setPendingTab(newTab);
+    } else {
+      handleTabSwitch(newTab);
+    }
+  };
+
+  const handleLibraryModalSave = async () => {
+    if (libRef.current) {
+      setIsLibrarySaving(true);
+      const success = await libRef.current.save();
+      setIsLibrarySaving(false);
+      if (success) {
+        const next = pendingTab;
+        setPendingTab(null);
+        if (next) handleTabSwitch(next);
+      }
+    }
+  };
+
+  const handleLibraryModalDiscard = () => {
+    if (libRef.current) {
+      libRef.current.discard();
+      const next = pendingTab;
+      setPendingTab(null);
+      if (next) handleTabSwitch(next);
+    }
+  };
 
   return (
     <>
       {isAdmin && (
-        <div className="bg-amber-50 border-b border-amber-200 p-2 flex justify-center gap-4">
+        <div className="bg-amber-50 border-b border-amber-200 p-2 flex justify-center gap-4 no-print print:hidden">
           <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest flex items-center">
             <ShieldCheck size={12} className="mr-1" /> Administrator Mode Active
           </p>
         </div>
       )}
-      <div className="h-screen flex bg-zinc-50 overflow-hidden">
+      <div className="h-screen flex bg-zinc-50 overflow-hidden print:hidden">
         <AnimatePresence>
           {isTrayOpen && (
             <>
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsTrayOpen(false)} className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[60]" />
               <motion.div initial={{ y: -100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -100, opacity: 0 }} className="fixed top-0 left-0 right-0 bg-white border-b border-zinc-200 shadow-xl z-[70] p-6">
                 <div className="max-w-4xl mx-auto space-y-6">
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center no-print">
                     <h3 className="text-sm font-bold uppercase tracking-widest">Context Selection</h3>
                     <button onClick={() => setIsTrayOpen(false)}><X size={20} /></button>
                   </div>
@@ -243,16 +282,35 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
 
         <aside className="w-64 bg-white border-r border-zinc-200 flex flex-col">
           <div className="p-6 border-b border-zinc-100"><img src={FREDAsoftLogo} alt="Logo" className="h-8 w-auto" /></div>
-          <nav className="flex-1 p-4 space-y-1">
-            <NavItem active={activeTab === 'setup'} onClick={() => handleTabSwitch('setup')} icon={<Settings size={18} />} label="Setup" />
-            <NavItem active={activeTab === 'dashboard'} onClick={() => handleTabSwitch('dashboard')} icon={<LayoutDashboard size={18} />} label="Dashboard" />
-            <NavItem active={activeTab === 'maintenance'} onClick={() => handleTabSwitch('maintenance')} icon={<Edit3 size={18} />} label="Glossary Builder" />
-            <NavItem active={activeTab === 'glossary_explorer'} onClick={() => handleTabSwitch('glossary_explorer')} icon={<Search size={18} />} label="Glossary Explorer" />
-            <NavItem active={activeTab === 'standards_manager'} onClick={() => handleTabSwitch('standards_manager')} icon={<ShieldCheck size={18} />} label="Standards Manager" />
-            <NavItem active={activeTab === 'data'} onClick={() => handleTabSwitch('data')} icon={<ClipboardList size={18} />} label="Project Data Entry" />
-            <NavItem active={activeTab === 'explorer'} onClick={() => handleTabSwitch('explorer')} icon={<Table size={18} />} label="Data Explorer" />
-            <NavItem active={activeTab === 'documents'} onClick={() => handleTabSwitch('documents')} icon={<FileText size={18} />} label="Documents" />
-            <NavItem active={activeTab === 'settings'} onClick={() => handleTabSwitch('settings')} icon={<Settings size={18} />} label="Settings & Billing" />
+          <nav className="flex-1 p-4 overflow-y-auto">
+            <NavSection label="Project Data">
+              <NavItem active={activeTab === 'data'} onClick={() => handleGuardedTabSwitch('data')} icon={<ClipboardList size={18} />} label="Project Data Entry" />
+              <NavItem active={activeTab === 'explorer'} onClick={() => handleGuardedTabSwitch('explorer')} icon={<Table size={18} />} label="Data Explorer" />
+            </NavSection>
+
+            <NavSection label="Glossaries">
+              <NavItem active={activeTab === 'maintenance'} onClick={() => handleGuardedTabSwitch('maintenance')} icon={<Edit3 size={18} />} label="Glossary Builder" />
+              <NavItem active={activeTab === 'glossary_explorer'} onClick={() => handleGuardedTabSwitch('glossary_explorer')} icon={<Search size={18} />} label="Glossary Explorer" />
+            </NavSection>
+
+            <NavSection label="Managers">
+              <NavItem active={activeTab === 'standards_manager'} onClick={() => handleGuardedTabSwitch('standards_manager')} icon={<ShieldCheck size={18} />} label="Standards Manager" />
+              <NavItem 
+                active={activeTab === 'library_manager'} 
+                onClick={() => handleGuardedTabSwitch('library_manager')} 
+                icon={<BookOpen size={18} />} 
+                label="Library Manager" 
+                tooltip="IDs and parent relationships are IMMUTABLE in this view. Updates only affect display names and ordering. Historical project snapshots remain unchanged."
+              />
+              <NavItem active={activeTab === 'documents'} onClick={() => handleGuardedTabSwitch('documents')} icon={<FileText size={18} />} label="Document Manager" />
+            </NavSection>
+
+            <NavSection label="Admin" className="mb-0">
+              <NavItem active={activeTab === 'setup'} onClick={() => handleGuardedTabSwitch('setup')} icon={<Settings size={18} />} label="Setup" />
+              <NavItem active={activeTab === 'sequence_manager'} onClick={() => handleGuardedTabSwitch('sequence_manager')} icon={<Hash size={18} />} label="Sequence Manager" />
+              <NavItem active={activeTab === 'settings'} onClick={() => handleGuardedTabSwitch('settings')} icon={<Settings size={18} />} label="Settings & Billing" />
+              <NavItem active={activeTab === 'dashboard'} onClick={() => handleGuardedTabSwitch('dashboard')} icon={<LayoutDashboard size={18} />} label="Dashboard" />
+            </NavSection>
           </nav>
           <div className="p-4 border-t border-zinc-100"><Button variant="ghost" onClick={handleLogout} className="w-full justify-start text-red-500"><LogOut size={16} className="mr-2" />Sign Out</Button></div>
         </aside>
@@ -286,15 +344,27 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
           <MainContent 
             activeTab={activeTab}
             isAdmin={isAdmin}
-            setActiveTab={handleTabSwitch}
+            setActiveTab={handleGuardedTabSwitch}
             selectionProps={selectionProps}
             masterDataProps={masterDataProps}
             entityProps={entityProps}
             projectProps={projectProps}
             opsProps={opsProps}
+            {...({ 
+              libraryManagerRef: libRef,
+              onLibraryDirtyChange: setIsLibraryDirty
+            } as any)}
           />
         </main>
       </div>
+
+      <UnsavedChangesModal 
+        isOpen={!!pendingTab}
+        onClose={() => setPendingTab(null)}
+        onDiscard={handleLibraryModalDiscard}
+        onSave={handleLibraryModalSave}
+        isSaving={isLibrarySaving}
+      />
 
       {showReportPreview && selectedProject && selectedClient && selectedFacility && selectedInspector && (
         <ReportPreview 
@@ -302,13 +372,14 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
           client={selectedClient}
           facility={selectedFacility}
           inspector={selectedInspector}
-          projectData={rawProjectData}
+          projectData={projectData}
           standards={standards}
           glossary={glossary}
           categories={categories}
           items={items}
           locations={locations}
           recommendations={recommendations as any}
+          findings={findings}
           onClose={() => setShowReportPreview(false)}
           isSidebarOpen={isSidebarOpen}
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -358,10 +429,40 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
   );
 }
 
-function NavItem({ active, onClick, icon, label }: any) {
+function NavSection({ label, children, className }: { label: string, children: React.ReactNode, className?: string }) {
   return (
-    <button key={label} onClick={onClick} className={cn('w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all', active ? 'bg-zinc-100 text-black' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50')}>
-      {icon} {label}
-    </button>
+    <div className={cn("space-y-1 mb-6 focus-within:ring-0", className)}>
+      <h3 className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 select-none">
+        {label}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+function NavItem({ active, onClick, icon, label, tooltip }: any) {
+  return (
+    <div className="relative group">
+      <button 
+        key={label} 
+        onClick={onClick} 
+        className={cn(
+          'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all', 
+          active ? 'bg-zinc-100 text-black shadow-sm' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50'
+        )}
+      >
+        {icon} {label}
+      </button>
+      {tooltip && (
+        <div className="absolute left-[calc(100%-8px)] top-0 ml-4 w-60 p-3 bg-amber-50 border border-amber-200 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100] pointer-events-none translate-x-2 group-hover:translate-x-0">
+          <div className="flex items-center gap-2 text-amber-800 font-bold text-[10px] uppercase tracking-wider mb-1 text-left">
+            <ShieldAlert size={12} /> Safety Check
+          </div>
+          <p className="text-[11px] text-amber-700 leading-relaxed font-medium text-left">
+            {tooltip}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

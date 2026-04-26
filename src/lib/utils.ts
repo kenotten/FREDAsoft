@@ -55,21 +55,27 @@ export const fromFraction = (str: string): number | '' => {
   return Number(str) || '';
 };
 
-export function formatMeasurement(value: number | undefined | null, type: string | undefined | null, suffix?: string | null) {
+export const MEASUREMENT_UNITS = ['IN', 'FT', 'LF', 'SF', '%', 'lbf', 'SEC'] as const;
+export type MeasurementUnit = (typeof MEASUREMENT_UNITS)[number];
+
+export const COST_UNIT_TYPES = ['EA', 'LF', 'SF', 'LS'] as const;
+export type CostUnitType = (typeof COST_UNIT_TYPES)[number];
+
+export function formatMeasurement(value: number | undefined | null, unit: string | undefined | null) {
   if (value === undefined || value === null) return '';
-  if (type === 'Inches') {
-    return toFraction(value, true);
-  }
-  if (suffix) return `${value}${suffix}`;
   
-  const defaultSuffix = type === 'Percentage' ? '%' : 
-                 type === 'Seconds' ? ' sec' : 
-                 type === 'Degrees' ? '°' : 
-                 type === 'Ratio' ? ':' : 
-                 type === 'Feet' ? ' ft' :
-                 type === 'Linear Feet' ? ' Lft' :
-                 '';
-  return `${value}${defaultSuffix}`;
+  const cleanUnit = (unit || '').trim();
+  
+  switch(cleanUnit) {
+    case 'IN': return toFraction(value, true);
+    case 'FT': return `${value} ft`;
+    case 'LF': return `${value} LF`;
+    case 'SF': return `${value} SF`;
+    case '%': return `${value}%`;
+    case 'lbf': return `${value} lbf`;
+    case 'SEC': return `${value} sec`;
+    default: return `${value}${cleanUnit ? ' ' + cleanUnit : ''}`;
+  }
 }
 
 export const sanitizeData = (data: any) => {
@@ -85,3 +91,27 @@ export const sanitizeData = (data: any) => {
   });
   return sanitized;
 };
+
+export function compareEntities(a: any, b: any, displayNameField: string): number {
+  const orderA = (a?.fldOrder === null || a?.fldOrder === undefined || a?.fldOrder === '') ? 999 : Number(a.fldOrder);
+  const orderB = (b?.fldOrder === null || b?.fldOrder === undefined || b?.fldOrder === '') ? 999 : Number(b.fldOrder);
+  
+  if (orderA !== orderB) return orderA - orderB;
+  
+  const nameA = String(a?.[displayNameField] || '').toLowerCase();
+  const nameB = String(b?.[displayNameField] || '').toLowerCase();
+  return nameA.localeCompare(nameB);
+}
+
+export function formatCurrency(value: number | undefined | null) {
+  if (value === undefined || value === null) return '$0.00';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2
+  }).format(value);
+}
+
+export function sortEntities<T>(array: T[], displayNameField: keyof T): T[] {
+  return [...array].sort((a: any, b: any) => compareEntities(a, b, displayNameField as string));
+}

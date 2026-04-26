@@ -8,6 +8,9 @@ import GlossaryExplorer from '../GlossaryExplorer';
 import { StandardsManager } from '../StandardsManager';
 import { SettingsPage } from '../SettingsPage';
 import { DocumentManager } from '../DocumentManager';
+import { OrderManager } from '../OrderManager';
+import { LibraryManager } from '../LibraryManager';
+import { cn } from '../../lib/utils';
 import { 
   SelectionProps, 
   MasterDataProps, 
@@ -27,25 +30,26 @@ interface MainContentProps {
   opsProps: OperationalProps;
 }
 
-export const MainContent: React.FC<MainContentProps> = ({
-  activeTab,
-  isAdmin,
-  setActiveTab,
-  selectionProps,
-  masterDataProps,
-  entityProps,
-  projectProps,
-  opsProps
-}) => {
+export const MainContent: React.FC<MainContentProps> = (props) => {
+  const {
+    activeTab,
+    isAdmin,
+    setActiveTab,
+    selectionProps,
+    masterDataProps,
+    entityProps,
+    projectProps,
+    opsProps
+  } = props;
   // Destructure for internal route compatibility
   const { selections, setSelections } = selectionProps;
   const { clients, facilities, projects, inspectors, rawInspectors, isAddingClient, setIsAddingClient, isAddingFacility, setIsAddingFacility, isAddingProject, setIsAddingProject, isAddingInspector, setIsAddingInspector, initiateDelete, handleEditClient, handleEditFacility, handleEditProject, handleEditInspector, deletedRecords, onRestoreClient, onRestoreFacility, onRestoreProject, onCleanupOrphans } = entityProps;
-  const { projectData, rawProjectData, selectedProject, selectedFacility, selectedInspector, documents, handleSaveRecord, handleDeleteRecord, handleSetActiveProject, onResetForm, pendingChanges } = projectProps;
+  const { projectData, selectedProject, selectedFacility, selectedInspector, documents, handleSaveRecord, handleDeleteRecord, handleSetActiveProject, onResetForm, pendingChanges } = projectProps;
   const { categories, items, findings, masterRecommendations, recommendations, standards, glossary, allLocations, unitTypes, mergedCategories, mergedItems, mergedFindings, mergedRecommendations, mergedGlossary, setRawFindings, setRawRecommendations, setRawMasterRecommendations, setGlossary, setStandards, importMasterGlossary, onEditGlossaryItem, locations } = masterDataProps;
   const { isDeduplicating, dedupStatus, setIsSynced, setActiveGlossaryId, setUserPreferences, isUpdatingRef, runStandardsMigration, migrateUomToUnit, sessionReads, sessionWrites, collectionCounts, setIsDeduplicating, setDedupStatus } = opsProps;
 
   return (
-    <div className="p-8 flex-1 overflow-hidden flex flex-col">
+    <div className={cn("flex-1 overflow-hidden flex flex-col", activeTab === 'library_manager' ? "p-0" : "p-8")}>
       {activeTab === 'setup' && (
         <PortfolioView 
           selectionProps={selectionProps}
@@ -162,6 +166,23 @@ export const MainContent: React.FC<MainContentProps> = ({
       {activeTab === 'standards_manager' && (
         <StandardsManager 
           standards={standards}
+        />
+      )}
+      {activeTab === 'sequence_manager' && (
+        <OrderManager 
+          categories={categories}
+          items={items}
+          findings={findings}
+        />
+      )}
+      {activeTab === 'library_manager' && (
+        <LibraryManager 
+          ref={(props as any).libraryManagerRef}
+          categories={categories}
+          items={items}
+          findings={findings}
+          recommendations={recommendations as any}
+          onDirtyChange={(props as any).onLibraryDirtyChange}
         />
       )}
       {activeTab === 'settings' && (
