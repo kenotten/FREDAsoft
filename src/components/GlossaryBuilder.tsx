@@ -13,6 +13,7 @@ import {
   Save, 
   Trash2, 
   RotateCcw, 
+  RotateCw,
   Edit2, 
   Copy,
   ArrowUp,
@@ -58,6 +59,14 @@ interface GlossaryBuilderProps {
   isUpdatingRef: React.MutableRefObject<boolean>;
   setShowStandards: (val: boolean) => void;
   showStandards: boolean;
+  activeStandardTarget?: 'finding' | 'recommendation' | 'glossary';
+  setActiveStandardTarget?: (val: 'finding' | 'recommendation' | 'glossary') => void;
+  onAddStandard?: (s: MasterStandard, targetOverride?: 'finding' | 'recommendation' | 'glossary') => void;
+  onRemoveStandard?: (target: 'finding' | 'recommendation' | 'glossary', standardId: string) => void;
+  onDiscardChanges?: () => void;
+  stagedFindingStds?: string[];
+  stagedRecStds?: string[];
+  stagedGlosStds?: string[];
 }
 
 export function GlossaryBuilder({
@@ -78,10 +87,38 @@ export function GlossaryBuilder({
   setIsSynced,
   isUpdatingRef,
   setShowStandards,
-  showStandards
+  showStandards,
+  activeStandardTarget = 'finding',
+  setActiveStandardTarget,
+  onAddStandard,
+  onRemoveStandard,
+  onDiscardChanges,
+  stagedFindingStds = [],
+  stagedRecStds = [],
+  stagedGlosStds = []
 }: GlossaryBuilderProps) {
   // Base UI should always render to prevent layout shifts.
   const { selectedCat, selectedItem, selectedFind, selectedRec } = selections;
+  const hasMinimumContext = !!(selectedCat && selectedItem && selectedFind && selectedRec);
+
+  const normalizeStringArray = (value: any): string[] => {
+    if (!value) return [];
+
+    const rawValues = Array.isArray(value)
+      ? value
+      : typeof value === 'object'
+        ? Object.values(value)
+        : [value];
+
+    return Array.from(
+      new Set(
+        rawValues
+          .filter(Boolean)
+          .map(v => String(v).trim())
+          .filter(Boolean)
+      )
+    );
+  };
 
   const setSelectedCat = (val: string) => {
     if (val === selections.selectedCat) return;
@@ -96,15 +133,32 @@ export function GlossaryBuilder({
     updatePreferences({ glossaryBuilderSelections: newS });
   };
   const setSelectedFind = (val: string) => {
+    if (val === selections.selectedFind) return;
     isUpdatingRef.current = true;
-    const newS = { ...selections, selectedFind: val, selectedRec: '' };
+    const matchedFinding = findings?.find(f => (f.id || f.fldFindID) === val);
+    const newS = { 
+      ...selections, 
+      selectedFind: val, 
+      selectedRec: '',
+      stagedFindShort: matchedFinding?.fldFindShort || "",
+      stagedFindLong: matchedFinding?.fldFindLong || "",
+      isDirty: false // Reset dirty when intentionally switching finding
+    };
     onSelectionChange(newS);
     updatePreferences({ glossaryBuilderSelections: newS });
     setTimeout(() => { isUpdatingRef.current = false; }, 500);
   };
   const setSelectedRec = (val: string) => {
+    if (val === selections.selectedRec) return;
     isUpdatingRef.current = true;
-    const newS = { ...selections, selectedRec: val };
+    const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID) === val);
+    const newS = { 
+      ...selections, 
+      selectedRec: val,
+      stagedRecShort: matchedRec?.fldRecShort || "",
+      stagedRecLong: matchedRec?.fldRecLong || "",
+      isDirty: false // Reset dirty when intentionally switching recommendation
+    };
     onSelectionChange(newS);
     updatePreferences({ glossaryBuilderSelections: newS });
     setTimeout(() => { isUpdatingRef.current = false; }, 500);
@@ -117,56 +171,47 @@ export function GlossaryBuilder({
         String(g.fldCat || "").toLowerCase().trim() === String(selectedCat || "").toLowerCase().trim() && 
         String(g.fldItem || "").toLowerCase().trim() === String(selectedItem || "").toLowerCase().trim() && 
         String(g.fldFind || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim() && 
-        (g.fldRec || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim()
+        (g.fldRec || g.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim()
       );
       
       if (existing) {
+        const matchedFinding = findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
+        const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
+
         onSelectionChange({
           ...selections,
           fldUnitCost: existing.fldUnitCost ?? undefined,
           fldUnitType: existing.fldUnitType ?? undefined,
-          editingGlossaryId: existing.fldGlosId,
+          stagedFindShort: matchedFinding?.fldFindShort || "",
+          stagedFindLong: matchedFinding?.fldFindLong || "",
+          stagedRecShort: matchedRec?.fldRecShort || "",
+          stagedRecLong: matchedRec?.fldRecLong || "",
+          editingGlossaryId: existing.fldGlosId || existing.id || '',
           images: existing.fldImages || [],
           isDirty: false
         });
       } else {
+        const matchedFinding = findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
+        const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
+
         onSelectionChange({
           ...selections,
           fldUnitCost: undefined,
           fldUnitType: undefined,
+          stagedFindShort: matchedFinding?.fldFindShort || "",
+          stagedFindLong: matchedFinding?.fldFindLong || "",
+          stagedRecShort: matchedRec?.fldRecShort || "",
+          stagedRecLong: matchedRec?.fldRecLong || "",
           editingGlossaryId: '',
           images: [],
           isDirty: false
         });
       }
     }
-  }, [selectedCat, selectedItem, selectedFind, selectedRec, glossary]);
+  }, [selectedCat, selectedItem, selectedFind, selectedRec, glossary, findings, masterRecommendations]);
 
   const [newType, setNewType] = useState<'category' | 'item' | 'finding' | 'recommendation' | 'glossary_record' | 'link_recommendation' | null>(null);
-  const [hydratedMasterRecs, setHydratedMasterRecs] = useState<MasterRecommendation[]>([]);
-
-  const masterRecsSource = (Array.isArray(hydratedMasterRecs) && hydratedMasterRecs.length > 0) 
-    ? hydratedMasterRecs 
-    : (Array.isArray(masterRecommendations) ? masterRecommendations : []);
-
-  useEffect(() => {
-    const hydrate = async () => {
-      // Sticky logic: If we have data in props, use it.
-      if (Array.isArray(masterRecommendations) && masterRecommendations.length > 0) {
-        setHydratedMasterRecs(masterRecommendations);
-      } 
-      // If props are empty AND we don't have local data yet, fetch it.
-      else if (hydratedMasterRecs.length === 0) {
-        try {
-          const data = await firestoreService.masterRecommendations.list();
-          setHydratedMasterRecs(data as MasterRecommendation[]);
-        } catch (error) {
-          console.error("BUILDER HYDRATION ERROR:", error);
-        }
-      }
-    };
-    hydrate();
-  }, [masterRecommendations]);
+  const masterRecsSource = Array.isArray(masterRecommendations) ? masterRecommendations : [];
 
   const [formData, setFormData] = useState({
     catName: '', catOrder: '', itemName: '', itemOrder: '', findShort: '', findLong: '', findOrder: '', fldUnitType: '', recShort: '', recLong: '', recOrder: '', unit: '', uom: '',
@@ -241,46 +286,21 @@ export function GlossaryBuilder({
     setImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const removeStandard = (type: 'finding' | 'recommendation', standardId: string, parentId: string) => {
-    if (type === 'finding') {
-      const finding = findings.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(parentId || "").toLowerCase().trim());
-      if (finding) {
-        const newStandards = (finding.fldStandards || []).filter(id => id !== standardId);
-        firestoreService.save('findings', sanitizeData({ fldStandards: newStandards }), finding.fldFindID);
-        setFindings(prev => prev.map(f => (f.id || f.fldFindID) === parentId ? { ...f, fldStandards: newStandards } : f));
-      }
-    } else {
-      const recommendation = masterRecommendations.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (parentId || "").toLowerCase().trim());
-      if (recommendation) {
-        const newStandards = (recommendation.fldStandards || []).filter(id => id !== standardId);
-        firestoreService.masterRecommendations.save(sanitizeData({ fldStandards: newStandards }), recommendation.fldRecID);
-      }
+  const removeStandard = (type: 'finding' | 'recommendation' | 'glossary', standardId: string) => {
+    if (onRemoveStandard) {
+      onRemoveStandard(type, standardId);
     }
   };
 
-  const handleDropStandard = async (e: React.DragEvent, type: 'finding' | 'recommendation') => {
+  const handleDropStandard = async (e: React.DragEvent, type: 'finding' | 'recommendation' | 'glossary') => {
     e.preventDefault();
     const standardId = e.dataTransfer.getData('standardId');
     if (!standardId) return;
 
-    if (type === 'finding' && selectedFind) {
-      const finding = findings.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
-      if (finding) {
-        const current = finding.fldStandards || [];
-        if (!current.includes(standardId)) {
-          const next = [...current, standardId];
-          await firestoreService.save('findings', sanitizeData({ fldStandards: next }), finding.fldFindID);
-          setFindings(prev => prev.map(f => f.fldFindID === finding.fldFindID ? { ...f, fldStandards: next } : f));
-        }
-      }
-    } else if (type === 'recommendation' && selectedRec) {
-      const recommendation = masterRecommendations.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
-      if (recommendation) {
-        const current = recommendation.fldStandards || [];
-        if (!current.includes(standardId)) {
-          const next = [...current, standardId];
-          firestoreService.masterRecommendations.save(sanitizeData({ fldStandards: next }), recommendation.fldRecID);
-        }
+    if (onAddStandard) {
+      const standard = standards.find(s => s.id === standardId);
+      if (standard) {
+        onAddStandard(standard, type);
       }
     }
   };
@@ -318,7 +338,7 @@ export function GlossaryBuilder({
         (g.fldRec || g.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim()
       );
       if (existing) {
-        targetGlosId = existing.fldGlosId;
+        targetGlosId = existing.fldGlosId || existing.id;
         isUpdate = true;
       }
     }
@@ -327,8 +347,31 @@ export function GlossaryBuilder({
       setIsSynced(false);
       const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
       
-      // Use existing selections if we're just updating the linked rec, 
-      // but if we have explicit form data (e.g. from a modal), use that.
+      // COMMIT STAGED CHANGES TO MASTER LIBRARY
+      if (selectedFind) {
+        const finding = findings.find(f => (f.id || f.fldFindID) === selectedFind);
+        if (finding) {
+          const findingPayload = sanitizeData({ 
+            fldStandards: normalizeStringArray(stagedFindingStds),
+            fldFindShort: selections.stagedFindShort,
+            fldFindLong: selections.stagedFindLong
+          });
+          await firestoreService.save('findings', findingPayload, finding.fldFindID);
+        }
+      }
+
+      if (selectedRec) {
+        const recommendation = masterRecsSource.find(r => (r.id || r.fldRecID) === selectedRec);
+        if (recommendation) {
+          const recPayload = sanitizeData({ 
+            fldStandards: normalizeStringArray(stagedRecStds),
+            fldRecShort: selections.stagedRecShort,
+            fldRecLong: selections.stagedRecLong
+          });
+          await firestoreService.masterRecommendations.save(recPayload, recommendation.fldRecID);
+        }
+      }
+
       const payload: any = { 
         fldCat: selectedCat,
         fldItem: selectedItem,
@@ -336,12 +379,13 @@ export function GlossaryBuilder({
         fldRec: selectedRec,
         fldImages: images,
         fldUnitCost: selections.fldUnitCost !== undefined ? selections.fldUnitCost : null,
-        fldUnitType: selections.fldUnitType !== undefined ? selections.fldUnitType : null
+        fldUnitType: selections.fldUnitType !== undefined ? selections.fldUnitType : null,
+        fldStandards: normalizeStringArray(stagedGlosStds)
       };
 
       if (isUpdate && targetGlosId) {
         await firestoreService.glossary.save(sanitizeData(payload), targetGlosId);
-        toast.success('Glossary record updated!');
+        toast.success('Glossary record and master citations updated!');
       } else {
         const glosId = uuidv4();
         const newGlos = sanitizeData({
@@ -349,7 +393,7 @@ export function GlossaryBuilder({
           fldGlosId: glosId
         });
         await firestoreService.glossary.save(newGlos, glosId);
-        toast.success('Glossary record created and linked!');
+        toast.success('Glossary record created and master citations committed!');
       }
       setIsDirty(false);
       onSelectionChange({ 
@@ -367,7 +411,19 @@ export function GlossaryBuilder({
   };
 
   const handleClearAll = () => {
-    onSelectionChange({ ...selections, selectedItem: '', selectedFind: '', selectedRec: '', editingGlossaryId: '', images: [], isDirty: false });
+    onSelectionChange({ 
+      ...selections, 
+      selectedItem: '', 
+      selectedFind: '', 
+      selectedRec: '', 
+      editingGlossaryId: '', 
+      images: [], 
+      stagedFindShort: '',
+      stagedFindLong: '',
+      stagedRecShort: '',
+      stagedRecLong: '',
+      isDirty: false 
+    });
   };
 
   const saveNewGlossaryRecord = async () => {
@@ -404,10 +460,18 @@ export function GlossaryBuilder({
       
       // Link to finding
       const finding = findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(findId || "").toLowerCase().trim());
-      const suggested = [...(finding?.fldSuggestedRecs || []), recId];
+      const suggested = [...(Array.isArray(finding?.fldSuggestedRecs) ? finding.fldSuggestedRecs : []), recId];
       await firestoreService.save('findings', { fldSuggestedRecs: suggested }, findId);
 
       const glosId = uuidv4();
+      const matchedFinding = findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
+      const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
+      
+      const glosStds = Array.from(new Set([
+        ...normalizeStringArray(matchedFinding?.fldStandards),
+        ...normalizeStringArray(matchedRec?.fldStandards)
+      ]));
+
       const glossaryPayload = sanitizeData({
         fldGlosId: glosId, 
         fldCat: selectedCat || '', 
@@ -415,7 +479,7 @@ export function GlossaryBuilder({
         fldFind: findId || '', 
         fldRec: recId || '', 
         fldImages: images || [], 
-        fldStandards: selections.standards || []
+        fldStandards: glosStds
       });
       await firestoreService.save('glossary', glossaryPayload, glosId);
       
@@ -480,7 +544,7 @@ export function GlossaryBuilder({
           if (raw === undefined || raw === null || raw === '') return [];
           return [raw];
         })(),
-        fldStandards: editingId ? (findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(id || "").toLowerCase().trim())?.fldStandards || []) : []
+        fldStandards: editingId ? normalizeStringArray(findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(id || "").toLowerCase().trim())?.fldStandards) : []
       });
       await firestoreService.save('findings', payload, id);
       setNewType(null);
@@ -506,7 +570,7 @@ export function GlossaryBuilder({
         fldOrder: formData.recOrder === '' ? 999 : (parseInt(formData.recOrder) || 999),
         fldUnit: Number(formData.unit) || 0, 
         fldUOM: formData.uom,
-        fldStandards: editingId ? (masterRecommendations?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (id || "").toLowerCase().trim())?.fldStandards || []) : []
+        fldStandards: editingId ? normalizeStringArray(masterRecommendations?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (id || "").toLowerCase().trim())?.fldStandards) : []
       });
       
       await firestoreService.masterRecommendations.save(payload, id);
@@ -514,7 +578,7 @@ export function GlossaryBuilder({
       if (!editingId && selectedFind) {
         const finding = findings.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
         if (finding) {
-          const suggested = [...(finding.fldSuggestedRecs || []), id];
+          const suggested = [...(Array.isArray(finding.fldSuggestedRecs) ? finding.fldSuggestedRecs : []), id];
           await firestoreService.save('findings', { fldSuggestedRecs: suggested }, selectedFind);
         }
       }
@@ -774,6 +838,11 @@ export function GlossaryBuilder({
             <Button size="sm" onClick={handleAddNew} disabled={!selectedCat || !selectedItem || !selectedFind || !selectedRec} className={cn(!selectedCat || !selectedItem || !selectedFind || !selectedRec ? "bg-zinc-200" : "bg-indigo-600 hover:bg-indigo-700")}>
               <Save size={14} className="mr-1" /> SAVE RECORD
             </Button>
+            {onDiscardChanges && (
+              <Button size="sm" variant="ghost" onClick={onDiscardChanges} className="text-zinc-500 hover:text-zinc-900 border border-zinc-200">
+                <RotateCw size={14} className="mr-1" /> DISCARD CITATION EDITS
+              </Button>
+            )}
           </div>
         </div>
 
@@ -958,38 +1027,74 @@ export function GlossaryBuilder({
 
       {/* Selection Preview Card */}
       {selectedFind && (() => {
-        const matchedFinding = findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
         const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
         
         return (
           <Card className="p-6 bg-indigo-50/30 border-indigo-100">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-indigo-600">
-                  <Search size={16} />
-                  <h3 className="text-xs font-bold uppercase tracking-wider">Finding Preview</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-indigo-600">
+                    <Search size={16} />
+                    <h3 className="text-xs font-bold uppercase tracking-wider">Finding (Library)</h3>
+                  </div>
                 </div>
-                <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
-                  <h4 className="font-bold text-zinc-900 mb-1">{matchedFinding?.fldFindShort || "Loading finding..."}</h4>
-                  <p className="text-sm text-zinc-600 leading-relaxed">{matchedFinding?.fldFindLong || "Please wait..."}</p>
+                
+                <div className="space-y-3 bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Short Finding</label>
+                    <input 
+                      className="w-full bg-zinc-50 border border-zinc-100 rounded-lg py-1.5 px-3 text-sm font-bold text-zinc-900 outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                      value={selections.stagedFindShort ?? ""}
+                      onChange={(e) => onSelectionChange({ ...selections, stagedFindShort: e.target.value, isDirty: true })}
+                      placeholder="Short finding title..."
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Long Finding</label>
+                    <textarea 
+                      className="w-full bg-zinc-50 border border-zinc-100 rounded-lg py-1.5 px-3 text-xs text-zinc-600 leading-relaxed outline-none focus:ring-1 focus:ring-indigo-500 transition-all min-h-[100px] resize-none"
+                      value={selections.stagedFindLong ?? ""}
+                      onChange={(e) => onSelectionChange({ ...selections, stagedFindLong: e.target.value, isDirty: true })}
+                      placeholder="Detailed finding description..."
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-indigo-600">
-                  <FileText size={16} />
-                  <h3 className="text-xs font-bold uppercase tracking-wider">Recommendation Preview</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-indigo-600">
+                    <FileText size={16} />
+                    <h3 className="text-xs font-bold uppercase tracking-wider">Recommendation (Library)</h3>
+                  </div>
+                  {selectedRec && (
+                    <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-6 px-2" onClick={() => handleUnlinkSuggestion(selectedFind, selectedRec)}>
+                      <X size={12} className="mr-1" /> UNLINK
+                    </Button>
+                  )}
                 </div>
+
                 {selectedRec ? (
-                  <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm space-y-4">
-                    <div className="flex justify-between items-start">
-                      <h4 className="font-bold text-zinc-900">{matchedRec?.fldRecShort || "Link to new..."}</h4>
-                      <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 p-1" onClick={() => handleUnlinkSuggestion(selectedFind, selectedRec)}>
-                        <X size={14} />
-                      </Button>
+                  <div className="space-y-3 bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Short Recommendation</label>
+                      <input 
+                        className="w-full bg-zinc-50 border border-zinc-100 rounded-lg py-1.5 px-3 text-sm font-bold text-zinc-900 outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                        value={selections.stagedRecShort ?? ""}
+                        onChange={(e) => onSelectionChange({ ...selections, stagedRecShort: e.target.value, isDirty: true })}
+                        placeholder="Short recommendation title..."
+                      />
                     </div>
-                    
-                    <p className="text-sm text-zinc-600 leading-relaxed">{matchedRec?.fldRecLong || "Please select a recommendation from the library..."}</p>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Long Recommendation</label>
+                      <textarea 
+                        className="w-full bg-zinc-50 border border-zinc-100 rounded-lg py-1.5 px-3 text-xs text-zinc-600 leading-relaxed outline-none focus:ring-1 focus:ring-indigo-500 transition-all min-h-[100px] resize-none"
+                        value={selections.stagedRecLong ?? ""}
+                        onChange={(e) => onSelectionChange({ ...selections, stagedRecLong: e.target.value, isDirty: true })}
+                        placeholder="Detailed recommendation description..."
+                      />
+                    </div>
 
                     <div className="pt-3 mt-3 border-t border-zinc-100 space-y-3">
                       <div className="flex items-center justify-between">
@@ -1218,10 +1323,14 @@ export function GlossaryBuilder({
           </div>
         </div>
       )}
-      {/* Image and Standards Section */}
-      <div className="grid grid-cols-2 gap-6">
+      {/* Standards Section */}
+      <div className="grid grid-cols-3 gap-6">
         <Card 
-          className="p-6 bg-zinc-50/50 border-dashed border-2 border-zinc-200"
+          className={cn(
+            "p-6 transition-all duration-300 border-2 cursor-pointer",
+            activeStandardTarget === 'finding' ? "bg-indigo-50/50 border-indigo-400 shadow-md ring-2 ring-indigo-200" : "bg-zinc-50/50 border-zinc-200 border-dashed opacity-80"
+          )}
+          onClick={() => setActiveStandardTarget?.('finding')}
           onDragOver={(e: React.DragEvent) => {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'copy';
@@ -1230,35 +1339,44 @@ export function GlossaryBuilder({
         >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <FileText size={16} className="text-zinc-400" />
-              <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest">Finding Standards</h3>
+              <div className={cn("p-1.5 rounded-lg", activeStandardTarget === 'finding' ? "bg-indigo-500 text-white" : "bg-zinc-200 text-zinc-500")}>
+                <FileText size={14} />
+              </div>
+              <h3 className={cn("text-[10px] font-black uppercase tracking-widest", activeStandardTarget === 'finding' ? "text-indigo-900" : "text-zinc-500")}>Finding Standards</h3>
             </div>
-            <span className="text-[10px] font-bold text-zinc-400">Drag Standards Here</span>
+            {activeStandardTarget === 'finding' && <div className="text-[9px] font-black text-indigo-500 animate-pulse uppercase">Active Target</div>}
+            {activeStandardTarget !== 'finding' && <span className="text-[10px] font-bold text-zinc-400">Drag/Click to Target</span>}
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
             {selectedFind ? (() => {
-              const finding = findings?.find(f => (f.id || f.fldFindID || "").toLowerCase().trim() === (selectedFind || "").toLowerCase().trim());
-              const standardsList = finding?.fldStandards;
-              if (!Array.isArray(standardsList)) return null;
-              return standardsList.map((sid, idx) => {
+              if (!Array.isArray(stagedFindingStds) || stagedFindingStds.length === 0) return <p className="text-[10px] text-zinc-400 italic text-center py-2">No Finding Standards</p>;
+              return stagedFindingStds.map((sid, idx) => {
                 const s = standards?.find(st => (st.id || "").toLowerCase().trim() === (sid || "").toLowerCase().trim());
                 return (
-                  <div key={`find-std-${sid}-${idx}`} className="flex items-center justify-between p-2 bg-white border border-zinc-200 rounded-lg group">
-                    <span className="text-xs font-medium text-zinc-600 truncate">{s?.citation_num} - {s?.citation_name}</span>
-                    <button onClick={() => removeStandard('finding', sid, selectedFind)} className="p-1 text-zinc-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div key={`find-std-${sid}-${idx}`} className="flex items-center justify-between p-2 bg-white border border-zinc-200 rounded-lg group hover:border-indigo-300 transition-colors">
+                    <span className="text-[10px] font-medium text-zinc-600 truncate">{s?.citation_num} - {s?.citation_name}</span>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); removeStandard('finding', sid); }} 
+                      className="p-1 px-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                      title="Remove Finding citation"
+                    >
                       <Trash2 size={12} />
                     </button>
                   </div>
                 );
               });
             })() : (
-              <p className="text-xs text-zinc-400 italic text-center py-4">Select a finding to manage standards</p>
+              <p className="text-[10px] text-zinc-400 italic text-center py-4">Select finding to manage</p>
             )}
           </div>
         </Card>
 
         <Card 
-          className="p-6 bg-zinc-50/50 border-dashed border-2 border-zinc-200"
+          className={cn(
+            "p-6 transition-all duration-300 border-2 cursor-pointer",
+            activeStandardTarget === 'recommendation' ? "bg-indigo-50/50 border-indigo-400 shadow-md ring-2 ring-indigo-200" : "bg-zinc-50/50 border-zinc-200 border-dashed opacity-80"
+          )}
+          onClick={() => setActiveStandardTarget?.('recommendation')}
           onDragOver={(e: React.DragEvent) => {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'copy';
@@ -1267,30 +1385,98 @@ export function GlossaryBuilder({
         >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <ShieldCheck size={16} className="text-zinc-400" />
-              <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest">Rec Standards</h3>
+              <div className={cn("p-1.5 rounded-lg", activeStandardTarget === 'recommendation' ? "bg-indigo-500 text-white" : "bg-zinc-200 text-zinc-500")}>
+                <ShieldCheck size={14} />
+              </div>
+              <h3 className={cn("text-[10px] font-black uppercase tracking-widest", activeStandardTarget === 'recommendation' ? "text-indigo-900" : "text-zinc-500")}>Rec Standards</h3>
             </div>
-            <span className="text-[10px] font-bold text-zinc-400">Drag Standards Here</span>
+            {activeStandardTarget === 'recommendation' && <div className="text-[9px] font-black text-indigo-500 animate-pulse uppercase">Active Target</div>}
+            {activeStandardTarget !== 'recommendation' && <span className="text-[10px] font-bold text-zinc-400">Drag/Click to Target</span>}
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
             {selectedRec ? (() => {
-              const recommendation = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
-              const standardsList = recommendation?.fldStandards;
-              if (!Array.isArray(standardsList)) return null;
-              return standardsList.map((sid, idx) => {
+              if (!Array.isArray(stagedRecStds) || stagedRecStds.length === 0) return <p className="text-[10px] text-zinc-400 italic text-center py-2">No Rec Standards</p>;
+              return stagedRecStds.map((sid, idx) => {
                 const s = standards?.find(st => (st.id || "").toLowerCase().trim() === (sid || "").toLowerCase().trim());
                 return (
-                  <div key={`rec-std-${sid}-${idx}`} className="flex items-center justify-between p-2 bg-white border border-zinc-200 rounded-lg group">
-                    <span className="text-xs font-medium text-zinc-600 truncate">{s?.citation_num} - {s?.citation_name}</span>
-                    <button onClick={() => removeStandard('recommendation', sid, selectedRec)} className="p-1 text-zinc-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div key={`rec-std-${sid}-${idx}`} className="flex items-center justify-between p-2 bg-white border border-zinc-200 rounded-lg group hover:border-indigo-300 transition-colors">
+                    <span className="text-[10px] font-medium text-zinc-600 truncate">{s?.citation_num} - {s?.citation_name}</span>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); removeStandard('recommendation', sid); }} 
+                      className="p-1 px-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                      title="Remove Recommendation citation"
+                    >
                       <Trash2 size={12} />
                     </button>
                   </div>
                 );
               });
             })() : (
-              <p className="text-xs text-zinc-400 italic text-center py-4">Select a recommendation to manage standards</p>
+              <p className="text-[10px] text-zinc-400 italic text-center py-4">Select rec to manage</p>
             )}
+          </div>
+        </Card>
+
+        <Card 
+          className={cn(
+            "p-6 transition-all duration-300 border-2",
+            hasMinimumContext ? "cursor-pointer" : "cursor-not-allowed",
+            activeStandardTarget === 'glossary' ? "bg-rose-50/50 border-rose-400 shadow-md ring-2 ring-rose-200" : "bg-rose-50/30 border-rose-100 opacity-80 border-dashed"
+          )}
+          onClick={() => {
+            if (hasMinimumContext) {
+              setActiveStandardTarget?.('glossary');
+            } else {
+              toast.info('Select Category, Item, Finding, and Recommendation before adding glossary citations.');
+            }
+          }}
+          onDragOver={(e: React.DragEvent) => {
+            if (!hasMinimumContext) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+          }}
+          onDrop={(e: React.DragEvent) => {
+            if (!hasMinimumContext) {
+               toast.info('Select Category, Item, Finding, and Recommendation before adding glossary citations.');
+               return;
+            }
+            handleDropStandard(e, 'glossary');
+          }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className={cn("p-1.5 rounded-lg", activeStandardTarget === 'glossary' ? "bg-rose-500 text-white" : "bg-rose-200 text-rose-500")}>
+                <Book size={14} />
+              </div>
+              <h3 className={cn("text-[10px] font-black uppercase tracking-widest", activeStandardTarget === 'glossary' ? "text-rose-900" : "text-rose-500")}>Glossary Record</h3>
+            </div>
+            {activeStandardTarget === 'glossary' && <div className="text-[9px] font-black text-rose-500 animate-pulse uppercase">Active Target</div>}
+            {activeStandardTarget !== 'glossary' && <span className="text-[10px] font-bold text-rose-400 opacity-60">Snapshot Specific</span>}
+          </div>
+          <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
+            {hasMinimumContext ? (() => {
+              if (!Array.isArray(stagedGlosStds) || stagedGlosStds.length === 0) return <p className="text-[10px] text-rose-400 italic text-center py-2">No Glossary Overrides</p>;
+              return stagedGlosStds.map((sid, idx) => {
+                const s = standards?.find(st => (st.id || "").toLowerCase().trim() === (sid || "").toLowerCase().trim());
+                return (
+                  <div key={`glos-std-${sid}-${idx}`} className="flex items-center justify-between p-2 bg-white border border-rose-100 rounded-lg group hover:border-rose-300 transition-colors">
+                    <span className="text-[10px] font-medium text-zinc-600 truncate">{s?.citation_num} - {s?.citation_name}</span>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); removeStandard('glossary', sid); }} 
+                      className="p-1 px-1.5 text-rose-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                      title="Remove Glossary specific citation"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                );
+              });
+            })() : (
+              <p className="text-[10px] text-zinc-400 italic text-center py-4">Select context to manage</p>
+            )}
+          </div>
+          <div className="mt-4 pt-2 border-t border-rose-100/50">
+             <p className="text-[8px] text-rose-600 font-bold leading-tight">Note: Standard edits here apply only to the specific combination and DO NOT affect the Master Library Finding or Recommendation records.</p>
           </div>
         </Card>
       </div>

@@ -49,7 +49,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
   const { isDeduplicating, dedupStatus, setIsSynced, setActiveGlossaryId, setUserPreferences, isUpdatingRef, runStandardsMigration, migrateUomToUnit, sessionReads, sessionWrites, collectionCounts, setIsDeduplicating, setDedupStatus } = opsProps;
 
   return (
-    <div className={cn("flex-1 overflow-hidden flex flex-col", activeTab === 'library_manager' ? "p-0" : "p-8")}>
+    <div className={cn("flex-1 overflow-y-auto scroll-smooth flex flex-col", activeTab === 'library_manager' ? "p-0" : "p-8")}>
       {activeTab === 'setup' && (
         <PortfolioView 
           selectionProps={selectionProps}

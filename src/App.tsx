@@ -74,6 +74,7 @@ import {
 
 import { Button, Card } from './components/ui/core';
 import { ClientModal, FacilityModal, ProjectModal, InspectorModal, DeleteConfirmationModal } from './components/modals/EntityModals';
+import { GlossaryOverwriteGuardModal } from './components/modals/GlossaryOverwriteGuardModal';
 import { MASTER_GLOSSARY_CSV } from './constants/glossaryData';
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: any }> {
@@ -179,6 +180,9 @@ export default function App() {
         setUser(u);
         if (u) {
           setIsAdmin(u.email === 'kenotten@statereview.com');
+        } else {
+          setIsAdmin(false);
+          setIsRestored(false);
         }
       } catch (err) {
         console.error("Auth error:", err);
@@ -241,6 +245,11 @@ export default function App() {
   const isUpdatingRef = useRef(false);
   const [sessionReads, setSessionReads] = useState(0);
   const [sessionWrites, setSessionWrites] = useState(0);
+  const [pendingGlossaryItem, setPendingGlossaryItem] = useState<any>(null);
+
+  const hasUnsavedGlossaryBuilderChanges = () => {
+    return selections.isDirty;
+  };
 
   useEffect(() => {
     return firestoreService.subscribeToReads((count) => {
@@ -284,12 +293,109 @@ export default function App() {
   const [editingInspector, setEditingInspector] = useState<Inspector | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<any>(null);
 
-  const [selections, setSelections] = useState(() => {
+  const [selections, setSelections] = useState<any>(() => {
     const saved = localStorage.getItem('fredasoft_selections');
     const initial = { clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null };
     if (saved) try { return { ...initial, ...JSON.parse(saved), isDirty: false, editingRecordId: null }; } catch (e) { return initial; }
     return initial;
   });
+
+  const [isRestored, setIsRestored] = useState(false);
+
+  // Restore Workspace Context from Firestore
+  useEffect(() => {
+    if (!user?.uid || isRestored) return;
+    
+    // Core data must be loaded before validation
+    if (rawClients.length === 0 || rawFacilities.length === 0 || rawProjects.length === 0) return;
+
+    const loadContext = async () => {
+      try {
+        const pref = await firestoreService.preferences.get(user.uid) as UserPreference;
+        if (pref?.workspaceContext) {
+          const { selectedClientId, selectedFacilityId, selectedProjectId } = pref.workspaceContext;
+          
+          let validatedClientId = selectedClientId;
+          let validatedFacilityId = selectedFacilityId;
+          let validatedProjectId = selectedProjectId;
+
+          // Validation
+          const clientExists = rawClients.some(c => c.fldClientID === validatedClientId && !c.fldIsDeleted);
+          if (!clientExists) {
+            validatedClientId = '';
+            validatedFacilityId = '';
+            validatedProjectId = '';
+          } else {
+            const facilityExists = rawFacilities.some(f => f.fldFacID === validatedFacilityId && f.fldClient === validatedClientId && !f.fldIsDeleted);
+            if (!facilityExists) {
+              validatedFacilityId = '';
+              validatedProjectId = '';
+            } else {
+              // Project may belong to client directly or through facility list
+              const project = rawProjects.find(p => p.fldProjID === validatedProjectId && !p.fldIsDeleted);
+              const projectExists = project && (project.fldClient === validatedClientId || project.fldFacID === validatedFacilityId || (Array.isArray(project.fldFacilities) && project.fldFacilities.includes(validatedFacilityId)));
+              if (!projectExists) {
+                validatedProjectId = '';
+              }
+            }
+          }
+
+          if (validatedClientId || validatedFacilityId || validatedProjectId) {
+            setSelections((prev: any) => ({
+              ...prev,
+              clientId: validatedClientId,
+              facilityId: validatedFacilityId,
+              projectId: validatedProjectId
+            }));
+            // toast.info('Workspace context restored.');
+          }
+        }
+        setIsRestored(true);
+      } catch (error) {
+        console.error('Failed to restore workspace context:', error);
+      }
+    };
+
+    loadContext();
+  }, [user?.uid, rawClients.length, rawFacilities.length, rawProjects.length, isRestored]);
+
+  // Persist Workspace Context to Firestore
+  useEffect(() => {
+    if (!user?.uid || !isRestored) return;
+
+    const saveContext = async () => {
+      try {
+        const workspaceContext = {
+          selectedClientId: selections.clientId || '',
+          selectedFacilityId: selections.facilityId || '',
+          selectedProjectId: selections.projectId || '',
+          updatedAt: new Date().toISOString()
+        };
+
+        // Get current prefs to merge
+        const currentPrefs = await firestoreService.preferences.get(user.uid) || {};
+        
+        // Deep compare to avoid redundant writes
+        if (currentPrefs.workspaceContext?.selectedClientId === workspaceContext.selectedClientId &&
+            currentPrefs.workspaceContext?.selectedFacilityId === workspaceContext.selectedFacilityId &&
+            currentPrefs.workspaceContext?.selectedProjectId === workspaceContext.selectedProjectId) {
+          return;
+        }
+
+        await firestoreService.preferences.save(user.uid, {
+          ...currentPrefs,
+          uid: user.uid,
+          workspaceContext
+        });
+      } catch (error) {
+        console.error('Failed to save workspace context:', error);
+      }
+    };
+
+    const timeoutId = setTimeout(saveContext, 1000); // Debounce saves
+    localStorage.setItem('fredasoft_selections', JSON.stringify(selections));
+    return () => clearTimeout(timeoutId);
+  }, [selections.clientId, selections.facilityId, selections.projectId, user?.uid, isRestored]);
 
   // Hook for Project-Specific Data Collections
   const { rawProjectData, rawLocations } = useProjectData(selections.projectId);
@@ -373,7 +479,11 @@ export default function App() {
     }
   }, [user?.uid]);
 
-  const handleLogout = () => signOut(auth);
+  const handleLogout = () => {
+    signOut(auth);
+    setIsRestored(false);
+    setSelections({ clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null });
+  };
   const handleTabSwitch = (newTab: string) => { setActiveTab(newTab); };
 
   const handleEditClient = (client: Client) => entityService.handleEditClient(client, setEditingClient, setIsAddingClient);
@@ -478,7 +588,7 @@ export default function App() {
     });
   };
 
-  const handleEditGlossaryItem = (item: any) => {
+  const proceedWithEditGlossaryItem = (item: any) => {
     setActiveTab('maintenance');
     setSelections(prev => ({
       ...prev,
@@ -488,10 +598,23 @@ export default function App() {
       selectedRec: item.fldRec || '',
       editingGlossaryId: item.fldGlosId || item.id || '',
       images: item.fldImages || [],
+      stagedFindShort: '', // Will be hydrated by builder useEffect
+      stagedFindLong: '',
+      stagedRecShort: '',
+      stagedRecLong: '',
       standards: item.fldStandards || [],
       isDirty: false
     }));
     toast.info(`Editing glossary record: ${item.findingShort || 'selected item'}`);
+    setPendingGlossaryItem(null);
+  };
+
+  const handleEditGlossaryItem = (item: any) => {
+    if (hasUnsavedGlossaryBuilderChanges()) {
+      setPendingGlossaryItem(item);
+    } else {
+      proceedWithEditGlossaryItem(item);
+    }
   };
 
   const selectionProps = {
@@ -525,7 +648,7 @@ export default function App() {
     setRawMasterRecommendations,
     setGlossary,
     setStandards,
-    setRawRecommendations,
+    setRawRecommendations: setRawMasterRecommendations,
     importMasterGlossary,
     onEditGlossaryItem: handleEditGlossaryItem
   };
@@ -637,6 +760,14 @@ export default function App() {
         projectProps={projectProps}
         opsProps={opsProps}
       />
+
+      <GlossaryOverwriteGuardModal 
+        isOpen={!!pendingGlossaryItem}
+        onClose={() => setPendingGlossaryItem(null)}
+        onConfirm={() => proceedWithEditGlossaryItem(pendingGlossaryItem)}
+        itemName={pendingGlossaryItem?.findingShort}
+      />
+
       {/* !!! VERSION 86.0 - THE RECONSTRUCTION !!! */}
     </ErrorBoundary>
   );

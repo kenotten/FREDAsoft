@@ -55,34 +55,9 @@ export default function GlossaryExplorer({
   const [isMigrating, setIsMigrating] = useState(false);
   
   useEffect(() => {
-    const fetchMasterRecs = async () => {
-      console.log("FETCH STATUS: Received", masterRecommendations.length, "recommendations and", glossary.length, "glossary items.");
-      console.log('[GLOSSARY EXPLORER] GABRIEL DIRECTIVE: Forcing local fetch from Firestore...');
-      
-      // Force reload if data is missing after 5 seconds
-      const reloadTimer = setTimeout(() => {
-        if (masterRecommendations.length === 0 && glossary.length === 0) {
-          console.error("[GLOSSARY EXPLORER] Data missing after 5s. Reloading...");
-          window.location.reload();
-        }
-      }, 5000);
+    setLocalMasterRecs(Array.isArray(masterRecommendations) ? masterRecommendations : []);
+  }, [masterRecommendations]);
 
-      try {
-        const querySnapshot = await getDocs(collection(db, 'recommendations'));
-        const recs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.log(`[GLOSSARY EXPLORER] Local fetch complete. Found ${recs.length} records.`);
-        setLocalMasterRecs(recs);
-        clearTimeout(reloadTimer);
-      } catch (error: any) {
-        console.error('[GLOSSARY EXPLORER] Local fetch FAILED. Error Code:', error.code, 'Message:', error.message);
-        toast.error(`Failed to fetch data: ${error.message}`);
-        clearTimeout(reloadTimer);
-      }
-    };
-    fetchMasterRecs();
-  }, []);
-
-  console.log('AUDIT - Master Rec Shape:', localMasterRecs[0]);
   const [sortMode, setSortMode] = useState<'order' | 'alpha'>('order');
   const [showMissingOnly, setShowMissingOnly] = useState(false);
   const [columnFilters, setColumnFilters] = useState({
@@ -111,7 +86,6 @@ export default function GlossaryExplorer({
   } | null>(null);
 
   const runHealthAudit = () => {
-    console.log("HEALTH AUDIT: Starting tally...");
     
     // 1. Orphaned Findings (No Item parent)
     const orphanedFindings = findings.filter((f: any) => !f.fldItem).length;
@@ -161,7 +135,6 @@ export default function GlossaryExplorer({
     setIsSaving(true);
     let fixedCount = 0;
     try {
-      console.log("SURGERY: Starting Findings Data Integrity Surgery...");
       const findingsSnap = await getDocs(collection(db, 'findings'));
       const batch = writeBatch(db);
       let batchCount = 0;
@@ -172,7 +145,6 @@ export default function GlossaryExplorer({
         
         // Audit only findings with improper data types
         if (!Array.isArray(value)) {
-          console.log(`LEAK FOUND: Finding [${docSnap.id}] has invalid fldSuggestedRecs:`, value);
           
           let repairedValue: string[] = [];
           if (typeof value === 'string' && value.trim() !== '') {
@@ -191,7 +163,6 @@ export default function GlossaryExplorer({
           // Firestore atomic batch limit is 500 operations
           if (batchCount >= 450) {
              await batch.commit();
-             console.log("SURGERY: Partial batch committed (450 records).");
              batchCount = 0;
           }
         }
@@ -200,8 +171,6 @@ export default function GlossaryExplorer({
       if (batchCount > 0) {
         await batch.commit();
       }
-
-      console.log(`SURGERY SUCCESS: Repaired ${fixedCount} records.`);
       toast.success(`Surgery Complete! Repaired ${fixedCount} finding records.`);
     } catch (error: any) {
       console.error("SURGERY FAILED:", error);
@@ -346,7 +315,17 @@ export default function GlossaryExplorer({
 
   const resolvedGlossary = useMemo(() => {
     if (!glossary) return [];
-    return glossary.map((g: any) => {
+    
+    // Deduplicate glossary array by fldGlosId or id before mapping
+    const seenIds = new Set();
+    const uniqueGlossary = glossary.filter((g: any) => {
+      const id = g.fldGlosId || g.id;
+      if (!id || seenIds.has(id)) return false;
+      seenIds.add(id);
+      return true;
+    });
+
+    return uniqueGlossary.map((g: any) => {
       const gRecId = g.fldRec || g.fldRecID;
       const gFindId = String(g.fldFind || "").toLowerCase().trim();
       const gItemId = String(g.fldItem || "").toLowerCase().trim();
@@ -370,12 +349,6 @@ export default function GlossaryExplorer({
           String(r.fldRecShort || "").toLowerCase().trim() === String(g.recommendationShort || "").toLowerCase().trim()
         );
       }
-
-      if (!matchedRec && gRecId && (g.recommendationShort || g.recommendationLong)) {
-        console.error('CRITICAL: Glossary ID not found in Master:', gRecId);
-        console.log('Glossary Record Context:', g);
-      }
-      
       // Fallback to legacy recommendations if missing from master
       let legacyRec = null;
       if (!matchedRec) {
@@ -1075,16 +1048,9 @@ export default function GlossaryExplorer({
                         {(() => {
                           const recId = row.fldRec;
                           
-                          if (recId === "5071ed43-a137-46a1-8843-4121f4cf6fb3") {
-                            console.log('TARGET FOUND IN STATE:', !!localMasterRecs.find(r => (r.id || r.fldRecID) === recId));
-                          }
-                          const isActuallyInMaster = localMasterRecs.some(mr => {
-                            const match = (mr.id || mr.fldRecID || "").toLowerCase().trim() === (recId || "").toLowerCase().trim();
-                            if (expandedRows.has(row.id)) {
-                              console.log('Comparing:', recId, 'to:', (mr.id || mr.fldRecID), 'Match:', match);
-                            }
-                            return match;
-                          });
+                          const isActuallyInMaster = localMasterRecs.some(mr => 
+                            (mr.id || mr.fldRecID || "").toLowerCase().trim() === (recId || "").toLowerCase().trim()
+                          );
                           
                           if (isActuallyInMaster || !recId) return null;
 

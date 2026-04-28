@@ -84,6 +84,8 @@ Category
 → Item
 → Location / Records
 
+See `/docs/CLIENT_PORTAL_SPEC.md` for future client portal reporting behavior and interactive report concepts.
+
 ---
 
 ## Design Principles

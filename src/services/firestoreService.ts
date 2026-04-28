@@ -7,7 +7,9 @@ import {
   writeBatch,
   serverTimestamp,
   getDocs,
+  getDoc,
   query,
+  where,
   QueryConstraint,
   onSnapshot
 } from 'firebase/firestore';
@@ -78,7 +80,7 @@ function notifyWriteListeners() {
   writeListeners.forEach(cb => cb(sessionWrites));
 }
 
-const validCollections = ['glossary', 'recommendations', 'categories', 'projects', 'tas_standards', 'inspectors', 'clients', 'facilities', 'items', 'findings', 'unitTypes', 'projectData', 'locations', 'documents'];
+const validCollections = ['glossary', 'recommendations', 'categories', 'projects', 'tas_standards', 'inspectors', 'clients', 'facilities', 'items', 'findings', 'unitTypes', 'projectData', 'locations', 'documents', 'users'];
 
 export const firestoreService = {
   getSessionReads() {
@@ -121,18 +123,24 @@ export const firestoreService = {
    * Helper to sanitize data for Firestore
    */
   sanitize(data: any): any {
-    if (typeof data !== 'object' || data === null) return data;
-    const sanitized = { ...data };
-    Object.keys(sanitized).forEach(key => {
-      if (sanitized[key] === undefined) {
-        sanitized[key] = null;
-      } else if (typeof sanitized[key] === 'object') {
-        sanitized[key] = this.sanitize(sanitized[key]);
-      }
+    if (data === undefined) return null;
+    if (data === null) return null;
+    if (typeof data !== 'object') return data;
+
+    // CRITICAL: Preserve arrays as arrays.
+    // Do not spread arrays into objects, or Firestore stores them as maps.
+    if (Array.isArray(data)) {
+      return data.map(item => this.sanitize(item));
+    }
+
+    const sanitized: any = {};
+    Object.keys(data).forEach(key => {
+      sanitized[key] = this.sanitize(data[key]);
     });
+
     return sanitized;
   },
-
+  
   /**
    * Save a document (Create or Update)
    */
@@ -336,5 +344,31 @@ export const firestoreService = {
     delete: (id: string) => firestoreService.delete('recommendations', id),
     list: () => firestoreService.list('recommendations'),
     onSnapshot: (callback: (data: any[]) => void) => firestoreService.onSnapshot('recommendations', callback)
+  },
+
+  /**
+   * User Preferences specific operations
+   */
+  preferences: {
+    save: (uid: string, preferences: any) => firestoreService.save('users', preferences, uid),
+    get: async (uid: string) => {
+      const docRef = doc(db, 'users', uid);
+      const directDoc = await getDoc(docRef);
+      if (directDoc.exists()) {
+        firestoreService.incrementReads(1);
+        return directDoc.data();
+      }
+      return null;
+    },
+    onSnapshot: (uid: string, callback: (data: any) => void) => {
+      const docRef = doc(db, 'users', uid);
+      return onSnapshot(docRef, (snapshot) => {
+        if (snapshot.exists()) {
+          callback(snapshot.data());
+        } else {
+          callback(null);
+        }
+      });
+    }
   }
 };

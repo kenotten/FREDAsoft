@@ -49,6 +49,7 @@ export interface Project {
   fldFacilities?: string[];
   fldFacID?: string; // Legacy/Filter compatibility
   fldPDDate: string;
+  fldNarrative?: string;
   fldCostMultiplier?: number;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
@@ -204,7 +205,23 @@ export interface UserPreference {
   uid: string;
   portfolioClientId?: string;
   portfolioViewMode?: 'projects' | 'facilities';
-  dataEntrySelections?: object;
+  dataEntrySelections?: {
+    clientId?: string;
+    facilityId?: string;
+    projectId?: string;
+    categoryId?: string;
+    itemId?: string;
+    findId?: string;
+    recId?: string;
+    locationId?: string;
+    locationName?: string;
+  };
+  workspaceContext?: {
+    selectedClientId: string;
+    selectedFacilityId: string;
+    selectedProjectId: string;
+    updatedAt: string;
+  };
   glossaryBuilderSelections?: object;
   activeTab?: string;
   isSidebarOpen?: boolean;

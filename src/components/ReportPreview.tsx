@@ -272,7 +272,10 @@ export function ReportPreview({
   }, [filteredData, financialRows, referencedStandards]);
 
   // Pagination Chunks using measured heights
-  const narrativePages = ["Project Narrative Placeholder"];
+  const narrativePages = useMemo(() => {
+    const narrative = project.fldNarrative || "No project narrative provided.";
+    return [narrative];
+  }, [project.fldNarrative]);
 
   const documentationPages = useMemo(() => {
     if (isMeasuring) return [];
@@ -541,7 +544,7 @@ export function ReportPreview({
                   <div className="flex flex-col">
                     <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">Narrative:</h2>
                     <div className="text-sm text-zinc-800 leading-relaxed space-y-6 whitespace-pre-wrap">
-                      {content || "No narrative content provided for this project."}
+                      {content}
                     </div>
                   </div>
                 </PageContainer>

@@ -21,6 +21,7 @@ const StandardItem = ({ s, onSelect, isDuplicate }: { s: MasterStandard, onSelec
         const data = JSON.stringify(s);
         e.dataTransfer.setData('application/json', data);
         e.dataTransfer.setData('text/plain', data);
+        e.dataTransfer.setData('standardId', s.id);
         e.dataTransfer.effectAllowed = 'copy';
       }}
       onClick={() => {
