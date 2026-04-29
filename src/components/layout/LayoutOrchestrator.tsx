@@ -180,7 +180,6 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
   const {
     isAdmin,
     handleLogout,
-    tabNames,
     activeTab,
     handleTabSwitch,
     isSidebarOpen,
@@ -319,10 +318,15 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
           <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-6">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsTrayOpen(true)}>
-                <span className="text-zinc-900 font-bold">{projects.find(p => p.fldProjID === selections.projectId)?.fldProjName || "Select Project"}</span>
+                <span className="text-zinc-900 font-bold">
+                  {(selectedClient?.fldClientName || 'Select Client')}
+                  {' / '}
+                  {(selectedFacility?.fldFacName || 'Select Facility')}
+                  {' / '}
+                  {(selectedProject?.fldProjName || 'Select Project')}
+                </span>
                 <ChevronDown size={14} className="text-zinc-400" />
               </div>
-              <span className="ml-4 text-[10px] font-mono text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full uppercase tracking-widest">v86.0 | STRUCTURAL_REPAIR</span>
             </div>
             <div className="flex items-center gap-4">
               {selectedProject && (
@@ -335,9 +339,6 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
                   <FileText size={14} className="mr-2" /> View Report
                 </Button>
               )}
-              <div className="flex items-center gap-2 px-4 py-1.5 bg-zinc-50 border border-zinc-200 rounded-full text-[11px] font-mono text-zinc-500">
-                 fredasoft.app / <span className="font-bold">{tabNames[activeTab] || activeTab}</span>
-              </div>
             </div>
           </header>
           
