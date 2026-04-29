@@ -97,7 +97,10 @@ export function ReportPreview({
 
   // Filter and sort project data for this specific project
   const filteredData = useMemo(() => {
-    const rawData = projectData.filter(d => d.fldPDataProject === project.fldProjID);
+  const rawData = projectData.filter(d =>
+  String(d.fldPDataProject || '').trim().toLowerCase() === String(project.fldProjID || '').trim().toLowerCase() &&
+  String(d.fldFacility || '').trim().toLowerCase() === String(facility.fldFacID || facility.id || '').trim().toLowerCase()
+);
     
     // Ensure uniqueness by fldPDataID
     const uniqueMap = new Map();
@@ -146,7 +149,7 @@ export function ReportPreview({
       if (findOrderA !== findOrderB) return findOrderA - findOrderB;
       return (itemA?.fldItemName || '').localeCompare(itemB?.fldItemName || '');
     });
-  }, [projectData, project.fldProjID, glossary, categories, items, locations, findings]);
+  }, [projectData, project.fldProjID, facility.fldFacID, facility.id, glossary, categories, items, locations, findings]);
 
   const referencedStandards = useMemo(() => {
     const standardsMap = new Map<string, any>();

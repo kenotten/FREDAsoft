@@ -584,10 +584,24 @@ export default function ProjectDataEntry({
     );
   }, [glossary, selections, activeRecord?.fldData]);
 
-  const filteredStandards = useMemo(() => {
+    const filteredStandards = useMemo(() => {
     if (!activeGlossaryEntry || !activeGlossaryEntry.fldStandards) return [];
-    const allowedIds = activeGlossaryEntry.fldStandards;
-    return (standards || []).filter(s => allowedIds.includes(s.id));
+
+    const rawAllowedIds = activeGlossaryEntry.fldStandards;
+
+    const allowedIds = Array.isArray(rawAllowedIds)
+      ? rawAllowedIds
+      : typeof rawAllowedIds === 'object'
+        ? Object.values(rawAllowedIds)
+        : [];
+
+    const normalizedAllowedIds = allowedIds
+      .filter(Boolean)
+      .map((id: any) => String(id).trim().toLowerCase());
+
+    return (standards || []).filter((s: any) =>
+      normalizedAllowedIds.includes(String(s.id || '').trim().toLowerCase())
+    );
   }, [standards, activeGlossaryEntry]);
 
   // TIERED RECOMMENDATION LOGIC
@@ -613,7 +627,17 @@ export default function ProjectDataEntry({
 
     // TIER 2: Finding Library Suggestions
     const finding = (findings || []).find(f => (f.fldFindID || f.id || '').toLowerCase().trim() === currentFindId);
-    const suggestedRecs = (finding?.fldSuggestedRecs || []).map((id: string) => id.toLowerCase().trim());
+        const rawSuggestedRecs = finding?.fldSuggestedRecs;
+
+    const suggestedRecs = (
+      Array.isArray(rawSuggestedRecs)
+        ? rawSuggestedRecs
+        : rawSuggestedRecs && typeof rawSuggestedRecs === 'object'
+          ? Object.values(rawSuggestedRecs)
+          : []
+    )
+      .filter(Boolean)
+      .map((id: any) => String(id).toLowerCase().trim());
 
     // TIER 3: Item Context (Broad Glossary) - Any rec used for this item
     const itemRecs = glossaryMatches.length === 0 ? (glossary || [])
