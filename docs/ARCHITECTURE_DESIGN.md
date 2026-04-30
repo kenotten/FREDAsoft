@@ -233,3 +233,111 @@ No implementation of these features is part of the current phase. This section d
 - `master_standards` → standards library  
 - `userPreferences` → UI state  
 - `documents` → reports  
+
+## Firebase Storage Configuration Notes
+
+FREDAsoft uses Firebase Storage with the bucket:
+
+path-recovery.firebasestorage.app
+
+Important:
+- This must match the value in firebase-applet-config.json
+- Do not use the legacy .appspot.com bucket unless explicitly configured
+
+CORS must be configured on the active bucket for local development:
+- Allows http://localhost:3000
+
+Storage rules must use:
+service firebase.storage
+
+NOT:
+service cloud.firestore
+
+Common failure symptoms:
+- Upload fails with "CORS" error
+- Preflight request fails
+- net::ERR_FAILED
+
+These usually indicate:
+- Wrong bucket
+- Missing CORS
+- Incorrect rules type
+
+
+## Future Enhancement: Data Record Image Management
+
+The restored Project Data Entry image upload feature is stable enough for beta testing in its current form. Future enhancements should be deferred until the current data-entry flow has been tested more thoroughly.
+
+Planned future capabilities:
+
+### 1. Image Ordering
+
+Allow users to manually reorder images attached to a project data record.
+
+Potential implementation:
+- Store image metadata as objects instead of raw URL strings.
+- Add an `order` field.
+- Support drag-and-drop or move up/down controls.
+- Preserve order when rendering thumbnails and reports.
+
+Example future structure:
+
+```ts
+fldImages: [
+  {
+    url: string;
+    storagePath: string;
+    order: number;
+    uploadedAt: string;
+    isDeleted: boolean;
+  }
+]
+2. Select Primary Report Images
+
+Allow users to mark up to two images per data record for inclusion in the main report body.
+
+Expected behavior:
+
+User may upload many images to a data record.
+User can select up to 2 as “primary” or “include in report body.”
+Remaining images should be included later in a report addendum/appendix.
+UI should prevent selecting more than 2 primary images.
+
+Potential metadata fields:
+
+includeInReport
+reportImageSlot
+reportOrder
+3. Image Addendum / Appendix
+
+Images not selected as primary report images should still be retained and available.
+
+Expected behavior:
+
+Non-primary images remain attached to the data record.
+Report generator places them in an image addendum/appendix.
+Images should retain association with their project, facility, location, and data record.
+4. Drag-and-Drop Upload
+
+Add drag-and-drop support to the Project Data Entry image card.
+
+Expected behavior:
+
+User can drag image files onto the Images card.
+Existing “Add Image” button remains available.
+Same validation, resize, upload, and fldImages save flow should be reused.
+Avoid introducing a separate upload pathway.
+5. Soft Delete / Archive Policy
+
+Image removal from a data record should follow FREDAsoft’s data retention policy.
+
+Expected behavior:
+
+Removing an image from a record should not immediately delete the underlying Firebase Storage object.
+Future image metadata should support isDeleted, deletedAt, and possibly deletedBy.
+A separate controlled purge/admin feature may be added later for permanent cleanup.
+Implementation Note
+
+Current implementation stores fldImages as an array of image URL strings. This is acceptable for beta testing.
+
+Future enhancements will likely require migrating fldImages from string[] to image metadata objects, or introducing a compatible normalization layer that supports both legacy string URLs and newer image objects.
