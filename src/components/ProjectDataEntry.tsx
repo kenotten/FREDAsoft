@@ -384,7 +384,7 @@ export default function ProjectDataEntry({
       fldPDataID: finalizedId,
       fldPDataProject: selections.projectId,
       fldFacility: facility?.fldFacID || activeRecord?.fldFacility,
-      fldData: activeRecord?.fldData || selections.glosId || "",
+      fldData: selections.glosId || activeRecord?.fldData || "",
       fldLocation,
       fldFindShort,
       fldFindLong,
