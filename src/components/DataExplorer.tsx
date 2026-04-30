@@ -168,10 +168,17 @@ export function DataExplorer({
     if (!projectData || !projects || !facilities || !clients || !categories || !items || !findings || !recommendations) {
       return [];
     }
+    const activeProjectId = String(selections.projectId || '').trim().toLowerCase();
+    const activeFacilityId = String(selections.facilityId || '').trim().toLowerCase();
+    if (!activeProjectId || !activeFacilityId) return [];
 
     const filtered = projectData.filter((d: any) => {
       // 🛡️ DATA GUARD: Ensure 'd' and IDs exist before searching
       if (!d || !d.fldPDataID) return false;
+      const recordProjectId = String(d.fldPDataProject || '').trim().toLowerCase();
+      const recordFacilityId = String(d.fldFacility || '').trim().toLowerCase();
+      const inActiveScope = recordProjectId === activeProjectId && recordFacilityId === activeFacilityId;
+      if (!inActiveScope) return false;
 
       const project = projects.find((p: any) => p.fldProjID === d.fldPDataProject);
       const glos = getGlossaryContext(d);
@@ -225,7 +232,7 @@ export function DataExplorer({
         return locA.localeCompare(locB);
       }
     });
-  }, [projectData, searchTerm, filterClient, filterFacility, filterProject, filterCategory, sortMode, projects, facilities, clients, categories, items, findings, locations, glossary]);
+  }, [projectData, searchTerm, filterClient, filterFacility, filterProject, filterCategory, sortMode, projects, facilities, clients, categories, items, findings, locations, glossary, selections.projectId, selections.facilityId]);
 
   const groupedData = useMemo(() => {
     const groups: any = {};
