@@ -5,7 +5,7 @@
   "authDomain": "path-recovery.firebaseapp.com",
   "firestoreDatabaseId": "(default)",
   "databaseId": "(default)",
-  "storageBucket": "path-recovery.appspot.com",
+  "storageBucket": "path-recovery.firebasestorage.app",
   "messagingSenderId": "702924902097",
   "measurementId": ""
 }

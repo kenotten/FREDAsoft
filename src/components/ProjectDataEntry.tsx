@@ -31,6 +31,12 @@ import { resizeImage } from '../lib/imageUtils';
 import { toFraction, fromFraction } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
+const safeArray = (value: any): string[] => {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') return Object.values(value).filter(Boolean).map(String);
+  return [];
+};
+
 function Modal({ title, children, onClose }: any) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -142,7 +148,7 @@ export default function ProjectDataEntry({
         (fldTotalCost === '' ? 0 : Number(fldTotalCost)) !== (activeRecord.fldTotalCost || 0) ||
         fldLocation !== (activeRecord.fldLocation || '') ||
         JSON.stringify(fldImages) !== JSON.stringify(activeRecord.fldImages || []) ||
-        JSON.stringify(fldStandards) !== JSON.stringify(activeRecord.fldStandards || [])
+        JSON.stringify(safeArray(fldStandards)) !== JSON.stringify(safeArray(activeRecord.fldStandards))
       );
     } else {
       return (
@@ -154,7 +160,7 @@ export default function ProjectDataEntry({
         fldMeasurement !== '' ||
         fldUnitType !== 'Decimal' ||
         fldImages.length > 0 ||
-        fldStandards.length > 0
+        safeArray(fldStandards).length > 0
       );
     }
   }, [
@@ -170,6 +176,7 @@ export default function ProjectDataEntry({
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [savedDraft, setSavedDraft] = useState<any>(null);
   const [standardSearch, setStandardSearch] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Project Safety: Reset form state when switching projects to prevent data contamination
   useEffect(() => {
@@ -192,7 +199,7 @@ export default function ProjectDataEntry({
     // 1. Text and Standards (Atomic update)
     setFldRecShort(rec.fldRecShort || '');
     setFldRecLong(rec.fldRecLong || '');
-    setFldStandards(rec.fldStandards || []);
+    setFldStandards(safeArray(rec.fldStandards));
 
     // 2. Glossary Context Lookup (Full path)
     const glos = (glossary || []).find(g => 
@@ -298,7 +305,7 @@ export default function ProjectDataEntry({
     setFldTotalCost(savedDraft.fldTotalCost || 0);
     setFldLocation(savedDraft.fldLocation || '');
     setFldImages(savedDraft.fldImages || []);
-    setFldStandards(savedDraft.fldStandards || []);
+    setFldStandards(safeArray(savedDraft.fldStandards));
     
     if (savedDraft.selections) {
       onSelectionChange({
@@ -351,7 +358,7 @@ export default function ProjectDataEntry({
       setFldTotalCost(activeRecord.fldTotalCost || 0);
       setFldLocation(activeRecord.fldLocation || '');
       setFldImages(Array.isArray(activeRecord.fldImages) ? activeRecord.fldImages : []);
-      setFldStandards(Array.isArray(activeRecord.fldStandards) ? activeRecord.fldStandards : []);
+      setFldStandards(safeArray(activeRecord.fldStandards));
       setIsDirty(false);
     } else {
       // Inheritance Lock: Initialize from selections if new record
@@ -390,7 +397,7 @@ export default function ProjectDataEntry({
       fldUnitType,
       fldTotalCost: Number(fldTotalCost) || 0,
       fldImages,
-      fldStandards: fldStandards,
+      fldStandards: safeArray(fldStandards),
       fldInspID: inspector.fldInspID,
       fldTimestamp: new Date().toISOString()
     });
@@ -475,7 +482,7 @@ export default function ProjectDataEntry({
         setFldTotalCost(activeRecord.fldTotalCost || 0);
         setFldLocation(activeRecord.fldLocation || '');
         setFldImages(Array.isArray(activeRecord.fldImages) ? activeRecord.fldImages : []);
-        setFldStandards(Array.isArray(activeRecord.fldStandards) ? activeRecord.fldStandards : []);
+        setFldStandards(safeArray(activeRecord.fldStandards));
         setIsDirty(false);
         toast.info('Restored to original');
       }
@@ -566,6 +573,48 @@ export default function ProjectDataEntry({
     } catch (error) {
       toast.error('Failed to remove location');
     }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    if (!selections.projectId) {
+      toast.error('Project context is required to upload images.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    setIsUploading(true);
+    let uploaded = 0;
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith('image/')) continue;
+        const dataUrl = await resizeImage(file);
+        const path = `project-data/${selections.projectId}/${uuidv4()}.jpg`;
+        const storageRef = ref(storage, path);
+        await uploadString(storageRef, dataUrl, 'data_url');
+        const url = await getDownloadURL(storageRef);
+        setFldImages((prev) => [...prev, url]);
+        uploaded++;
+      }
+      if (uploaded > 0) {
+        setIsDirty(true);
+        toast.success(uploaded === 1 ? 'Image uploaded' : `${uploaded} images uploaded`);
+      } else {
+        toast.error('No valid image files selected');
+      }
+    } catch (error) {
+      console.error('[ProjectDataEntry] Image upload:', error);
+      toast.error('Image upload failed');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setIsUploading(false);
+    }
+  };
+
+  const handleRemoveImage = (url: string) => {
+    setFldImages((prev) => prev.filter((u) => u !== url));
+    setIsDirty(true);
   };
 
   const facilityLocations = (Array.isArray(locations) ? locations : [])
@@ -965,7 +1014,7 @@ export default function ProjectDataEntry({
                     s.citation_name.toLowerCase().includes(standardSearch.toLowerCase())
                   )
                   .map(s => {
-                    const isSelected = fldStandards.includes(s.id);
+                    const isSelected = safeArray(fldStandards).includes(s.id);
                     return (
                       <button
                         key={s.id}
@@ -997,9 +1046,9 @@ export default function ProjectDataEntry({
                   })
               )}
             </div>
-            {fldStandards.length > 0 && (
+            {safeArray(fldStandards).length > 0 && (
               <div className="flex flex-wrap gap-2 pt-2">
-                {fldStandards.map(id => {
+                {safeArray(fldStandards).map(id => {
                   const s = standards.find(st => (st.id || "").toLowerCase() === (id || "").toLowerCase());
                   if (!s) return null;
                   return (
@@ -1011,6 +1060,56 @@ export default function ProjectDataEntry({
                     </span>
                   );
                 })}
+              </div>
+            )}
+          </Card>
+
+          <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+              <h3 className="text-sm font-bold text-zinc-900">Images</h3>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isUploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="h-9 px-4"
+              >
+                {isUploading ? (
+                  <Loader2 size={16} className="mr-2 animate-spin" />
+                ) : (
+                  <Camera size={16} className="mr-2" />
+                )}
+                Add Image
+              </Button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleImageUpload}
+            />
+            {fldImages.length === 0 ? (
+              <p className="text-sm text-zinc-400 italic text-center py-6">No images attached.</p>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                {fldImages.map((url) => (
+                  <div
+                    key={url}
+                    className="relative w-24 h-24 rounded-xl border border-zinc-200 overflow-hidden bg-zinc-50 shrink-0 group"
+                  >
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage(url)}
+                      className="absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      aria-label="Remove image"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </Card>
