@@ -226,6 +226,7 @@ export default function GlossaryExplorer({
     try {
       await firestoreService.softDelete('glossary', id);
       toast.success('Record retired');
+      setDeleteConfirm(null);
     } catch (error) {
       toast.error('Failed to retire');
     } finally {
@@ -319,6 +320,7 @@ export default function GlossaryExplorer({
     // Deduplicate glossary array by fldGlosId or id before mapping
     const seenIds = new Set();
     const uniqueGlossary = glossary.filter((g: any) => {
+      if (g.fldIsDeleted === true || g.fldDeleted === true) return false;
       const id = g.fldGlosId || g.id;
       if (!id || seenIds.has(id)) return false;
       seenIds.add(id);
