@@ -203,6 +203,8 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
   const [isLibraryDirty, setIsLibraryDirty] = React.useState(false);
   const [pendingTab, setPendingTab] = React.useState<string | null>(null);
   const [isLibrarySaving, setIsLibrarySaving] = React.useState(false);
+  const [isDataEntryDirty, setIsDataEntryDirty] = React.useState(false);
+  const [pendingDataAction, setPendingDataAction] = React.useState<'logout' | null>(null);
   const libRef = React.useRef<LibraryManagerHandle>(null);
 
   const handleGuardedTabSwitch = (newTab: string) => {
@@ -211,6 +213,21 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
     } else {
       handleTabSwitch(newTab);
     }
+  };
+
+  const handleGuardedLogout = () => {
+    if (isDataEntryDirty) {
+      setPendingDataAction('logout');
+      return;
+    }
+    handleLogout();
+  };
+
+  const handleDataDiscardAndContinue = () => {
+    localStorage.removeItem('fredasoft_draft');
+    setIsDataEntryDirty(false);
+    setPendingDataAction(null);
+    handleLogout();
   };
 
   const handleLibraryModalSave = async () => {
@@ -311,7 +328,7 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
               <NavItem active={activeTab === 'dashboard'} onClick={() => handleGuardedTabSwitch('dashboard')} icon={<LayoutDashboard size={18} />} label="Dashboard" />
             </NavSection>
           </nav>
-          <div className="p-4 border-t border-zinc-100"><Button variant="ghost" onClick={handleLogout} className="w-full justify-start text-red-500"><LogOut size={16} className="mr-2" />Sign Out</Button></div>
+          <div className="p-4 border-t border-zinc-100"><Button variant="ghost" onClick={handleGuardedLogout} className="w-full justify-start text-red-500"><LogOut size={16} className="mr-2" />Sign Out</Button></div>
         </aside>
 
         <main className="flex-1 h-screen overflow-hidden flex flex-col relative">
@@ -346,6 +363,8 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
             activeTab={activeTab}
             isAdmin={isAdmin}
             setActiveTab={handleGuardedTabSwitch}
+            isDataEntryDirty={isDataEntryDirty}
+            onDataEntryDirtyChange={setIsDataEntryDirty}
             selectionProps={selectionProps}
             masterDataProps={masterDataProps}
             entityProps={entityProps}
@@ -366,6 +385,36 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
         onSave={handleLibraryModalSave}
         isSaving={isLibrarySaving}
       />
+      {pendingDataAction && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-zinc-100">
+              <h2 className="text-lg font-bold text-zinc-900">Unsaved changes</h2>
+              <p className="text-sm text-zinc-600 mt-2">
+                {pendingDataAction === 'logout'
+                  ? 'You have an unsaved record in progress. Signing out will discard these changes.'
+                  : 'You have unsaved changes in the current record. Leaving will discard them.'}
+              </p>
+            </div>
+            <div className="p-6 flex gap-3">
+              <button
+                onClick={() => {
+                  setPendingDataAction(null);
+                }}
+                className="flex-1 h-11 px-4 rounded-lg border border-zinc-200 text-zinc-700 font-medium hover:bg-zinc-50"
+              >
+                Continue Editing
+              </button>
+              <button
+                onClick={handleDataDiscardAndContinue}
+                className="flex-1 h-11 px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium"
+              >
+                Discard Changes and Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showReportPreview && selectedProject && selectedClient && selectedFacility && selectedInspector && (
         <ReportPreview 

@@ -37,6 +37,9 @@ const safeArray = (value: any): string[] => {
   return [];
 };
 
+/** Session flag: draft recovery runs once per tab session; cleared on full reload so refresh still prompts. */
+const FREDASOFT_DRAFT_SESSION_CHECK_KEY = 'fredasoft_draft_checked';
+
 function Modal({ title, children, onClose }: any) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -63,7 +66,7 @@ function Modal({ title, children, onClose }: any) {
 export default function ProjectDataEntry({ 
   project = {}, facility = {}, inspector = {}, glossary = [], standards = [], projectData = [],
   onSave, onReset, items = [], findings = [], recommendations = [], masterRecommendations = [],
-  unitTypes = [], mergedCategories = [], locations = [], selections = {}, onSelectionChange
+  unitTypes = [], mergedCategories = [], locations = [], selections = {}, onSelectionChange, onDirtyChange
 }: any) {
   const [isSearchingAll, setIsSearchingAll] = useState(false);
   
@@ -168,6 +171,13 @@ export default function ProjectDataEntry({
     fldQTY, fldMeasurement, fldUnitType, fldLocation, fldImages, fldStandards
   ]);
 
+  useEffect(() => {
+    if (typeof onDirtyChange === 'function') onDirtyChange(isFormDirty);
+    return () => {
+      if (typeof onDirtyChange === 'function') onDirtyChange(false);
+    };
+  }, [isFormDirty, onDirtyChange]);
+
   const focusClasses = "focus:border-amber-500 focus:bg-yellow-50 focus:ring-amber-500/10";
 
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
@@ -247,8 +257,22 @@ export default function ProjectDataEntry({
     setIsDirty(true);
   };
 
-  // Recovery Protocol: Check for draft on mount
+  // Recovery Protocol: check for draft on first Data Entry mount per tab session only.
+  // Tab switches unmount/remount this component; sessionStorage skips re-prompting until reload/new tab.
   useEffect(() => {
+    const navEntries =
+      typeof performance !== 'undefined' && typeof performance.getEntriesByType === 'function'
+        ? performance.getEntriesByType('navigation')
+        : [];
+    const nav =
+      navEntries.length > 0 ? (navEntries[0] as PerformanceNavigationTiming) : undefined;
+    if (nav?.type === 'reload') {
+      sessionStorage.removeItem(FREDASOFT_DRAFT_SESSION_CHECK_KEY);
+    }
+    if (sessionStorage.getItem(FREDASOFT_DRAFT_SESSION_CHECK_KEY) !== null) {
+      return;
+    }
+
     const draft = localStorage.getItem('fredasoft_draft');
     if (draft) {
       try {
@@ -259,6 +283,7 @@ export default function ProjectDataEntry({
         localStorage.removeItem('fredasoft_draft');
       }
     }
+    sessionStorage.setItem(FREDASOFT_DRAFT_SESSION_CHECK_KEY, '1');
   }, []);
 
   // Auto-Save Logic: Every 5 seconds if dirty
