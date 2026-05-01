@@ -404,7 +404,7 @@ export default function ProjectDataEntry({
     setFldTotalCost(cost * qty);
   }, [fldUnitCost, fldQTY]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!hasRequiredContext) {
       toast.error('Select a project and inspector before saving.');
       return;
@@ -415,31 +415,59 @@ export default function ProjectDataEntry({
     // Ensure we have a valid ID before saving
     const finalizedId = editingRecordId || uuidv4();
     
-    onSave({
-      fldPDataID: finalizedId,
-      fldPDataProject: selections.projectId,
-      fldFacility: facility?.fldFacID || activeRecord?.fldFacility,
-      fldData: selections.glosId || activeRecord?.fldData || "",
-      fldLocation,
-      fldFindShort,
-      fldFindLong,
-      fldRecShort,
-      fldRecLong,
-      fldQTY: Number(fldQTY) || 0,
-      fldMeasurement: fldMeasurement === '' ? null : Number(fldMeasurement),
-      fldMeasurementUnit,
-      fldUnitCost: Number(fldUnitCost) || 0,
-      fldUnitType,
-      fldTotalCost: Number(fldTotalCost) || 0,
-      fldImages,
-      fldStandards: safeArray(fldStandards),
-      fldInspID: inspector.fldInspID,
-      fldTimestamp: new Date().toISOString()
-    });
-    // Update selections for sticky behavior
-    onSelectionChange({ ...selections, locationId: fldLocation, editingRecordId: finalizedId, isDirty: false });
+    try {
+      await onSave({
+        fldPDataID: finalizedId,
+        fldPDataProject: selections.projectId,
+        fldFacility: facility?.fldFacID || activeRecord?.fldFacility,
+        fldData: selections.glosId || activeRecord?.fldData || "",
+        fldLocation,
+        fldFindShort,
+        fldFindLong,
+        fldRecShort,
+        fldRecLong,
+        fldQTY: Number(fldQTY) || 0,
+        fldMeasurement: fldMeasurement === '' ? null : Number(fldMeasurement),
+        fldMeasurementUnit,
+        fldUnitCost: Number(fldUnitCost) || 0,
+        fldUnitType,
+        fldTotalCost: Number(fldTotalCost) || 0,
+        fldImages,
+        fldStandards: safeArray(fldStandards),
+        fldInspID: inspector.fldInspID,
+        fldTimestamp: new Date().toISOString()
+      });
+    } catch {
+      return;
+    }
+
+    setFldFindShort('');
+    setFldFindLong('');
+    setFldRecShort('');
+    setFldRecLong('');
+    setFldQTY(0);
+    setFldMeasurement('');
+    setFldMeasurementUnit('');
+    setFldUnitType('Decimal');
+    setFldUnitCost(0);
+    setFldTotalCost(0);
+    setFldImages([]);
+    setFldStandards([]);
+
     localStorage.removeItem('fredasoft_draft');
     setIsDirty(false);
+    onSelectionChange({
+      ...selections,
+      categoryId: selections.categoryId,
+      locationId: fldLocation,
+      itemId: '',
+      findId: '',
+      recId: '',
+      standards: [],
+      images: [],
+      editingRecordId: null,
+      isDirty: false
+    });
   };
 
   const confirmAction = (title: string, message: string, action: () => void) => {
