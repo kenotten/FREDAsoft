@@ -77,9 +77,15 @@ export default function ProjectDataEntry({
   }, [projectData, selections.editingRecordId]);
 
   const editingRecordId = selections.editingRecordId;
+
+  const hasRequiredContext = Boolean(selections.projectId && inspector?.fldInspID);
   
   const selectedCat = selections.categoryId;
   const setSelectedCat = (val: string) => {
+    if (!hasRequiredContext && val !== '') {
+      toast.error('Select a project and inspector before entering data.');
+      return;
+    }
     // Cascading Reset: Clear everything downstream
     setFldFindShort('');
     setFldFindLong('');
@@ -399,6 +405,10 @@ export default function ProjectDataEntry({
   }, [fldUnitCost, fldQTY]);
 
   const handleSave = () => {
+    if (!hasRequiredContext) {
+      toast.error('Select a project and inspector before saving.');
+      return;
+    }
     if (!fldLocation) { toast.error('Location is required'); return; }
     if (!inspector?.fldInspID) { toast.error('Inspector context is missing. Please select an inspector in Setup.'); return; }
     
@@ -785,6 +795,15 @@ export default function ProjectDataEntry({
               )}
             </div>
 
+            {!hasRequiredContext && (
+              <div className="mb-4 p-4 rounded-xl border border-zinc-200 bg-zinc-50/90 text-zinc-700 shadow-sm">
+                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Workspace incomplete</p>
+                <p className="text-sm text-zinc-600 mt-1.5 leading-snug">
+                  Select a client, facility, project, and inspector to enable data entry.
+                </p>
+              </div>
+            )}
+
             {/* TOP CONTEXT CARD - Now part of sticky header */}
             <Card className="p-6 border-zinc-200 shadow-sm bg-white">
               <div className="flex flex-wrap gap-6">
@@ -794,6 +813,7 @@ export default function ProjectDataEntry({
                     label="Category"
                     value={selectedCat}
                     onChange={(e: any) => setSelectedCat(e.target.value)}
+                    disabled={!hasRequiredContext}
                     selectClassName={focusClasses}
                     options={sortedCategories.map((c, index) => ({ 
                       value: c.fldCategoryID || c.fldCatID || `missing-${index}`, 
