@@ -136,9 +136,9 @@ function main() {
       const imgSrc = imgNode?.attributes?.src || "";
 
       const relationType = inferRelationType(caption, tag);
-      const citationMatch = caption.match(/(?:Figure|Fig\.?|Table)\s+([A]?\d+(?:\.\d+)*|\d+)/i);
-
-      const citationNum = citationMatch?.[1] || currentCitationNum;
+      // Figures/tables are citation variants associated with the current standard section.
+      // Keep the section citation as citation_num; preserve the literal figure/table label in citation_name/imageCaption.
+      const citationNum = relationType === "Figure" || relationType === "Table" ? currentCitationNum : citationMatch?.[1];
 
       const imageId = imgSrc
         ? crypto.createHash("sha1").update(imgSrc).digest("hex").slice(0, 16)

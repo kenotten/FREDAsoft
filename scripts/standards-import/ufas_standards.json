@@ -255,12 +255,12 @@
     "imageCaption": ""
   },
   {
-    "id": "1170_1_table",
+    "id": "1170_3_1_table",
     "source": "UFAS",
     "chapter_name": "3. Miscellaneous Instructions And Definitions",
     "section_num": "3.1",
     "section_name": "Graphic Conventions",
-    "citation_num": "1",
+    "citation_num": "3.1",
     "citation_name": "Table 1: Graphic Conventions",
     "content_text": "Table 1: Graphic Conventions",
     "relation_type": "Table",
@@ -690,12 +690,12 @@
     "imageCaption": ""
   },
   {
-    "id": "1460_1_table",
+    "id": "1460_4_2_1_table",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.2",
     "section_name": "Wheelchair Passage Width",
-    "citation_num": "1",
+    "citation_num": "4.2.1",
     "citation_name": "Table 1: Graphic Conventions",
     "content_text": "Table 1: Graphic Conventions",
     "relation_type": "Table",
@@ -705,12 +705,12 @@
     "imageCaption": "Table 1: Graphic Conventions"
   },
   {
-    "id": "1470_1_figure",
+    "id": "1470_4_2_1_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.2",
     "section_name": "Wheelchair Passage Width",
-    "citation_num": "1",
+    "citation_num": "4.2.1",
     "citation_name": "Figure 1: Minimum Clear Width for Single Wheelchair",
     "content_text": "Figure 1: Minimum Clear Width for Single Wheelchair",
     "relation_type": "Figure",
@@ -735,12 +735,12 @@
     "imageCaption": ""
   },
   {
-    "id": "1490_2_figure",
+    "id": "1490_4_2_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.2",
     "section_name": "Width For Wheelchair Passing",
-    "citation_num": "2",
+    "citation_num": "4.2.2",
     "citation_name": "Figure 2: Minimum Clear Width for Two Wheelchairs",
     "content_text": "Figure 2: Minimum Clear Width for Two Wheelchairs",
     "relation_type": "Figure",
@@ -765,12 +765,12 @@
     "imageCaption": ""
   },
   {
-    "id": "1510_3_figure",
+    "id": "1510_4_2_3_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.2",
     "section_name": "Wheelchair Turning Space",
-    "citation_num": "3",
+    "citation_num": "4.2.3",
     "citation_name": "Figure 3: Wheelchair Turning Space",
     "content_text": "Figure 3: Wheelchair Turning Space",
     "relation_type": "Figure",
@@ -795,12 +795,12 @@
     "imageCaption": ""
   },
   {
-    "id": "1530_4_figure",
+    "id": "1530_4_2_4_1_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.2",
     "section_name": "Size And Approach",
-    "citation_num": "4",
+    "citation_num": "4.2.4.1",
     "citation_name": "Figure 4: Minimum Clear Floor Space for Wheelchairs",
     "content_text": "Figure 4: Minimum Clear Floor Space for Wheelchairs",
     "relation_type": "Figure",
@@ -855,12 +855,12 @@
     "imageCaption": ""
   },
   {
-    "id": "1570_5_figure",
+    "id": "1570_4_2_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.2",
     "section_name": "Forward Reach",
-    "citation_num": "5",
+    "citation_num": "4.2.5",
     "citation_name": "Figure 5: Forward Reach",
     "content_text": "Figure 5: Forward Reach",
     "relation_type": "Figure",
@@ -885,12 +885,12 @@
     "imageCaption": ""
   },
   {
-    "id": "1590_6_figure",
+    "id": "1590_4_2_6_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.2",
     "section_name": "Side Reach",
-    "citation_num": "6",
+    "citation_num": "4.2.6",
     "citation_name": "Figure 6: Side Reach",
     "content_text": "Figure 6: Side Reach",
     "relation_type": "Figure",
@@ -930,12 +930,12 @@
     "imageCaption": ""
   },
   {
-    "id": "1620_7_figure",
+    "id": "1620_4_3_3_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.3",
     "section_name": "Width",
-    "citation_num": "7",
+    "citation_num": "4.3.3",
     "citation_name": "Figure 7: Width of Accessible Route",
     "content_text": "Figure 7: Width of Accessible Route",
     "relation_type": "Figure",
@@ -1065,12 +1065,12 @@
     "imageCaption": ""
   },
   {
-    "id": "1710_8_figure",
+    "id": "1710_4_4_1_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.4",
     "section_name": "General",
-    "citation_num": "8",
+    "citation_num": "4.4.1",
     "citation_name": "Figure 8(a): Protruding Objects, Walking Parallel to a Wall",
     "content_text": "Figure 8(a): Protruding Objects, Walking Parallel to a Wall",
     "relation_type": "Figure",
@@ -1080,12 +1080,12 @@
     "imageCaption": "Figure 8(a): Protruding Objects, Walking Parallel to a Wall"
   },
   {
-    "id": "1720_8_figure",
+    "id": "1720_4_4_1_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.4",
     "section_name": "General",
-    "citation_num": "8",
+    "citation_num": "4.4.1",
     "citation_name": "Figure 8(b): Protruding Objects, Walking Perpendicular to a Wall",
     "content_text": "Figure 8(b): Protruding Objects, Walking Perpendicular to a Wall",
     "relation_type": "Figure",
@@ -1095,12 +1095,12 @@
     "imageCaption": "Figure 8(b): Protruding Objects, Walking Perpendicular to a Wall"
   },
   {
-    "id": "1730_8_figure",
+    "id": "1730_4_4_1_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.4",
     "section_name": "General",
-    "citation_num": "8",
+    "citation_num": "4.4.1",
     "citation_name": "Figure 8(c): Protruding Objects, Free-Standing Overhanging Objects",
     "content_text": "Figure 8(c): Protruding Objects, Free-Standing Overhanging Objects",
     "relation_type": "Figure",
@@ -1110,12 +1110,12 @@
     "imageCaption": "Figure 8(c): Protruding Objects, Free-Standing Overhanging Objects"
   },
   {
-    "id": "1740_8_figure",
+    "id": "1740_4_4_1_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.4",
     "section_name": "General",
-    "citation_num": "8",
+    "citation_num": "4.4.1",
     "citation_name": "Figure 8(c1): Protruding Objects, Overhead Hazards",
     "content_text": "Figure 8(c1): Protruding Objects, Overhead Hazards",
     "relation_type": "Figure",
@@ -1125,12 +1125,12 @@
     "imageCaption": "Figure 8(c1): Protruding Objects, Overhead Hazards"
   },
   {
-    "id": "1750_8_figure",
+    "id": "1750_4_4_1_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.4",
     "section_name": "General",
-    "citation_num": "8",
+    "citation_num": "4.4.1",
     "citation_name": "Figure 8(d): Protruding Objects, Objects Mounted on Posts or Pylons",
     "content_text": "Figure 8(d): Protruding Objects, Objects Mounted on Posts or Pylons",
     "relation_type": "Figure",
@@ -1140,12 +1140,12 @@
     "imageCaption": "Figure 8(d): Protruding Objects, Objects Mounted on Posts or Pylons"
   },
   {
-    "id": "1760_8_figure",
+    "id": "1760_4_4_1_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.4",
     "section_name": "General",
-    "citation_num": "8",
+    "citation_num": "4.4.1",
     "citation_name": "Figure 8(e): Protruding Objects, Example of Protection around Wall-Mounted Objects and Measurements of Clear Widths",
     "content_text": "Figure 8(e): Protruding Objects, Example of Protection around Wall-Mounted Objects and Measurements of Clear Widths",
     "relation_type": "Figure",
@@ -1155,12 +1155,12 @@
     "imageCaption": "Figure 8(e): Protruding Objects, Example of Protection around Wall-Mounted Objects and Measurements of Clear Widths"
   },
   {
-    "id": "1770_8_figure",
+    "id": "1770_4_4_1_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.4",
     "section_name": "General",
-    "citation_num": "8",
+    "citation_num": "4.4.1",
     "citation_name": "Figure 8(f): Carpet Tile Thickness",
     "content_text": "Figure 8(f): Carpet Tile Thickness",
     "relation_type": "Figure",
@@ -1170,12 +1170,12 @@
     "imageCaption": "Figure 8(f): Carpet Tile Thickness"
   },
   {
-    "id": "1780_8_figure",
+    "id": "1780_4_4_1_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.4",
     "section_name": "General",
-    "citation_num": "8",
+    "citation_num": "4.4.1",
     "citation_name": "Figure 8(g): Gratings",
     "content_text": "Figure 8(g): Gratings",
     "relation_type": "Figure",
@@ -1185,12 +1185,12 @@
     "imageCaption": "Figure 8(g): Gratings"
   },
   {
-    "id": "1790_8_figure",
+    "id": "1790_4_4_1_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.4",
     "section_name": "General",
-    "citation_num": "8",
+    "citation_num": "4.4.1",
     "citation_name": "Figure 8(h): Grating Orientation",
     "content_text": "Figure 8(h): Grating Orientation",
     "relation_type": "Figure",
@@ -1335,12 +1335,12 @@
     "imageCaption": ""
   },
   {
-    "id": "1890_9_figure",
+    "id": "1890_4_6_3_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.6",
     "section_name": "Parking Spaces",
-    "citation_num": "9",
+    "citation_num": "4.6.3",
     "citation_name": "Figure 9: Dimensions of Parking Spaces",
     "content_text": "Figure 9: Dimensions of Parking Spaces",
     "relation_type": "Figure",
@@ -1380,12 +1380,12 @@
     "imageCaption": ""
   },
   {
-    "id": "1920_10_figure",
+    "id": "1920_4_6_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.6",
     "section_name": "Passenger Loading Zones",
-    "citation_num": "10",
+    "citation_num": "4.6.5",
     "citation_name": "Figure 10: Access Aisle at Passenger Loading Zones",
     "content_text": "Figure 10: Access Aisle at Passenger Loading Zones",
     "relation_type": "Figure",
@@ -1440,12 +1440,12 @@
     "imageCaption": ""
   },
   {
-    "id": "1960_11_figure",
+    "id": "1960_4_7_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.7",
     "section_name": "Slope",
-    "citation_num": "11",
+    "citation_num": "4.7.2",
     "citation_name": "Figure 11: Measurement of Curb Ramp Slopes",
     "content_text": "Figure 11: Measurement of Curb Ramp Slopes",
     "relation_type": "Figure",
@@ -1500,12 +1500,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2000_12_figure",
+    "id": "2000_4_7_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.7",
     "section_name": "Sides Of Curb Ramps",
-    "citation_num": "12",
+    "citation_num": "4.7.5",
     "citation_name": "Figure 12(a): Sides of Curb Ramps, Flared Sides",
     "content_text": "Figure 12(a): Sides of Curb Ramps, Flared Sides",
     "relation_type": "Figure",
@@ -1530,12 +1530,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2020_12_figure",
+    "id": "2020_4_7_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.7",
     "section_name": "Sides Of Curb Ramps",
-    "citation_num": "12",
+    "citation_num": "4.7.5",
     "citation_name": "Figure 12(b): Sides of Curb Ramps, Returned Curb",
     "content_text": "Figure 12(b): Sides of Curb Ramps, Returned Curb",
     "relation_type": "Figure",
@@ -1560,12 +1560,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2040_13_figure",
+    "id": "2040_4_7_6_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.7",
     "section_name": "Built-Up Curb Ramps",
-    "citation_num": "13",
+    "citation_num": "4.7.6",
     "citation_name": "Figure 13: Built-Up Curb Ramp",
     "content_text": "Figure 13: Built-Up Curb Ramp",
     "relation_type": "Figure",
@@ -1620,12 +1620,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2080_15_figure",
+    "id": "2080_4_7_9_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.7",
     "section_name": "Location At Marked Crossings",
-    "citation_num": "15",
+    "citation_num": "4.7.9",
     "citation_name": "Figure 15: Curb Ramps at Marked Crossings",
     "content_text": "Figure 15: Curb Ramps at Marked Crossings",
     "relation_type": "Figure",
@@ -1710,12 +1710,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2140_16_figure",
+    "id": "2140_4_8_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.8",
     "section_name": "Slope And Rise",
-    "citation_num": "16",
+    "citation_num": "4.8.2",
     "citation_name": "Figure 16: Components of a Single Ramp Run and Sample Ramp Dimensions",
     "content_text": "Figure 16: Components of a Single Ramp Run and Sample Ramp Dimensions",
     "relation_type": "Figure",
@@ -1800,12 +1800,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2200_17_figure",
+    "id": "2200_4_8_7_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.8",
     "section_name": "Edge Protection",
-    "citation_num": "17",
+    "citation_num": "4.8.7",
     "citation_name": "Figure 17: Examples of Edge Protection and Handrail Extensions",
     "content_text": "Figure 17: Examples of Edge Protection and Handrail Extensions",
     "relation_type": "Figure",
@@ -1875,12 +1875,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2250_18_figure",
+    "id": "2250_4_9_3_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.9",
     "section_name": "Nosings",
-    "citation_num": "18",
+    "citation_num": "4.9.3",
     "citation_name": "Figure 18: Usable Tread Width and Examples of Acceptable Nosings",
     "content_text": "Figure 18: Usable Tread Width and Examples of Acceptable Nosings",
     "relation_type": "Figure",
@@ -1905,12 +1905,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2270_19_figure",
+    "id": "2270_4_9_4_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.9",
     "section_name": "Handrails",
-    "citation_num": "19",
+    "citation_num": "4.9.4",
     "citation_name": "Figure 19(a): Stair Handrails - Plan",
     "content_text": "Figure 19(a): Stair Handrails - Plan",
     "relation_type": "Figure",
@@ -1935,12 +1935,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2290_19_figure",
+    "id": "2290_4_9_4_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.9",
     "section_name": "Handrails",
-    "citation_num": "19",
+    "citation_num": "4.9.4",
     "citation_name": "Figure 19(b): Stair Handrails - Elevation of Center Handrail",
     "content_text": "Figure 19(b): Stair Handrails - Elevation of Center Handrail",
     "relation_type": "Figure",
@@ -1950,12 +1950,12 @@
     "imageCaption": "Figure 19(b): Stair Handrails - Elevation of Center Handrail"
   },
   {
-    "id": "2300_19_figure",
+    "id": "2300_4_9_4_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.9",
     "section_name": "Handrails",
-    "citation_num": "19",
+    "citation_num": "4.9.4",
     "citation_name": "Figure 19(c): Stair Handrails - Extension at Bottom of Run",
     "content_text": "Figure 19(c): Stair Handrails - Extension at Bottom of Run",
     "relation_type": "Figure",
@@ -1980,12 +1980,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2320_19_figure",
+    "id": "2320_4_9_4_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.9",
     "section_name": "Handrails",
-    "citation_num": "19",
+    "citation_num": "4.9.4",
     "citation_name": "Figure 19(d): Stair Handrails - Extension at Top of Run",
     "content_text": "Figure 19(d): Stair Handrails - Extension at Top of Run",
     "relation_type": "Figure",
@@ -2085,12 +2085,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2390_20_figure",
+    "id": "2390_4_10_3_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.10",
     "section_name": "Hall Call Buttons",
-    "citation_num": "20",
+    "citation_num": "4.10.3",
     "citation_name": "Figure 20: Hoistway and Elevator Entrances",
     "content_text": "Figure 20: Hoistway and Elevator Entrances",
     "relation_type": "Figure",
@@ -2220,12 +2220,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2480_21_figure",
+    "id": "2480_4_10_7_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.10",
     "section_name": "Door And Signal Timing For Hall Calls",
-    "citation_num": "21",
+    "citation_num": "4.10.7",
     "citation_name": "Figure 21: Graph of Timing Equation",
     "content_text": "Figure 21: Graph of Timing Equation",
     "relation_type": "Figure",
@@ -2265,12 +2265,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2510_22_figure",
+    "id": "2510_4_10_9_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.10",
     "section_name": "Floor Plan Of Elevator Cars",
-    "citation_num": "22",
+    "citation_num": "4.10.9",
     "citation_name": "Figure 22: Minimum Dimensions of Elevator Cars",
     "content_text": "Figure 22: Minimum Dimensions of Elevator Cars",
     "relation_type": "Figure",
@@ -2325,12 +2325,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2550_23_figure",
+    "id": "2550_4_10_12_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.10",
     "section_name": "Car Controls",
-    "citation_num": "23",
+    "citation_num": "4.10.12",
     "citation_name": "Figure 23(a): Car Controls, Panel Detail",
     "content_text": "Figure 23(a): Car Controls, Panel Detail",
     "relation_type": "Figure",
@@ -2340,12 +2340,12 @@
     "imageCaption": "Figure 23(a): Car Controls, Panel Detail"
   },
   {
-    "id": "2560_23_figure",
+    "id": "2560_4_10_12_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.10",
     "section_name": "Car Controls",
-    "citation_num": "23",
+    "citation_num": "4.10.12",
     "citation_name": "Figure 23(b): Car Controls, Control Height",
     "content_text": "Figure 23(b): Car Controls, Control Height",
     "relation_type": "Figure",
@@ -2355,12 +2355,12 @@
     "imageCaption": "Figure 23(b): Car Controls, Control Height"
   },
   {
-    "id": "2570_23_figure",
+    "id": "2570_4_10_12_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.10",
     "section_name": "Car Controls",
-    "citation_num": "23",
+    "citation_num": "4.10.12",
     "citation_name": "Figure 23(c): Car Controls, Alternate Locations of Panel with Center Opening Door",
     "content_text": "Figure 23(c): Car Controls, Alternate Locations of Panel with Center Opening Door",
     "relation_type": "Figure",
@@ -2370,12 +2370,12 @@
     "imageCaption": "Figure 23(c): Car Controls, Alternate Locations of Panel with Center Opening Door"
   },
   {
-    "id": "2580_23_figure",
+    "id": "2580_4_10_12_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.10",
     "section_name": "Car Controls",
-    "citation_num": "23",
+    "citation_num": "4.10.12",
     "citation_name": "Figure 23(d): Car Controls, Alternate Locations of Panel with Side Opening Door",
     "content_text": "Figure 23(d): Car Controls, Alternate Locations of Panel with Side Opening Door",
     "relation_type": "Figure",
@@ -2565,12 +2565,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2710_24_figure",
+    "id": "2710_4_13_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.13",
     "section_name": "Clear Width",
-    "citation_num": "24",
+    "citation_num": "4.13.5",
     "citation_name": "Figure 24(a): Clear Doorway Width and Depth, Detail",
     "content_text": "Figure 24(a): Clear Doorway Width and Depth, Detail",
     "relation_type": "Figure",
@@ -2580,12 +2580,12 @@
     "imageCaption": "Figure 24(a): Clear Doorway Width and Depth, Detail"
   },
   {
-    "id": "2720_24_figure",
+    "id": "2720_4_13_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.13",
     "section_name": "Clear Width",
-    "citation_num": "24",
+    "citation_num": "4.13.5",
     "citation_name": "Figure 24(b): Clear Doorway Width and Depth, Hinged Door",
     "content_text": "Figure 24(b): Clear Doorway Width and Depth, Hinged Door",
     "relation_type": "Figure",
@@ -2595,12 +2595,12 @@
     "imageCaption": "Figure 24(b): Clear Doorway Width and Depth, Hinged Door"
   },
   {
-    "id": "2730_24_figure",
+    "id": "2730_4_13_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.13",
     "section_name": "Clear Width",
-    "citation_num": "24",
+    "citation_num": "4.13.5",
     "citation_name": "Figure 24(c): Clear Doorway Width and Depth, Sliding Door",
     "content_text": "Figure 24(c): Clear Doorway Width and Depth, Sliding Door",
     "relation_type": "Figure",
@@ -2610,12 +2610,12 @@
     "imageCaption": "Figure 24(c): Clear Doorway Width and Depth, Sliding Door"
   },
   {
-    "id": "2740_24_figure",
+    "id": "2740_4_13_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.13",
     "section_name": "Clear Width",
-    "citation_num": "24",
+    "citation_num": "4.13.5",
     "citation_name": "Figure 24(d): Clear Doorway Width and Depth, Folding Door",
     "content_text": "Figure 24(d): Clear Doorway Width and Depth, Folding Door",
     "relation_type": "Figure",
@@ -2625,12 +2625,12 @@
     "imageCaption": "Figure 24(d): Clear Doorway Width and Depth, Folding Door"
   },
   {
-    "id": "2750_24_figure",
+    "id": "2750_4_13_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.13",
     "section_name": "Clear Width",
-    "citation_num": "24",
+    "citation_num": "4.13.5",
     "citation_name": "Figure 24(e): Clear Doorway Width and Depth, Maximum Doorway Depth",
     "content_text": "Figure 24(e): Clear Doorway Width and Depth, Maximum Doorway Depth",
     "relation_type": "Figure",
@@ -2655,12 +2655,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2770_25_figure",
+    "id": "2770_4_13_6_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.13",
     "section_name": "Maneuvering Clearances At Doors",
-    "citation_num": "25",
+    "citation_num": "4.13.6",
     "citation_name": "Figure 25: Maneuvering Clearances at Doors",
     "content_text": "Figure 25: Maneuvering Clearances at Doors",
     "relation_type": "Figure",
@@ -2685,12 +2685,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2790_26_figure",
+    "id": "2790_4_13_7_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.13",
     "section_name": "Two Doors In Series",
-    "citation_num": "26",
+    "citation_num": "4.13.7",
     "citation_name": "Figure 26: Two Hinged Doors in Series",
     "content_text": "Figure 26: Two Hinged Doors in Series",
     "relation_type": "Figure",
@@ -2880,12 +2880,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2920_27_figure",
+    "id": "2920_4_15_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.15",
     "section_name": "Clearances",
-    "citation_num": "27",
+    "citation_num": "4.15.5",
     "citation_name": "Figure 27(a): Drinking Fountains and Water Coolers - Spout Height and Knee Clearance",
     "content_text": "Figure 27(a): Drinking Fountains and Water Coolers - Spout Height and Knee Clearance",
     "relation_type": "Figure",
@@ -2895,12 +2895,12 @@
     "imageCaption": "Figure 27(a): Drinking Fountains and Water Coolers - Spout Height and Knee Clearance"
   },
   {
-    "id": "2930_27_figure",
+    "id": "2930_4_15_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.15",
     "section_name": "Clearances",
-    "citation_num": "27",
+    "citation_num": "4.15.5",
     "citation_name": "Figure 27(b): Drinking Fountains and Water Coolers - Clear Floor Space",
     "content_text": "Figure 27(b): Drinking Fountains and Water Coolers - Clear Floor Space",
     "relation_type": "Figure",
@@ -2910,12 +2910,12 @@
     "imageCaption": "Figure 27(b): Drinking Fountains and Water Coolers - Clear Floor Space"
   },
   {
-    "id": "2940_27_figure",
+    "id": "2940_4_15_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.15",
     "section_name": "Clearances",
-    "citation_num": "27",
+    "citation_num": "4.15.5",
     "citation_name": "Figure 27(c): Drinking Fountains and Water Coolers - Free-Standing Fountain or Cooler",
     "content_text": "Figure 27(c): Drinking Fountains and Water Coolers - Free-Standing Fountain or Cooler",
     "relation_type": "Figure",
@@ -2925,12 +2925,12 @@
     "imageCaption": "Figure 27(c): Drinking Fountains and Water Coolers - Free-Standing Fountain or Cooler"
   },
   {
-    "id": "2950_27_figure",
+    "id": "2950_4_15_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.15",
     "section_name": "Clearances",
-    "citation_num": "27",
+    "citation_num": "4.15.5",
     "citation_name": "Figure 27(d): Drinking Fountains and Water Coolers - Built-In Fountain or Cooler",
     "content_text": "Figure 27(d): Drinking Fountains and Water Coolers - Built-In Fountain or Cooler",
     "relation_type": "Figure",
@@ -2970,12 +2970,12 @@
     "imageCaption": ""
   },
   {
-    "id": "2980_28_figure",
+    "id": "2980_4_16_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.16",
     "section_name": "Clear Floor Space",
-    "citation_num": "28",
+    "citation_num": "4.16.2",
     "citation_name": "Figure 28: Clear Floor Space at Water Closets",
     "content_text": "Figure 28: Clear Floor Space at Water Closets",
     "relation_type": "Figure",
@@ -3015,12 +3015,12 @@
     "imageCaption": ""
   },
   {
-    "id": "3010_29_figure",
+    "id": "3010_4_16_4_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.16",
     "section_name": "Grab Bars",
-    "citation_num": "29",
+    "citation_num": "4.16.4",
     "citation_name": "Figure 29: Grab Bars at Water Closets",
     "content_text": "Figure 29: Grab Bars at Water Closets",
     "relation_type": "Figure",
@@ -3120,12 +3120,12 @@
     "imageCaption": ""
   },
   {
-    "id": "3080_30_figure",
+    "id": "3080_4_17_3_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.17",
     "section_name": "Size And Arrangement",
-    "citation_num": "30",
+    "citation_num": "4.17.3",
     "citation_name": "Figure 30: Toilet Stalls",
     "content_text": "Figure 30: Toilet Stalls",
     "relation_type": "Figure",
@@ -3270,12 +3270,12 @@
     "imageCaption": ""
   },
   {
-    "id": "3180_31_figure",
+    "id": "3180_4_19_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.19",
     "section_name": "Height And Clearances",
-    "citation_num": "31",
+    "citation_num": "4.19.2",
     "citation_name": "Figure 31: Lavatory Clearances",
     "content_text": "Figure 31: Lavatory Clearances",
     "relation_type": "Figure",
@@ -3300,12 +3300,12 @@
     "imageCaption": ""
   },
   {
-    "id": "3200_32_figure",
+    "id": "3200_4_19_3_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.19",
     "section_name": "Clear Floor Space",
-    "citation_num": "32",
+    "citation_num": "4.19.3",
     "citation_name": "Figure 32: Clear Floor Space at Lavatories",
     "content_text": "Figure 32: Clear Floor Space at Lavatories",
     "relation_type": "Figure",
@@ -3390,12 +3390,12 @@
     "imageCaption": ""
   },
   {
-    "id": "3260_33_figure",
+    "id": "3260_4_20_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.20",
     "section_name": "Floor Space",
-    "citation_num": "33",
+    "citation_num": "4.20.2",
     "citation_name": "Figure 33: Clear Floor Space at Bathtubs",
     "content_text": "Figure 33: Clear Floor Space at Bathtubs",
     "relation_type": "Figure",
@@ -3405,12 +3405,12 @@
     "imageCaption": "Figure 33: Clear Floor Space at Bathtubs"
   },
   {
-    "id": "3270_34_figure",
+    "id": "3270_4_20_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.20",
     "section_name": "Floor Space",
-    "citation_num": "34",
+    "citation_num": "4.20.2",
     "citation_name": "Figure 34: Grab Bars at Bathtubs",
     "content_text": "Figure 34: Grab Bars at Bathtubs",
     "relation_type": "Figure",
@@ -3525,12 +3525,12 @@
     "imageCaption": ""
   },
   {
-    "id": "3350_35_figure",
+    "id": "3350_4_21_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.21",
     "section_name": "Size And Clearances",
-    "citation_num": "35",
+    "citation_num": "4.21.2",
     "citation_name": "Figure 35(a): Shower Size and Clearances, 36-in by 36-in (915-mm by 915-mm) Stall",
     "content_text": "Figure 35(a): Shower Size and Clearances, 36-in by 36-in (915-mm by 915-mm) Stall",
     "relation_type": "Figure",
@@ -3540,12 +3540,12 @@
     "imageCaption": "Figure 35(a): Shower Size and Clearances, 36-in by 36-in (915-mm by 915-mm) Stall"
   },
   {
-    "id": "3360_35_figure",
+    "id": "3360_4_21_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.21",
     "section_name": "Size And Clearances",
-    "citation_num": "35",
+    "citation_num": "4.21.2",
     "citation_name": "Figure 35(b): Shower Size and Clearances, 30-in by 60-in (760-mm by 1525-mm) Stall",
     "content_text": "Figure 35(b): Shower Size and Clearances, 30-in by 60-in (760-mm by 1525-mm) Stall",
     "relation_type": "Figure",
@@ -3570,12 +3570,12 @@
     "imageCaption": ""
   },
   {
-    "id": "3380_36_figure",
+    "id": "3380_4_21_3_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.21",
     "section_name": "Seat",
-    "citation_num": "36",
+    "citation_num": "4.21.3",
     "citation_name": "Figure 36: Shower Seat Design",
     "content_text": "Figure 36: Shower Seat Design",
     "relation_type": "Figure",
@@ -3585,12 +3585,12 @@
     "imageCaption": "Figure 36: Shower Seat Design"
   },
   {
-    "id": "3390_37_figure",
+    "id": "3390_4_21_3_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.21",
     "section_name": "Seat",
-    "citation_num": "37",
+    "citation_num": "4.21.3",
     "citation_name": "Figure 37: Grab Bars at Shower Stalls",
     "content_text": "Figure 37: Grab Bars at Shower Stalls",
     "relation_type": "Figure",
@@ -4110,12 +4110,12 @@
     "imageCaption": ""
   },
   {
-    "id": "3740_38_figure",
+    "id": "3740_4_25_3_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.25",
     "section_name": "Height",
-    "citation_num": "38",
+    "citation_num": "4.25.3",
     "citation_name": "Figure 38: Storage Shelves and Closets",
     "content_text": "Figure 38: Storage Shelves and Closets",
     "relation_type": "Figure",
@@ -4170,12 +4170,12 @@
     "imageCaption": ""
   },
   {
-    "id": "3780_39_figure",
+    "id": "3780_4_26_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.26",
     "section_name": "Size And Spacing Of Grab Bars And Handrails",
-    "citation_num": "39",
+    "citation_num": "4.26.2",
     "citation_name": "Figure 39(a): Size and Spacing of Handrails and Grab Bars, Handrail",
     "content_text": "Figure 39(a): Size and Spacing of Handrails and Grab Bars, Handrail",
     "relation_type": "Figure",
@@ -4185,12 +4185,12 @@
     "imageCaption": "Figure 39(a): Size and Spacing of Handrails and Grab Bars, Handrail"
   },
   {
-    "id": "3790_39_figure",
+    "id": "3790_4_26_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.26",
     "section_name": "Size And Spacing Of Grab Bars And Handrails",
-    "citation_num": "39",
+    "citation_num": "4.26.2",
     "citation_name": "Figure 39(b): Size and Spacing of Handrails and Grab Bars, Handrail",
     "content_text": "Figure 39(b): Size and Spacing of Handrails and Grab Bars, Handrail",
     "relation_type": "Figure",
@@ -4200,12 +4200,12 @@
     "imageCaption": "Figure 39(b): Size and Spacing of Handrails and Grab Bars, Handrail"
   },
   {
-    "id": "3800_39_figure",
+    "id": "3800_4_26_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.26",
     "section_name": "Size And Spacing Of Grab Bars And Handrails",
-    "citation_num": "39",
+    "citation_num": "4.26.2",
     "citation_name": "Figure 39(c): Size and Spacing of Handrails and Grab Bars, Handrail",
     "content_text": "Figure 39(c): Size and Spacing of Handrails and Grab Bars, Handrail",
     "relation_type": "Figure",
@@ -4215,12 +4215,12 @@
     "imageCaption": "Figure 39(c): Size and Spacing of Handrails and Grab Bars, Handrail"
   },
   {
-    "id": "3810_39_figure",
+    "id": "3810_4_26_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.26",
     "section_name": "Size And Spacing Of Grab Bars And Handrails",
-    "citation_num": "39",
+    "citation_num": "4.26.2",
     "citation_name": "Figure 39(d): Size and Spacing of Handrails and Grab Bars, Handrail",
     "content_text": "Figure 39(d): Size and Spacing of Handrails and Grab Bars, Handrail",
     "relation_type": "Figure",
@@ -4230,12 +4230,12 @@
     "imageCaption": "Figure 39(d): Size and Spacing of Handrails and Grab Bars, Handrail"
   },
   {
-    "id": "3820_39_figure",
+    "id": "3820_4_26_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.26",
     "section_name": "Size And Spacing Of Grab Bars And Handrails",
-    "citation_num": "39",
+    "citation_num": "4.26.2",
     "citation_name": "Figure 39(e): Size and Spacing of Handrails and Grab Bars, Grab Bar",
     "content_text": "Figure 39(e): Size and Spacing of Handrails and Grab Bars, Grab Bar",
     "relation_type": "Figure",
@@ -4590,12 +4590,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4060_43_figure",
+    "id": "4060_4_30_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.30",
     "section_name": "Symbols Of Accessibility",
-    "citation_num": "43",
+    "citation_num": "4.30.5",
     "citation_name": "Figure 43(a): International Symbol of Accessibility, Proportions",
     "content_text": "Figure 43(a): International Symbol of Accessibility, Proportions",
     "relation_type": "Figure",
@@ -4650,12 +4650,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4100_44_figure",
+    "id": "4100_4_31_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.31",
     "section_name": "Clear Floor Or Ground Space",
-    "citation_num": "44",
+    "citation_num": "4.31.2",
     "citation_name": "Figure 44: Mounting Heights and Clearances for Telephones",
     "content_text": "Figure 44: Mounting Heights and Clearances for Telephones",
     "relation_type": "Figure",
@@ -4785,12 +4785,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4190_45_figure",
+    "id": "4190_4_32_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.32",
     "section_name": "Seating",
-    "citation_num": "45",
+    "citation_num": "4.32.2",
     "citation_name": "Figure 45: Minimum Clearances for Seating and Tables",
     "content_text": "Figure 45: Minimum Clearances for Seating and Tables",
     "relation_type": "Figure",
@@ -4860,12 +4860,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4240_46_figure",
+    "id": "4240_4_33_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.33",
     "section_name": "Size Of Wheelchair Locations",
-    "citation_num": "46",
+    "citation_num": "4.33.2",
     "citation_name": "Figure 46: Space Requirements for Wheelchair Seating Spaces in Series",
     "content_text": "Figure 46: Space Requirements for Wheelchair Seating Spaces in Series",
     "relation_type": "Figure",
@@ -5070,12 +5070,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4380_47_figure",
+    "id": "4380_4_34_5_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.34",
     "section_name": "Water Closets",
-    "citation_num": "47",
+    "citation_num": "4.34.5.2",
     "citation_name": "Figure 47(a): Clear Floor Space for Adaptable Bathrooms",
     "content_text": "Figure 47(a): Clear Floor Space for Adaptable Bathrooms",
     "relation_type": "Figure",
@@ -5085,12 +5085,12 @@
     "imageCaption": "Figure 47(a): Clear Floor Space for Adaptable Bathrooms"
   },
   {
-    "id": "4390_47_figure",
+    "id": "4390_4_34_5_2_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.34",
     "section_name": "Water Closets",
-    "citation_num": "47",
+    "citation_num": "4.34.5.2",
     "citation_name": "Figure 47(b): Reinforced Areas for Installation of Grab Bars",
     "content_text": "Figure 47(b): Reinforced Areas for Installation of Grab Bars",
     "relation_type": "Figure",
@@ -5130,12 +5130,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4420_48_figure",
+    "id": "4420_4_34_5_4_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.34",
     "section_name": "Bathtubs",
-    "citation_num": "48",
+    "citation_num": "4.34.5.4",
     "citation_name": "Figure 48(a): Location of Grab Bars and Controls, of Adaptable Bathrooms - With Seat in Tub",
     "content_text": "Figure 48(a): Location of Grab Bars and Controls, of Adaptable Bathrooms - With Seat in Tub",
     "relation_type": "Figure",
@@ -5145,12 +5145,12 @@
     "imageCaption": "Figure 48(a): Location of Grab Bars and Controls, of Adaptable Bathrooms - With Seat in Tub"
   },
   {
-    "id": "4430_48_figure",
+    "id": "4430_4_34_5_4_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.34",
     "section_name": "Bathtubs",
-    "citation_num": "48",
+    "citation_num": "4.34.5.4",
     "citation_name": "Figure 48(b): Location of Grab Bars and Controls, of Adaptable Bathrooms - With Seat at Head of Tub",
     "content_text": "Figure 48(b): Location of Grab Bars and Controls, of Adaptable Bathrooms - With Seat at Head of Tub",
     "relation_type": "Figure",
@@ -5175,12 +5175,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4450_49_figure",
+    "id": "4450_4_34_5_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.34",
     "section_name": "Showers",
-    "citation_num": "49",
+    "citation_num": "4.34.5.5",
     "citation_name": "Figure 49(a): Location of Grab Bars and Controls of Adaptable Showers - 36-in by 36-in Stall",
     "content_text": "Figure 49(a): Location of Grab Bars and Controls of Adaptable Showers - 36-in by 36-in Stall",
     "relation_type": "Figure",
@@ -5190,12 +5190,12 @@
     "imageCaption": "Figure 49(a): Location of Grab Bars and Controls of Adaptable Showers - 36-in by 36-in Stall"
   },
   {
-    "id": "4460_49_figure",
+    "id": "4460_4_34_5_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.34",
     "section_name": "Showers",
-    "citation_num": "49",
+    "citation_num": "4.34.5.5",
     "citation_name": "Figure 49(b): Location of Grab Bars and Controls, of Adaptable Showers - 30-in by 60-in Stall",
     "content_text": "Figure 49(b): Location of Grab Bars and Controls, of Adaptable Showers - 30-in by 60-in Stall",
     "relation_type": "Figure",
@@ -5310,12 +5310,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4540_50_figure",
+    "id": "4540_4_34_6_4_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.34",
     "section_name": "Work Surfaces",
-    "citation_num": "50",
+    "citation_num": "4.34.6.4",
     "citation_name": "Figure 50: Counter Work Surface",
     "content_text": "Figure 50: Counter Work Surface",
     "relation_type": "Figure",
@@ -5340,12 +5340,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4560_51_figure",
+    "id": "4560_4_34_6_5_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.34",
     "section_name": "Sink",
-    "citation_num": "51",
+    "citation_num": "4.34.6.5",
     "citation_name": "Figure 51: Kitchen Sink",
     "content_text": "Figure 51: Kitchen Sink",
     "relation_type": "Figure",
@@ -5385,12 +5385,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4590_52_figure",
+    "id": "4590_4_34_6_7_figure",
     "source": "UFAS",
     "chapter_name": "4. Accessible Elements And Spaces: Scope And Technical Requirements",
     "section_num": "4.34",
     "section_name": "Ovens",
-    "citation_num": "52",
+    "citation_num": "4.34.6.7",
     "citation_name": "Figure 52: Ovens without Self-Cleaning Feature",
     "content_text": "Figure 52: Ovens without Self-Cleaning Feature",
     "relation_type": "Figure",
@@ -5550,12 +5550,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4700_53_figure",
+    "id": "4700_5_2_figure",
     "source": "UFAS",
     "chapter_name": "5. Restaurants And Cafeterias",
     "section_num": "5.2",
     "section_name": "Food Service Lines",
-    "citation_num": "53",
+    "citation_num": "5.2",
     "citation_name": "Figure 53: Food Service Lines",
     "content_text": "Figure 53: Food Service Lines",
     "relation_type": "Figure",
@@ -5580,12 +5580,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4720_54_figure",
+    "id": "4720_5_3_figure",
     "source": "UFAS",
     "chapter_name": "5. Restaurants And Cafeterias",
     "section_num": "5.3",
     "section_name": "Tableware Areas",
-    "citation_num": "54",
+    "citation_num": "5.3",
     "citation_name": "Figure 54: Tableware Areas",
     "content_text": "Figure 54: Tableware Areas",
     "relation_type": "Figure",
@@ -5790,12 +5790,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4860_55_figure",
+    "id": "4860_8_4_figure",
     "source": "UFAS",
     "chapter_name": "8. Libraries",
     "section_num": "8.4",
     "section_name": "Card Catalogs",
-    "citation_num": "55",
+    "citation_num": "8.4",
     "citation_name": "Figure 55: Card Catalog",
     "content_text": "Figure 55: Card Catalog",
     "relation_type": "Figure",
@@ -5820,12 +5820,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4880_56_figure",
+    "id": "4880_8_5_figure",
     "source": "UFAS",
     "chapter_name": "8. Libraries",
     "section_num": "8.5",
     "section_name": "Stacks",
-    "citation_num": "56",
+    "citation_num": "8.5",
     "citation_name": "Figure 56: Stacks",
     "content_text": "Figure 56: Stacks",
     "relation_type": "Figure",
@@ -5940,12 +5940,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4960_a1_figure",
+    "id": "4960_a4_2_1_figure",
     "source": "UFAS",
     "chapter_name": "Appendix",
     "section_num": "A4.2",
     "section_name": "Wheelchair Passage Width",
-    "citation_num": "A1",
+    "citation_num": "A4.2.1",
     "citation_name": "Figure A1: Minimum Passage Width for One Wheelchair and One Ambulatory Person",
     "content_text": "Figure A1: Minimum Passage Width for One Wheelchair and One Ambulatory Person",
     "relation_type": "Figure",
@@ -5970,12 +5970,12 @@
     "imageCaption": ""
   },
   {
-    "id": "4980_a2_figure",
+    "id": "4980_a4_2_3_figure",
     "source": "UFAS",
     "chapter_name": "Appendix",
     "section_num": "A4.2",
     "section_name": "Wheelchair Turning Space",
-    "citation_num": "A2",
+    "citation_num": "A4.2.3",
     "citation_name": "Figure A2: Space Needed for Smooth U-Turn in a Wheelchair",
     "content_text": "Figure A2: Space Needed for Smooth U-Turn in a Wheelchair",
     "relation_type": "Figure",
@@ -6015,12 +6015,12 @@
     "imageCaption": ""
   },
   {
-    "id": "5010_a3_figure",
+    "id": "5010_a4_2_4_figure",
     "source": "UFAS",
     "chapter_name": "Appendix",
     "section_num": "A4.2",
     "section_name": "Clear Floor Or Ground Space For Wheelchairs",
-    "citation_num": "A3",
+    "citation_num": "A4.2.4",
     "citation_name": "Figure A3: Dimensions of Adult-Sized Wheelchairs",
     "content_text": "Figure A3: Dimensions of Adult-Sized Wheelchairs",
     "relation_type": "Figure",
@@ -6060,12 +6060,12 @@
     "imageCaption": ""
   },
   {
-    "id": "5040_a3_figure",
+    "id": "5040_a4_2_5_figure",
     "source": "UFAS",
     "chapter_name": "Appendix",
     "section_num": "A4.2",
     "section_name": "& A4.2.6 Reach",
-    "citation_num": "A3",
+    "citation_num": "A4.2.5",
     "citation_name": "Figure A3(a): Dimensions of Adult-Sized Wheelchairs",
     "content_text": "Figure A3(a): Dimensions of Adult-Sized Wheelchairs",
     "relation_type": "Figure",
@@ -6120,12 +6120,12 @@
     "imageCaption": ""
   },
   {
-    "id": "5080_a4_figure",
+    "id": "5080_a4_4_1_figure",
     "source": "UFAS",
     "chapter_name": "Appendix",
     "section_num": "A4.4",
     "section_name": "General",
-    "citation_num": "A4",
+    "citation_num": "A4.4.1",
     "citation_name": "Figure A4: Cane Technique",
     "content_text": "Figure A4: Cane Technique",
     "relation_type": "Figure",
@@ -6510,12 +6510,12 @@
     "imageCaption": ""
   },
   {
-    "id": "5340_a5_figure",
+    "id": "5340_a4_16_4_figure",
     "source": "UFAS",
     "chapter_name": "Appendix",
     "section_num": "A4.16",
     "section_name": "Grab Bars",
-    "citation_num": "A5",
+    "citation_num": "A4.16.4",
     "citation_name": "Figure A5: Wheelchair Transfers",
     "content_text": "Figure A5: Wheelchair Transfers",
     "relation_type": "Figure",
@@ -6645,12 +6645,12 @@
     "imageCaption": ""
   },
   {
-    "id": "5430_a6_figure",
+    "id": "5430_a4_27_3_figure",
     "source": "UFAS",
     "chapter_name": "Appendix",
     "section_num": "A4.27",
     "section_name": "Height",
-    "citation_num": "A6",
+    "citation_num": "A4.27.3",
     "citation_name": "Figure A6: Control Reach Limitations",
     "content_text": "Figure A6: Control Reach Limitations",
     "relation_type": "Figure",
