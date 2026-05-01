@@ -40,7 +40,9 @@ This section governs how AI agents interact with the codebase. It is REQUIRED re
 3. No implicit refactors or “cleanup”  
 4. Use explicit logic (no truthy/falsy shortcuts)  
 5. Use safe, targeted React state updates  
-6. Do not mix concerns (security, UI, data, performance)  
+6. Do not mix concerns (security, UI, data, performance) 
+7. If the prompt is marked ANALYSIS ONLY, no code may be written or modified under any circumstance.
+8. Do not assume intent. If a prompt does not explicitly say "apply changes", only analyze and report. 
 
 ---
 
@@ -341,3 +343,55 @@ Implementation Note
 Current implementation stores fldImages as an array of image URL strings. This is acceptable for beta testing.
 
 Future enhancements will likely require migrating fldImages from string[] to image metadata objects, or introducing a compatible normalization layer that supports both legacy string URLs and newer image objects.
+
+## Firebase Usage Safety Guidelines
+
+FREDAsoft must prevent accidental Firebase overuse caused by render loops, repeated listeners, or uncontrolled retries.
+
+Guidelines:
+- Firebase writes should be triggered by explicit user actions whenever possible.
+- Avoid Firebase writes inside `useEffect` unless the effect is tightly guarded.
+- Use operation locks such as `isUploading`, `isSaving`, or `isLoading` to prevent duplicate actions.
+- Long-running operations must fail fast and surface errors to the user.
+- Avoid unbounded retry loops.
+- Prefer localStorage for draft autosave rather than Firestore autosave.
+- Scope all project data reads and views by active `projectId` and `facilityId`.
+- Use Firestore queries with project/facility constraints where practical.
+- Avoid broad realtime listeners unless the screen truly needs live updates.
+- Add Firebase budget alerts in Google Cloud/Firebase.
+- During beta, set practical limits on uploads and batch operations.
+
+## Glossary Link Integrity
+
+Project data records rely on `fldData` as the authoritative reference to the glossary hierarchy.
+
+When editing records:
+- `fldData` must always reflect the current selection (`selections.glosId`)
+- UI text fields alone are not sufficient to define structure
+
+Failure to update `fldData` results in:
+- incorrect category/item display in explorer
+- incorrect hydration when reopening records
+
+## Future Enhancement: Inspector Assignment Model
+
+Current behavior:
+- A project may currently resolve to a single active inspector.
+- Project data records store the inspector responsible for the record in `fldInspID`.
+
+Future need:
+- Projects may have multiple inspectors.
+- Large assessments may involve multiple inspectors across buildings, facilities, or locations.
+- The active inspector should be selectable during the session and associated with each data record they create or edit.
+
+Design direction:
+- Do not hard-code a single inspector as the only valid project inspector.
+- Treat inspector as active session context, similar to active client/facility/project.
+- Continue storing `fldInspID` on each projectData record.
+- Future UI should allow selecting the active inspector for data entry.
+- Future project setup may support assigning one or more inspectors to a project.
+- Existing records should preserve their original `fldInspID` unless intentionally reassigned.
+
+Near-term guidance:
+- Do not block the current beta workflow to redesign inspector assignment.
+- Ensure new Data Entry session-state work does not assume only one inspector can ever exist per project.
