@@ -11,14 +11,6 @@ function textOf(node) {
   return node.children.map(textOf).join(" ").replace(/\s+/g, " ").trim();
 }
 
-function walk(node, callback, parent = null) {
-  if (!node || typeof node === "string") return;
-  callback(node, parent);
-  if (Array.isArray(node.children)) {
-    node.children.forEach(child => walk(child, callback, node));
-  }
-}
-
 function makeId(order, citationNum, relationType) {
   const safeCitation = String(citationNum || "unknown")
     .toLowerCase()
@@ -33,13 +25,24 @@ function makeId(order, citationNum, relationType) {
 }
 
 function parseCitationFromHeading(text) {
-  const match = text.match(/^([A]?\d+(?:\.\d+)*\*?)\s+(.+)$/);
-  if (!match) return null;
-
-  return {
-    citation_num: match[1].replace(/\*$/, ""),
-    citation_name: match[2].trim()
-  };
+  const t = text.trim();
+  // "4.1.1 Title" — space after full citation number
+  let match = t.match(/^([A]?\d+(?:\.\d+)*\*?)\s+(.+)$/);
+  if (match) {
+    return {
+      citation_num: match[1].replace(/\*$/, ""),
+      citation_name: match[2].trim()
+    };
+  }
+  // "1. Purpose" / "2. General" — dot then space after the leading segment (major UFAS h3)
+  match = t.match(/^([A]?\d+(?:\.\d+)*\*?)\.\s+(.+)$/);
+  if (match) {
+    return {
+      citation_num: match[1].replace(/\*$/, ""),
+      citation_name: match[2].trim()
+    };
+  }
+  return null;
 }
 
 function inferRelationType(text, tagName) {
@@ -56,139 +59,402 @@ function inferRelationType(text, tagName) {
   return "Standard";
 }
 
+/** Block-level nodes in document order (no descent into pushed blocks). */
+const LINEAR_BLOCK_TAGS = new Set([
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "p",
+  "dl",
+  "ul",
+  "ol",
+  "figure",
+  "table"
+]);
+
+function linearizeBlocks(node, out) {
+  if (!node || typeof node === "string") return;
+  const tag = node.tagName;
+  if (LINEAR_BLOCK_TAGS.has(tag)) {
+    out.push(node);
+    return;
+  }
+  if (Array.isArray(node.children)) {
+    node.children.forEach(c => linearizeBlocks(c, out));
+  }
+}
+
+/**
+ * Extract text from a subtree; collect table/figure nodes into embedNodes
+ * (placeholders in returned text) so table/figure are not duplicated verbatim.
+ */
+function extractTextWithEmbeds(node, embedNodes, st) {
+  if (!node) return "";
+  if (typeof node === "string") return node.trim();
+  const tag = node.tagName;
+  if (tag === "table") {
+    embedNodes.push({ type: "table", node });
+    return "[Table: see separate record]";
+  }
+  if (tag === "figure") {
+    embedNodes.push({ type: "figure", node });
+    const captionNode = (node.children || []).find(c => c.tagName === "figcaption");
+    const cap = textOf(captionNode);
+    return cap ? `[Figure: ${cap}]` : "[Figure: see separate record]";
+  }
+  if (!node.children || !node.children.length) return "";
+  const parts = node.children
+    .map(c => extractTextWithEmbeds(c, embedNodes, st))
+    .map(s => (typeof s === "string" ? s.trim() : ""))
+    .filter(Boolean);
+  return parts.join("\n\n");
+}
+
+function blockToText(n, embedNodes, st) {
+  const tag = n.tagName;
+  if (tag === "p") {
+    const raw = extractTextWithEmbeds(n, embedNodes, st);
+    return raw.replace(/\s+/g, " ").trim();
+  }
+  if (tag === "dl" || tag === "ul" || tag === "ol") {
+    const raw = extractTextWithEmbeds(n, embedNodes, st);
+    return raw.replace(/\n{3,}/g, "\n\n").trim();
+  }
+  if (tag === "figure") {
+    embedNodes.push({ type: "figure", node: n });
+    const captionNode = (n.children || []).find(c => c.tagName === "figcaption");
+    const cap = textOf(captionNode);
+    return cap ? `[Figure: ${cap}]` : "[Figure: see separate record]";
+  }
+  if (tag === "table") {
+    embedNodes.push({ type: "table", node: n });
+    return "[Table: see separate record]";
+  }
+  return textOf(n);
+}
+
+function flushEmbedNodes(embedNodes, st, records) {
+  embedNodes.forEach(({ type, node }) => {
+    if (type === "table") records.push(makeTableRecord(node, st));
+    else records.push(makeFigureRecord(node, st));
+  });
+  embedNodes.length = 0;
+}
+
+function makeFigureRecord(node, st) {
+  const captionNode = (node.children || []).find(c => c.tagName === "figcaption");
+  const imgNode = (node.children || []).find(c => c.tagName === "img");
+
+  const caption = textOf(captionNode);
+  const imgSrc = imgNode?.attributes?.src || "";
+
+  const relationType = inferRelationType(caption, "figure");
+  const citationNum = st.currentCitationNum;
+
+  const imageId = imgSrc
+    ? crypto.createHash("sha1").update(imgSrc).digest("hex").slice(0, 16)
+    : null;
+
+  const order = st.order;
+  st.order += 10;
+
+  return {
+    id: makeId(order, citationNum, relationType),
+    source: "UFAS",
+    chapter_name: st.currentChapter,
+    section_num: st.currentSectionNum,
+    section_name: st.currentSectionName,
+    citation_num: citationNum,
+    citation_name: caption || st.currentCitationName,
+    content_text: caption,
+    relation_type: relationType,
+    order,
+    imageId,
+    imageUrl: imgSrc,
+    imageCaption: caption
+  };
+}
+
+function makeTableRecord(node, st) {
+  const content = textOf(node);
+  const relationType = "Table";
+  const order = st.order;
+  st.order += 10;
+
+  return {
+    id: makeId(order, st.currentCitationNum, relationType),
+    source: "UFAS",
+    chapter_name: st.currentChapter,
+    section_num: st.currentSectionNum,
+    section_name: st.currentSectionName,
+    citation_num: st.currentCitationNum,
+    citation_name: st.currentCitationName || "Table",
+    content_text: content,
+    relation_type: relationType,
+    order,
+    imageId: null,
+    imageUrl: null,
+    imageCaption: ""
+  };
+}
+
+function pushMergedCitationStandard(bodyBlocks, st, records, options = {}) {
+  const emitEmpty = Boolean(options.emitEmpty);
+  const embedNodes = [];
+  const parts = bodyBlocks
+    .map(b => blockToText(b, embedNodes, st))
+    .map(s => (typeof s === "string" ? s.trim() : ""))
+    .filter(Boolean);
+  const contentText = parts.join("\n\n").trim();
+  if (!contentText && !emitEmpty) {
+    flushEmbedNodes(embedNodes, st, records);
+    return;
+  }
+
+  const order = st.order;
+  st.order += 10;
+
+  records.push({
+    id: makeId(order, st.currentCitationNum, "Standard"),
+    source: "UFAS",
+    chapter_name: st.currentChapter,
+    section_num: st.currentSectionNum,
+    section_name: st.currentSectionName,
+    citation_num: st.currentCitationNum,
+    citation_name: st.currentCitationName,
+    content_text: contentText || "",
+    relation_type: "Standard",
+    order,
+    imageId: null,
+    imageUrl: null,
+    imageCaption: ""
+  });
+
+  flushEmbedNodes(embedNodes, st, records);
+}
+
+function pushOrphanParagraph(node, st, records) {
+  const txt = textOf(node);
+  if (!txt) return;
+
+  const relationType = inferRelationType(txt, node.tagName);
+
+  const citationNum =
+    relationType === "Advisory"
+      ? txt.match(/^Advisory\s+([A]?\d+(?:\.\d+)*)/i)?.[1] || st.currentCitationNum
+      : st.currentCitationNum;
+
+  const order = st.order;
+  st.order += 10;
+
+  records.push({
+    id: makeId(order, citationNum, relationType),
+    source: "UFAS",
+    chapter_name: st.currentChapter,
+    section_num: st.currentSectionNum,
+    section_name: st.currentSectionName,
+    citation_num: citationNum,
+    citation_name: st.currentCitationName,
+    content_text: txt,
+    relation_type: relationType,
+    order,
+    imageId: null,
+    imageUrl: null,
+    imageCaption: ""
+  });
+}
+
+function pushOrphanFigure(node, st, records) {
+  const captionNode = (node.children || []).find(c => c.tagName === "figcaption");
+  const imgNode = (node.children || []).find(c => c.tagName === "img");
+
+  const caption = textOf(captionNode);
+  const imgSrc = imgNode?.attributes?.src || "";
+
+  const relationType = inferRelationType(caption, "figure");
+  const citationNum = st.currentCitationNum;
+
+  const imageId = imgSrc
+    ? crypto.createHash("sha1").update(imgSrc).digest("hex").slice(0, 16)
+    : null;
+
+  const order = st.order;
+  st.order += 10;
+
+  records.push({
+    id: makeId(order, citationNum, relationType),
+    source: "UFAS",
+    chapter_name: st.currentChapter,
+    section_num: st.currentSectionNum,
+    section_name: st.currentSectionName,
+    citation_num: citationNum,
+    citation_name: caption || st.currentCitationName,
+    content_text: caption,
+    relation_type: relationType,
+    order,
+    imageId,
+    imageUrl: imgSrc,
+    imageCaption: caption
+  });
+}
+
+function pushOrphanTable(node, st, records) {
+  const content = textOf(node);
+  const order = st.order;
+  st.order += 10;
+
+  records.push({
+    id: makeId(order, st.currentCitationNum, "Table"),
+    source: "UFAS",
+    chapter_name: st.currentChapter,
+    section_num: st.currentSectionNum,
+    section_name: st.currentSectionName,
+    citation_num: st.currentCitationNum,
+    citation_name: st.currentCitationName || "Table",
+    content_text: content,
+    relation_type: "Table",
+    order,
+    imageId: null,
+    imageUrl: null,
+    imageCaption: ""
+  });
+}
+
 function main() {
   const raw = JSON.parse(fs.readFileSync(INPUT, "utf8"));
 
   const records = [];
+  const linear = [];
+  linearizeBlocks(raw, linear);
 
-  let currentChapter = "";
-  let currentSectionNum = "";
-  let currentSectionName = "";
-  let currentCitationNum = "";
-  let currentCitationName = "";
-  let order = 1000;
+  const st = {
+    currentChapter: "",
+    currentSectionNum: "",
+    currentSectionName: "",
+    currentCitationNum: "",
+    currentCitationName: "",
+    order: 1000
+  };
 
-  walk(raw, node => {
+  let i = 0;
+  while (i < linear.length) {
+    const node = linear[i];
     const tag = node.tagName;
-    if (!tag) return;
 
-    const txt = textOf(node);
-    if (!txt) return;
-
-    // Chapter / major heading
     if (tag === "h3") {
-      currentChapter = txt;
+      const txt = textOf(node);
       const parsed = parseCitationFromHeading(txt);
       if (parsed) {
-        currentSectionNum = parsed.citation_num;
-        currentSectionName = parsed.citation_name;
+        // Major section (e.g. "1. Purpose"): emit Standard + body until any h3–h6 (do not absorb h4/h5/h6 children).
+        if (txt) st.currentChapter = txt;
+        st.currentSectionNum = parsed.citation_num;
+        st.currentSectionName = parsed.citation_name;
+        st.currentCitationNum = parsed.citation_num;
+        st.currentCitationName = parsed.citation_name;
+
+        const bodyBlocks = [];
+        let j = i + 1;
+        while (j < linear.length) {
+          const next = linear[j];
+          const nt = next.tagName;
+          if (nt === "h3" || nt === "h4" || nt === "h5" || nt === "h6") break;
+          bodyBlocks.push(next);
+          j += 1;
+        }
+
+        pushMergedCitationStandard(bodyBlocks, st, records, { emitEmpty: true });
+        i = j;
+        continue;
       }
-      return;
+      if (txt) st.currentChapter = txt;
+      i += 1;
+      continue;
     }
 
-    // Section/subsection heading
     if (tag === "h4" || tag === "h5" || tag === "h6") {
+      const txt = textOf(node);
       const parsed = parseCitationFromHeading(txt);
       if (parsed) {
-        currentCitationNum = parsed.citation_num;
-        currentCitationName = parsed.citation_name;
-        currentSectionNum = parsed.citation_num.split(".").slice(0, 2).join(".");
-        currentSectionName = parsed.citation_name;
+        st.currentCitationNum = parsed.citation_num;
+        st.currentCitationName = parsed.citation_name;
+        st.currentSectionNum = parsed.citation_num.split(".").slice(0, 2).join(".");
+        st.currentSectionName = parsed.citation_name;
+
+        const bodyBlocks = [];
+        let j = i + 1;
+        while (j < linear.length) {
+          const next = linear[j];
+          const nt = next.tagName;
+          // Stop at any section heading so h4 does not absorb h5/h6 children (each citation gets its own body).
+          if (nt === "h3" || nt === "h4" || nt === "h5" || nt === "h6") break;
+          bodyBlocks.push(next);
+          j += 1;
+        }
+
+        pushMergedCitationStandard(bodyBlocks, st, records);
+
+        i = j;
+        continue;
       }
-      return;
+      i += 1;
+      continue;
     }
 
-    // Paragraphs become standard/advisory/exception content
     if (tag === "p") {
-      const relationType = inferRelationType(txt, tag);
-
-      const citationNum =
-        relationType === "Advisory"
-          ? (txt.match(/^Advisory\s+([A]?\d+(?:\.\d+)*)/i)?.[1] || currentCitationNum)
-          : currentCitationNum;
-
-      const record = {
-        id: makeId(order, citationNum, relationType),
-        source: "UFAS",
-        chapter_name: currentChapter,
-        section_num: currentSectionNum,
-        section_name: currentSectionName,
-        citation_num: citationNum,
-        citation_name: currentCitationName,
-        content_text: txt,
-        relation_type: relationType,
-        order,
-        imageId: null,
-        imageUrl: null,
-        imageCaption: ""
-      };
-
-      records.push(record);
-      order += 10;
+      pushOrphanParagraph(node, st, records);
+      i += 1;
+      continue;
     }
 
-    // Figures with images
     if (tag === "figure") {
-      const captionNode = (node.children || []).find(c => c.tagName === "figcaption");
-      const imgNode = (node.children || []).find(c => c.tagName === "img");
-
-      const caption = textOf(captionNode);
-      const imgSrc = imgNode?.attributes?.src || "";
-
-      const relationType = inferRelationType(caption, tag);
-      // Figures/tables are citation variants associated with the current standard section.
-      // Keep the section citation as citation_num; preserve the literal figure/table label in citation_name/imageCaption.
-      const citationNum = relationType === "Figure" || relationType === "Table" ? currentCitationNum : citationMatch?.[1];
-
-      const imageId = imgSrc
-        ? crypto.createHash("sha1").update(imgSrc).digest("hex").slice(0, 16)
-        : null;
-
-      const record = {
-        id: makeId(order, citationNum, relationType),
-        source: "UFAS",
-        chapter_name: currentChapter,
-        section_num: currentSectionNum,
-        section_name: currentSectionName,
-        citation_num: citationNum,
-        citation_name: caption || currentCitationName,
-        content_text: caption,
-        relation_type: relationType,
-        order,
-        imageId,
-        imageUrl: imgSrc,
-        imageCaption: caption
-      };
-
-      records.push(record);
-      order += 10;
+      pushOrphanFigure(node, st, records);
+      i += 1;
+      continue;
     }
 
-    // HTML tables as table records
     if (tag === "table") {
-      const content = txt;
-      const relationType = "Table";
-
-      const record = {
-        id: makeId(order, currentCitationNum, relationType),
-        source: "UFAS",
-        chapter_name: currentChapter,
-        section_num: currentSectionNum,
-        section_name: currentSectionName,
-        citation_num: currentCitationNum,
-        citation_name: currentCitationName || "Table",
-        content_text: content,
-        relation_type: relationType,
-        order,
-        imageId: null,
-        imageUrl: null,
-        imageCaption: ""
-      };
-
-      records.push(record);
-      order += 10;
+      pushOrphanTable(node, st, records);
+      i += 1;
+      continue;
     }
-  });
+
+    if (tag === "dl" || tag === "ul" || tag === "ol") {
+      const embedNodes = [];
+      const txt = blockToText(node, embedNodes, st).trim();
+      if (txt) {
+        const relationType = inferRelationType(txt, tag);
+        const citationNum =
+          relationType === "Advisory"
+            ? txt.match(/^Advisory\s+([A]?\d+(?:\.\d+)*)/i)?.[1] || st.currentCitationNum
+            : st.currentCitationNum;
+        const o = st.order;
+        st.order += 10;
+        records.push({
+          id: makeId(o, citationNum, relationType),
+          source: "UFAS",
+          chapter_name: st.currentChapter,
+          section_num: st.currentSectionNum,
+          section_name: st.currentSectionName,
+          citation_num: citationNum,
+          citation_name: st.currentCitationName,
+          content_text: txt,
+          relation_type: relationType,
+          order: o,
+          imageId: null,
+          imageUrl: null,
+          imageCaption: ""
+        });
+        flushEmbedNodes(embedNodes, st, records);
+      } else {
+        flushEmbedNodes(embedNodes, st, records);
+      }
+      i += 1;
+      continue;
+    }
+
+    i += 1;
+  }
 
   fs.writeFileSync(OUTPUT, JSON.stringify(records, null, 2));
   console.log(`Wrote ${records.length} records to ${OUTPUT}`);
