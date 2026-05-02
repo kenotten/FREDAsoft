@@ -149,9 +149,8 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
     const duplicates = new Set<string>();
     standards.forEach(s => {
       const num = (s.citation_num || '').trim();
-      const text = (s.content_text || '').trim();
       const type = (s.relation_type || '').trim();
-      const key = `${num}|${text}|${type}`;
+      const key = `${num}|${type}`;
       
       if (seen.has(key)) {
         duplicates.add(s.id);
@@ -172,6 +171,11 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
       }
     });
     return ids;
+  }, [standards]);
+
+  const maxOrder = useMemo(() => {
+    if (standards.length === 0) return 0;
+    return Math.max(...standards.map(s => s.order ?? 0));
   }, [standards]);
 
   const resequenceAll = async (currentStandards: MasterStandard[]) => {
@@ -523,7 +527,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
             </Button>
             <Button onClick={() => setEditingStandard({ 
               relation_type: 'Standard', 
-              order: standards.length > 0 ? Math.max(...standards.map(s => s.order)) + 10 : 10,
+              order: maxOrder + 10,
               chapter_name: '',
               section_num: '',
               section_name: '',
