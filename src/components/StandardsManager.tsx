@@ -150,6 +150,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
     const seen = new Map<string, string>();
     const duplicates = new Set<string>();
     standards.forEach(s => {
+      if (s.relation_type === 'Exception') return;
       const num = (s.citation_num || '').trim();
       const type = (s.relation_type || '').trim();
       const key = `${num}|${type}`;
