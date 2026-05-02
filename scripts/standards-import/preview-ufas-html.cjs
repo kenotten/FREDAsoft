@@ -3,12 +3,8 @@ const fs = require("fs");
 const INPUT = "scripts/standards-import/ufas_standards.json";
 const OUTPUT = "scripts/standards-import/ufas_preview.html";
 
-// Change these numbers to preview a different range
-const START = 10;
-const COUNT = 200;
-
 const records = JSON.parse(fs.readFileSync(INPUT, "utf8"));
-const sample = records.slice(START, START + COUNT);
+const sample = records;
 
 function esc(value) {
   return String(value ?? "")
@@ -197,7 +193,7 @@ const html = `<!doctype html>
 <body>
   <main class="page">
     <h1>UFAS Standards Preview</h1>
-    <p class="subtitle">Showing records ${START + 1}–${START + sample.length} of ${records.length}</p>
+    <p class="subtitle">Showing records 1–${records.length} of ${records.length}</p>
 
     ${sample.map(r => {
       const headingClass = getHeadingClass(r);

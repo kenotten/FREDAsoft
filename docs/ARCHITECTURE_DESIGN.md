@@ -395,3 +395,81 @@ Design direction:
 Near-term guidance:
 - Do not block the current beta workflow to redesign inspector assignment.
 - Ensure new Data Entry session-state work does not assume only one inspector can ever exist per project.
+
+## Library Management Expansion (Future)
+
+Current State:
+- Findings and Recommendations are primarily created and managed through the Glossary Builder.
+- Certain associated attributes (e.g., citations/standards, unit cost, unit type) are used in application workflows but are not consistently visible or editable within a dedicated library interface.
+
+Observation:
+- This creates a disconnect between:
+  - where records are defined (Glossary Builder)
+  - and how they are used (Data Entry, Reports)
+
+Future Direction:
+- Move full lifecycle management of Findings and Recommendations into the Library domain.
+- Users should be able to:
+  - Create
+  - Edit
+  - Delete
+  - Copy / duplicate (for rapid creation of similar records)
+
+Key Principles:
+- Findings:
+  - Contain descriptive content and classification (e.g., finding type / default type)
+  - May reference standards/citations
+  - Do NOT contain measurement values (those belong to data records)
+
+- Recommendations:
+  - Contain corrective action content
+  - May include default cost-related fields (unit cost, unit type)
+
+Proposed Structure:
+- Introduce a dedicated Library interface, potentially including:
+  - Library Explorer (browse/search/filter records)
+  - Library Builder (create/edit structured records)
+
+- Align this structure conceptually with the Glossary system, but with clearer separation of concerns and improved usability.
+
+Note:
+- This is a planned architectural evolution and should not be implemented until current data entry and reporting workflows are fully stabilized.
+
+### Standards Model Enhancement (Future)
+
+Current State:
+- All standards (Standard, Advisory, Exception, Figure, Table) share a consistent record structure.
+- Distinction between types is handled via `relation_type` (e.g., "Standard", "Advisory", "Exception", "Figure", "Table").
+- Content is primarily text-based (`content_text`).
+
+Observation:
+- Real-world standards (e.g., TAS, ADA, UFAS) include **figures and tables** that are not independent entities, but **citation variants** associated with standard sections.
+- Figures and tables often:
+  - share the same citation numbering system
+  - appear sequentially with text standards
+  - include visual content (images) in addition to or instead of text
+
+Future Direction:
+- Maintain a **single unified standards schema** for all record types.
+- Extend the schema to support **optional image references** for any standard record.
+
+Key Principles:
+- No separate "figure" or "table" entity types — all remain standard records.
+- `relation_type` continues to define:
+  - Standard
+  - Advisory
+  - Exception
+  - Figure
+  - Table
+- Images are **supplemental to text**, not replacements.
+- Any standard record may include:
+  - text only
+  - image only
+  - or both
+
+Proposed Additions to Standard Record:
+
+```ts
+imageId?: string | null;
+imageUrl?: string | null;     // optional denormalized field
+imageCaption?: string;
