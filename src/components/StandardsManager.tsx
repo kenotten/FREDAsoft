@@ -111,6 +111,8 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
   const [showBulkUploader, setShowBulkUploader] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [expandedStandards, setExpandedStandards] = useState<Set<string>>(new Set());
+  const PAGE_SIZE = 150;
+  const [page, setPage] = useState(1);
 
   const typePriority: Record<string, number> = {
     'Standard': 1,
@@ -268,6 +270,26 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
       s.section_name.toLowerCase().includes(q)
     );
   }, [standards, searchQuery, showAlphanumericOnly, showArchived, alphanumericIds, selectedType, selectedVersion]);
+
+  const { total, start, pageItems } = useMemo(() => {
+    const total = filteredStandards.length;
+    const start = (page - 1) * PAGE_SIZE;
+    const pageItems = filteredStandards.slice(start, start + PAGE_SIZE);
+    return { total, start, pageItems };
+  }, [filteredStandards, page]);
+
+  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage(1);
+  }, [filteredStandards]);
+
+  useEffect(() => {
+    if (total === 0) return;
+    if (start >= total) {
+      setPage(lastPage);
+    }
+  }, [total, start, lastPage]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -506,6 +528,41 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
     });
   };
 
+  const renderStandardsPaginationBar = (edgeClass: string) => (
+    <div
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-3 bg-zinc-50 px-4 py-3 text-sm text-zinc-600',
+        edgeClass
+      )}
+    >
+      <span>
+        {total === 0
+          ? 'Showing 0–0 of 0'
+          : `Showing ${start + 1}–${start + pageItems.length} of ${total}`}
+      </span>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={page <= 1 || total === 0}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+        >
+          Prev
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={page >= lastPage || total === 0}
+          onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-full bg-zinc-50">
       <div className="p-6 bg-white border-b border-zinc-200">
@@ -607,6 +664,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm">
+          {renderStandardsPaginationBar('border-b border-zinc-200')}
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-zinc-50 border-b border-zinc-200">
@@ -619,7 +677,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
-              {filteredStandards.map((s, index) => (
+              {pageItems.map((s, index) => (
                 <React.Fragment key={`${s.id || 'new'}-${index}`}>
                   <tr className={cn(
                     "hover:bg-zinc-50 transition-colors group cursor-pointer", 
@@ -742,6 +800,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
               )}
             </tbody>
           </table>
+          {renderStandardsPaginationBar('border-t border-zinc-200')}
         </div>
       </div>
 
