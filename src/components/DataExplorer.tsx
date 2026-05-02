@@ -83,7 +83,11 @@ export function DataExplorer({
   const getGlossaryContext = (d: any) => {
     if (!d.fldData) return null;
     const cleanKey = d.fldData.trim().toLowerCase();
-    return glossary.find(g => g.fldGlosId?.trim().toLowerCase() === cleanKey);
+    return glossary.find((g: any) => {
+      const byGlos = (g.fldGlosId || '').trim().toLowerCase() === cleanKey;
+      const byId = (g.id || '').trim().toLowerCase() === cleanKey;
+      return byGlos || byId;
+    });
   };
 
   const toggleSelection = (id: string) => {

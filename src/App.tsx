@@ -420,7 +420,8 @@ export default function App() {
     !d.fldDeleted && 
     !d.fldIsDeleted && 
     d.fldPDataID && // 🛡️ Task 111.B: Ensure identity exists to avoid ghost records
-    (!selections.projectId || d.fldPDataProject === selections.projectId)
+    (!selections.projectId || String(d.fldPDataProject || '').trim().toLowerCase() ===
+      String(selections.projectId || '').trim().toLowerCase())
   ), [rawProjectData, selections.projectId]);
   const inspectors = useMemo(() => rawInspectors.filter(i => !i.fldDeleted && !i.fldIsDeleted), [rawInspectors]);
   const categories = useMemo(() => rawCategories.filter(c => !c.fldDeleted && !c.fldIsDeleted), [rawCategories]);

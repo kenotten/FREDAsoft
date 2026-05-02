@@ -37,6 +37,9 @@ const safeArray = (value: any): string[] => {
   return [];
 };
 
+/** Session flag: draft recovery runs once per tab session; cleared on full reload so refresh still prompts. */
+const FREDASOFT_DRAFT_SESSION_CHECK_KEY = 'fredasoft_draft_checked';
+
 function Modal({ title, children, onClose }: any) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -63,7 +66,7 @@ function Modal({ title, children, onClose }: any) {
 export default function ProjectDataEntry({ 
   project = {}, facility = {}, inspector = {}, glossary = [], standards = [], projectData = [],
   onSave, onReset, items = [], findings = [], recommendations = [], masterRecommendations = [],
-  unitTypes = [], mergedCategories = [], locations = [], selections = {}, onSelectionChange
+  unitTypes = [], mergedCategories = [], locations = [], selections = {}, onSelectionChange, onDirtyChange
 }: any) {
   const [isSearchingAll, setIsSearchingAll] = useState(false);
   
@@ -74,9 +77,15 @@ export default function ProjectDataEntry({
   }, [projectData, selections.editingRecordId]);
 
   const editingRecordId = selections.editingRecordId;
+
+  const hasRequiredContext = Boolean(selections.projectId && inspector?.fldInspID);
   
   const selectedCat = selections.categoryId;
   const setSelectedCat = (val: string) => {
+    if (!hasRequiredContext && val !== '') {
+      toast.error('Select a project and inspector before entering data.');
+      return;
+    }
     // Cascading Reset: Clear everything downstream
     setFldFindShort('');
     setFldFindLong('');
@@ -168,6 +177,13 @@ export default function ProjectDataEntry({
     fldQTY, fldMeasurement, fldUnitType, fldLocation, fldImages, fldStandards
   ]);
 
+  useEffect(() => {
+    if (typeof onDirtyChange === 'function') onDirtyChange(isFormDirty);
+    return () => {
+      if (typeof onDirtyChange === 'function') onDirtyChange(false);
+    };
+  }, [isFormDirty, onDirtyChange]);
+
   const focusClasses = "focus:border-amber-500 focus:bg-yellow-50 focus:ring-amber-500/10";
 
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
@@ -247,8 +263,22 @@ export default function ProjectDataEntry({
     setIsDirty(true);
   };
 
-  // Recovery Protocol: Check for draft on mount
+  // Recovery Protocol: check for draft on first Data Entry mount per tab session only.
+  // Tab switches unmount/remount this component; sessionStorage skips re-prompting until reload/new tab.
   useEffect(() => {
+    const navEntries =
+      typeof performance !== 'undefined' && typeof performance.getEntriesByType === 'function'
+        ? performance.getEntriesByType('navigation')
+        : [];
+    const nav =
+      navEntries.length > 0 ? (navEntries[0] as PerformanceNavigationTiming) : undefined;
+    if (nav?.type === 'reload') {
+      sessionStorage.removeItem(FREDASOFT_DRAFT_SESSION_CHECK_KEY);
+    }
+    if (sessionStorage.getItem(FREDASOFT_DRAFT_SESSION_CHECK_KEY) !== null) {
+      return;
+    }
+
     const draft = localStorage.getItem('fredasoft_draft');
     if (draft) {
       try {
@@ -259,6 +289,7 @@ export default function ProjectDataEntry({
         localStorage.removeItem('fredasoft_draft');
       }
     }
+    sessionStorage.setItem(FREDASOFT_DRAFT_SESSION_CHECK_KEY, '1');
   }, []);
 
   // Auto-Save Logic: Every 5 seconds if dirty
@@ -373,38 +404,70 @@ export default function ProjectDataEntry({
     setFldTotalCost(cost * qty);
   }, [fldUnitCost, fldQTY]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!hasRequiredContext) {
+      toast.error('Select a project and inspector before saving.');
+      return;
+    }
     if (!fldLocation) { toast.error('Location is required'); return; }
     if (!inspector?.fldInspID) { toast.error('Inspector context is missing. Please select an inspector in Setup.'); return; }
     
     // Ensure we have a valid ID before saving
     const finalizedId = editingRecordId || uuidv4();
     
-    onSave({
-      fldPDataID: finalizedId,
-      fldPDataProject: selections.projectId,
-      fldFacility: facility?.fldFacID || activeRecord?.fldFacility,
-      fldData: selections.glosId || activeRecord?.fldData || "",
-      fldLocation,
-      fldFindShort,
-      fldFindLong,
-      fldRecShort,
-      fldRecLong,
-      fldQTY: Number(fldQTY) || 0,
-      fldMeasurement: fldMeasurement === '' ? null : Number(fldMeasurement),
-      fldMeasurementUnit,
-      fldUnitCost: Number(fldUnitCost) || 0,
-      fldUnitType,
-      fldTotalCost: Number(fldTotalCost) || 0,
-      fldImages,
-      fldStandards: safeArray(fldStandards),
-      fldInspID: inspector.fldInspID,
-      fldTimestamp: new Date().toISOString()
-    });
-    // Update selections for sticky behavior
-    onSelectionChange({ ...selections, locationId: fldLocation, editingRecordId: finalizedId, isDirty: false });
+    try {
+      await onSave({
+        fldPDataID: finalizedId,
+        fldPDataProject: selections.projectId,
+        fldFacility: facility?.fldFacID || activeRecord?.fldFacility,
+        fldData: selections.glosId || activeRecord?.fldData || "",
+        fldLocation,
+        fldFindShort,
+        fldFindLong,
+        fldRecShort,
+        fldRecLong,
+        fldQTY: Number(fldQTY) || 0,
+        fldMeasurement: fldMeasurement === '' ? null : Number(fldMeasurement),
+        fldMeasurementUnit,
+        fldUnitCost: Number(fldUnitCost) || 0,
+        fldUnitType,
+        fldTotalCost: Number(fldTotalCost) || 0,
+        fldImages,
+        fldStandards: safeArray(fldStandards),
+        fldInspID: inspector.fldInspID,
+        fldTimestamp: new Date().toISOString()
+      });
+    } catch {
+      return;
+    }
+
+    setFldFindShort('');
+    setFldFindLong('');
+    setFldRecShort('');
+    setFldRecLong('');
+    setFldQTY(0);
+    setFldMeasurement('');
+    setFldMeasurementUnit('');
+    setFldUnitType('Decimal');
+    setFldUnitCost(0);
+    setFldTotalCost(0);
+    setFldImages([]);
+    setFldStandards([]);
+
     localStorage.removeItem('fredasoft_draft');
     setIsDirty(false);
+    onSelectionChange({
+      ...selections,
+      categoryId: selections.categoryId,
+      locationId: fldLocation,
+      itemId: '',
+      findId: '',
+      recId: '',
+      standards: [],
+      images: [],
+      editingRecordId: null,
+      isDirty: false
+    });
   };
 
   const confirmAction = (title: string, message: string, action: () => void) => {
@@ -760,6 +823,15 @@ export default function ProjectDataEntry({
               )}
             </div>
 
+            {!hasRequiredContext && (
+              <div className="mb-4 p-4 rounded-xl border border-zinc-200 bg-zinc-50/90 text-zinc-700 shadow-sm">
+                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Workspace incomplete</p>
+                <p className="text-sm text-zinc-600 mt-1.5 leading-snug">
+                  Select a client, facility, project, and inspector to enable data entry.
+                </p>
+              </div>
+            )}
+
             {/* TOP CONTEXT CARD - Now part of sticky header */}
             <Card className="p-6 border-zinc-200 shadow-sm bg-white">
               <div className="flex flex-wrap gap-6">
@@ -769,6 +841,7 @@ export default function ProjectDataEntry({
                     label="Category"
                     value={selectedCat}
                     onChange={(e: any) => setSelectedCat(e.target.value)}
+                    disabled={!hasRequiredContext}
                     selectClassName={focusClasses}
                     options={sortedCategories.map((c, index) => ({ 
                       value: c.fldCategoryID || c.fldCatID || `missing-${index}`, 

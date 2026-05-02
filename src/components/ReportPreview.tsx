@@ -68,6 +68,139 @@ interface StandardSnapshot {
   fldImageUrl?: string;
 }
 
+type AddendumEntry =
+  | { kind: 'header'; standardType: string; key: string }
+  | { kind: 'standard'; standard: StandardSnapshot };
+
+function normalizeStandardIds(raw: unknown): string[] {
+  if (raw === undefined || raw === null) return [];
+  const arr = Array.isArray(raw) ? raw : typeof raw === 'string' && raw ? [raw] : [];
+  return arr.map(id => String(id).trim()).filter(Boolean);
+}
+
+function standardTypeKey(std: { fldStandardType?: string }): string {
+  const t = std.fldStandardType;
+  if (t === undefined || t === null || String(t).trim() === '') return 'Unknown';
+  return String(t).trim();
+}
+
+function compareCitationNum(a: string, b: string): number {
+  return (a || '').trim().localeCompare((b || '').trim(), undefined, { numeric: true });
+}
+
+function formatGroupedStandardCitations(ids: string[], standards: MasterStandard[]): string {
+  const seen = new Set<string>();
+  const list: MasterStandard[] = [];
+  for (const rawId of ids) {
+    const id = String(rawId).trim();
+    if (!id || seen.has(id)) continue;
+    const std = standards.find(s => s.id === id);
+    if (!std) continue;
+    seen.add(id);
+    list.push(std);
+  }
+  const byType = new Map<string, MasterStandard[]>();
+  for (const std of list) {
+    const t = standardTypeKey(std);
+    if (!byType.has(t)) byType.set(t, []);
+    byType.get(t)!.push(std);
+  }
+  const types = Array.from(byType.keys()).sort((a, b) => a.localeCompare(b));
+  const parts: string[] = [];
+  for (const t of types) {
+    const arr = byType.get(t)!;
+    arr.sort((a, b) => compareCitationNum(a.citation_num || '', b.citation_num || ''));
+    for (const s of arr) {
+      parts.push(`${t} ${(s.citation_num || '').trim()}`);
+    }
+  }
+  return parts.join('; ');
+}
+
+function buildReferencedAddendumEntries(
+  filteredData: ProjectData[],
+  glossary: Glossary[],
+  standards: MasterStandard[]
+): AddendumEntry[] {
+  const standardsMap = new Map<string, StandardSnapshot>();
+  filteredData.forEach(d => {
+    const cleanKey = (d.fldData || "").trim().toLowerCase();
+    const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
+    const recordIds = normalizeStandardIds(d.fldStandards);
+    const glosIds = normalizeStandardIds(glos?.fldStandards);
+    const mergedIds = [...new Set([...recordIds, ...glosIds])];
+    mergedIds.forEach(id => {
+      if (standardsMap.has(id)) return;
+      const std = standards.find(s => s.id === id);
+      if (!std) return;
+      const tKey = standardTypeKey(std);
+      standardsMap.set(id, {
+        fldStandardType: tKey,
+        fldStandardVersion: std.fldStandardVersion ?? '',
+        fldCitationNum: std.citation_num,
+        fldCitationName: std.citation_name,
+        fldContentText: std.content_text,
+        fldStandardId: id,
+        fldImageUrl: std.image_url
+      });
+    });
+  });
+  const snapshots = Array.from(standardsMap.values());
+  const byType = new Map<string, StandardSnapshot[]>();
+  for (const snap of snapshots) {
+    const t = standardTypeKey(snap);
+    if (!byType.has(t)) byType.set(t, []);
+    byType.get(t)!.push({ ...snap, fldStandardType: t });
+  }
+  const types = Array.from(byType.keys()).sort((a, b) => a.localeCompare(b));
+  const entries: AddendumEntry[] = [];
+  for (const t of types) {
+    entries.push({ kind: 'header', standardType: t, key: `__addendum_header__${t}` });
+    const arr = byType.get(t)!;
+    arr.sort((a, b) => compareCitationNum(a.fldCitationNum || '', b.fldCitationNum || ''));
+    for (const s of arr) entries.push({ kind: 'standard', standard: s });
+  }
+  return entries;
+}
+
+function AddendumRows({ entries }: { entries: AddendumEntry[] }) {
+  return (
+    <>
+      {entries.map(entry => {
+        if (entry.kind === 'header') {
+          return (
+            <div key={entry.key} data-measure-type="addendum" data-id={entry.key} className="mb-4">
+              <h2 className="text-lg font-black text-zinc-900 border-b-2 border-zinc-900 pb-2 tracking-tight">
+                {entry.standardType}
+              </h2>
+            </div>
+          );
+        }
+        const standard = entry.standard;
+        const prefix = standard.fldStandardType || 'Unknown';
+        return (
+          <div key={standard.fldStandardId} data-measure-type="addendum" data-id={standard.fldStandardId} className="mb-6 space-y-2 break-inside-avoid">
+            <h3 className="font-bold text-zinc-900 text-sm">
+              {prefix} {standard.fldCitationNum} {standard.fldCitationName}
+            </h3>
+            <p className="text-xs text-zinc-700 leading-relaxed">{standard.fldContentText}</p>
+            {standard.fldImageUrl && (
+              <div className="my-2">
+                <img
+                  src={standard.fldImageUrl}
+                  alt={`${prefix} ${standard.fldCitationNum}`}
+                  className="max-h-64 object-contain border border-zinc-200 rounded-lg"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function ReportPreview({
   project,
   client,
@@ -151,32 +284,10 @@ export function ReportPreview({
     });
   }, [projectData, project.fldProjID, facility.fldFacID, facility.id, glossary, categories, items, locations, findings]);
 
-  const referencedStandards = useMemo(() => {
-    const standardsMap = new Map<string, any>();
-    filteredData.forEach(d => {
-      const cleanKey = (d.fldData || "").trim().toLowerCase();
-      const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
-      const rawIds = glos?.fldStandards || [];
-      const ids = Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' && rawIds ? [rawIds] : []);
-      ids.forEach(id => {
-        if (!standardsMap.has(id)) {
-          const std = standards.find(s => s.id === id);
-          if (std) {
-            standardsMap.set(id, {
-              fldStandardType: std.fldStandardType,
-              fldStandardVersion: std.fldStandardVersion,
-              fldCitationNum: std.citation_num,
-              fldCitationName: std.citation_name,
-              fldContentText: std.content_text,
-              fldStandardId: id
-            });
-          }
-        }
-      });
-    });
-    return Array.from(standardsMap.values())
-      .sort((a, b) => a.fldCitationNum.localeCompare(b.fldCitationNum, undefined, { numeric: true }));
-  }, [filteredData, glossary, standards]);
+  const referencedStandards = useMemo(
+    () => buildReferencedAddendumEntries(filteredData, glossary, standards),
+    [filteredData, glossary, standards]
+  );
 
   const financialData = useMemo(() => {
     const groups: Record<string, { category: string, records: any[], subtotal: number }> = {};
@@ -335,22 +446,24 @@ export function ReportPreview({
 
   const addendumPages = useMemo(() => {
     if (isMeasuring) return [];
-    const chunks: StandardSnapshot[][] = [];
-    let currentChunk: StandardSnapshot[] = [];
+    const chunks: AddendumEntry[][] = [];
+    let currentChunk: AddendumEntry[] = [];
     let currentHeight = 0;
     const standardLimit = 660; // Reduced further for extra safety buffer
     const firstPageLimit = 595; // 660 - 65
 
-    for (const item of referencedStandards) {
-      const height = (measuredAddendumHeights[item.fldStandardId] || 100) + 24;
+    for (const entry of referencedStandards) {
+      const measureKey = entry.kind === 'header' ? entry.key : entry.standard.fldStandardId;
+      const defaultH = entry.kind === 'header' ? 56 : 100;
+      const height = (measuredAddendumHeights[measureKey] || defaultH) + 24;
       const limit = chunks.length === 0 ? firstPageLimit : standardLimit;
-      
+
       if (currentHeight + height > limit && currentChunk.length > 0) {
         chunks.push(currentChunk);
-        currentChunk = [item];
+        currentChunk = [entry];
         currentHeight = height;
       } else {
-        currentChunk.push(item);
+        currentChunk.push(entry);
         currentHeight += height;
       }
     }
@@ -417,21 +530,7 @@ export function ReportPreview({
             ))}
           </tbody>
         </table>
-        {referencedStandards.map(standard => (
-          <div key={standard.fldStandardId} data-measure-type="addendum" data-id={standard.fldStandardId} className="mb-6 space-y-2">
-            <h3 className="font-bold text-zinc-900 text-sm">{standard.fldCitationNum} {standard.fldCitationName}</h3>
-            <p className="text-xs text-zinc-700 leading-relaxed">{standard.fldContentText}</p>
-            {standard.fldImageUrl && (
-              <div className="my-2">
-                <img 
-                  src={standard.fldImageUrl} 
-                  className="max-h-64 object-contain border border-zinc-200 rounded-lg" 
-                  referrerPolicy="no-referrer" 
-                />
-              </div>
-            )}
-          </div>
-        ))}
+        <AddendumRows entries={referencedStandards} />
       </div>
 
       {/* Header / Controls */}
@@ -674,26 +773,11 @@ export function ReportPreview({
                     <div className="flex flex-col">
                       {pIdx === 0 && (
                         <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
-                          Addendum: Texas Accessibility Standards
+                          Addendum: Referenced Standards
                         </h2>
                       )}
                       <div className="space-y-6">
-                        {pageRecords.map(standard => (
-                          <div key={standard.fldStandardId} className="space-y-2 break-inside-avoid">
-                            <h3 className="font-bold text-zinc-900 text-sm">{standard.fldCitationNum} {standard.fldCitationName}</h3>
-                            <p className="text-xs text-zinc-700 leading-relaxed">{standard.fldContentText}</p>
-                            {standard.fldImageUrl && (
-                              <div className="my-2">
-                                <img 
-                                  src={standard.fldImageUrl} 
-                                  alt={`Figure ${standard.fldCitationNum}`} 
-                                  className="max-h-64 object-contain border border-zinc-200 rounded-lg" 
-                                  referrerPolicy="no-referrer" 
-                                />
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                        <AddendumRows entries={pageRecords} />
                       </div>
                     </div>
                   </PageContainer>
@@ -702,7 +786,7 @@ export function ReportPreview({
                 <PageContainer facilityName={facility.fldFacName} pageNumber="C1">
                   <div className="flex flex-col">
                     <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
-                      Addendum: Texas Accessibility Standards
+                      Addendum: Referenced Standards
                     </h2>
                     <p className="text-sm text-zinc-500 italic">No standards citations referenced in this report.</p>
                   </div>
@@ -768,14 +852,12 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
   const item = items.find(i => i.fldItemID === glos?.fldItem);
   const location = locations.find(l => l.fldLocID === record.fldLocation);
   const refs = useMemo(() => {
-    const rawIds = record.fldStandards || glos?.fldStandards || [];
-    const standardIds = Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' && rawIds ? [rawIds] : []);
-    if (standardIds.length === 0) return '';
-    return standardIds
-      .map(id => standards.find(s => s.id === id)?.citation_num)
-      .filter(Boolean)
-      .join('; ');
-  }, [record.fldStandards, glos, standards]);
+    const recordIds = normalizeStandardIds(record.fldStandards);
+    const glosIds = normalizeStandardIds(glos?.fldStandards);
+    const mergedIds = [...new Set([...recordIds, ...glosIds])];
+    if (mergedIds.length === 0) return '';
+    return formatGroupedStandardCitations(mergedIds, standards);
+  }, [record.fldStandards, glos?.fldStandards, standards]);
 
   return (
     <div className="border-2 border-zinc-900 flex break-inside-avoid">
