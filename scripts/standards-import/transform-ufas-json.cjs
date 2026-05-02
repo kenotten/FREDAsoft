@@ -372,27 +372,54 @@ function main() {
       continue;
     }
 
-    if (tag === "h4" || tag === "h5" || tag === "h6") {
+    if (tag === "h4") {
       const txt = textOf(node);
       const parsed = parseCitationFromHeading(txt);
       if (parsed) {
+        // h4 defines parent section for subsequent h5/h6 (and their figures/tables).
+        st.currentSectionNum = parsed.citation_num;
+        st.currentSectionName = parsed.citation_name;
         st.currentCitationNum = parsed.citation_num;
         st.currentCitationName = parsed.citation_name;
-        st.currentSectionNum = parsed.citation_num.split(".").slice(0, 2).join(".");
-        st.currentSectionName = parsed.citation_name;
 
         const bodyBlocks = [];
         let j = i + 1;
         while (j < linear.length) {
           const next = linear[j];
           const nt = next.tagName;
-          // Stop at any section heading so h4 does not absorb h5/h6 children (each citation gets its own body).
           if (nt === "h3" || nt === "h4" || nt === "h5" || nt === "h6") break;
           bodyBlocks.push(next);
           j += 1;
         }
 
-        pushMergedCitationStandard(bodyBlocks, st, records);
+        pushMergedCitationStandard(bodyBlocks, st, records, { emitEmpty: true });
+
+        i = j;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
+
+    if (tag === "h5" || tag === "h6") {
+      const txt = textOf(node);
+      const parsed = parseCitationFromHeading(txt);
+      if (parsed) {
+        // h5/h6: citation only; keep currentSectionNum / currentSectionName from enclosing h4.
+        st.currentCitationNum = parsed.citation_num;
+        st.currentCitationName = parsed.citation_name;
+
+        const bodyBlocks = [];
+        let j = i + 1;
+        while (j < linear.length) {
+          const next = linear[j];
+          const nt = next.tagName;
+          if (nt === "h3" || nt === "h4" || nt === "h5" || nt === "h6") break;
+          bodyBlocks.push(next);
+          j += 1;
+        }
+
+        pushMergedCitationStandard(bodyBlocks, st, records, { emitEmpty: true });
 
         i = j;
         continue;
