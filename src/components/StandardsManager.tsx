@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Search, 
   Plus, 
@@ -81,6 +81,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
   const [selectedVersion, setSelectedVersion] = useState<string>('ALL');
   const [showArchived, setShowArchived] = useState(false);
   const [editingStandard, setEditingStandard] = useState<Partial<MasterStandard> | null>(null);
+  const figureTableImageFileRef = useRef<HTMLInputElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<MasterStandard | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<MasterStandard | null>(null);
 
@@ -299,6 +300,8 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
       toast.error('Failed to upload image');
     } finally {
       toast.dismiss(loadingToast);
+      const input = e.target as HTMLInputElement;
+      if (input) input.value = '';
       setIsSaving(false);
     }
   };
@@ -871,6 +874,73 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                   onChange={(e: any) => setEditingStandard({ ...editingStandard, citation_name: e.target.value })} 
                 />
               </div>
+
+              {(editingStandard.relation_type === 'Figure' ||
+                editingStandard.relation_type === 'Table') && (
+                <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Figure / table image</p>
+                  {editingStandard.image_url ? (
+                    <div className="space-y-3">
+                      <img
+                        src={editingStandard.image_url}
+                        alt=""
+                        className="max-h-24 w-auto max-w-full rounded-lg border border-zinc-200 object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label
+                          className={cn(
+                            'inline-flex cursor-pointer items-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50',
+                            isSaving && 'pointer-events-none opacity-50'
+                          )}
+                        >
+                          Replace Image
+                          <input
+                            ref={figureTableImageFileRef}
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            disabled={isSaving}
+                            onChange={handleImageUpload}
+                          />
+                        </label>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={isSaving}
+                          onClick={() => {
+                            setEditingStandard({ ...editingStandard, image_url: null });
+                            if (figureTableImageFileRef.current) figureTableImageFileRef.current.value = '';
+                          }}
+                        >
+                          Remove Image
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-sm text-zinc-500">No image uploaded</p>
+                      <label
+                        className={cn(
+                          'inline-flex cursor-pointer items-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50',
+                          isSaving && 'pointer-events-none opacity-50'
+                        )}
+                      >
+                        Choose image
+                        <input
+                          ref={figureTableImageFileRef}
+                          type="file"
+                          accept="image/*"
+                          className="sr-only"
+                          disabled={isSaving}
+                          onChange={handleImageUpload}
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <TextArea 
                 label="Content Text" 
