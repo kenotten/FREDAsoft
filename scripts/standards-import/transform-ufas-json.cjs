@@ -483,8 +483,11 @@ function main() {
     i += 1;
   }
 
-  fs.writeFileSync(OUTPUT, JSON.stringify(records, null, 2));
-  console.log(`Wrote ${records.length} records to ${OUTPUT}`);
+  const filteredRecords = records.filter(
+    r => !(r.relation_type === "Standard" && !String(r.citation_num ?? "").trim())
+  );
+  fs.writeFileSync(OUTPUT, JSON.stringify(filteredRecords, null, 2));
+  console.log(`Wrote ${filteredRecords.length} records to ${OUTPUT}`);
 }
 
 main();
