@@ -5,7 +5,6 @@ import {
   Edit2, 
   Trash2, 
   Book, 
-  FileText, 
   Hash, 
   AlertCircle, 
   Save, 
@@ -80,7 +79,6 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [selectedVersion, setSelectedVersion] = useState<string>('ALL');
-  const [showAlphanumericOnly, setShowAlphanumericOnly] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [editingStandard, setEditingStandard] = useState<Partial<MasterStandard> | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<MasterStandard | null>(null);
@@ -146,15 +144,19 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
     return (a.order || 0) - (b.order || 0);
   };
 
+  // TODO: Future refinement should use an explicit sub_sequence / display label for repeated Exceptions, Figures, and Tables.
   const duplicateIds = useMemo(() => {
     const seen = new Map<string, string>();
     const duplicates = new Set<string>();
     standards.forEach(s => {
-      if (s.relation_type === 'Exception') return;
-      const num = (s.citation_num || '').trim();
-      const type = (s.relation_type || '').trim();
-      const key = `${num}|${type}`;
-      
+      const stdType = (s.fldStandardType || '').trim();
+      const stdVer = (s.fldStandardVersion || '').trim();
+      const citeNum = (s.citation_num || '').trim();
+      const relType = (s.relation_type || '').trim();
+      const citeName = (s.citation_name || '').trim();
+      const body = (s.content_text || '').trim();
+      const key = `${stdType}|${stdVer}|${citeNum}|${relType}|${citeName}|${body}`;
+
       if (seen.has(key)) {
         duplicates.add(s.id);
         const firstId = seen.get(key);
@@ -164,16 +166,6 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
       }
     });
     return duplicates;
-  }, [standards]);
-
-  const alphanumericIds = useMemo(() => {
-    const ids = new Set<string>();
-    standards.forEach(s => {
-      if (/[a-zA-Z]/.test(s.citation_num || '')) {
-        ids.add(s.id);
-      }
-    });
-    return ids;
   }, [standards]);
 
   const maxOrder = useMemo(() => {
@@ -258,9 +250,6 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
       base = base.filter(s => s.fldStandardVersion === selectedVersion);
     }
 
-    if (showAlphanumericOnly) {
-      base = base.filter(s => alphanumericIds.has(s.id));
-    }
     if (!searchQuery) return base;
     const q = searchQuery.toLowerCase();
     return base.filter(s => 
@@ -270,7 +259,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
       s.chapter_name.toLowerCase().includes(q) ||
       s.section_name.toLowerCase().includes(q)
     );
-  }, [standards, searchQuery, showAlphanumericOnly, showArchived, alphanumericIds, selectedType, selectedVersion]);
+  }, [standards, searchQuery, showArchived, selectedType, selectedVersion]);
 
   const { total, start, pageItems } = useMemo(() => {
     const total = filteredStandards.length;
@@ -638,20 +627,6 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
             />
           </div>
           <Button 
-            variant={showAlphanumericOnly ? 'primary' : 'secondary'} 
-            size="sm" 
-            onClick={() => setShowAlphanumericOnly(!showAlphanumericOnly)}
-            className="shrink-0"
-          >
-            <FileText size={16} className="mr-2" />
-            {showAlphanumericOnly ? 'Showing Alphanumeric' : 'Filter Alphanumeric'}
-            {alphanumericIds.size > 0 && !showAlphanumericOnly && (
-              <span className="ml-2 px-1.5 py-0.5 bg-zinc-100 text-zinc-600 rounded-full text-[10px] font-bold">
-                {alphanumericIds.size}
-              </span>
-            )}
-          </Button>
-          <Button 
             variant={showArchived ? 'primary' : 'secondary'} 
             size="sm" 
             onClick={() => setShowArchived(!showArchived)}
@@ -683,20 +658,16 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                   <tr className={cn(
                     "hover:bg-zinc-50 transition-colors group cursor-pointer",
                     duplicateIds.has(s.id) && "bg-orange-500/20 hover:bg-orange-500/30",
-                    alphanumericIds.has(s.id) && !duplicateIds.has(s.id) && "bg-purple-500/10 hover:bg-purple-500/20",
                     !expandedStandards.has(s.id) &&
                       !duplicateIds.has(s.id) &&
-                      !alphanumericIds.has(s.id) &&
                       s.relation_type === 'Table' &&
                       "bg-green-50",
                     !expandedStandards.has(s.id) &&
                       !duplicateIds.has(s.id) &&
-                      !alphanumericIds.has(s.id) &&
                       s.relation_type === 'Figure' &&
                       "bg-blue-50",
                     !expandedStandards.has(s.id) &&
                       !duplicateIds.has(s.id) &&
-                      !alphanumericIds.has(s.id) &&
                       s.relation_type === 'Exception' &&
                       "bg-red-50",
                     expandedStandards.has(s.id) && "bg-zinc-50"
@@ -718,18 +689,9 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                     </td>
                     <td className="px-4 py-3 text-xs font-bold text-zinc-900">
                       <div className="flex items-center gap-2">
-                        <span className={cn(
-                          alphanumericIds.has(s.id) && "text-purple-600"
-                        )}>
-                          {s.citation_num}
-                        </span>
+                        <span>{s.citation_num}</span>
                         {duplicateIds.has(s.id) && (
                           <AlertCircle size={12} className="text-orange-600" />
-                        )}
-                        {alphanumericIds.has(s.id) && (
-                          <div className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[9px] font-bold uppercase tracking-wider">
-                            Alphanumeric
-                          </div>
                         )}
                       </div>
                     </td>
