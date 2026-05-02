@@ -648,6 +648,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider w-16">Img</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider w-24">Citation</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider">Chapter / Section / Name</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider w-28">Source</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider">Type</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider text-right">Actions</th>
               </tr>
@@ -703,6 +704,11 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                       </div>
                     </td>
                     <td className="px-4 py-3">
+                      <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-semibold tracking-wide bg-slate-100 text-slate-700 border border-slate-200/80">
+                        {(s.fldStandardType || '').trim() || 'Unknown'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
                       <span className={cn(
                         "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
                         s.relation_type === 'Standard' ? "bg-zinc-100 text-zinc-600" :
@@ -748,7 +754,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                   </tr>
                   {expandedStandards.has(s.id) && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-4 bg-zinc-50 text-sm text-zinc-700 border-b border-zinc-100">
+                      <td colSpan={7} className="px-4 py-4 bg-zinc-50 text-sm text-zinc-700 border-b border-zinc-100">
                         <div className="flex gap-6">
                           {s.image_url && (
                             <div className="shrink-0">
@@ -771,7 +777,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
               ))}
               {filteredStandards.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-zinc-500 italic text-sm">
+                  <td colSpan={7} className="px-4 py-12 text-center text-zinc-500 italic text-sm">
                     No standards found matching your search.
                   </td>
                 </tr>
