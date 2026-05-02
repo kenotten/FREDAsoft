@@ -680,10 +680,25 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
               {pageItems.map((s, index) => (
                 <React.Fragment key={`${s.id || 'new'}-${index}`}>
                   <tr className={cn(
-                    "hover:bg-zinc-50 transition-colors group cursor-pointer", 
-                    expandedStandards.has(s.id) && "bg-zinc-50",
+                    "hover:bg-zinc-50 transition-colors group cursor-pointer",
                     duplicateIds.has(s.id) && "bg-orange-500/20 hover:bg-orange-500/30",
-                    alphanumericIds.has(s.id) && !duplicateIds.has(s.id) && "bg-purple-500/10 hover:bg-purple-500/20"
+                    alphanumericIds.has(s.id) && !duplicateIds.has(s.id) && "bg-purple-500/10 hover:bg-purple-500/20",
+                    !expandedStandards.has(s.id) &&
+                      !duplicateIds.has(s.id) &&
+                      !alphanumericIds.has(s.id) &&
+                      s.relation_type === 'Table' &&
+                      "bg-green-50",
+                    !expandedStandards.has(s.id) &&
+                      !duplicateIds.has(s.id) &&
+                      !alphanumericIds.has(s.id) &&
+                      s.relation_type === 'Figure' &&
+                      "bg-blue-50",
+                    !expandedStandards.has(s.id) &&
+                      !duplicateIds.has(s.id) &&
+                      !alphanumericIds.has(s.id) &&
+                      s.relation_type === 'Exception' &&
+                      "bg-red-50",
+                    expandedStandards.has(s.id) && "bg-zinc-50"
                   )} onClick={() => toggleExpand(s.id)}>
                     <td className="px-4 py-3 text-xs font-mono text-zinc-400">{s.order}</td>
                     <td className="px-4 py-3">
