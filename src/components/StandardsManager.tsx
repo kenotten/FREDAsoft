@@ -682,11 +682,11 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                           className="w-8 h-8 object-cover rounded border border-zinc-200"
                           referrerPolicy="no-referrer"
                         />
-                      ) : (
+                      ) : s.relation_type === 'Figure' || s.relation_type === 'Table' ? (
                         <div className="w-8 h-8 rounded border border-dashed border-zinc-200 flex items-center justify-center text-zinc-300">
                           <ImageIcon size={12} />
                         </div>
-                      )}
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-xs font-bold text-zinc-900">
                       <div className="flex items-center gap-2">
