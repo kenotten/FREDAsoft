@@ -147,13 +147,10 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           standards={standards}
           selections={selections}
           onSelectionChange={setSelections}
-          isDeduplicating={isDeduplicating}
-          dedupStatus={dedupStatus}
           setIsSynced={setIsSynced}
           setActiveTab={setActiveTab}
           setActiveGlossaryId={setActiveGlossaryId}
           updatePreferences={setUserPreferences}
-          importMasterGlossary={importMasterGlossary}
           isUpdatingRef={isUpdatingRef}
           clients={clients}
           facilities={facilities}
