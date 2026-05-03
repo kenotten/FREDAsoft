@@ -1,103 +1,69 @@
-# Architecture & Design Decisions (FREDAsoft)
+FREDAsoft Architecture & Design Decisions
 
-This document serves as the single source of truth for all architectural decisions and is version-controlled alongside the codebase. Every AI session should read this before making changes.
+This document is the single source of truth for architectural decisions in FREDAsoft.
+It defines system behavior, data modeling philosophy, and development constraints.
 
----
+All contributors (human or AI) must follow this document.
 
-## 🧠 AI Operations Layer (Archie / Gabe / Francine)
+🧠 AI Operations Layer (Archie / Gabe / Francine)
+🎭 Agent Roles
 
-This section governs how AI agents interact with the codebase. It is REQUIRED reading before any automated or assisted code changes.
+Archie (Architect)
 
-### 🎭 Agent Roles
+Defines system-level structure and refactoring strategy
+Breaks work into atomic, safe tasks
+Focus: scalability, safety, clarity
 
-**Archie (Architect)**
-- Defines system-level structure and refactoring strategy
-- Breaks work into atomic, safe tasks
-- Focus: scalability, safety, clarity
+Gabe (Sentry)
 
-**Gabe (Sentry)**
-- Reviews and hardens all prompts before execution
-- Enforces:
-  - strict scope control
-  - no unintended refactors
-  - preservation of behavior
-- Converts ideas into deterministic instructions
+Reviews and hardens all prompts before execution
+Enforces:
+strict scope control
+no unintended refactors
+preservation of behavior
+Converts ideas into deterministic instructions
 
-**Francine (Execution Agent)**
-- Executes tasks in AI Studio
-- Must follow instructions exactly
-- Has NO authority to:
-  - refactor beyond instructions
-  - introduce new patterns
-  - modify unrelated code
+Francine (Execution Agent)
 
----
-
-### 🛡️ Non-Negotiable Execution Rules
-
-1. Only modify what is explicitly specified  
-2. Preserve all existing behavior unless explicitly changed  
-3. No implicit refactors or “cleanup”  
-4. Use explicit logic (no truthy/falsy shortcuts)  
-5. Use safe, targeted React state updates  
-6. Do not mix concerns (security, UI, data, performance) 
-7. If the prompt is marked ANALYSIS ONLY, no code may be written or modified under any circumstance.
-8. Do not assume intent. If a prompt does not explicitly say "apply changes", only analyze and report. 
-
----
-
-### 🔁 Standard Task Structure
-
-Every task must include:
-- Objective  
-- File(s)  
-- Target function  
-- Explicit logic  
-- Constraints  
-- Verification steps  
-
----
-
-### 🧪 Required Verification
-
-- App builds successfully  
-- No console errors  
-- No UI regression  
-- Target behavior works  
-
----
-
-## 🚦 Current Work State
-
-- **Phase**: Data Integrity Stabilization  
-- **Active Task**: 95 — Opening Force Fix  
-- **Target Version**: v87.0  
-- **Status**: Pending quota reset  
-
-### Next Up
-- P1 — Firestore Security Hardening  
-- P2 — Remove runtime debug logic  
-- P3 — Extract Firestore subscriptions  
-
----
-
-## ⚠️ Known Risk Areas
-
-- Firestore security rules (overly permissive)  
-- App.tsx (“God component”)  
-- Large components (>800 LOC)  
-- Heavy use of `any`  
-- Firestore subscription lifecycle issues  
-- Runtime debug/migration logic in production  
-- Large bundle size (~1.5MB)  
-
----
-
-## 📦 Proven Code Patterns
-
-### Safe React State Update
-
-```ts
+Executes tasks in AI Studio
+Must follow instructions exactly
+Has NO authority to:
+refactor beyond instructions
+introduce new patterns
+modify unrelated code
+🛡️ Non-Negotiable Execution Rules
+Only modify what is explicitly specified
+Preserve all existing behavior unless explicitly changed
+No implicit refactors or “cleanup”
+Use explicit logic (no truthy/falsy shortcuts)
+Use safe, targeted React state updates
+Do not mix concerns (security, UI, data, performance)
+If marked ANALYSIS ONLY → no code changes
+Do not assume intent
+🧪 Required Verification
+App builds successfully
+No console errors
+No UI regression
+Target behavior works
+🚦 Current Work State
+Phase: Data Integrity Stabilization
+Active Task: 95 — Opening Force Fix
+Target Version: v87.0
+Status: Pending quota reset
+Next Up
+P1 — Firestore Security Hardening
+P2 — Remove runtime debug logic
+P3 — Extract Firestore subscriptions
+⚠️ Known Risk Areas
+Firestore security rules (overly permissive)
+App.tsx (“God component”)
+Large components (>800 LOC)
+Heavy use of any
+Firestore subscription lifecycle issues
+Runtime debug/migration logic in production
+Large bundle size (~1.5MB)
+📦 Proven Code Patterns
+Safe React State Update
 setState(prev =>
   prev.map(item =>
     item.id === targetId
@@ -105,371 +71,261 @@ setState(prev =>
       : item
   )
 );
-```
+🧱 Core System Architecture
+1. System Identity
 
-### Array Sanitization Pattern
+FREDAsoft is a:
 
-```ts
-if ('field' in updates) {
-  const value = updates.field;
+Data-centric compliance platform
 
-  if (Array.isArray(value)) {
-    updates.field = value;
-  } else if (value === undefined || value === null || value === '') {
-    updates.field = [];
-  } else {
-    updates.field = [value];
-  }
-}
-```
+Supports:
 
----
+inspections
+plan reviews
+assessments
+2. Core Data Model
+Project
+  → Facilities / Locations
+  → projectData (findings and recommendations)
+  → Glossaries (context)
+  → Standards (references)
 
-## 1. Core Identity / Data Model
+Key collections:
 
-- User Identity: Firebase Auth (Google). Roles stored in `users`.  
-- Project Hierarchy: Project → Client, Facility, DesignFirm, Inspector  
-- Inspection Logic: `projectData` = inspection findings  
-- Glossary System: Category → Item → Finding → Recommendation  
-- Snapshots: Standards copied into `StandardSnapshot`  
-- Multi-Tab Persistence: `persistentMultipleTabManager`  
-- Database: `freda-enterprise` instance  
-- Initialization Safety: try/catch + finally loading handling  
-- Migration Logic: moved to `migrationService.ts` (must NOT run in normal runtime)  
-- Schema Normalization: `fldSuggestedRecs` is Array-based  
-- Standards Library: `master_standards`  
+projectData → findings and recommendations (primary operational data)
+glossary → templates (context-specific)
+master_standards → standards library
+users → roles & identity
+🧠 Libraries, Glossaries, and Data Records
+3. Libraries Are the Foundation
 
----
+Libraries define:
 
-## 2. Permission & Role Model
+finding language
+recommendation language
+measurement types
+units of measure
+unit costs
+default standards associations
 
-| Role   | Scope            | Permissions         |
-|--------|------------------|--------------------|
-| Admin  | System-wide      | Full access        |
-| User   | Project-wide     | Read + limited write |
-| Public | Unauthenticated  | Read-only lookup   |
+Libraries are the origin of all structured content.
 
----
+4. Snapshot Inheritance Model (Critical)
+Library → Glossary → Data Record
 
-## 3. Data Sharing & Visibility
+Rules:
 
-Public read access will be restricted in Phase P1.
+Data is copied downward
+Each layer is independently editable
+No automatic upstream propagation
 
-- Global read access (temporary)  
-- Authenticated writes required  
-- PII protections planned  
+This ensures:
 
----
+historical accuracy
+stable reporting
+project-specific flexibility
+5. Glossaries = Context (Not Standards)
 
-## 4. Lifecycle Management
+Glossaries represent:
 
-- Soft deletes via `fldIsDeleted`  
-- Standards archived via `fldIsArchived`  
-- Optimistic UI updates  
+real-world workflows or use cases
 
----
+Examples:
 
-## 5. Interface Strategy
+TAS Plan Review Glossary
+ADA Assessment Glossary
+Housing Assessment Glossary
+6. Glossary Types
+Standard-Focused
+TAS Plan Review Glossary
+  → TAS only
+Multi-Standard
+Housing Assessment Glossary
+  → ADA + UFAS + FHA + TAS + IBC
+7. Projects Enable Glossaries
 
-- Field (Mobile): fast, minimal input  
-- Office (Desktop): complex management + reporting  
+Each project:
 
----
+enables one or more glossaries
+maintains one active glossary
 
-## 6. Open Questions
+The active glossary drives:
 
-### Standards
-- Multi-code support  
-- Snapshot hashing  
+default findings
+recommendations
+standard associations
+8. Data Records = Source of Truth
 
-### User Management
-- Admin dashboard  
-- Project ownership transfer  
+Each record:
 
-### Performance
-- PDF generation strategy  
-- Image compression  
+inherits from glossary
+is fully editable
+may diverge
 
----
+Supports:
 
-## 7. Process Rules
+multiple standards simultaneously
+⚖️ Standards Model
+9. Standards Are Layered
 
-1. Strict scope  
-2. Clarify before big changes  
-3. Update decisions immediately  
-4. Log open questions  
-5. Prefer simple solutions  
-6. Treat this as institutional memory  
-7. Snapshot data for legal integrity  
+Projects may include:
 
----
+ADA
+TAS
+UFAS
+FHA / ANSI
+IBC
+10. Time-Based Compliance
+Evaluation Standard ≠ Recommendation Standard
 
-## 8. Product Direction: FREDA Platform Evolution
+Example:
 
-**FREDA (Facility Reporting and Data Analytics)** is designed as a platform for managing compliance-related data across facilities.
+Built: 2008
+Evaluation: TAS 1994
+Recommendation: TAS 2012
+11. Standard Record Model
 
-While the current system focuses on structured report generation, it is intentionally architected to support multiple workflows, including:
+Unified schema:
 
-* inspections
-* plan reviews
-* assessments
+relation_type:
+Standard
+Advisory
+Exception
+Figure
+Table
 
-Future development will expand FREDA into a client-facing platform that enables interaction with project data beyond static reports. This includes:
+Optional:
 
-* client access to project data via a secure portal
-* tracking and responding to findings or review comments
-* communication between clients and professionals
-* filtered views across facilities and projects
-* generation of dynamic, data-driven reports
+imageUrl?
+imageCaption?
+🧬 Concept vs Version
+12. Concept Layer (Deferred)
 
-This direction establishes FREDA as a **data-centric compliance platform**, not limited to static reporting.
+Future-ready:
 
-No implementation of these features is part of the current phase. This section defines long-term direction only and should guide future architectural decisions.
+conceptId (planned, not implemented)
+13. Version Layer
 
----
+Each concept exists as:
 
-## Appendix: Schema Notes
+ADA version
+TAS version
+UFAS version
+Context-specific version
+14. Controlled Duplication
 
-- `projectData` → inspection findings  
-- `glossary` → templates  
-- `master_standards` → standards library  
-- `userPreferences` → UI state  
-- `documents` → reports  
+Duplicate findings across standards are:
 
-## Firebase Storage Configuration Notes
+EXPECTED and CORRECT
+🔁 Data Flow
+15. Library → Glossary
 
-FREDAsoft uses Firebase Storage with the bucket:
-
-path-recovery.firebasestorage.app
-
-Important:
-- This must match the value in firebase-applet-config.json
-- Do not use the legacy .appspot.com bucket unless explicitly configured
-
-CORS must be configured on the active bucket for local development:
-- Allows http://localhost:3000
-
-Storage rules must use:
-service firebase.storage
-
-NOT:
-service cloud.firestore
-
-Common failure symptoms:
-- Upload fails with "CORS" error
-- Preflight request fails
-- net::ERR_FAILED
-
-These usually indicate:
-- Wrong bucket
-- Missing CORS
-- Incorrect rules type
-
-
-## Future Enhancement: Data Record Image Management
-
-The restored Project Data Entry image upload feature is stable enough for beta testing in its current form. Future enhancements should be deferred until the current data-entry flow has been tested more thoroughly.
-
-Planned future capabilities:
-
-### 1. Image Ordering
-
-Allow users to manually reorder images attached to a project data record.
-
-Potential implementation:
-- Store image metadata as objects instead of raw URL strings.
-- Add an `order` field.
-- Support drag-and-drop or move up/down controls.
-- Preserve order when rendering thumbnails and reports.
-
-Example future structure:
-
-```ts
-fldImages: [
-  {
-    url: string;
-    storagePath: string;
-    order: number;
-    uploadedAt: string;
-    isDeleted: boolean;
-  }
-]
-2. Select Primary Report Images
-
-Allow users to mark up to two images per data record for inclusion in the main report body.
-
-Expected behavior:
-
-User may upload many images to a data record.
-User can select up to 2 as “primary” or “include in report body.”
-Remaining images should be included later in a report addendum/appendix.
-UI should prevent selecting more than 2 primary images.
-
-Potential metadata fields:
-
-includeInReport
-reportImageSlot
-reportOrder
-3. Image Addendum / Appendix
-
-Images not selected as primary report images should still be retained and available.
-
-Expected behavior:
-
-Non-primary images remain attached to the data record.
-Report generator places them in an image addendum/appendix.
-Images should retain association with their project, facility, location, and data record.
-4. Drag-and-Drop Upload
-
-Add drag-and-drop support to the Project Data Entry image card.
-
-Expected behavior:
-
-User can drag image files onto the Images card.
-Existing “Add Image” button remains available.
-Same validation, resize, upload, and fldImages save flow should be reused.
-Avoid introducing a separate upload pathway.
-5. Soft Delete / Archive Policy
-
-Image removal from a data record should follow FREDAsoft’s data retention policy.
-
-Expected behavior:
-
-Removing an image from a record should not immediately delete the underlying Firebase Storage object.
-Future image metadata should support isDeleted, deletedAt, and possibly deletedBy.
-A separate controlled purge/admin feature may be added later for permanent cleanup.
-Implementation Note
-
-Current implementation stores fldImages as an array of image URL strings. This is acceptable for beta testing.
-
-Future enhancements will likely require migrating fldImages from string[] to image metadata objects, or introducing a compatible normalization layer that supports both legacy string URLs and newer image objects.
-
-## Firebase Usage Safety Guidelines
-
-FREDAsoft must prevent accidental Firebase overuse caused by render loops, repeated listeners, or uncontrolled retries.
-
-Guidelines:
-- Firebase writes should be triggered by explicit user actions whenever possible.
-- Avoid Firebase writes inside `useEffect` unless the effect is tightly guarded.
-- Use operation locks such as `isUploading`, `isSaving`, or `isLoading` to prevent duplicate actions.
-- Long-running operations must fail fast and surface errors to the user.
-- Avoid unbounded retry loops.
-- Prefer localStorage for draft autosave rather than Firestore autosave.
-- Scope all project data reads and views by active `projectId` and `facilityId`.
-- Use Firestore queries with project/facility constraints where practical.
-- Avoid broad realtime listeners unless the screen truly needs live updates.
-- Add Firebase budget alerts in Google Cloud/Firebase.
-- During beta, set practical limits on uploads and batch operations.
-
-## Glossary Link Integrity
-
-Project data records rely on `fldData` as the authoritative reference to the glossary hierarchy.
-
-When editing records:
-- `fldData` must always reflect the current selection (`selections.glosId`)
-- UI text fields alone are not sufficient to define structure
-
-Failure to update `fldData` results in:
-- incorrect category/item display in explorer
-- incorrect hydration when reopening records
-
-## Future Enhancement: Inspector Assignment Model
-
-Current behavior:
-- A project may currently resolve to a single active inspector.
-- Project data records store the inspector responsible for the record in `fldInspID`.
-
-Future need:
-- Projects may have multiple inspectors.
-- Large assessments may involve multiple inspectors across buildings, facilities, or locations.
-- The active inspector should be selectable during the session and associated with each data record they create or edit.
-
-Design direction:
-- Do not hard-code a single inspector as the only valid project inspector.
-- Treat inspector as active session context, similar to active client/facility/project.
-- Continue storing `fldInspID` on each projectData record.
-- Future UI should allow selecting the active inspector for data entry.
-- Future project setup may support assigning one or more inspectors to a project.
-- Existing records should preserve their original `fldInspID` unless intentionally reassigned.
-
-Near-term guidance:
-- Do not block the current beta workflow to redesign inspector assignment.
-- Ensure new Data Entry session-state work does not assume only one inspector can ever exist per project.
-
-## Library Management Expansion (Future)
-
-Current State:
-- Findings and Recommendations are primarily created and managed through the Glossary Builder.
-- Certain associated attributes (e.g., citations/standards, unit cost, unit type) are used in application workflows but are not consistently visible or editable within a dedicated library interface.
-
-Observation:
-- This creates a disconnect between:
-  - where records are defined (Glossary Builder)
-  - and how they are used (Data Entry, Reports)
-
-Future Direction:
-- Move full lifecycle management of Findings and Recommendations into the Library domain.
-- Users should be able to:
-  - Create
-  - Edit
-  - Delete
-  - Copy / duplicate (for rapid creation of similar records)
-
-Key Principles:
-- Findings:
-  - Contain descriptive content and classification (e.g., finding type / default type)
-  - May reference standards/citations
-  - Do NOT contain measurement values (those belong to data records)
-
-- Recommendations:
-  - Contain corrective action content
-  - May include default cost-related fields (unit cost, unit type)
-
-Proposed Structure:
-- Introduce a dedicated Library interface, potentially including:
-  - Library Explorer (browse/search/filter records)
-  - Library Builder (create/edit structured records)
-
-- Align this structure conceptually with the Glossary system, but with clearer separation of concerns and improved usability.
-
-Note:
-- This is a planned architectural evolution and should not be implemented until current data entry and reporting workflows are fully stabilized.
-
-### Standards Model Enhancement (Future)
-
-Current State:
-- All standards (Standard, Advisory, Exception, Figure, Table) share a consistent record structure.
-- Distinction between types is handled via `relation_type` (e.g., "Standard", "Advisory", "Exception", "Figure", "Table").
-- Content is primarily text-based (`content_text`).
-
-Observation:
-- Real-world standards (e.g., TAS, ADA, UFAS) include **figures and tables** that are not independent entities, but **citation variants** associated with standard sections.
-- Figures and tables often:
-  - share the same citation numbering system
-  - appear sequentially with text standards
-  - include visual content (images) in addition to or instead of text
-
-Future Direction:
-- Maintain a **single unified standards schema** for all record types.
-- Extend the schema to support **optional image references** for any standard record.
-
-Key Principles:
-- No separate "figure" or "table" entity types — all remain standard records.
-- `relation_type` continues to define:
-  - Standard
-  - Advisory
-  - Exception
-  - Figure
-  - Table
-- Images are **supplemental to text**, not replacements.
-- Any standard record may include:
-  - text only
-  - image only
-  - or both
-
-Proposed Additions to Standard Record:
-
-```ts
-imageId?: string | null;
-imageUrl?: string | null;     // optional denormalized field
-imageCaption?: string;
+Copy:
+
+text
+measurements
+costs
+standards
+16. Glossary → Data Record
+
+Copy all fields.
+
+Records become fully independent.
+
+17. Integrity Rule
+Records NEVER update glossary
+Glossary NEVER updates library automatically
+🧰 Library Management (Future)
+18. Library System Expansion
+
+Future UI:
+
+Library Explorer
+Library Builder
+19. Clone Workflow
+Copy ADA → TAS
+
+Rules:
+
+copy text
+reset standard context
+require new citations
+20. Library Sync (Explicit Only)
+
+Allowed:
+
+manual sync tools
+compare vs source
+update selected records
+
+NOT allowed:
+
+automatic updates
+
+Must include:
+
+backup protection before sync
+🏗️ Project Types
+
+Project Types are:
+
+presets, NOT constraints
+
+Define:
+
+default glossaries
+default standards
+report behavior
+🧪 UI Strategy
+21. Dual Mode
+Field (mobile) → fast input, access to mobile device camera
+Office (desktop) → full management
+📸 Image Architecture (Future)
+
+Planned:
+
+ordering
+primary report images
+appendices
+metadata-based storage
+🔐 Firebase Safety
+no uncontrolled writes
+no loops
+explicit triggers only
+scoped queries
+use operation locks
+🧠 User Mental Model
+1. Choose a glossary
+2. Select a finding
+3. Adjust as needed
+4. Add standards if needed
+
+Users should NOT need to understand:
+
+joins
+normalization
+schema complexity
+🧭 Design Philosophy
+
+System must balance:
+
+Flexibility
+Clarity
+Traceability
+Accuracy
+Usability
+🟢 Final Architecture Summary
+Libraries → define language
+Glossaries → define context
+Projects → define scope
+Records → define truth
+Standards → define authority
+🚀 Next Steps
+Firestore schema design
+UI workflow alignment
+migration planning
+✅ Architectural Decisions Locked
+Concept layer → deferred, future-ready
+Glossaries → context-driven
+Standards handling → implicit multi-citation model
+Library sync → explicit only, never automatic, with backup protection
