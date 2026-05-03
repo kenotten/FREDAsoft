@@ -27,6 +27,7 @@ import { db } from '../firebase';
 import { toast } from 'sonner';
 import { Category, Item, Finding, MasterRecommendation } from '../types';
 import { UnsavedChangesModal } from './modals/UnsavedChangesModal';
+import { LibraryCompletenessPanel } from './LibraryCompletenessPanel';
 
 export interface LibraryManagerHandle {
   save: () => Promise<boolean>;
@@ -42,7 +43,7 @@ interface LibraryManagerProps {
   onNavigateAway?: (nextTab: string) => void;
 }
 
-type LibraryTab = 'categories' | 'items' | 'findings' | 'recommendations';
+type LibraryTab = 'categories' | 'items' | 'findings' | 'recommendations' | 'completeness';
 
 export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerProps>(({ 
   categories, 
@@ -119,7 +120,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   // Reset context when tab changes
   useEffect(() => {
     // Clear selections that are no longer valid for the tab
-    if (activeTab === 'categories' || activeTab === 'recommendations') {
+    if (activeTab === 'categories' || activeTab === 'recommendations' || activeTab === 'completeness') {
       setSelectedCatId('');
       setSelectedItemId('');
     } else if (activeTab === 'items') {
@@ -599,6 +600,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               <option value="items">Items</option>
               <option value="findings">Findings</option>
               <option value="recommendations">Recommendations</option>
+              <option value="completeness">Completeness</option>
             </select>
             <ChevronRight size={12} className="absolute right-2 top-1/2 -translate-y-1/2 rotate-90 text-zinc-400 pointer-events-none" />
           </div>
@@ -795,46 +797,55 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
           </div>
         )}
 
-        {/* Main List Panel */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <Card className="flex-1 overflow-hidden flex flex-col border-zinc-200 rounded-none border-x-0 border-t-0 shadow-none bg-white">
-            <div className="flex items-center gap-3 px-4 py-2 bg-zinc-900 text-white text-[9px] font-black uppercase tracking-widest shrink-0">
-              <div className="w-14 text-center">Order</div>
-              <div className="flex-1">Display Name / Short Text</div>
-              <div className="w-40">ID (ReadOnly)</div>
-              <div className="w-20 text-right pr-2">Reorder</div>
-            </div>
+        {/* Main List Panel or Completeness admin */}
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
+          {activeTab === 'completeness' ? (
+            <LibraryCompletenessPanel
+              categories={categories}
+              items={items}
+              findings={findings}
+              recommendations={recommendations}
+            />
+          ) : (
+            <Card className="flex-1 overflow-hidden flex flex-col border-zinc-200 rounded-none border-x-0 border-t-0 shadow-none bg-white min-h-0">
+              <div className="flex items-center gap-3 px-4 py-2 bg-zinc-900 text-white text-[9px] font-black uppercase tracking-widest shrink-0">
+                <div className="w-14 text-center">Order</div>
+                <div className="flex-1">Display Name / Short Text</div>
+                <div className="w-40">ID (ReadOnly)</div>
+                <div className="w-20 text-right pr-2">Reorder</div>
+              </div>
 
-            <div className="flex-1 overflow-y-auto divide-y divide-zinc-100">
-              {visibleData.length > 0 ? (
-                isGroupedMode ? (
-                  groupedFindings?.map(group => (
-                    <div key={group.item.fldItemID || (group.item as any).id} className="flex flex-col">
-                      <div className="bg-zinc-50/80 px-4 py-1.5 border-y border-zinc-100 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
-                        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest flex items-center">
-                          <Layers size={10} className="mr-1.5 text-indigo-400" /> {group.item.fldItemName}
-                        </span>
-                        <span className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest bg-white px-1.5 py-0.5 rounded border border-zinc-200">
-                          {group.findings.length} findings
-                        </span>
+              <div className="flex-1 overflow-y-auto divide-y divide-zinc-100">
+                {visibleData.length > 0 ? (
+                  isGroupedMode ? (
+                    groupedFindings?.map(group => (
+                      <div key={group.item.fldItemID || (group.item as any).id} className="flex flex-col">
+                        <div className="bg-zinc-50/80 px-4 py-1.5 border-y border-zinc-100 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
+                          <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest flex items-center">
+                            <Layers size={10} className="mr-1.5 text-indigo-400" /> {group.item.fldItemName}
+                          </span>
+                          <span className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest bg-white px-1.5 py-0.5 rounded border border-zinc-200">
+                            {group.findings.length} findings
+                          </span>
+                        </div>
+                        <div className="divide-y divide-zinc-100/50">
+                          {group.findings.map((record, index) => renderRecord(record, index, group.findings))}
+                        </div>
                       </div>
-                      <div className="divide-y divide-zinc-100/50">
-                        {group.findings.map((record, index) => renderRecord(record, index, group.findings))}
-                      </div>
-                    </div>
-                  ))
+                    ))
+                  ) : (
+                    visibleData.map((record, index) => renderRecord(record, index, visibleData))
+                  )
                 ) : (
-                  visibleData.map((record, index) => renderRecord(record, index, visibleData))
-                )
-              ) : (
-                <div className="flex flex-col items-center justify-center p-12 text-zinc-400 text-center">
-                  <ClipboardList size={32} className="mb-3 opacity-10" />
-                  <p className="text-xs font-bold text-zinc-900 uppercase tracking-widest">{getEmptyStateMessage()}</p>
-                  <p className="text-[10px] text-zinc-500 mt-1 max-w-[240px]">Contextual filtering narrows the editable scope of the library.</p>
-                </div>
-              )}
-            </div>
-          </Card>
+                  <div className="flex flex-col items-center justify-center p-12 text-zinc-400 text-center">
+                    <ClipboardList size={32} className="mb-3 opacity-10" />
+                    <p className="text-xs font-bold text-zinc-900 uppercase tracking-widest">{getEmptyStateMessage()}</p>
+                    <p className="text-[10px] text-zinc-500 mt-1 max-w-[240px]">Contextual filtering narrows the editable scope of the library.</p>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
         </div>
       </div>
 

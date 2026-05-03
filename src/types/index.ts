@@ -91,6 +91,8 @@ export interface Finding {
   fldFindShort: string;
   fldFindLong: string;
   fldOrder?: number;
+  /** What is being measured (e.g. Slope, Width) — optional until backfilled */
+  fldMeasurementType?: string;
   fldUnitType?: string;
   fldStandards: string[]; // Array of MasterStandard IDs
   fldSuggestedRecs: string[]; // Array of MasterRecommendation IDs
