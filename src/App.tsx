@@ -295,7 +295,7 @@ export default function App() {
 
   const [selections, setSelections] = useState<any>(() => {
     const saved = localStorage.getItem('fredasoft_selections');
-    const initial = { clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null };
+    const initial = { clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null, dataEntryMode: 'glossary' as const };
     if (saved) try { return { ...initial, ...JSON.parse(saved), isDirty: false, editingRecordId: null }; } catch (e) { return initial; }
     return initial;
   });
@@ -483,7 +483,7 @@ export default function App() {
   const handleLogout = () => {
     signOut(auth);
     setIsRestored(false);
-    setSelections({ clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null });
+    setSelections({ clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null, dataEntryMode: 'glossary' });
   };
   const handleTabSwitch = (newTab: string) => { setActiveTab(newTab); };
 

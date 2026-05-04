@@ -221,6 +221,8 @@ export interface UserPreference {
     recId?: string;
     locationId?: string;
     locationName?: string;
+    /** Data Entry: glossary-approved path vs project-only custom record */
+    dataEntryMode?: 'glossary' | 'custom';
   };
   workspaceContext?: {
     selectedClientId: string;

@@ -126,7 +126,8 @@ export default function ProjectDataEntry({
 
   const hasRequiredContext = Boolean(selections.projectId && inspector?.fldInspID);
   
-  const [recordMode, setRecordMode] = useState<'glossary' | 'custom'>('glossary');
+  /** Single source of truth: parent `selections.dataEntryMode` (persists across ProjectDataEntry remounts). */
+  const dataEntryMode: 'glossary' | 'custom' = selections.dataEntryMode === 'custom' ? 'custom' : 'glossary';
   const [customMasterRecId, setCustomMasterRecId] = useState<string>('');
 
   const selectedCat = selections.categoryId;
@@ -260,24 +261,13 @@ export default function ProjectDataEntry({
     }
   }, [project?.fldProjID, activeRecord, onReset]);
 
-  // Mode selection: default to glossary; reopen explicit custom records in custom mode
-  useEffect(() => {
-    if (activeRecord?.fldRecordSource === 'custom') {
-      setRecordMode('custom');
-      setCustomMasterRecId(activeRecord?.fldPDataMasterRecID || '');
-    } else {
-      setRecordMode('glossary');
-      setCustomMasterRecId('');
-    }
-  }, [activeRecord?.fldPDataID, activeRecord?.fldRecordSource, activeRecord?.fldPDataMasterRecID]);
-
   // Switching to custom mode should clear glossary-only selection state
   useEffect(() => {
-    if (recordMode !== 'custom') return;
+    if (selections.dataEntryMode !== 'custom') return;
     if (selections.findId || selections.recId || selections.glosId) {
       onSelectionChange({ ...selections, findId: '', recId: '', glosId: '', isDirty: true });
     }
-  }, [recordMode]);
+  }, [selections.dataEntryMode]);
 
   /** Resolves glossary row from category → item → finding → recommendation path (raw FKs; rec matches fldRec or fldRecID). */
   const resolveGlossaryForSelection = (recIdOverride?: string) => {
@@ -435,11 +425,17 @@ export default function ProjectDataEntry({
   useEffect(() => {
     if (activeRecord) {
       console.log("Hydrating Form with:", activeRecord);
-      const isCustom = activeRecord.fldRecordSource === 'custom';
+      const fldDataBlank = !(activeRecord.fldData || '').trim();
+      const hasPDataCatItem =
+        !!(activeRecord.fldPDataCategoryID || '').trim() && !!(activeRecord.fldPDataItemID || '').trim();
+      const isCustom =
+        activeRecord.fldRecordSource === 'custom' ||
+        (fldDataBlank && hasPDataCatItem);
       let newSelections: any = { ...selections };
       if (isCustom) {
         newSelections = {
           ...selections,
+          dataEntryMode: 'custom',
           locationId: activeRecord.fldLocation || selections.locationId,
           categoryId: activeRecord.fldPDataCategoryID || selections.categoryId || '',
           itemId: activeRecord.fldPDataItemID || selections.itemId || '',
@@ -447,12 +443,14 @@ export default function ProjectDataEntry({
           recId: '',
           glosId: ''
         };
+        setCustomMasterRecId(activeRecord.fldPDataMasterRecID || '');
       } else {
         // BLUEPRINT-ACCURATE POPULATION (Glossary)
         const targetId = (activeRecord.fldData || "").trim().toLowerCase();
         const glos = (glossary || []).find((g: any) => (g.id || g.fldGlosId || "").trim().toLowerCase() === targetId);
         newSelections = {
           ...selections,
+          dataEntryMode: 'glossary',
           locationId: activeRecord.fldLocation || selections.locationId,
           categoryId: glos?.fldCat || selections.categoryId || '',
           itemId: glos?.fldItem || selections.itemId || '',
@@ -460,6 +458,7 @@ export default function ProjectDataEntry({
           recId: glos?.fldRec || glos?.fldRecID || selections.recId || '',
           glosId: glos?.fldGlosId || glos?.id || ''
         };
+        setCustomMasterRecId('');
       }
 
       initialSelectionRef.current = {
@@ -498,7 +497,15 @@ export default function ProjectDataEntry({
       // Inheritance Lock: Initialize from selections if new record
       if (selections.locationId) setFldLocation(selections.locationId);
     }
-  }, [activeRecord?.fldPDataID, glossary]);
+  }, [
+    activeRecord?.fldPDataID,
+    activeRecord?.fldRecordSource,
+    activeRecord?.fldData,
+    activeRecord?.fldPDataCategoryID,
+    activeRecord?.fldPDataItemID,
+    activeRecord?.fldPDataMasterRecID,
+    glossary
+  ]);
 
   // Live calculation logic
   useEffect(() => {
@@ -518,7 +525,7 @@ export default function ProjectDataEntry({
     // Ensure we have a valid ID before saving
     const finalizedId = editingRecordId || uuidv4();
 
-    const isCustomMode = recordMode === 'custom';
+    const isCustomMode = selections.dataEntryMode === 'custom';
 
     if (isCustomMode) {
       const hasCat = Boolean((selections.categoryId || '').trim());
@@ -1018,7 +1025,7 @@ export default function ProjectDataEntry({
               </div>
             )}
 
-            {recordMode === 'glossary' && hasRequiredContext && activeGlossaryRows.length === 0 && (
+            {dataEntryMode === 'glossary' && hasRequiredContext && activeGlossaryRows.length === 0 && (
               <div className="mb-4 p-4 rounded-xl border border-amber-200 bg-amber-50/90 text-amber-900 shadow-sm">
                 <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">No glossary records</p>
                 <p className="text-sm text-amber-900/90 mt-1.5 leading-snug">
@@ -1036,10 +1043,13 @@ export default function ProjectDataEntry({
                     <button
                       type="button"
                       disabled={!hasRequiredContext}
-                      onClick={() => { setRecordMode('glossary'); setCustomMasterRecId(''); }}
+                      onClick={() => {
+                        setCustomMasterRecId('');
+                        onSelectionChange({ ...selections, dataEntryMode: 'glossary' });
+                      }}
                       className={cn(
                         "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
-                        recordMode === 'glossary' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+                        dataEntryMode === 'glossary' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                       )}
                       title="Use approved glossary record combinations"
                     >
@@ -1048,10 +1058,10 @@ export default function ProjectDataEntry({
                     <button
                       type="button"
                       disabled={!hasRequiredContext}
-                      onClick={() => setRecordMode('custom')}
+                      onClick={() => onSelectionChange({ ...selections, dataEntryMode: 'custom' })}
                       className={cn(
                         "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
-                        recordMode === 'custom' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+                        dataEntryMode === 'custom' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                       )}
                       title="Create a project-only custom record"
                     >
@@ -1059,7 +1069,7 @@ export default function ProjectDataEntry({
                     </button>
                   </div>
                 </div>
-                {recordMode === 'custom' && (
+                {dataEntryMode === 'custom' && (
                   <div className="text-[10px] font-bold px-3 py-2 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl">
                     This record is project-specific and will not be added to the glossary or library.
                   </div>
@@ -1074,7 +1084,7 @@ export default function ProjectDataEntry({
                     onChange={(e: any) => setSelectedCat(e.target.value)}
                     disabled={!hasRequiredContext}
                     selectClassName={focusClasses}
-                    options={(recordMode === 'custom' ? sortEntities(mergedCategories || [], 'fldCategoryName') : sortedCategories).map((c: any, index: number) => ({ 
+                    options={(dataEntryMode === 'custom' ? sortEntities(mergedCategories || [], 'fldCategoryName') : sortedCategories).map((c: any, index: number) => ({ 
                       value: c.fldCategoryID || c.fldCatID || `missing-${index}`, 
                       label: c.fldCategoryName || c.fldCatName || 'Select Category',
                       key: `cat-${c.fldCategoryID || c.fldCatID || index}-${index}` 
@@ -1097,7 +1107,7 @@ export default function ProjectDataEntry({
                     value={selectedItem}
                     onChange={(e: any) => setSelectedItem(e.target.value)}
                     selectClassName={focusClasses}
-                    options={(recordMode === 'custom'
+                    options={(dataEntryMode === 'custom'
                       ? sortEntities((items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat), 'fldItemName')
                       : sortedItems
                     ).map((i: any, index: number) => ({ 
@@ -1152,7 +1162,7 @@ export default function ProjectDataEntry({
         <div className="max-w-6xl mx-auto px-8 py-8 space-y-8">
           {/* FINDING CARD */}
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
-            {recordMode === 'glossary' && (
+            {dataEntryMode === 'glossary' && (
               <Select 
                 label="Finding"
                 value={selections.findId || ''}
@@ -1193,7 +1203,7 @@ export default function ProjectDataEntry({
               </div>
               
               {/* Finding Footer Row: Measurement, Measurement Type (from library finding), Measurement Unit */}
-              <div className={cn("grid grid-cols-1 gap-4 pt-2 border-t border-zinc-100", recordMode === 'glossary' ? "md:grid-cols-3" : "md:grid-cols-2")}>
+              <div className={cn("grid grid-cols-1 gap-4 pt-2 border-t border-zinc-100", dataEntryMode === 'glossary' ? "md:grid-cols-3" : "md:grid-cols-2")}>
                 <Input 
                   label="Measurement"
                   value={fldMeasurement}
@@ -1201,7 +1211,7 @@ export default function ProjectDataEntry({
                   className={focusClasses}
                   placeholder="Actual recorded value"
                 />
-                {recordMode === 'glossary' && (
+                {dataEntryMode === 'glossary' && (
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Type</label>
                     <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
@@ -1222,7 +1232,7 @@ export default function ProjectDataEntry({
 
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
              <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-2">Recommendation</label>
-             {recordMode === 'glossary' && (
+             {dataEntryMode === 'glossary' && (
                <Select 
                 value={recommendationSelectValue || ''}
                 onChange={(e: any) => {
@@ -1236,7 +1246,7 @@ export default function ProjectDataEntry({
                 options={recommendationOptions}
               />
              )}
-             {recordMode === 'custom' && (
+             {dataEntryMode === 'custom' && (
                <div className="space-y-1.5">
                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Copy from Master Recommendation (optional)</label>
                  <Select
