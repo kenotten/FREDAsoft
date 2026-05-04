@@ -792,6 +792,16 @@ export default function ProjectDataEntry({
     [findings, selectedItem]
   );
 
+  const selectedFinding = useMemo(() => {
+    const id = (selections.findId || '').toLowerCase().trim();
+    if (!id) return undefined;
+    return (findings || []).find(
+      (f) => (f.fldFindID || f.id || '').toLowerCase().trim() === id
+    );
+  }, [findings, selections.findId]);
+
+  const selectedFindingMeasurementType = selectedFinding?.fldMeasurementType || '';
+
   return (
     <div className="flex flex-col h-full bg-transparent overflow-hidden">
       <div className="flex-1 overflow-y-auto w-full bg-transparent">
@@ -956,8 +966,8 @@ export default function ProjectDataEntry({
                 />
               </div>
               
-              {/* Finding Footer Row: Measurement and Measurement Unit */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-zinc-100">
+              {/* Finding Footer Row: Measurement, Measurement Type (from library finding), Measurement Unit */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-zinc-100">
                 <Input 
                   label="Measurement"
                   value={fldMeasurement}
@@ -965,6 +975,12 @@ export default function ProjectDataEntry({
                   className={focusClasses}
                   placeholder="Actual recorded value"
                 />
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Type</label>
+                  <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
+                    {selectedFindingMeasurementType || '(Not set)'}
+                  </div>
+                </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Unit</label>
                   <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
