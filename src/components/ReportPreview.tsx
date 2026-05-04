@@ -261,8 +261,17 @@ export function ReportPreview({
       const keyB = (b.fldData || "").trim().toLowerCase();
       const glosA = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === keyA);
       const glosB = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === keyB);
-      const catA = categories.find(c => c.fldCategoryID === glosA?.fldCat);
-      const catB = categories.find(c => c.fldCategoryID === glosB?.fldCat);
+      const isCustomA = a?.fldRecordSource === 'custom' && !glosA;
+      const isCustomB = b?.fldRecordSource === 'custom' && !glosB;
+      const catIdA = glosA?.fldCat || (isCustomA ? (a?.fldPDataCategoryID || '') : '');
+      const catIdB = glosB?.fldCat || (isCustomB ? (b?.fldPDataCategoryID || '') : '');
+      const itemIdA = glosA?.fldItem || (isCustomA ? (a?.fldPDataItemID || '') : '');
+      const itemIdB = glosB?.fldItem || (isCustomB ? (b?.fldPDataItemID || '') : '');
+      const findIdA = glosA?.fldFind || '';
+      const findIdB = glosB?.fldFind || '';
+
+      const catA = categories.find(c => c.fldCategoryID === catIdA);
+      const catB = categories.find(c => c.fldCategoryID === catIdB);
       const catOrderA = catA?.fldOrder ?? 999;
       const catOrderB = catB?.fldOrder ?? 999;
       if (catOrderA !== catOrderB) return catOrderA - catOrderB;
@@ -270,13 +279,13 @@ export function ReportPreview({
       const locB = locations.find(l => l.fldLocID === b.fldLocation)?.fldLocName || '';
       const locCompare = locA.localeCompare(locB);
       if (locCompare !== 0) return locCompare;
-      const itemA = items.find(i => i.fldItemID === glosA?.fldItem);
-      const itemB = items.find(i => i.fldItemID === glosB?.fldItem);
+      const itemA = items.find(i => i.fldItemID === itemIdA);
+      const itemB = items.find(i => i.fldItemID === itemIdB);
       const itemOrderA = itemA?.fldOrder ?? 999;
       const itemOrderB = itemB?.fldOrder ?? 999;
       if (itemOrderA !== itemOrderB) return itemOrderA - itemOrderB;
-      const findA = findings.find(f => f.fldFindID === glosA?.fldFind);
-      const findB = findings.find(f => f.fldFindID === glosB?.fldFind);
+      const findA = findings.find(f => f.fldFindID === findIdA);
+      const findB = findings.find(f => f.fldFindID === findIdB);
       const findOrderA = findA?.fldOrder ?? 999;
       const findOrderB = findB?.fldOrder ?? 999;
       if (findOrderA !== findOrderB) return findOrderA - findOrderB;
@@ -294,7 +303,10 @@ export function ReportPreview({
     filteredData.forEach(record => {
       const cleanKey = (record.fldData || "").trim().toLowerCase();
       const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
-      const cat = categories.find(c => c.fldCategoryID === glos?.fldCat);
+      const isCustom = record?.fldRecordSource === 'custom' && !glos;
+      const catId = glos?.fldCat || (isCustom ? (record?.fldPDataCategoryID || '') : '');
+      const itemId = glos?.fldItem || (isCustom ? (record?.fldPDataItemID || '') : '');
+      const cat = categories.find(c => c.fldCategoryID === catId);
       const catName = cat?.fldCategoryName || 'Uncategorized';
       if (!groups[catName]) {
         groups[catName] = { category: catName, records: [], subtotal: 0 };
@@ -302,7 +314,7 @@ export function ReportPreview({
       const location = locations.find(l => l.fldLocID === record.fldLocation);
       groups[catName].records.push({
         ...record,
-        itemName: items.find(i => i.fldItemID === glos?.fldItem)?.fldItemName || 'N/A',
+        itemName: items.find(i => i.fldItemID === itemId)?.fldItemName || 'N/A',
         locationName: location?.fldLocName || 'N/A'
       });
       groups[catName].subtotal += (record as any).totalCost;
@@ -848,8 +860,11 @@ function InfoRow({ label, value }: { label: string, value: string }) {
 function DocumentationCard({ record, index, glossary, standards, locations, categories, items }: { record: any, index: number, glossary: Glossary[], standards: MasterStandard[], locations: Location[], categories: Category[], items: Item[] }) {
   const cleanKey = (record.fldData || "").trim().toLowerCase();
   const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
-  const cat = categories.find(c => c.fldCategoryID === glos?.fldCat);
-  const item = items.find(i => i.fldItemID === glos?.fldItem);
+  const isCustom = record?.fldRecordSource === 'custom' && !glos;
+  const catId = glos?.fldCat || (isCustom ? (record?.fldPDataCategoryID || '') : '');
+  const itemId = glos?.fldItem || (isCustom ? (record?.fldPDataItemID || '') : '');
+  const cat = categories.find(c => c.fldCategoryID === catId);
+  const item = items.find(i => i.fldItemID === itemId);
   const location = locations.find(l => l.fldLocID === record.fldLocation);
   const refs = useMemo(() => {
     const recordIds = normalizeStandardIds(record.fldStandards);

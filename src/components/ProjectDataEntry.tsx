@@ -63,13 +63,27 @@ function Modal({ title, children, onClose }: any) {
   );
 }
 
+function normalizeId(value: any): string {
+  return String(value || '').trim().toLowerCase();
+}
+
+function recommendationMatches(rec: any, targetId: string): boolean {
+  const t = normalizeId(targetId);
+  if (!t) return false;
+  return normalizeId(rec?.fldRecID) === t || normalizeId(rec?.id) === t;
+}
+
+function glossaryRecommendationMatches(g: any, recId: string): boolean {
+  const t = normalizeId(recId);
+  if (!t) return false;
+  return normalizeId(g?.fldRec) === t || normalizeId(g?.fldRecID) === t;
+}
+
 export default function ProjectDataEntry({ 
   project = {}, facility = {}, inspector = {}, glossary = [], standards = [], projectData = [],
   onSave, onReset, items = [], findings = [], recommendations = [], masterRecommendations = [],
   unitTypes = [], mergedCategories = [], locations = [], selections = {}, onSelectionChange, onDirtyChange
 }: any) {
-  const [isSearchingAll, setIsSearchingAll] = useState(false);
-  
   // Localized state management for the active record
   const activeRecord = useMemo(() => {
     if (!selections.editingRecordId) return null;
@@ -78,8 +92,43 @@ export default function ProjectDataEntry({
 
   const editingRecordId = selections.editingRecordId;
 
+  const initialSelectionRef = useRef({
+    categoryId: '',
+    itemId: '',
+    findId: '',
+    recId: '',
+    glosId: ''
+  });
+
+  /** Approved glossary rows only: not soft-deleted, full Cat/Item/Find + Rec FKs. */
+  const activeGlossaryRows = useMemo(() => {
+    return (glossary || []).filter((g: any) => {
+      if (g?.fldDeleted || g?.fldIsDeleted) return false;
+      const cat = normalizeId(g.fldCat);
+      const item = normalizeId(g.fldItem);
+      const find = normalizeId(g.fldFind);
+      const recA = normalizeId(g.fldRec);
+      const recB = normalizeId(g.fldRecID);
+      if (!cat || !item || !find) return false;
+      if (!recA && !recB) return false;
+      return true;
+    });
+  }, [glossary]);
+
+  const approvedCategoryIds = useMemo(() => {
+    const s = new Set<string>();
+    activeGlossaryRows.forEach((g: any) => {
+      const id = normalizeId(g.fldCat);
+      if (id) s.add(id);
+    });
+    return s;
+  }, [activeGlossaryRows]);
+
   const hasRequiredContext = Boolean(selections.projectId && inspector?.fldInspID);
   
+  const [recordMode, setRecordMode] = useState<'glossary' | 'custom'>('glossary');
+  const [customMasterRecId, setCustomMasterRecId] = useState<string>('');
+
   const selectedCat = selections.categoryId;
   const setSelectedCat = (val: string) => {
     if (!hasRequiredContext && val !== '') {
@@ -98,9 +147,11 @@ export default function ProjectDataEntry({
       itemId: '', 
       findId: '', 
       recId: '', 
+      glosId: '',
       standards: [],
       isDirty: true 
     });
+    setCustomMasterRecId('');
   };
 
   const selectedItem = selections.itemId || '';
@@ -111,7 +162,8 @@ export default function ProjectDataEntry({
     setFldRecShort('');
     setFldRecLong('');
     setFldStandards([]);
-    onSelectionChange({ ...selections, itemId: val, findId: '', recId: '', standards: [], isDirty: true });
+    onSelectionChange({ ...selections, itemId: val, findId: '', recId: '', glosId: '', standards: [], isDirty: true });
+    setCustomMasterRecId('');
   };
   
   const [fldImages, setFldImages] = useState<string[]>([]);
@@ -144,7 +196,12 @@ export default function ProjectDataEntry({
 
   const isFormDirty = useMemo(() => {
     if (activeRecord) {
+      const init = initialSelectionRef.current;
       return (
+        (selections.categoryId || '') !== (init.categoryId || '') ||
+        (selections.itemId || '') !== (init.itemId || '') ||
+        (selections.findId || '') !== (init.findId || '') ||
+        (selections.recId || '') !== (init.recId || '') ||
         fldFindShort !== (activeRecord.fldFindShort || '') ||
         fldFindLong !== (activeRecord.fldFindLong || '') ||
         fldRecShort !== (activeRecord.fldRecShort || '') ||
@@ -173,7 +230,8 @@ export default function ProjectDataEntry({
       );
     }
   }, [
-    activeRecord, fldFindShort, fldFindLong, fldRecShort, fldRecLong,
+    activeRecord, selections.categoryId, selections.itemId, selections.findId, selections.recId,
+    fldFindShort, fldFindLong, fldRecShort, fldRecLong,
     fldQTY, fldMeasurement, fldUnitType, fldLocation, fldImages, fldStandards
   ]);
 
@@ -202,64 +260,80 @@ export default function ProjectDataEntry({
     }
   }, [project?.fldProjID, activeRecord, onReset]);
 
-  // 124 CONSOLIDATED HYDRATION
-  const hydrateRecommendationSelection = (recId: string, forceHydrateCosts = false) => {
-    if (!recId) return;
+  // Mode selection: default to glossary; reopen explicit custom records in custom mode
+  useEffect(() => {
+    if (activeRecord?.fldRecordSource === 'custom') {
+      setRecordMode('custom');
+      setCustomMasterRecId(activeRecord?.fldPDataMasterRecID || '');
+    } else {
+      setRecordMode('glossary');
+      setCustomMasterRecId('');
+    }
+  }, [activeRecord?.fldPDataID, activeRecord?.fldRecordSource, activeRecord?.fldPDataMasterRecID]);
 
-    const rec = (masterRecommendations || []).find(r => 
-      (r.id || r.fldRecID || "").toLowerCase().trim() === (recId || "").toLowerCase().trim()
+  // Switching to custom mode should clear glossary-only selection state
+  useEffect(() => {
+    if (recordMode !== 'custom') return;
+    if (selections.findId || selections.recId || selections.glosId) {
+      onSelectionChange({ ...selections, findId: '', recId: '', glosId: '', isDirty: true });
+    }
+  }, [recordMode]);
+
+  /** Resolves glossary row from category → item → finding → recommendation path (raw FKs; rec matches fldRec or fldRecID). */
+  const resolveGlossaryForSelection = (recIdOverride?: string) => {
+    const cat = normalizeId(selections.categoryId);
+    const item = normalizeId(selections.itemId);
+    const find = normalizeId(selections.findId);
+    const recRaw = recIdOverride !== undefined ? recIdOverride : selections.recId;
+    const rec = normalizeId(recRaw);
+    if (!cat || !item || !find || !rec) return undefined;
+    return (activeGlossaryRows || []).find((g: any) =>
+      normalizeId(g.fldCat) === cat &&
+      normalizeId(g.fldItem) === item &&
+      normalizeId(g.fldFind) === find &&
+      glossaryRecommendationMatches(g, recRaw)
     );
-    
+  };
+
+  /** Hydrate from a single approved glossary row (rec master + costs + selections.glosId). */
+  const applyGlossaryRecommendationRow = (gRow: any, forceHydrateCosts = false) => {
+    if (!gRow) return;
+    const recIdRaw = gRow.fldRec || gRow.fldRecID;
+    const rec = (masterRecommendations || []).find((r: any) => recommendationMatches(r, recIdRaw));
     if (!rec) return;
 
-    // 1. Text and Standards (Atomic update)
     setFldRecShort(rec.fldRecShort || '');
     setFldRecLong(rec.fldRecLong || '');
     setFldStandards(safeArray(rec.fldStandards));
 
-    // 2. Glossary Context Lookup (Full path)
-    const glos = (glossary || []).find(g => 
-      (g.fldCat || "").toLowerCase().trim() === (selections.categoryId || "").toLowerCase().trim() &&
-      (g.fldItem || "").toLowerCase().trim() === (selections.itemId || "").toLowerCase().trim() &&
-      (g.fldFind || "").toLowerCase().trim() === (selections.findId || "").toLowerCase().trim() &&
-      (g.fldRec || "").toLowerCase().trim() === (recId || "").toLowerCase().trim()
-    );
-
-    // 3. Fiscal Hydration Logic
-    // Only hydrate costs if:
-    // - New record (!activeRecord)
-    // - Explicitly forced (user selection change / forceHydrateCosts=true)
+    const glos = gRow;
     const shouldHydrateCosts = forceHydrateCosts || !activeRecord;
 
     if (shouldHydrateCosts) {
-      // Priority: Glossary Override > Library Default > Safe Fallback
       const unitCost = glos?.fldUnitCost ?? rec.fldUnit ?? 0;
-      const unitType = glos?.fldUnitType ?? rec.fldUOM ?? 'EA'; // Default to EA if missing
-      
+      const unitType = glos?.fldUnitType ?? rec.fldUOM ?? 'EA';
+
       setFldUnitCost(unitCost);
       setFldUnitType(unitType);
-      
-      // LUMP SUM BEHAVIOR: Force QTY to 1 for LS
+
       if (unitType === 'LS') {
         setFldQTY(1);
         setFldTotalCost(unitCost);
       } else {
-        // Live calculation of Total Cost
-        // If QTY is 0 or empty, default to 1 for new selections
         const currentQty = (fldQTY === 0 || fldQTY === '') ? 1 : Number(fldQTY);
         if (fldQTY === 0 || fldQTY === '') setFldQTY(1);
         setFldTotalCost(unitCost * currentQty);
       }
     }
 
-    // 4. Update Selections (Atomic)
+    const masterRecId = rec.fldRecID || rec.id;
     onSelectionChange({
       ...selections,
-      recId: recId,
+      recId: masterRecId,
       glosId: glos?.fldGlosId || glos?.id || '',
       isDirty: true
     });
-    
+
     setIsDirty(true);
   };
 
@@ -361,17 +435,39 @@ export default function ProjectDataEntry({
   useEffect(() => {
     if (activeRecord) {
       console.log("Hydrating Form with:", activeRecord);
-      // BLUEPRINT-ACCURATE POPULATION
-      const targetId = (activeRecord.fldData || "").trim().toLowerCase();
-      const glos = (glossary || []).find((g: any) => (g.id || g.fldGlosId || "").trim().toLowerCase() === targetId);
-      
-      const newSelections = {
-        ...selections,
-        locationId: activeRecord.fldLocation || selections.locationId,
-        categoryId: glos?.fldCat || selections.categoryId || '',
-        itemId: glos?.fldItem || selections.itemId || '',
-        findId: glos?.fldFind || selections.findId || '',
-        recId: glos?.fldRec || selections.recId || ''
+      const isCustom = activeRecord.fldRecordSource === 'custom';
+      let newSelections: any = { ...selections };
+      if (isCustom) {
+        newSelections = {
+          ...selections,
+          locationId: activeRecord.fldLocation || selections.locationId,
+          categoryId: activeRecord.fldPDataCategoryID || selections.categoryId || '',
+          itemId: activeRecord.fldPDataItemID || selections.itemId || '',
+          findId: '',
+          recId: '',
+          glosId: ''
+        };
+      } else {
+        // BLUEPRINT-ACCURATE POPULATION (Glossary)
+        const targetId = (activeRecord.fldData || "").trim().toLowerCase();
+        const glos = (glossary || []).find((g: any) => (g.id || g.fldGlosId || "").trim().toLowerCase() === targetId);
+        newSelections = {
+          ...selections,
+          locationId: activeRecord.fldLocation || selections.locationId,
+          categoryId: glos?.fldCat || selections.categoryId || '',
+          itemId: glos?.fldItem || selections.itemId || '',
+          findId: glos?.fldFind || selections.findId || '',
+          recId: glos?.fldRec || glos?.fldRecID || selections.recId || '',
+          glosId: glos?.fldGlosId || glos?.id || ''
+        };
+      }
+
+      initialSelectionRef.current = {
+        categoryId: newSelections.categoryId || '',
+        itemId: newSelections.itemId || '',
+        findId: newSelections.findId || '',
+        recId: newSelections.recId || '',
+        glosId: newSelections.glosId || ''
       };
 
       onSelectionChange(newSelections);
@@ -392,6 +488,13 @@ export default function ProjectDataEntry({
       setFldStandards(safeArray(activeRecord.fldStandards));
       setIsDirty(false);
     } else {
+      initialSelectionRef.current = {
+        categoryId: '',
+        itemId: '',
+        findId: '',
+        recId: '',
+        glosId: ''
+      };
       // Inheritance Lock: Initialize from selections if new record
       if (selections.locationId) setFldLocation(selections.locationId);
     }
@@ -414,13 +517,55 @@ export default function ProjectDataEntry({
     
     // Ensure we have a valid ID before saving
     const finalizedId = editingRecordId || uuidv4();
+
+    const isCustomMode = recordMode === 'custom';
+
+    if (isCustomMode) {
+      const hasCat = Boolean((selections.categoryId || '').trim());
+      const hasItem = Boolean((selections.itemId || '').trim());
+      const hasFindingText = Boolean((fldFindShort || '').trim() || (fldFindLong || '').trim());
+      const hasRecText = Boolean((fldRecShort || '').trim() || (fldRecLong || '').trim());
+
+      if (!hasCat) { toast.error('Category is required for a custom record.'); return; }
+      if (!hasItem) { toast.error('Item is required for a custom record.'); return; }
+      if (!hasFindingText) { toast.error('Finding Summary or Finding Detailed Description is required.'); return; }
+      if (!hasRecText) { toast.error('Recommendation Summary or Recommendation Detailed Description is required.'); return; }
+    }
+
+    const resolvedGlossary = isCustomMode ? undefined : resolveGlossaryForSelection();
+    const hasFullPath = !!(
+      (selections.categoryId || '').trim() &&
+      (selections.itemId || '').trim() &&
+      (selections.findId || '').trim() &&
+      (selections.recId || '').trim()
+    );
+    if (!isCustomMode && hasFullPath && !resolvedGlossary) {
+      toast.error('Unable to save: selected finding/recommendation is not linked to a glossary record.');
+      return;
+    }
+
+    const fldDataResolved = isCustomMode
+      ? ''
+      : (
+          resolvedGlossary?.fldGlosId ||
+          resolvedGlossary?.id ||
+          selections.glosId ||
+          activeRecord?.fldData ||
+          ''
+        );
     
     try {
-      await onSave({
+      const basePayload: any = {
         fldPDataID: finalizedId,
         fldPDataProject: selections.projectId,
         fldFacility: facility?.fldFacID || activeRecord?.fldFacility,
-        fldData: selections.glosId || activeRecord?.fldData || "",
+        fldData: fldDataResolved,
+        fldRecordSource: isCustomMode ? 'custom' : 'glossary',
+        ...(isCustomMode ? {
+          fldPDataCategoryID: selections.categoryId || '',
+          fldPDataItemID: selections.itemId || '',
+          ...(customMasterRecId ? { fldPDataMasterRecID: customMasterRecId } : {})
+        } : {}),
         fldLocation,
         fldFindShort,
         fldFindLong,
@@ -436,7 +581,9 @@ export default function ProjectDataEntry({
         fldStandards: safeArray(fldStandards),
         fldInspID: inspector.fldInspID,
         fldTimestamp: new Date().toISOString()
-      });
+      };
+
+      await onSave(basePayload);
     } catch {
       return;
     }
@@ -468,6 +615,7 @@ export default function ProjectDataEntry({
       editingRecordId: null,
       isDirty: false
     });
+    setCustomMasterRecId('');
   };
 
   const confirmAction = (title: string, message: string, action: () => void) => {
@@ -686,15 +834,16 @@ export default function ProjectDataEntry({
 
   const activeGlossaryEntry = useMemo(() => {
     if (!selections.categoryId || !selections.itemId || !selections.findId || !selections.recId) return null;
-    const targetGlosId = (activeRecord?.fldData || "").trim().toLowerCase();
-    return (glossary || []).find(g => 
-      (g.id || g.fldGlosId || "").trim().toLowerCase() === targetGlosId || 
-      (String(g.fldCat || "").trim().toLowerCase() === String(selections.categoryId || "").trim().toLowerCase() && 
-       String(g.fldItem || "").trim().toLowerCase() === String(selections.itemId || "").trim().toLowerCase() && 
-       String(g.fldFind || "").trim().toLowerCase() === String(selections.findId || "").trim().toLowerCase() && 
-       (g.fldRec || g.fldRecID || "").trim().toLowerCase() === (selections.recId || "").trim().toLowerCase())
+    const targetGlosId = normalizeId(activeRecord?.fldData);
+    return (activeGlossaryRows || []).find((g: any) =>
+      (targetGlosId &&
+        (normalizeId(g.fldGlosId) === targetGlosId || normalizeId(g.id) === targetGlosId)) ||
+      (normalizeId(g.fldCat) === normalizeId(selections.categoryId) &&
+        normalizeId(g.fldItem) === normalizeId(selections.itemId) &&
+        normalizeId(g.fldFind) === normalizeId(selections.findId) &&
+        glossaryRecommendationMatches(g, selections.recId))
     );
-  }, [glossary, selections, activeRecord?.fldData]);
+  }, [activeGlossaryRows, selections, activeRecord?.fldData]);
 
     const filteredStandards = useMemo(() => {
     if (!activeGlossaryEntry || !activeGlossaryEntry.fldStandards) return [];
@@ -716,81 +865,108 @@ export default function ProjectDataEntry({
     );
   }, [standards, activeGlossaryEntry]);
 
-  // TIERED RECOMMENDATION LOGIC
+  /** Glossary rows matching current Cat + Item + Finding (approved set only). */
+  const rowsForPath = useMemo(() => {
+    if (!selections.findId || !selections.itemId || !selections.categoryId) return [];
+    return activeGlossaryRows.filter(
+      (g: any) =>
+        normalizeId(g.fldCat) === normalizeId(selections.categoryId) &&
+        normalizeId(g.fldItem) === normalizeId(selections.itemId) &&
+        normalizeId(g.fldFind) === normalizeId(selections.findId)
+    );
+  }, [activeGlossaryRows, selections.findId, selections.itemId, selections.categoryId]);
+
+  /** One option per glossary row; value = fldGlosId || doc id for stable selection + fldData. */
   const recommendationOptions = useMemo(() => {
-    if (isSearchingAll) {
-      return (masterRecommendations || [])
-        .sort((a: any, b: any) => (a.fldRecShort || '').localeCompare(b.fldRecShort || ''))
-        .map((r: any) => ({ value: r.fldRecID || r.id, label: r.fldRecShort, key: `rec-${r.fldRecID || r.id}` }));
+    const out: { value: string; label: string; key: string }[] = [];
+    const seenGlos = new Set<string>();
+    for (const g of rowsForPath) {
+      const glosKey = normalizeId(g.fldGlosId || g.id);
+      if (!glosKey || seenGlos.has(glosKey)) continue;
+      const recRaw = g.fldRec || g.fldRecID;
+      const rec = (masterRecommendations || []).find((r: any) => recommendationMatches(r, recRaw));
+      if (!rec) continue;
+      seenGlos.add(glosKey);
+      out.push({
+        value: g.fldGlosId || g.id,
+        label: rec.fldRecShort || 'Recommendation',
+        key: `rec-gl-${glosKey}`
+      });
     }
+    return out.sort((a, b) => a.label.localeCompare(b.label));
+  }, [rowsForPath, masterRecommendations]);
 
-    const currentFindId = (selections.findId || '').toLowerCase().trim();
-    const currentItemId = (selections.itemId || '').toLowerCase().trim();
-    const currentCatId = (selections.categoryId || '').toLowerCase().trim();
+  const recommendationSelectValue = useMemo(() => {
+    const opts = recommendationOptions;
+    if (!opts.length) return '';
+    if (selections.glosId && opts.some((o) => normalizeId(o.value) === normalizeId(selections.glosId))) {
+      return selections.glosId;
+    }
+    if (selections.recId && rowsForPath.length) {
+      const row = rowsForPath.find((g: any) => glossaryRecommendationMatches(g, selections.recId));
+      return row ? row.fldGlosId || row.id : '';
+    }
+    return '';
+  }, [selections.glosId, selections.recId, recommendationOptions, rowsForPath]);
 
-    if (!currentFindId) return [];
-
-    // TIER 1: Glossary Precision (Exact path match)
-    const glossaryMatches = (glossary || []).filter(g => 
-      (g.fldFind || '').toLowerCase().trim() === currentFindId &&
-      (g.fldItem || '').toLowerCase().trim() === currentItemId &&
-      (g.fldCat || '').toLowerCase().trim() === currentCatId
-    ).map(g => (g.fldRec || g.fldRecID || '').toLowerCase().trim());
-
-    // TIER 2: Finding Library Suggestions
-    const finding = (findings || []).find(f => (f.fldFindID || f.id || '').toLowerCase().trim() === currentFindId);
-        const rawSuggestedRecs = finding?.fldSuggestedRecs;
-
-    const suggestedRecs = (
-      Array.isArray(rawSuggestedRecs)
-        ? rawSuggestedRecs
-        : rawSuggestedRecs && typeof rawSuggestedRecs === 'object'
-          ? Object.values(rawSuggestedRecs)
-          : []
-    )
-      .filter(Boolean)
-      .map((id: any) => String(id).toLowerCase().trim());
-
-    // TIER 3: Item Context (Broad Glossary) - Any rec used for this item
-    const itemRecs = glossaryMatches.length === 0 ? (glossary || [])
-      .filter(g => (g.fldItem || '').toLowerCase().trim() === currentItemId)
-      .map(g => (g.fldRec || g.fldRecID || '').toLowerCase().trim()) : [];
-
-    const combinedRecIds = new Set([...glossaryMatches, ...suggestedRecs, ...itemRecs]);
-    
-    const results = (masterRecommendations || [])
-      .filter(r => combinedRecIds.has((r.fldRecID || r.id || '').toLowerCase().trim()))
-      .sort((a: any, b: any) => (a.fldRecShort || '').localeCompare(b.fldRecShort || ''));
-
-    if (results.length > 0) return results.map(r => ({ value: r.fldRecID || r.id, label: r.fldRecShort, key: `rec-${r.fldRecID || r.id}` }));
-
-    return [];
-  }, [isSearchingAll, masterRecommendations, selections.findId, selections.itemId, selections.categoryId, glossary, findings]);
-
-  // Handle auto-selection of recommendation
+  // Handle auto-selection of recommendation when exactly one glossary-backed option exists
   useEffect(() => {
-    if (!selections.findId || selections.recId || isSearchingAll || recommendationOptions.length === 0) return;
-    
-    // Task 124: If only one recommendation is suggested, auto-select it using consolidated hydration
-    if (recommendationOptions.length === 1) {
-      hydrateRecommendationSelection(recommendationOptions[0].value);
-    }
-  }, [selections.findId, recommendationOptions, masterRecommendations, isSearchingAll]);
+    if (!selections.findId || selections.recId || recommendationOptions.length !== 1) return;
+    const only = recommendationOptions[0];
+    const gRow = rowsForPath.find(
+      (g: any) => normalizeId(g.fldGlosId || g.id) === normalizeId(only.value)
+    );
+    if (gRow) applyGlossaryRecommendationRow(gRow, false);
+  }, [selections.findId, selections.recId, recommendationOptions, rowsForPath]);
 
-  const sortedCategories = useMemo(() => 
-    sortEntities(Array.isArray(mergedCategories) ? mergedCategories : [], 'fldCategoryName'),
-    [mergedCategories]
+  const sortedCategories = useMemo(
+    () =>
+      sortEntities(
+        (Array.isArray(mergedCategories) ? mergedCategories : []).filter((c: any) =>
+          approvedCategoryIds.has(normalizeId(c.fldCategoryID || c.fldCatID))
+        ),
+        'fldCategoryName'
+      ),
+    [mergedCategories, approvedCategoryIds]
   );
 
-  const sortedItems = useMemo(() => 
-    sortEntities((Array.isArray(items) ? items : []).filter(i => i && i.fldCatID === selectedCat), 'fldItemName'),
-    [items, selectedCat]
-  );
+  const sortedItems = useMemo(() => {
+    if (!selectedCat) return [];
+    const approvedItemIds = new Set(
+      activeGlossaryRows
+        .filter((g: any) => normalizeId(g.fldCat) === normalizeId(selectedCat))
+        .map((g: any) => normalizeId(g.fldItem))
+        .filter(Boolean)
+    );
+    return sortEntities(
+      (Array.isArray(items) ? items : []).filter(
+        (i: any) => i && approvedItemIds.has(normalizeId(i.fldItemID || i.id))
+      ),
+      'fldItemName'
+    );
+  }, [items, selectedCat, activeGlossaryRows]);
 
-  const sortedFindings = useMemo(() => 
-    sortEntities((Array.isArray(findings) ? findings : []).filter(f => f && f.fldFindID && f.fldItem === selectedItem), 'fldFindShort'),
-    [findings, selectedItem]
-  );
+  const sortedFindings = useMemo(() => {
+    if (!selectedItem || !selectedCat) return [];
+    const approvedFindIds = new Set(
+      activeGlossaryRows
+        .filter(
+          (g: any) =>
+            normalizeId(g.fldCat) === normalizeId(selectedCat) &&
+            normalizeId(g.fldItem) === normalizeId(selectedItem)
+        )
+        .map((g: any) => normalizeId(g.fldFind))
+        .filter(Boolean)
+    );
+    return sortEntities(
+      (Array.isArray(findings) ? findings : []).filter((f: any) => {
+        if (!f) return false;
+        const fid = normalizeId(f.fldFindID || f.id);
+        return fid && approvedFindIds.has(fid);
+      }),
+      'fldFindShort'
+    );
+  }, [findings, selectedItem, selectedCat, activeGlossaryRows]);
 
   const selectedFinding = useMemo(() => {
     const id = (selections.findId || '').toLowerCase().trim();
@@ -842,8 +1018,53 @@ export default function ProjectDataEntry({
               </div>
             )}
 
+            {recordMode === 'glossary' && hasRequiredContext && activeGlossaryRows.length === 0 && (
+              <div className="mb-4 p-4 rounded-xl border border-amber-200 bg-amber-50/90 text-amber-900 shadow-sm">
+                <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">No glossary records</p>
+                <p className="text-sm text-amber-900/90 mt-1.5 leading-snug">
+                  No glossary records are available. Create glossary records in Glossary Builder first.
+                </p>
+              </div>
+            )}
+
             {/* TOP CONTEXT CARD - Now part of sticky header */}
             <Card className="p-6 border-zinc-200 shadow-sm bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Mode</label>
+                  <div className="flex items-center bg-zinc-100 rounded-xl p-1 border border-zinc-200">
+                    <button
+                      type="button"
+                      disabled={!hasRequiredContext}
+                      onClick={() => { setRecordMode('glossary'); setCustomMasterRecId(''); }}
+                      className={cn(
+                        "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
+                        recordMode === 'glossary' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+                      )}
+                      title="Use approved glossary record combinations"
+                    >
+                      Use Glossary Record
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!hasRequiredContext}
+                      onClick={() => setRecordMode('custom')}
+                      className={cn(
+                        "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
+                        recordMode === 'custom' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+                      )}
+                      title="Create a project-only custom record"
+                    >
+                      Create Custom Record
+                    </button>
+                  </div>
+                </div>
+                {recordMode === 'custom' && (
+                  <div className="text-[10px] font-bold px-3 py-2 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl">
+                    This record is project-specific and will not be added to the glossary or library.
+                  </div>
+                )}
+              </div>
               <div className="flex flex-wrap gap-6">
                 {/* CATEGORY SELECT */}
                 <div className="flex-1 min-w-[240px] relative group">
@@ -853,7 +1074,7 @@ export default function ProjectDataEntry({
                     onChange={(e: any) => setSelectedCat(e.target.value)}
                     disabled={!hasRequiredContext}
                     selectClassName={focusClasses}
-                    options={sortedCategories.map((c, index) => ({ 
+                    options={(recordMode === 'custom' ? sortEntities(mergedCategories || [], 'fldCategoryName') : sortedCategories).map((c: any, index: number) => ({ 
                       value: c.fldCategoryID || c.fldCatID || `missing-${index}`, 
                       label: c.fldCategoryName || c.fldCatName || 'Select Category',
                       key: `cat-${c.fldCategoryID || c.fldCatID || index}-${index}` 
@@ -876,7 +1097,10 @@ export default function ProjectDataEntry({
                     value={selectedItem}
                     onChange={(e: any) => setSelectedItem(e.target.value)}
                     selectClassName={focusClasses}
-                    options={sortedItems.map((i, index) => ({ 
+                    options={(recordMode === 'custom'
+                      ? sortEntities((items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat), 'fldItemName')
+                      : sortedItems
+                    ).map((i: any, index: number) => ({ 
                       value: i.fldItemID || `missing-item-${index}`, 
                       label: i.fldItemName || 'Select Item',
                       key: `item-${i.fldItemID || index}-${index}` 
@@ -928,26 +1152,28 @@ export default function ProjectDataEntry({
         <div className="max-w-6xl mx-auto px-8 py-8 space-y-8">
           {/* FINDING CARD */}
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
-            <Select 
-              label="Finding"
-              value={selections.findId || ''}
-              onChange={(e: any) => {
-                 const find = (findings || []).find(f => (f.id || f.fldFindID || "").toLowerCase() === (e.target.value || "").toLowerCase());
-                 if(find) { 
-                   setFldFindShort(find.fldFindShort); 
-                   setFldFindLong(find.fldFindLong); 
-                   setFldMeasurementUnit(find.fldUnitType || '');
-                 }
-                 setFldStandards([]); // Clear standards on finding change
-                 onSelectionChange({...selections, findId: e.target.value, isDirty: true});
-              }}
-              selectClassName={focusClasses}
-              options={sortedFindings.map((f, index) => ({ 
-                value: f.fldFindID || `missing-find-${index}`, 
-                label: f.fldFindShort || 'Select Finding', 
-                key: `find-${f.fldFindID || index}-${index}` 
-              }))}
-            />
+            {recordMode === 'glossary' && (
+              <Select 
+                label="Finding"
+                value={selections.findId || ''}
+                onChange={(e: any) => {
+                   const find = (findings || []).find(f => (f.id || f.fldFindID || "").toLowerCase() === (e.target.value || "").toLowerCase());
+                   if(find) { 
+                     setFldFindShort(find.fldFindShort); 
+                     setFldFindLong(find.fldFindLong); 
+                     setFldMeasurementUnit(find.fldUnitType || '');
+                   }
+                   setFldStandards([]); // Clear standards on finding change
+                   onSelectionChange({...selections, findId: e.target.value, recId: '', glosId: '', isDirty: true});
+                }}
+                selectClassName={focusClasses}
+                options={sortedFindings.map((f, index) => ({ 
+                  value: f.fldFindID || `missing-find-${index}`, 
+                  label: f.fldFindShort || 'Select Finding', 
+                  key: `find-${f.fldFindID || index}-${index}` 
+                }))}
+              />
+            )}
             <div className="space-y-4">
               <Input 
                 label="Finding Summary"
@@ -967,7 +1193,7 @@ export default function ProjectDataEntry({
               </div>
               
               {/* Finding Footer Row: Measurement, Measurement Type (from library finding), Measurement Unit */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-zinc-100">
+              <div className={cn("grid grid-cols-1 gap-4 pt-2 border-t border-zinc-100", recordMode === 'glossary' ? "md:grid-cols-3" : "md:grid-cols-2")}>
                 <Input 
                   label="Measurement"
                   value={fldMeasurement}
@@ -975,12 +1201,14 @@ export default function ProjectDataEntry({
                   className={focusClasses}
                   placeholder="Actual recorded value"
                 />
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Type</label>
-                  <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
-                    {selectedFindingMeasurementType || '(Not set)'}
+                {recordMode === 'glossary' && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Type</label>
+                    <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
+                      {selectedFindingMeasurementType || '(Not set)'}
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Unit</label>
                   <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
@@ -993,23 +1221,45 @@ export default function ProjectDataEntry({
           </Card>
 
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
-             <div className="flex items-center justify-between">
-               <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Recommendation</label>
-               <Button 
-                 variant="ghost" 
-                 size="sm" 
-                 onClick={() => setIsSearchingAll(!isSearchingAll)}
-                 className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700"
-               >
-                 {isSearchingAll ? "SHOW SUGGESTED" : "SEARCH ALL MASTER"}
-               </Button>
-             </div>
-             <Select 
-              value={selections.recId || ''}
-              onChange={(e: any) => hydrateRecommendationSelection(e.target.value, true)}
-              selectClassName={focusClasses}
-              options={recommendationOptions}
-            />
+             <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-2">Recommendation</label>
+             {recordMode === 'glossary' && (
+               <Select 
+                value={recommendationSelectValue || ''}
+                onChange={(e: any) => {
+                  const gid = e.target.value;
+                  const gRow = rowsForPath.find(
+                    (g: any) => normalizeId(g.fldGlosId || g.id) === normalizeId(gid)
+                  );
+                  applyGlossaryRecommendationRow(gRow, true);
+                }}
+                selectClassName={focusClasses}
+                options={recommendationOptions}
+              />
+             )}
+             {recordMode === 'custom' && (
+               <div className="space-y-1.5">
+                 <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Copy from Master Recommendation (optional)</label>
+                 <Select
+                   value={customMasterRecId || ''}
+                   onChange={(e: any) => {
+                     const id = e.target.value || '';
+                     setCustomMasterRecId(id);
+                     const rec = (masterRecommendations || []).find((r: any) => normalizeId(r?.fldRecID) === normalizeId(id) || normalizeId(r?.id) === normalizeId(id));
+                     if (rec) {
+                       setFldRecShort(rec.fldRecShort || '');
+                       setFldRecLong(rec.fldRecLong || '');
+                     }
+                     setIsDirty(true);
+                   }}
+                   selectClassName={focusClasses}
+                   options={sortEntities(masterRecommendations || [], 'fldRecShort').map((r: any, idx: number) => ({
+                     value: r.fldRecID || r.id || `missing-master-rec-${idx}`,
+                     label: r.fldRecShort || r.fldRecLong || 'Recommendation',
+                     key: `master-rec-${r.fldRecID || r.id || idx}-${idx}`
+                   }))}
+                 />
+               </div>
+             )}
             <div className="space-y-4">
               <Input 
                 label="Recommendation Summary"

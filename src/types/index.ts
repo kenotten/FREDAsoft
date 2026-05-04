@@ -178,6 +178,10 @@ export interface ProjectData {
   fldPDataProject: string; // FK from tblProject.fldProjID
   fldFacility: string; // FK from tblFacility.fldFacID
   fldData: string; // FK from tblGlossary.fldGlosID
+  fldRecordSource?: "glossary" | "custom";
+  fldPDataCategoryID?: string;
+  fldPDataItemID?: string;
+  fldPDataMasterRecID?: string;
   fldLocation: string; // FK to tblLocation.fldLocID
   fldFindShort: string;
   fldFindLong: string;
