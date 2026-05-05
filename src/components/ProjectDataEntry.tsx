@@ -6,9 +6,7 @@ import {
   Trash2, 
   Camera, 
   X, 
-  Search,
   Plus,
-  CheckCircle,
   Hash,
   Loader2,
   Book,
@@ -25,6 +23,7 @@ import { Input } from './ui/input';
 import { Select } from './ui/select';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
+import { StandardsBrowser } from './StandardsBrowser';
 import { cn, sortEntities, formatCurrency, COST_UNIT_TYPES, MEASUREMENT_UNITS } from '../lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { resizeImage } from '../lib/imageUtils';
@@ -77,6 +76,20 @@ function glossaryRecommendationMatches(g: any, recId: string): boolean {
   const t = normalizeId(recId);
   if (!t) return false;
   return normalizeId(g?.fldRec) === t || normalizeId(g?.fldRecID) === t;
+}
+
+function recordCitationDisplayLabel(standard: any | undefined, idFallback: string): string {
+  if (standard) {
+    const t = String(standard.fldStandardType ?? '').trim();
+    const n = String(standard.citation_num ?? '').trim();
+    if (t !== '' && n !== '') return `${t} ${n}`;
+    if (n !== '') return n;
+    const sid = String(standard.id ?? '').trim();
+    if (sid !== '') return sid;
+  }
+  const fb = String(idFallback ?? '').trim();
+  if (fb !== '') return fb;
+  return 'Citation';
 }
 
 export default function ProjectDataEntry({ 
@@ -253,7 +266,6 @@ export default function ProjectDataEntry({
   const [newLocName, setNewLocName] = useState('');
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [savedDraft, setSavedDraft] = useState<any>(null);
-  const [standardSearch, setStandardSearch] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Project Safety: Reset form state when switching projects to prevent data contamination
@@ -847,38 +859,43 @@ export default function ProjectDataEntry({
     .filter(l => (l.fldProjectID === selections.projectId || (l.fldFacID && l.fldFacID === selections.facilityId)) && !l.fldIsDeleted)
     .sort((a, b) => a.fldLocName.localeCompare(b.fldLocName));
 
-  const activeGlossaryEntry = useMemo(() => {
-    if (!selections.categoryId || !selections.itemId || !selections.findId || !selections.recId) return null;
-    const targetGlosId = normalizeId(activeRecord?.fldData);
-    return (activeGlossaryRows || []).find((g: any) =>
-      (targetGlosId &&
-        (normalizeId(g.fldGlosId) === targetGlosId || normalizeId(g.id) === targetGlosId)) ||
-      (normalizeId(g.fldCat) === normalizeId(selections.categoryId) &&
-        normalizeId(g.fldItem) === normalizeId(selections.itemId) &&
-        normalizeId(g.fldFind) === normalizeId(selections.findId) &&
-        glossaryRecommendationMatches(g, selections.recId))
+  const addRecordCitation = (standardId: string) => {
+    const canonical = (standards || []).find(
+      (st: any) => normalizeId(st.id) === normalizeId(standardId)
     );
-  }, [activeGlossaryRows, selections, activeRecord?.fldData]);
+    const idToStore = canonical?.id ?? standardId;
+    if (!idToStore) return;
+    setFldStandards((prev) => {
+      const arr = safeArray(prev);
+      if (arr.some((id) => normalizeId(id) === normalizeId(idToStore))) return arr;
+      return [...arr, idToStore];
+    });
+    setIsDirty(true);
+  };
 
-    const filteredStandards = useMemo(() => {
-    if (!activeGlossaryEntry || !activeGlossaryEntry.fldStandards) return [];
-
-    const rawAllowedIds = activeGlossaryEntry.fldStandards;
-
-    const allowedIds = Array.isArray(rawAllowedIds)
-      ? rawAllowedIds
-      : typeof rawAllowedIds === 'object'
-        ? Object.values(rawAllowedIds)
-        : [];
-
-    const normalizedAllowedIds = allowedIds
-      .filter(Boolean)
-      .map((id: any) => String(id).trim().toLowerCase());
-
-    return (standards || []).filter((s: any) =>
-      normalizedAllowedIds.includes(String(s.id || '').trim().toLowerCase())
+  const removeRecordCitation = (standardId: string) => {
+    setFldStandards((prev) =>
+      safeArray(prev).filter((id) => normalizeId(id) !== normalizeId(standardId))
     );
-  }, [standards, activeGlossaryEntry]);
+    setIsDirty(true);
+  };
+
+  const handleRecordCitationsDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleRecordCitationsDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const standardId = e.dataTransfer.getData('standardId');
+    if (!standardId) return;
+    addRecordCitation(standardId);
+  };
+
+  const handleAddRecordCitation = (standard: any) => {
+    if (!standard?.id) return;
+    addRecordCitation(standard.id);
+  };
 
   /** Glossary rows matching current Cat + Item + Finding (approved set only). */
   const rowsForPath = useMemo(() => {
@@ -1609,83 +1626,76 @@ export default function ProjectDataEntry({
             </div>
           </Card>
 
-          {/* STANDARDS SELECTION */}
+          {/* Record-level citations (projectData.fldStandards) */}
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
-            <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
-              <h3 className="text-sm font-bold text-zinc-900">Applicable Standards (fldStandards)</h3>
-              <div className="relative w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
-                <input 
-                  type="text"
-                  placeholder="Search standards..."
-                  className={cn("w-full pl-9 pr-3 py-1.5 text-xs border border-zinc-200 rounded-full outline-none transition-all", focusClasses)}
-                  value={standardSearch}
-                  onChange={(e) => setStandardSearch(e.target.value)}
+            <div className="flex flex-col gap-1 border-b border-zinc-100 pb-2">
+              <div>
+                <h3 className="text-sm font-bold text-zinc-900">Record Citations</h3>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Stored on this project data record as <span className="font-mono text-zinc-600">fldStandards</span>.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+              <div className="xl:col-span-5 space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  Selected citations
+                </p>
+                <div
+                  className={cn(
+                    'rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50/40 min-h-[22rem] p-3 transition-colors',
+                    'hover:border-zinc-300'
+                  )}
+                  onDragOver={handleRecordCitationsDragOver}
+                  onDrop={handleRecordCitationsDrop}
+                >
+                  {safeArray(fldStandards).length === 0 ? (
+                    <p className="text-xs text-zinc-400 italic py-4 text-center">
+                      Drop a citation here or add one with + in the Standards Library.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2 max-h-[20rem] overflow-y-auto pr-1">
+                      {safeArray(fldStandards).map((id) => {
+                        const s = standards.find(
+                          (st: any) => normalizeId(st.id) === normalizeId(id)
+                        );
+                        const label = recordCitationDisplayLabel(s, id);
+                        return (
+                          <li
+                            key={id}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs"
+                          >
+                            <span className="font-medium text-zinc-800 truncate" title={label}>
+                              {label}
+                            </span>
+                            <button
+                              type="button"
+                              className="shrink-0 p-1 rounded-md text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              title="Remove citation"
+                              onClick={() => removeRecordCitation(id)}
+                            >
+                              <X size={14} />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              <div className="xl:col-span-7 space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  Standards Library
+                </p>
+                <StandardsBrowser
+                  standards={standards}
+                  onSelect={handleAddRecordCitation}
+                  className="h-[32rem]"
                 />
               </div>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto p-1">
-              {filteredStandards.length === 0 ? (
-                <div className="col-span-full py-8 text-center text-zinc-400 italic text-sm">
-                  {!selections.findId ? "Select a Finding to see Standards" : "No standards associated with this finding."}
-                </div>
-              ) : (
-                filteredStandards
-                  .filter(s => 
-                    !standardSearch || 
-                    s.citation_num.toLowerCase().includes(standardSearch.toLowerCase()) ||
-                    s.citation_name.toLowerCase().includes(standardSearch.toLowerCase())
-                  )
-                  .map(s => {
-                    const isSelected = safeArray(fldStandards).includes(s.id);
-                    return (
-                      <button
-                        key={s.id}
-                        onClick={() => {
-                          setFldStandards(prev => 
-                            isSelected ? prev.filter(id => id !== s.id) : [...prev, s.id]
-                          );
-                          setIsDirty(true);
-                        }}
-                        className={cn(
-                          "flex items-start gap-3 p-3 rounded-xl border text-left transition-all group",
-                          isSelected 
-                            ? "bg-amber-50 border-amber-200 ring-1 ring-amber-200" 
-                            : "bg-white border-zinc-200 hover:border-zinc-300"
-                        )}
-                      >
-                        <div className={cn(
-                          "w-5 h-5 rounded flex items-center justify-center shrink-0 border transition-colors",
-                          isSelected ? "bg-amber-500 border-amber-500 text-white" : "bg-zinc-50 border-zinc-200 group-hover:border-zinc-300"
-                        )}>
-                          {isSelected && <CheckCircle size={12} />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-zinc-900 truncate">{s.citation_num}</p>
-                          <p className="text-[10px] text-zinc-500 line-clamp-2 leading-tight">{s.citation_name}</p>
-                        </div>
-                      </button>
-                    );
-                  })
-              )}
-            </div>
-            {safeArray(fldStandards).length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-2">
-                {safeArray(fldStandards).map(id => {
-                  const s = standards.find(st => (st.id || "").toLowerCase() === (id || "").toLowerCase());
-                  if (!s) return null;
-                  return (
-                    <span key={id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-zinc-100 text-zinc-700 rounded-full text-[10px] font-medium border border-zinc-200">
-                      {s.citation_num}
-                      <button onClick={() => { setFldStandards(prev => prev.filter(i => i !== id)); setIsDirty(true); }}>
-                        <X size={10} className="hover:text-red-500" />
-                      </button>
-                    </span>
-                  );
-                })}
-              </div>
-            )}
           </Card>
 
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
