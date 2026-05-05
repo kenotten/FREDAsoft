@@ -1234,7 +1234,6 @@ export default function ProjectDataEntry({
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-zinc-900 leading-tight">Data Entry</h2>
-                  <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">Recording Inspection Findings</p>
                 </div>
               </div>
               
@@ -1270,7 +1269,7 @@ export default function ProjectDataEntry({
             )}
 
             {/* TOP CONTEXT CARD - Now part of sticky header */}
-            <Card className="p-6 border-zinc-200 shadow-sm bg-white">
+            <Card className="p-6 border-zinc-200 shadow-sm !bg-blue-50">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
                 <div className="flex items-center gap-2">
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Mode</label>
@@ -1397,7 +1396,7 @@ export default function ProjectDataEntry({
         {/* LAYER 2: SCROLLABLE CONTENT */}
         <div className="max-w-6xl mx-auto px-8 py-8 space-y-8">
           {/* FINDING CARD */}
-          <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
+          <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
             {dataEntryMode === 'glossary' && (
               <Select 
                 label="Finding"
@@ -1520,7 +1519,7 @@ export default function ProjectDataEntry({
             </div>
           </Card>
 
-          <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
+          <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
              <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-2">Recommendation</label>
              {dataEntryMode === 'glossary' && (
                <Select 
@@ -1659,7 +1658,7 @@ export default function ProjectDataEntry({
           </Card>
 
           {/* Record-level citations (projectData.fldStandards) */}
-          <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
+          <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
             <div className="flex flex-col gap-1 border-b border-zinc-100 pb-2">
               <div>
                 <h3 className="text-sm font-bold text-zinc-900">Record Citations</h3>
@@ -1730,7 +1729,7 @@ export default function ProjectDataEntry({
             </div>
           </Card>
 
-          <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
+          <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
             <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
               <h3 className="text-sm font-bold text-zinc-900">Images</h3>
               <Button
