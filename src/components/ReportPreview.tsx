@@ -78,6 +78,32 @@ function normalizeStandardIds(raw: unknown): string[] {
   return arr.map(id => String(id).trim()).filter(Boolean);
 }
 
+/**
+ * Final record-level citation IDs for reports (no union with glossary).
+ * - Array `record.fldStandards` (including []) is authoritative.
+ * - Firestore map/object on the record is treated as an explicit snapshot.
+ * - Legacy fallback: when fldStandards is missing/null/undefined and the row is glossary-linked
+ *   (non-empty fldData + matching glossary row), use glos.fldStandards.
+ * - Custom / non-linked rows (empty fldData): never fall back to glossary.
+ */
+function getRecordStandardIds(record: any, glos: Glossary | undefined): string[] {
+  const raw = record?.fldStandards;
+  if (Array.isArray(raw)) {
+    return normalizeStandardIds(raw);
+  }
+  if (raw !== undefined && raw !== null && typeof raw === 'object') {
+    return Object.values(raw as Record<string, unknown>)
+      .filter(Boolean)
+      .map(v => String(v).trim())
+      .filter(Boolean);
+  }
+  const fldData = (record?.fldData || '').trim();
+  if (fldData !== '' && glos) {
+    return normalizeStandardIds(glos.fldStandards);
+  }
+  return [];
+}
+
 function standardTypeKey(std: { fldStandardType?: string }): string {
   const t = std.fldStandardType;
   if (t === undefined || t === null || String(t).trim() === '') return 'Unknown';
@@ -126,10 +152,8 @@ function buildReferencedAddendumEntries(
   filteredData.forEach(d => {
     const cleanKey = (d.fldData || "").trim().toLowerCase();
     const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
-    const recordIds = normalizeStandardIds(d.fldStandards);
-    const glosIds = normalizeStandardIds(glos?.fldStandards);
-    const mergedIds = [...new Set([...recordIds, ...glosIds])];
-    mergedIds.forEach(id => {
+    const ids = getRecordStandardIds(d, glos);
+    ids.forEach(id => {
       if (standardsMap.has(id)) return;
       const std = standards.find(s => s.id === id);
       if (!std) return;
@@ -867,12 +891,10 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
   const item = items.find(i => i.fldItemID === itemId);
   const location = locations.find(l => l.fldLocID === record.fldLocation);
   const refs = useMemo(() => {
-    const recordIds = normalizeStandardIds(record.fldStandards);
-    const glosIds = normalizeStandardIds(glos?.fldStandards);
-    const mergedIds = [...new Set([...recordIds, ...glosIds])];
-    if (mergedIds.length === 0) return '';
-    return formatGroupedStandardCitations(mergedIds, standards);
-  }, [record.fldStandards, glos?.fldStandards, standards]);
+    const ids = getRecordStandardIds(record, glos);
+    if (ids.length === 0) return '';
+    return formatGroupedStandardCitations(ids, standards);
+  }, [record.fldStandards, record.fldData, glos, standards]);
 
   return (
     <div className="border-2 border-zinc-900 flex break-inside-avoid">
