@@ -259,7 +259,7 @@ export default function ProjectDataEntry({
     };
   }, [isFormDirty, onDirtyChange]);
 
-  const focusClasses = "focus:border-amber-500 focus:bg-yellow-50 focus:ring-amber-500/10";
+  const focusClasses = "focus:border-amber-500 focus:bg-green-50 focus:ring-amber-500/10";
 
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [editingLoc, setEditingLoc] = useState<any>(null);
@@ -1269,7 +1269,7 @@ export default function ProjectDataEntry({
             )}
 
             {/* TOP CONTEXT CARD - Now part of sticky header */}
-            <Card className="p-6 border-zinc-200 shadow-sm !bg-blue-50">
+            <Card className="p-6 border-zinc-200 shadow-sm !bg-blue-100">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
                 <div className="flex items-center gap-2">
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Mode</label>
@@ -1411,7 +1411,7 @@ export default function ProjectDataEntry({
                    setFldStandards([]); // Clear standards on finding change
                    onSelectionChange({...selections, findId: e.target.value, recId: '', glosId: '', isDirty: true});
                 }}
-                selectClassName={focusClasses}
+                selectClassName={cn('!bg-yellow-50', focusClasses)}
                 options={sortedFindings.map((f, index) => ({ 
                   value: f.fldFindID || `missing-find-${index}`, 
                   label: f.fldFindShort || 'Select Finding', 
@@ -1442,7 +1442,7 @@ export default function ProjectDataEntry({
                 }}
                 options={[]}
                 placeholder="None — type your own"
-                selectClassName={focusClasses}
+                selectClassName={cn('!bg-yellow-50', focusClasses)}
               >
                 {customFindingGroups.g1.length > 0 && (
                   <optgroup label="Selected item">
@@ -1484,7 +1484,11 @@ export default function ProjectDataEntry({
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Finding Detailed Description</label>
                 <textarea 
-                  className={cn("w-full p-3 border border-zinc-200 rounded-lg text-sm min-h-[120px] transition-all outline-none", focusClasses)} 
+                  className={cn(
+                    "w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm min-h-[120px] transition-all duration-200",
+                    "placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black",
+                    focusClasses
+                  )}
                   value={fldFindLong} 
                   onChange={(e: any) => { setFldFindLong(e.target.value); setIsDirty(true); }} 
                   placeholder="Detailed finding description..."
@@ -1531,7 +1535,7 @@ export default function ProjectDataEntry({
                   );
                   applyGlossaryRecommendationRow(gRow, true);
                 }}
-                selectClassName={focusClasses}
+                selectClassName={cn('!bg-yellow-50', focusClasses)}
                 options={recommendationOptions}
               />
              )}
@@ -1562,7 +1566,7 @@ export default function ProjectDataEntry({
                  }}
                  options={[]}
                  placeholder="None — type your own"
-                 selectClassName={focusClasses}
+                 selectClassName={cn('!bg-yellow-50', focusClasses)}
                >
                  {customRecGroups.g1.length > 0 && (
                    <optgroup label="Selected item">
@@ -1604,7 +1608,11 @@ export default function ProjectDataEntry({
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Recommendation Detailed Description</label>
                 <textarea 
-                  className={cn("w-full p-3 border border-zinc-200 rounded-lg text-sm min-h-[120px] transition-all outline-none", focusClasses)} 
+                  className={cn(
+                    "w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm min-h-[120px] transition-all duration-200",
+                    "placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black",
+                    focusClasses
+                  )}
                   value={fldRecLong} 
                   onChange={(e: any) => { setFldRecLong(e.target.value); setIsDirty(true); }} 
                   placeholder="Detailed recommendation description..."
