@@ -181,6 +181,8 @@ export interface ProjectData {
   fldRecordSource?: "glossary" | "custom";
   fldPDataCategoryID?: string;
   fldPDataItemID?: string;
+  /** Trace: master finding template used for optional copy in custom mode */
+  fldPDataMasterFindID?: string;
   fldPDataMasterRecID?: string;
   fldLocation: string; // FK to tblLocation.fldLocID
   fldFindShort: string;

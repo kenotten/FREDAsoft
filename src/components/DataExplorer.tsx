@@ -165,6 +165,7 @@ export function DataExplorer({
           fldRecordSource: originalIsCustom ? "custom" : (original.fldRecordSource || "glossary"),
           fldPDataCategoryID: original.fldPDataCategoryID || "",
           fldPDataItemID: original.fldPDataItemID || "",
+          fldPDataMasterFindID: original.fldPDataMasterFindID || "",
           fldPDataMasterRecID: original.fldPDataMasterRecID || "",
           fldLocation: cloneLocationId || "",
           fldFindShort: original.fldFindShort || "",

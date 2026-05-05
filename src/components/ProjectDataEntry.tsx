@@ -129,6 +129,7 @@ export default function ProjectDataEntry({
   /** Single source of truth: parent `selections.dataEntryMode` (persists across ProjectDataEntry remounts). */
   const dataEntryMode: 'glossary' | 'custom' = selections.dataEntryMode === 'custom' ? 'custom' : 'glossary';
   const [customMasterRecId, setCustomMasterRecId] = useState<string>('');
+  const [customMasterFindId, setCustomMasterFindId] = useState<string>('');
 
   const selectedCat = selections.categoryId;
   const setSelectedCat = (val: string) => {
@@ -153,6 +154,7 @@ export default function ProjectDataEntry({
       isDirty: true 
     });
     setCustomMasterRecId('');
+    setCustomMasterFindId('');
   };
 
   const selectedItem = selections.itemId || '';
@@ -165,6 +167,7 @@ export default function ProjectDataEntry({
     setFldStandards([]);
     onSelectionChange({ ...selections, itemId: val, findId: '', recId: '', glosId: '', standards: [], isDirty: true });
     setCustomMasterRecId('');
+    setCustomMasterFindId('');
   };
   
   const [fldImages, setFldImages] = useState<string[]>([]);
@@ -444,6 +447,7 @@ export default function ProjectDataEntry({
           glosId: ''
         };
         setCustomMasterRecId(activeRecord.fldPDataMasterRecID || '');
+        setCustomMasterFindId(activeRecord.fldPDataMasterFindID || '');
       } else {
         // BLUEPRINT-ACCURATE POPULATION (Glossary)
         const targetId = (activeRecord.fldData || "").trim().toLowerCase();
@@ -459,6 +463,7 @@ export default function ProjectDataEntry({
           glosId: glos?.fldGlosId || glos?.id || ''
         };
         setCustomMasterRecId('');
+        setCustomMasterFindId('');
       }
 
       initialSelectionRef.current = {
@@ -504,6 +509,7 @@ export default function ProjectDataEntry({
     activeRecord?.fldPDataCategoryID,
     activeRecord?.fldPDataItemID,
     activeRecord?.fldPDataMasterRecID,
+    activeRecord?.fldPDataMasterFindID,
     glossary
   ]);
 
@@ -571,6 +577,7 @@ export default function ProjectDataEntry({
         ...(isCustomMode ? {
           fldPDataCategoryID: selections.categoryId || '',
           fldPDataItemID: selections.itemId || '',
+          ...(customMasterFindId ? { fldPDataMasterFindID: customMasterFindId } : {}),
           ...(customMasterRecId ? { fldPDataMasterRecID: customMasterRecId } : {})
         } : {}),
         fldLocation,
@@ -623,6 +630,7 @@ export default function ProjectDataEntry({
       isDirty: false
     });
     setCustomMasterRecId('');
+    setCustomMasterFindId('');
   };
 
   const confirmAction = (title: string, message: string, action: () => void) => {
@@ -985,6 +993,184 @@ export default function ProjectDataEntry({
 
   const selectedFindingMeasurementType = selectedFinding?.fldMeasurementType || '';
 
+  const activeFindingsList = useMemo(
+    () => (findings || []).filter((f: any) => !f?.fldDeleted && !f?.fldIsDeleted),
+    [findings]
+  );
+
+  const usableGlossaryTemplateRows = useMemo(
+    () => (glossary || []).filter((g: any) => !g?.fldDeleted && !g?.fldIsDeleted),
+    [glossary]
+  );
+
+  const masterRecsActive = useMemo(
+    () => (masterRecommendations || []).filter((r: any) => !r?.fldDeleted && !r?.fldIsDeleted),
+    [masterRecommendations]
+  );
+
+  const sortFindingsForTemplate = (arr: any[]) =>
+    [...arr].sort((a: any, b: any) => {
+      const oa = a.fldOrder ?? 999;
+      const ob = b.fldOrder ?? 999;
+      if (oa !== ob) return oa - ob;
+      return (a.fldFindShort || '').localeCompare(b.fldFindShort || '', undefined, { sensitivity: 'base' });
+    });
+
+  const sortRecsForTemplate = (arr: any[]) =>
+    [...arr].sort((a: any, b: any) => {
+      const oa = a.fldOrder ?? 999;
+      const ob = b.fldOrder ?? 999;
+      if (oa !== ob) return oa - ob;
+      return (a.fldRecShort || '').localeCompare(b.fldRecShort || '', undefined, { sensitivity: 'base' });
+    });
+
+  const categoryLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (mergedCategories || []).forEach((c: any) => {
+      const id = normalizeId(c?.fldCategoryID || c?.fldCatID);
+      if (!id) return;
+      m.set(id, String(c?.fldCategoryName || c?.fldCatName || 'Uncategorized'));
+    });
+    return m;
+  }, [mergedCategories]);
+
+  const customFindingGroups = useMemo(() => {
+    const catId = normalizeId(selections.categoryId);
+    const itemId = normalizeId(selections.itemId);
+    const all = activeFindingsList;
+    const byCategoryBuckets = (rows: any[]) => {
+      const grouped = new Map<string, { label: string; rows: any[] }>();
+      rows.forEach((f: any) => {
+        const item = (items || []).find((i: any) => normalizeId(i.fldItemID) === normalizeId(f.fldItem));
+        const cid = normalizeId(item?.fldCatID);
+        const label = cid ? (categoryLabelById.get(cid) || 'Uncategorized') : 'Uncategorized';
+        const key = cid || 'uncategorized';
+        if (!grouped.has(key)) grouped.set(key, { label, rows: [] });
+        grouped.get(key)!.rows.push(f);
+      });
+      return Array.from(grouped.values())
+        .map((g) => ({ label: g.label, rows: sortFindingsForTemplate(g.rows) }))
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+    };
+    if (!catId || !itemId) {
+      return { g1: [] as any[], g2: [] as any[], g3ByCategory: byCategoryBuckets(all) };
+    }
+    const g1 = all.filter((f: any) => normalizeId(f.fldItem) === itemId);
+    const g1Keys = new Set(g1.map((f: any) => normalizeId(f.fldFindID || f.id)));
+    const g2 = all.filter((f: any) => {
+      if (normalizeId(f.fldItem) === itemId) return false;
+      const item = (items || []).find((i: any) => normalizeId(i.fldItemID) === normalizeId(f.fldItem));
+      return !!(item && normalizeId(item.fldCatID) === catId);
+    });
+    const g2Keys = new Set(g2.map((f: any) => normalizeId(f.fldFindID || f.id)));
+    const inG12 = (f: any) =>
+      g1Keys.has(normalizeId(f.fldFindID || f.id)) || g2Keys.has(normalizeId(f.fldFindID || f.id));
+    const g3 = all.filter((f: any) => !inG12(f));
+    return {
+      g1: sortFindingsForTemplate(g1),
+      g2: sortFindingsForTemplate(g2),
+      g3ByCategory: byCategoryBuckets(g3)
+    };
+  }, [activeFindingsList, items, selections.categoryId, selections.itemId, categoryLabelById]);
+
+  const customRecGroups = useMemo(() => {
+    const catId = normalizeId(selections.categoryId);
+    const itemId = normalizeId(selections.itemId);
+    const addRaw = (set: Set<string>, v: any) => {
+      const s = String(v || '').trim();
+      if (s) set.add(s);
+    };
+    const itemRecRaw = new Set<string>();
+    const categoryRecRaw = new Set<string>();
+
+    if (catId && itemId) {
+      for (const f of activeFindingsList) {
+        if (normalizeId(f.fldItem) === itemId) {
+          for (const id of safeArray(f.fldSuggestedRecs)) addRaw(itemRecRaw, id);
+        }
+      }
+      for (const g of usableGlossaryTemplateRows) {
+        if (normalizeId(g.fldItem) === itemId) {
+          addRaw(itemRecRaw, g.fldRec);
+          addRaw(itemRecRaw, g.fldRecID);
+        }
+      }
+      for (const f of activeFindingsList) {
+        if (normalizeId(f.fldItem) === itemId) continue;
+        const item = (items || []).find((i: any) => normalizeId(i.fldItemID) === normalizeId(f.fldItem));
+        if (!item || normalizeId(item.fldCatID) !== catId) continue;
+        for (const id of safeArray(f.fldSuggestedRecs)) addRaw(categoryRecRaw, id);
+      }
+      for (const g of usableGlossaryTemplateRows) {
+        if (normalizeId(g.fldCat) !== catId) continue;
+        if (normalizeId(g.fldItem) === itemId) continue;
+        addRaw(categoryRecRaw, g.fldRec);
+        addRaw(categoryRecRaw, g.fldRecID);
+      }
+    }
+
+    const itemKeys = new Set([...itemRecRaw].map(normalizeId).filter(Boolean));
+    const catKeys = new Set(
+      [...categoryRecRaw].map(normalizeId).filter(Boolean).filter((k) => !itemKeys.has(k))
+    );
+    const recKey = (r: any) => normalizeId(r.fldRecID || r.id);
+    const inItem = (r: any) => itemKeys.has(recKey(r));
+    const inCatOnly = (r: any) => !inItem(r) && catKeys.has(recKey(r));
+
+    const g1 = sortRecsForTemplate(masterRecsActive.filter(inItem));
+    const g2 = sortRecsForTemplate(masterRecsActive.filter(inCatOnly));
+    const g3 = masterRecsActive.filter((r: any) => !inItem(r) && !inCatOnly(r));
+    const g3ByCategoryMap = new Map<string, { label: string; rows: any[] }>();
+    const resolveRecCategoryKey = (rec: any) => {
+      const possible = new Set<string>();
+      const rk = recKey(rec);
+      activeFindingsList.forEach((f: any) => {
+        const suggested = new Set(safeArray(f.fldSuggestedRecs).map(normalizeId));
+        if (!suggested.has(rk)) return;
+        const item = (items || []).find((i: any) => normalizeId(i.fldItemID) === normalizeId(f.fldItem));
+        const cid = normalizeId(item?.fldCatID);
+        if (cid) possible.add(cid);
+      });
+      usableGlossaryTemplateRows.forEach((g: any) => {
+        if (normalizeId(g.fldRec) === rk || normalizeId(g.fldRecID) === rk) {
+          const cid = normalizeId(g.fldCat);
+          if (cid) possible.add(cid);
+        }
+      });
+      const recItem = (items || []).find((i: any) => normalizeId(i.fldItemID) === normalizeId(rec?.fldItem));
+      const recItemCat = normalizeId(recItem?.fldCatID);
+      if (recItemCat) possible.add(recItemCat);
+
+      if (!possible.size) return { key: 'uncategorized', label: 'Uncategorized' };
+      const sortedCats = [...possible].sort((a, b) => {
+        const la = categoryLabelById.get(a) || 'Uncategorized';
+        const lb = categoryLabelById.get(b) || 'Uncategorized';
+        return la.localeCompare(lb, undefined, { sensitivity: 'base' });
+      });
+      const chosen = sortedCats[0];
+      return { key: chosen, label: categoryLabelById.get(chosen) || 'Uncategorized' };
+    };
+
+    g3.forEach((rec: any) => {
+      const grp = resolveRecCategoryKey(rec);
+      if (!g3ByCategoryMap.has(grp.key)) g3ByCategoryMap.set(grp.key, { label: grp.label, rows: [] });
+      g3ByCategoryMap.get(grp.key)!.rows.push(rec);
+    });
+
+    const g3ByCategory = Array.from(g3ByCategoryMap.values())
+      .map((g) => ({ label: g.label, rows: sortRecsForTemplate(g.rows) }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+    return { g1, g2, g3ByCategory };
+  }, [
+    activeFindingsList,
+    usableGlossaryTemplateRows,
+    items,
+    masterRecsActive,
+    selections.categoryId,
+    selections.itemId,
+    categoryLabelById
+  ]);
+
   return (
     <div className="flex flex-col h-full bg-transparent overflow-hidden">
       <div className="flex-1 overflow-y-auto w-full bg-transparent">
@@ -1045,6 +1231,7 @@ export default function ProjectDataEntry({
                       disabled={!hasRequiredContext}
                       onClick={() => {
                         setCustomMasterRecId('');
+                        setCustomMasterFindId('');
                         onSelectionChange({ ...selections, dataEntryMode: 'glossary' });
                       }}
                       className={cn(
@@ -1184,6 +1371,60 @@ export default function ProjectDataEntry({
                 }))}
               />
             )}
+            {dataEntryMode === 'custom' && (
+              <Select
+                label="Optional: Copy finding template from library"
+                value={customMasterFindId}
+                onChange={(e: any) => {
+                  const id = e.target.value || '';
+                  setCustomMasterFindId(id);
+                  if (!id) {
+                    setIsDirty(true);
+                    return;
+                  }
+                  const f = activeFindingsList.find(
+                    (x: any) => normalizeId(x.fldFindID || x.id) === normalizeId(id)
+                  );
+                  if (f) {
+                    setFldFindShort(f.fldFindShort || '');
+                    setFldFindLong(f.fldFindLong || '');
+                    if (f.fldUnitType) setFldMeasurementUnit(String(f.fldUnitType));
+                    setIsDirty(true);
+                  }
+                }}
+                options={[]}
+                placeholder="None — type your own"
+                selectClassName={focusClasses}
+              >
+                {customFindingGroups.g1.length > 0 && (
+                  <optgroup label="Selected item">
+                    {customFindingGroups.g1.map((f: any, idx: number) => (
+                      <option key={`cf-g1-${f.fldFindID || f.id}-${idx}`} value={f.fldFindID || f.id || ''}>
+                        {f.fldFindShort || f.fldFindLong || 'Finding'}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {customFindingGroups.g2.length > 0 && (
+                  <optgroup label="Other items in category">
+                    {customFindingGroups.g2.map((f: any, idx: number) => (
+                      <option key={`cf-g2-${f.fldFindID || f.id}-${idx}`} value={f.fldFindID || f.id || ''}>
+                        {f.fldFindShort || f.fldFindLong || 'Finding'}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {customFindingGroups.g3ByCategory.map((group: any, gIdx: number) => (
+                  <optgroup key={`cf-g3-cat-${gIdx}-${group.label}`} label={group.label}>
+                    {group.rows.map((f: any, idx: number) => (
+                      <option key={`cf-g3-${f.fldFindID || f.id}-${idx}`} value={f.fldFindID || f.id || ''}>
+                        {f.fldFindShort || f.fldFindLong || 'Finding'}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </Select>
+            )}
             <div className="space-y-4">
               <Input 
                 label="Finding Summary"
@@ -1247,28 +1488,62 @@ export default function ProjectDataEntry({
               />
              )}
              {dataEntryMode === 'custom' && (
-               <div className="space-y-1.5">
-                 <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Copy from Master Recommendation (optional)</label>
-                 <Select
-                   value={customMasterRecId || ''}
-                   onChange={(e: any) => {
-                     const id = e.target.value || '';
-                     setCustomMasterRecId(id);
-                     const rec = (masterRecommendations || []).find((r: any) => normalizeId(r?.fldRecID) === normalizeId(id) || normalizeId(r?.id) === normalizeId(id));
-                     if (rec) {
-                       setFldRecShort(rec.fldRecShort || '');
-                       setFldRecLong(rec.fldRecLong || '');
-                     }
+               <Select
+                 label="Optional: Copy recommendation template from library"
+                 value={customMasterRecId || ''}
+                 onChange={(e: any) => {
+                   const id = e.target.value || '';
+                   setCustomMasterRecId(id);
+                   if (!id) {
                      setIsDirty(true);
-                   }}
-                   selectClassName={focusClasses}
-                   options={sortEntities(masterRecommendations || [], 'fldRecShort').map((r: any, idx: number) => ({
-                     value: r.fldRecID || r.id || `missing-master-rec-${idx}`,
-                     label: r.fldRecShort || r.fldRecLong || 'Recommendation',
-                     key: `master-rec-${r.fldRecID || r.id || idx}-${idx}`
-                   }))}
-                 />
-               </div>
+                     return;
+                   }
+                   const rec = masterRecsActive.find(
+                     (r: any) =>
+                       normalizeId(r?.fldRecID) === normalizeId(id) || normalizeId(r?.id) === normalizeId(id)
+                   );
+                   if (rec) {
+                     setFldRecShort(rec.fldRecShort || '');
+                     setFldRecLong(rec.fldRecLong || '');
+                     const uom = rec.fldUOM || 'Decimal';
+                     setFldUnitType(uom);
+                     setFldUnitCost(rec.fldUnit ?? 0);
+                     if (uom === 'LS') setFldQTY(1);
+                     setIsDirty(true);
+                   }
+                 }}
+                 options={[]}
+                 placeholder="None — type your own"
+                 selectClassName={focusClasses}
+               >
+                 {customRecGroups.g1.length > 0 && (
+                   <optgroup label="Selected item">
+                     {customRecGroups.g1.map((r: any, idx: number) => (
+                       <option key={`cr-g1-${r.fldRecID || r.id}-${idx}`} value={r.fldRecID || r.id || ''}>
+                         {r.fldRecShort || r.fldRecLong || 'Recommendation'}
+                       </option>
+                     ))}
+                   </optgroup>
+                 )}
+                 {customRecGroups.g2.length > 0 && (
+                   <optgroup label="Other items in category">
+                     {customRecGroups.g2.map((r: any, idx: number) => (
+                       <option key={`cr-g2-${r.fldRecID || r.id}-${idx}`} value={r.fldRecID || r.id || ''}>
+                         {r.fldRecShort || r.fldRecLong || 'Recommendation'}
+                       </option>
+                     ))}
+                   </optgroup>
+                 )}
+                 {customRecGroups.g3ByCategory.map((group: any, gIdx: number) => (
+                   <optgroup key={`cr-g3-cat-${gIdx}-${group.label}`} label={group.label}>
+                     {group.rows.map((r: any, idx: number) => (
+                       <option key={`cr-g3-${r.fldRecID || r.id}-${idx}`} value={r.fldRecID || r.id || ''}>
+                         {r.fldRecShort || r.fldRecLong || 'Recommendation'}
+                       </option>
+                     ))}
+                   </optgroup>
+                 ))}
+               </Select>
              )}
             <div className="space-y-4">
               <Input 
