@@ -426,3 +426,205 @@ The purpose of Phase 2 is to preserve flexibility without weakening library qual
 Users can document unusual field conditions.
 Admins control what becomes reusable content.
 Glossaries remain curated and intentional.
+
+## Future Memo: Citation Inheritance, Drift, and Refresh Workflow
+
+The citation model follows the broader snapshot inheritance architecture:
+
+```text
+Library → Glossary → Project Data Record
+
+Citations may eventually exist at all three layers:
+
+Finding / Recommendation Library Citations
+        ↓ copied into
+Glossary Citations
+        ↓ copied into
+Project Data Record Citations
+
+Each layer inherits defaults from the layer above, but once copied, the citation set becomes an editable snapshot for that layer.
+
+Core Rule
+
+Changes to citations at an upstream layer should not automatically mutate downstream records.
+
+For example, if a citation is later added to or changed on a library finding record:
+
+finding.fldStandards
+
+that should not automatically update:
+
+glossary.fldStandards
+
+and should not automatically update:
+
+projectData.fldStandards
+
+This protects historical work, avoids unexpected report changes, and preserves the principle that each layer is independently reviewable.
+
+Current Direction
+
+The intended long-term behavior is:
+
+Library citation changes do not automatically mutate glossaries.
+Glossaries may be manually refreshed from library defaults.
+Project data records do not automatically mutate from glossary changes.
+
+A glossary record may inherit citations from its underlying finding/recommendation library records when it is created, but later changes to those library records require explicit review before being applied to the glossary.
+
+Likewise, a project data record may inherit citations from the glossary when it is created, but later changes to the glossary do not automatically update the already-saved project data record.
+
+Why Automatic Sync Is Risky
+
+Automatic downstream updates could unintentionally alter:
+
+Existing glossary records
+Previously completed project data
+Report citations
+Historical audit trails
+Cost/recommendation documentation associated with a completed inspection or review
+
+For example, if a finding library citation is corrected from one standard section to another, that may be appropriate for future glossaries, but not necessarily for every existing glossary or every completed project record.
+
+Preferred Future Flow: Explicit Citation Review
+
+A future workflow should allow users/admins to compare current library citation defaults against the citations currently stored on a glossary record.
+
+Possible UI action:
+
+Review Library Citation Updates
+
+This action would compare:
+
+Current Library Defaults
+vs.
+Current Glossary Citations
+
+Example:
+
+Current Glossary Citations
+- TAS 302.1
+- TAS 403.5.1
+
+Current Library Defaults
+- TAS 302.1
+- TAS 403.5.2
+
+The user/admin could then decide whether to:
+
+Add a newly inherited citation
+Remove an outdated citation
+Replace a citation
+Keep the glossary as-is
+Apply all suggested changes
+Ignore the difference for this glossary record
+Option A: Per-Glossary Review
+
+Add a review action directly in Glossary Builder.
+
+Example:
+
+Review Library Citation Updates
+
+This would evaluate only the currently selected glossary record.
+
+Benefits:
+
+Simple mental model
+Lower risk
+Good for case-by-case review
+Avoids accidental bulk changes
+
+This is likely the best first implementation.
+
+Option B: Admin Citation Drift Audit
+
+Create a future admin/audit panel that identifies glossary records whose citations differ from their underlying library defaults.
+
+Example:
+
+Glossary Citation Drift Audit
+
+The audit could list:
+
+Glossary record
+Associated category/item/finding/recommendation
+Current glossary citations
+Current library default citations
+Added/removed/different citation IDs
+Suggested action
+
+Benefits:
+
+Better for larger cleanup efforts
+Helps identify outdated glossary records
+Allows admins to review multiple records efficiently
+
+This should still require explicit approval before changes are applied.
+
+Option C: Bulk Refresh With Preview
+
+A future advanced admin workflow could allow selected glossary records to be refreshed from library defaults in bulk.
+
+This should only be allowed with:
+
+Clear preview
+Selective approval
+Backup protection
+Duplicate detection
+Ability to skip records
+Confirmation before write
+
+Bulk refresh should never be silent or automatic.
+
+Possible Metadata for Future Sync
+
+To support better review workflows, future records may store citation inheritance metadata such as:
+
+fldInheritedFindingStandardsSnapshot
+fldInheritedRecommendationStandardsSnapshot
+fldCitationLastSyncedAt
+fldCitationSourceVersion
+
+These fields are not required immediately, but may help distinguish:
+
+Citations originally inherited from the library
+Citations added directly to the glossary
+Citations removed intentionally at the glossary level
+Citations that differ because the library changed later
+
+A simpler first implementation can compare live library citation values against current glossary citation values without additional metadata.
+
+Project Data Records
+
+Project data records should remain even more protected than glossary records.
+
+Once a data record has inherited citations from the glossary, its citations are stored in:
+
+projectData.fldStandards
+
+That field represents the final citation set for that specific record.
+
+Later changes to either:
+
+glossary.fldStandards
+
+or:
+
+finding/recommendation.fldStandards
+
+should not automatically update saved project data records.
+
+If project-level citation refresh is ever needed, it should be treated as a separate explicit workflow with strong safeguards.
+
+Design Principle
+Defaults may flow downward.
+Edits do not automatically propagate downward.
+Refreshes must be explicit, reviewable, and reversible.
+
+This preserves flexibility while protecting historical accuracy and user trust.
+
+Users can update reusable defaults.
+Admins can review drift.
+Glossaries can be refreshed intentionally.
+Project data remains stable unless directly edited.
