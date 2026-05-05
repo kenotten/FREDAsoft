@@ -276,13 +276,40 @@ export default function ProjectDataEntry({
     }
   }, [project?.fldProjID, activeRecord, onReset]);
 
-  // Switching to custom mode should clear glossary-only selection state
+  // Switching to custom mode clears glossary-only selection state.
+  // New custom record: drop glossary links and any citation snapshot inherited from a glossary row.
+  // Existing records preserve projectData.fldStandards (handled in activeRecord hydration).
   useEffect(() => {
     if (selections.dataEntryMode !== 'custom') return;
-    if (selections.findId || selections.recId || selections.glosId) {
-      onSelectionChange({ ...selections, findId: '', recId: '', glosId: '', isDirty: true });
+    const hadGlossaryLinks = Boolean(
+      (selections.findId || '').trim() ||
+      (selections.recId || '').trim() ||
+      (selections.glosId || '').trim()
+    );
+    if (activeRecord) {
+      if (hadGlossaryLinks) {
+        onSelectionChange({ ...selections, findId: '', recId: '', glosId: '', isDirty: true });
+      }
+      return;
     }
-  }, [selections.dataEntryMode]);
+    if (hadGlossaryLinks) {
+      setFldStandards([]);
+      onSelectionChange({
+        ...selections,
+        findId: '',
+        recId: '',
+        glosId: '',
+        standards: [],
+        isDirty: true
+      });
+    }
+  }, [
+    selections.dataEntryMode,
+    activeRecord?.fldPDataID,
+    selections.findId,
+    selections.recId,
+    selections.glosId
+  ]);
 
   /** Resolves glossary row from category → item → finding → recommendation path (raw FKs; rec matches fldRec or fldRecID). */
   const resolveGlossaryForSelection = (recIdOverride?: string) => {
@@ -309,7 +336,11 @@ export default function ProjectDataEntry({
 
     setFldRecShort(rec.fldRecShort || '');
     setFldRecLong(rec.fldRecLong || '');
-    setFldStandards(safeArray(rec.fldStandards));
+    if (dataEntryMode === 'glossary' && !activeRecord) {
+      // New glossary record: inherit citation snapshot from glossary row
+      setFldStandards(safeArray(gRow.fldStandards));
+    }
+    // Existing records preserve projectData.fldStandards — do not overwrite from glossary row here.
 
     const glos = gRow;
     const shouldHydrateCosts = forceHydrateCosts || !activeRecord;
@@ -501,6 +532,7 @@ export default function ProjectDataEntry({
       setFldTotalCost(activeRecord.fldTotalCost || 0);
       setFldLocation(activeRecord.fldLocation || '');
       setFldImages(Array.isArray(activeRecord.fldImages) ? activeRecord.fldImages : []);
+      // Existing records preserve projectData.fldStandards
       setFldStandards(safeArray(activeRecord.fldStandards));
       setIsDirty(false);
     } else {
