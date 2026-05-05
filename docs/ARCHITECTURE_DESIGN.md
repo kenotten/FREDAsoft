@@ -329,3 +329,100 @@ Concept layer → deferred, future-ready
 Glossaries → context-driven
 Standards handling → implicit multi-citation model
 Library sync → explicit only, never automatic, with backup protection
+
+---
+
+## Future Phase 2: Custom Record Promotion and Glossary Governance
+
+Phase 1 allows users to create **project-only custom data records** that are not linked to the glossary or library.
+
+Phase 2 will define how high-quality custom records can be reviewed and promoted into reusable library/glossary content.
+
+### Core Principle
+
+Custom project records are allowed for one-off field conditions, but they do not automatically become part of the reusable library or glossary.
+
+```text
+Custom Project Record ≠ Library Record
+
+glossaryRequests
+
+Possible fields:
+
+sourceProjectDataId
+sourceProjectId
+sourceFacilityId
+proposedCategoryId
+proposedItemId
+proposedFindingShort
+proposedFindingLong
+proposedRecommendationShort
+proposedRecommendationLong
+proposedMeasurementType
+proposedMeasurementUnit
+proposedUnitCost
+proposedCostUnit
+proposedStandards
+submittedBy
+submittedAt
+status
+reviewedBy
+reviewedAt
+reviewNotes
+
+Suggested statuses:
+
+pending
+approved
+rejected
+duplicate
+needs_revision
+Admin Review Workflow
+
+Admins should eventually have a review queue for pending glossary requests.
+
+Admin actions may include:
+
+Approve as new glossary entry
+Reject request
+Mark as duplicate
+Edit before approving
+Link to an existing finding
+Link to an existing recommendation
+Create new finding and/or recommendation records
+Create final glossary link row
+
+Approval may create or update:
+
+findings
+recommendations
+glossary
+
+depending on whether reusable library records already exist.
+
+Promotion Rules
+
+Promotion should avoid creating duplicate or low-quality library records.
+
+Before approval, the admin should be able to compare the requested custom record against existing:
+
+Categories
+Items
+Findings
+Recommendations
+Glossary rows
+Standards associations
+
+The admin should decide whether to:
+
+Use existing library records
+Create new library records
+Create only a new glossary link
+Reject as project-specific only
+Design Goal
+
+The purpose of Phase 2 is to preserve flexibility without weakening library quality.
+
+Users can document unusual field conditions.
+Admins control what becomes reusable content.
+Glossaries remain curated and intentional.
