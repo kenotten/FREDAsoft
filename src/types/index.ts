@@ -131,6 +131,14 @@ export interface Recommendation extends MasterRecommendation {
 export interface Glossary {
   id?: string;
   fldGlosId: string;
+  /** Standard/version glossary set key (e.g. UFAS, ADA_2010, TAS_2012) */
+  fldGlossarySetId?: string;
+  /** Human-readable glossary set name (e.g. ADA 2010) */
+  fldGlossarySetName?: string;
+  /** Standard family/type for glossary set (e.g. ADA, TAS, UFAS) */
+  fldGlossaryStandardType?: string;
+  /** Standard version for glossary set (e.g. 2010, 2012, Guidelines) */
+  fldGlossaryStandardVersion?: string;
   fldCat: string; // FK from tblCategories.fldCategoryID
   fldItem: string; // FK from tblItems.fldItemID
   fldFind: string; // FK from tblFindings.fldFindID

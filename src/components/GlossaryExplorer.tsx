@@ -25,6 +25,7 @@ import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import { firestoreService } from '../services/firestoreService';
+import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
 import { db } from '../firebase';
 import { writeBatch, doc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 
@@ -62,6 +63,7 @@ export default function GlossaryExplorer({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [selectedItemId, setSelectedItemId] = useState<string>('');
+  const [selectedGlossarySetFilter, setSelectedGlossarySetFilter] = useState<string>('ALL');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [editingField, setEditingField] = useState<{ id: string, field: string, value: any } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -321,6 +323,9 @@ export default function GlossaryExplorer({
       }
 
       const finalRec = matchedRec || legacyRec;
+      const setDef = glossarySetById(g.fldGlossarySetId);
+      const glossarySetId = String(g.fldGlossarySetId || '').trim();
+      const glossarySetName = String(g.fldGlossarySetName || '').trim();
 
       return {
         ...g,
@@ -346,6 +351,15 @@ export default function GlossaryExplorer({
         unitCost: finalRec?.fldUnit || 0,
         findingId: finding?.fldFindID || finding?.id,
         recommendationId: finalRec?.fldRecID || finalRec?.id,
+        glossarySetId: glossarySetId || '',
+        glossarySetName: glossarySetName || setDef?.name || '',
+        glossarySetType: String(g.fldGlossaryStandardType || setDef?.standardType || '').trim(),
+        glossarySetVersion: String(g.fldGlossaryStandardVersion || setDef?.standardVersion || '').trim(),
+        glossarySetLabel:
+          glossarySetName ||
+          setDef?.name ||
+          glossarySetId ||
+          'Unassigned',
         isOrphaned: !matchedRec && !!gRecId,
         canRecover: !matchedRec && !!gRecId,
         suggestedHealRec,
@@ -383,6 +397,12 @@ export default function GlossaryExplorer({
     }
     if (selectedItemId) {
       base = base.filter((d: any) => d.fldItem === selectedItemId);
+    }
+    if (selectedGlossarySetFilter === 'UNASSIGNED') {
+      base = base.filter((d: any) => !String(d.glossarySetId || '').trim());
+    } else if (selectedGlossarySetFilter !== 'ALL') {
+      const target = String(selectedGlossarySetFilter || '').toLowerCase().trim();
+      base = base.filter((d: any) => String(d.glossarySetId || '').toLowerCase().trim() === target);
     }
 
     // 3. Column Filters
@@ -441,7 +461,7 @@ export default function GlossaryExplorer({
       // Recommendation (Always by order then alpha per stability requirement)
       return (a.recOrder ?? Infinity) - (b.recOrder ?? Infinity) || (a.recommendationShort || '').localeCompare(b.recommendationShort || '');
     });
-  }, [resolvedGlossary, searchTerm, selectedCategoryId, selectedItemId, sortMode, showMissingOnly, columnFilters]);
+  }, [resolvedGlossary, searchTerm, selectedCategoryId, selectedItemId, selectedGlossarySetFilter, sortMode, showMissingOnly, columnFilters]);
 
   const EditableField = ({ id, field, value, type = 'text', label, inline = false }: any) => {
     const isEditing = editingField?.id === id && editingField?.field === field;
@@ -516,6 +536,29 @@ export default function GlossaryExplorer({
       return (a.fldItemName || '').localeCompare(b.fldItemName || '');
     });
   }, [items, selectedCategoryId, sortMode]);
+
+  const glossarySetFilterOptions = useMemo(() => {
+    const dynamicIds = new Set<string>();
+    (resolvedGlossary || []).forEach((r: any) => {
+      const id = String(r.glossarySetId || '').trim();
+      if (id) dynamicIds.add(id);
+    });
+
+    const knownById = new Map(GLOSSARY_SET_DEFS.map((s) => [s.id, s]));
+    const mergedIds = new Set<string>([...Array.from(knownById.keys()), ...Array.from(dynamicIds)]);
+    const mergedRows = Array.from(mergedIds).map((id) => {
+      const known = knownById.get(id);
+      const label = known?.name || id;
+      return { id, label };
+    });
+    mergedRows.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+
+    return [
+      { value: 'ALL', label: 'All Glossary Sets' },
+      { value: 'UNASSIGNED', label: 'Unassigned' },
+      ...mergedRows.map((r) => ({ value: r.id, label: r.label })),
+    ];
+  }, [resolvedGlossary]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 space-y-6 overflow-hidden">
@@ -611,6 +654,13 @@ export default function GlossaryExplorer({
               options={sortedItems.map((i: any) => ({ value: i.fldItemID, label: i.fldItemName })) || []}
               placeholder="All Items"
             />
+            <Select
+              value={selectedGlossarySetFilter}
+              onChange={(e: any) => setSelectedGlossarySetFilter(e.target.value || 'ALL')}
+              className="w-56"
+              options={glossarySetFilterOptions}
+              placeholder="All Glossary Sets"
+            />
           </div>
         </div>
 
@@ -641,6 +691,7 @@ export default function GlossaryExplorer({
                 <th className="w-10 px-4 py-3"></th>
                 <th className="w-32 px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Category</th>
                 <th className="w-32 px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Item</th>
+                <th className="w-32 px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Glossary Set</th>
                 <th className="px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Finding Short</span>
@@ -705,6 +756,18 @@ export default function GlossaryExplorer({
                     </td>
                     <td className="px-4 py-3 text-xs font-medium text-zinc-600 truncate">{row.categoryName}</td>
                     <td className="px-4 py-3 text-xs font-medium text-zinc-900 truncate">{row.itemName}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={cn(
+                          "inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border",
+                          row.glossarySetId
+                            ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                            : "bg-zinc-50 text-zinc-500 border-zinc-200"
+                        )}
+                      >
+                        {row.glossarySetLabel || 'Unassigned'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <EditableField id={row.findingId} field="fldFindShort" value={row.findingShort} inline />
                     </td>
@@ -779,7 +842,7 @@ export default function GlossaryExplorer({
                   </tr>
                   {expandedRows.has(row.id) && (
                     <tr className="bg-zinc-50/50">
-                      <td colSpan={3}></td>
+                      <td colSpan={4}></td>
                       <td className="px-4 py-4 border-b border-zinc-100 align-top">
                         <div className="space-y-4">
                           <EditableField 
@@ -856,7 +919,7 @@ export default function GlossaryExplorer({
               ))}
               {filteredData.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-zinc-400 italic text-sm">
+                  <td colSpan={9} className="px-4 py-12 text-center text-zinc-400 italic text-sm">
                     No records found matching your search.
                   </td>
                 </tr>

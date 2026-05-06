@@ -1,69 +1,130 @@
-FREDAsoft Architecture & Design Decisions
+# FREDAsoft Architecture & Design Decisions
 
 This document is the single source of truth for architectural decisions in FREDAsoft.
-It defines system behavior, data modeling philosophy, and development constraints.
 
-All contributors (human or AI) must follow this document.
+It defines system behavior, data modeling philosophy, workflow decisions, and development constraints.
 
-🧠 AI Operations Layer (Archie / Gabe / Francine)
-🎭 Agent Roles
+All contributors, including human developers and AI agents, must follow this document.
 
-Archie (Architect)
+---
 
-Defines system-level structure and refactoring strategy
-Breaks work into atomic, safe tasks
-Focus: scalability, safety, clarity
+## 🧠 AI Operations Layer
 
-Gabe (Sentry)
+### Agent Roles
 
-Reviews and hardens all prompts before execution
-Enforces:
-strict scope control
-no unintended refactors
-preservation of behavior
-Converts ideas into deterministic instructions
+#### Archie — Architect
 
-Francine (Execution Agent)
+Archie defines system-level structure and refactoring strategy.
 
-Executes tasks in AI Studio
-Must follow instructions exactly
-Has NO authority to:
-refactor beyond instructions
-introduce new patterns
-modify unrelated code
-🛡️ Non-Negotiable Execution Rules
-Only modify what is explicitly specified
-Preserve all existing behavior unless explicitly changed
-No implicit refactors or “cleanup”
-Use explicit logic (no truthy/falsy shortcuts)
-Use safe, targeted React state updates
-Do not mix concerns (security, UI, data, performance)
-If marked ANALYSIS ONLY → no code changes
-Do not assume intent
-🧪 Required Verification
-App builds successfully
-No console errors
-No UI regression
-Target behavior works
-🚦 Current Work State
-Phase: Data Integrity Stabilization
-Active Task: 95 — Opening Force Fix
-Target Version: v87.0
-Status: Pending quota reset
-Next Up
-P1 — Firestore Security Hardening
-P2 — Remove runtime debug logic
-P3 — Extract Firestore subscriptions
-⚠️ Known Risk Areas
-Firestore security rules (overly permissive)
-App.tsx (“God component”)
-Large components (>800 LOC)
-Heavy use of any
-Firestore subscription lifecycle issues
-Runtime debug/migration logic in production
-Large bundle size (~1.5MB)
-📦 Proven Code Patterns
-Safe React State Update
+Responsibilities:
+
+- define architectural direction
+- identify safe implementation phases
+- break work into atomic tasks
+- preserve system integrity
+- prioritize scalability, safety, clarity, and traceability
+
+#### Gabe — Sentry
+
+Gabe reviews and hardens prompts before execution.
+
+Responsibilities:
+
+- enforce strict scope control
+- prevent unintended refactors
+- preserve existing behavior unless explicitly changed
+- convert design direction into deterministic implementation instructions
+- identify risk before work begins
+
+#### Francine — Execution Agent
+
+Francine executes implementation tasks.
+
+Responsibilities:
+
+- follow instructions exactly
+- modify only the files and behavior specified
+- report exact diffs and lint results
+- avoid architectural decisions unless explicitly asked
+
+Francine has no authority to:
+
+- refactor beyond instructions
+- introduce new patterns without approval
+- modify unrelated code
+- change data behavior without instruction
+
+---
+
+## 🛡️ Non-Negotiable Execution Rules
+
+- Only modify what is explicitly specified.
+- Preserve all existing behavior unless explicitly changed.
+- No implicit refactors.
+- No unrelated cleanup.
+- Use explicit logic.
+- Avoid truthy/falsy shortcuts when data integrity matters.
+- Use safe, targeted React state updates.
+- Do not mix unrelated concerns such as UI, security, data modeling, and performance in one task.
+- If a task is marked **ANALYSIS ONLY**, no code changes are allowed.
+- Do not assume intent.
+- Report uncertainty instead of guessing.
+
+---
+
+## 🧪 Required Verification
+
+For implementation tasks, verify:
+
+- target behavior works
+- app builds or targeted lint/type checks pass where possible
+- no new console errors are introduced
+- no unrelated UI regression is introduced
+- no unrelated data model or Firestore behavior is changed
+
+Known unrelated lint/type issues should be reported separately and not hidden.
+
+---
+
+## 🚦 Current Work State
+
+Current phase:
+
+```text
+Data Integrity Stabilization
+```
+
+Recent completed areas:
+
+```text
+Custom project-only data records
+Grouped custom template copy options
+Record-level citations using Standards Browser
+Citation inheritance into new data records
+Reports using record-level citations as final references
+Measurement type snapshot on projectData
+Measurement metadata repair completed
+Data Entry UI cleanup
+Glossary Set metadata planning
+```
+
+Known ongoing risk areas:
+
+- Firestore security rules may be overly permissive
+- `App.tsx` remains a large coordination component
+- several components are large and should be refactored carefully later
+- heavy use of `any`
+- Firestore subscription lifecycle should be reviewed
+- runtime debug/migration logic should not remain in production indefinitely
+- bundle size should be monitored
+
+---
+
+## 📦 Proven Code Patterns
+
+### Safe React State Update
+
+```ts
 setState(prev =>
   prev.map(item =>
     item.id === targetId
@@ -71,284 +132,1076 @@ setState(prev =>
       : item
   )
 );
-🧱 Core System Architecture
-1. System Identity
+```
 
-FREDAsoft is a:
+### Snapshot Rule
 
-Data-centric compliance platform
+When copying data from one layer to another:
 
-Supports:
+```text
+copy values downward
+then treat copied values as an editable snapshot
+```
 
-inspections
-plan reviews
-assessments
-2. Core Data Model
+Do not continue linking values in a way that silently mutates historical records.
+
+---
+
+# 🧱 Core System Architecture
+
+## 1. System Identity
+
+FREDAsoft is a data-centric compliance platform.
+
+It supports:
+
+- inspections
+- plan reviews
+- accessibility assessments
+- compliance documentation
+- report generation
+
+The system must support multiple standards, multiple project contexts, and project-specific professional judgment.
+
+---
+
+## 2. Core Data Model
+
+High-level structure:
+
+```text
 Project
   → Facilities / Locations
-  → projectData (findings and recommendations)
-  → Glossaries (context)
-  → Standards (references)
+  → projectData
+  → Glossary Records
+  → Glossary Sets
+  → Libraries
+  → Standards
+```
 
 Key collections:
 
-projectData → findings and recommendations (primary operational data)
-glossary → templates (context-specific)
-master_standards → standards library
-users → roles & identity
-🧠 Libraries, Glossaries, and Data Records
-3. Libraries Are the Foundation
+```text
+projectData       → findings and recommendations; primary operational data
+glossary          → approved category/item/finding/recommendation combinations
+master_standards  → standards and citation library
+categories        → library categories
+items             → library items
+findings          → library findings
+recommendations   → library recommendations / master recommendations
+users             → roles and identity
+```
 
-Libraries define:
+---
 
-finding language
-recommendation language
-measurement types
-units of measure
-unit costs
-default standards associations
+# 🧠 Libraries, Glossary Sets, Glossary Records, and Data Records
 
-Libraries are the origin of all structured content.
+## 3. Libraries Are the Foundation
 
-4. Snapshot Inheritance Model (Critical)
-Library → Glossary → Data Record
+Libraries define reusable professional content:
 
-Rules:
+- finding language
+- recommendation language
+- measurement types
+- units of measure
+- unit costs
+- default standards associations
 
-Data is copied downward
-Each layer is independently editable
-No automatic upstream propagation
+Libraries are the origin of structured content.
 
-This ensures:
-
-historical accuracy
-stable reporting
-project-specific flexibility
-5. Glossaries = Context (Not Standards)
-
-Glossaries represent:
-
-real-world workflows or use cases
+Library records should eventually support direct citation associations.
 
 Examples:
 
-TAS Plan Review Glossary
-ADA Assessment Glossary
-Housing Assessment Glossary
-6. Glossary Types
-Standard-Focused
-TAS Plan Review Glossary
-  → TAS only
-Multi-Standard
-Housing Assessment Glossary
-  → ADA + UFAS + FHA + TAS + IBC
-7. Projects Enable Glossaries
+```text
+finding.fldStandards
+recommendation.fldStandards
+```
 
-Each project:
+These are reusable defaults, not project-specific final citations.
 
-enables one or more glossaries
-maintains one active glossary
+---
 
-The active glossary drives:
+## 4. Snapshot Inheritance Model
 
-default findings
-recommendations
-standard associations
-8. Data Records = Source of Truth
+The system follows a snapshot inheritance model:
 
-Each record:
+```text
+Library → Glossary Record → Project Data Record
+```
 
-inherits from glossary
-is fully editable
-may diverge
+Rules:
 
-Supports:
+- data is copied downward
+- each layer is independently editable after copying
+- no automatic upstream propagation
+- no automatic downstream mutation after the snapshot is created
 
-multiple standards simultaneously
-⚖️ Standards Model
-9. Standards Are Layered
+This ensures:
 
-Projects may include:
+- historical accuracy
+- stable reporting
+- project-specific flexibility
+- protection from unintended global changes
 
-ADA
-TAS
+---
+
+## 5. Glossary Sets Are Standard / Version Contexts
+
+✅ DECIDED: Glossary records are indexed primarily by **Glossary Set**, meaning a standard/type/version context.
+
+Examples of Glossary Sets:
+
+```text
 UFAS
-FHA / ANSI
-IBC
-10. Time-Based Compliance
-Evaluation Standard ≠ Recommendation Standard
+ADA 2010
+TAS 2012
+TAS 1994
+FHA Guidelines
+ANSI A117.1 2009
+IBC 2020
+```
+
+A Glossary Set represents the reusable working content associated with a particular compliance authority or standard version.
+
+Examples:
+
+```text
+UFAS Glossary
+ADA 2010 Glossary
+TAS 2012 Glossary
+ANSI A117.1 2009 Glossary
+IBC 2020 Glossary
+```
+
+This does not mean that a project uses only one Glossary Set. Many real projects require multiple overlapping standards.
+
+---
+
+## 6. Glossary Records
+
+A glossary record links:
+
+```text
+Category → Item → Finding → Recommendation
+```
+
+and belongs to a Glossary Set.
+
+Phase 1 metadata fields on glossary records:
+
+```ts
+fldGlossarySetId?: string;
+fldGlossarySetName?: string;
+fldGlossaryStandardType?: string;
+fldGlossaryStandardVersion?: string;
+```
+
+Examples:
+
+```text
+fldGlossarySetId: "UFAS"
+fldGlossarySetName: "UFAS"
+fldGlossaryStandardType: "UFAS"
+fldGlossaryStandardVersion: "1984"
+```
+
+```text
+fldGlossarySetId: "ADA_2010"
+fldGlossarySetName: "ADA 2010"
+fldGlossaryStandardType: "ADA"
+fldGlossaryStandardVersion: "2010"
+```
+
+Existing glossary records without this metadata remain valid as legacy or unassigned records.
+
+---
+
+## 7. Project Families Are Prescriptive, Not Restrictive
+
+✅ DECIDED: Project Families / Project Types are presets, not constraints.
+
+A Project Family suggests which Glossary Sets are likely applicable, but it must not restrict users from enabling additional Glossary Sets.
+
+Examples of Project Families:
+
+```text
+Housing with Federal Funding
+Housing without Federal Funding
+TDLR / RAS Project
+ADA Title II Assessment
+ADA Title III Assessment
+Fair Housing Review
+Public Right-of-Way Review
+```
+
+A Project Family may define:
+
+- default Glossary Sets
+- default active Glossary Set
+- suggested standards
+- report defaults
+- workflow defaults
+
+But users must be able to add or remove Glossary Sets based on professional judgment and project conditions.
 
 Example:
 
-Built: 2008
-Evaluation: TAS 1994
-Recommendation: TAS 2012
-11. Standard Record Model
+```text
+Project Family:
+Housing with Federal Funding
 
-Unified schema:
+Suggested Glossary Sets:
+- UFAS
+- ADA 2010
+- FHA Guidelines
+- ANSI A117.1 2009
+- IBC 2020
+- TAS 2012, if Texas / public facility scope applies
+```
 
-relation_type:
+These are suggested defaults only.
+
+---
+
+## 8. Projects Enable Glossary Sets
+
+Each project may enable one or more Glossary Sets.
+
+A project should eventually store:
+
+```ts
+fldEnabledGlossarySetIds?: string[];
+fldActiveGlossarySetId?: string;
+fldProjectFamilyId?: string;
+```
+
+The enabled Glossary Sets define the working compliance universe for that project.
+
+The active Glossary Set controls which glossary records are shown in Data Entry at a given moment.
+
+Example:
+
+```text
+Client:
+Harris Center
+
+Project:
+Accessibility Assessment
+
+Project Family:
+Housing with Federal Funding
+
+Enabled Glossary Sets:
+- UFAS
+- ADA 2010
+- FHA Guidelines
+- ANSI A117.1 2009
+- IBC 2020
+- TAS 2012
+
+Active Glossary Set:
+UFAS
+```
+
+The user may switch the active Glossary Set depending on the scope being evaluated.
+
+Example:
+
+```text
+Site arrival / parking / exterior route:
+Active Glossary Set = TAS 2012
+
+Dwelling units:
+Active Glossary Sets = UFAS, IBC 2020, ANSI A117.1 2009
+```
+
+The system should eventually help users identify likely applicable standards, but it should not replace professional judgment.
+
+---
+
+## 9. Data Records Are the Source of Truth
+
+Each project data record:
+
+- inherits from a glossary record or is created as a custom project-only record
+- is fully editable
+- may diverge from the glossary
+- stores final project-specific values
+
+For glossary-based records:
+
+```text
+Glossary Record → Project Data Record
+```
+
+For custom records:
+
+```text
+Custom Project Record
+```
+
+Custom records are project-only and are not automatically added to the library or glossary.
+
+Project data records are the final reporting source.
+
+---
+
+## 10. Controlled Duplication Across Glossary Sets
+
+Duplicate or near-duplicate findings across standards are expected and correct.
+
+Example:
+
+```text
+"Curb ramp slope exceeds allowable maximum"
+```
+
+may exist in:
+
+```text
+ADA 2010
+TAS 2012
+UFAS
+ANSI A117.1
+IBC
+```
+
+Even if the wording is identical, the records may differ in:
+
+- citation
+- legal authority
+- applicability
+- thresholds
+- measurement rules
+- recommended corrective language
+- reporting context
+
+This duplication is not a data-quality problem. It reflects real compliance differences.
+
+---
+
+## 11. Immediate Phase 1 Glossary Set Implementation
+
+✅ DECIDED: Phase 1 adds Glossary Set metadata directly to glossary records.
+
+Phase 1 does not require a separate `glossarySets` collection.
+
+Phase 1 does not change Data Entry filtering yet.
+
+Phase 1 does not automatically migrate existing glossary records.
+
+Phase 1 goals:
+
+- allow new glossary records to be tagged as UFAS, ADA 2010, TAS 2012, etc.
+- allow current Harris Center work to be tagged as UFAS
+- preserve legacy/unassigned glossary rows
+- prepare for future active Glossary Set filtering
+
+Files likely affected:
+
+```text
+src/types/index.ts
+src/components/GlossaryBuilder.tsx
+src/components/GlossaryExplorer.tsx
+docs/ARCHITECTURE_DESIGN.md
+```
+
+Files not affected in Phase 1:
+
+```text
+src/components/ProjectDataEntry.tsx
+src/components/DataExplorer.tsx
+src/components/ReportPreview.tsx
+src/services/firestoreService.ts
+```
+
+---
+
+## 12. Future Phase: Glossary Set Registry
+
+A future phase may add a formal collection:
+
+```text
+glossarySets
+```
+
+Possible fields:
+
+```ts
+id: string;
+name: string;
+standardType: string;
+standardVersion?: string;
+isActive?: boolean;
+sortOrder?: number;
+```
+
+Examples:
+
+```text
+UFAS
+ADA_2010
+TAS_2012
+TAS_1994
+FHA_GUIDELINES
+ANSI_A117_1_2009
+IBC_2020
+```
+
+This registry would support:
+
+- controlled Glossary Set options
+- admin management
+- sorting
+- activation/deactivation
+- future Project Family presets
+
+---
+
+## 13. Future Phase: Project Families
+
+A future phase may add:
+
+```text
+projectFamilies
+```
+
+Possible fields:
+
+```ts
+id: string;
+name: string;
+defaultGlossarySetIds: string[];
+defaultActiveGlossarySetId?: string;
+description?: string;
+isActive?: boolean;
+```
+
+A project may then store:
+
+```ts
+fldProjectFamilyId?: string;
+fldEnabledGlossarySetIds?: string[];
+fldActiveGlossarySetId?: string;
+```
+
+Important rule:
+
+```text
+Project Families suggest.
+They do not restrict.
+```
+
+Users must always be able to enable additional Glossary Sets or remove suggested Glossary Sets when professional judgment requires it.
+
+---
+
+## 14. Future Phase: Active Glossary Set in Data Entry
+
+A future Data Entry phase should add:
+
+```text
+Active Glossary Set
+```
+
+This will allow users to switch the working Glossary Set while entering records.
+
+Example:
+
+```text
+Active Glossary Set: UFAS
+Category → Item → Finding → Recommendation
+```
+
+Switching the active Glossary Set should filter available glossary records.
+
+Custom Record mode remains available regardless of active Glossary Set.
+
+---
+
+## 15. Revised User Mental Model
+
+User-facing mental model:
+
+```text
+1. Choose project context.
+2. Enable applicable Glossary Sets.
+3. Select the active Glossary Set.
+4. Select a finding/recommendation.
+5. Adjust the data record as needed.
+6. Add or modify citations if needed.
+```
+
+Users should not need to understand:
+
+- joins
+- normalization
+- many-to-many relationships
+- database structure
+
+But users should understand:
+
+```text
+Glossary Set = standard/version working context
+Project Family = suggested bundle
+Project Data Record = final project-specific truth
+```
+
+---
+
+# ⚖️ Standards Model
+
+## 16. Standards Are Layered
+
+Projects may involve multiple overlapping standards, including:
+
+- ADA
+- TAS
+- UFAS
+- FHA / ANSI
+- IBC
+- local code amendments
+- federal funding requirements
+- agency-specific requirements
+
+The system must allow multiple standards to be relevant to the same project.
+
+---
+
+## 17. Time-Based Compliance
+
+Evaluation Standard may differ from Recommendation Standard.
+
+Example:
+
+```text
+Building constructed: 2008
+Evaluation standard: TAS 1994
+Recommendation standard: TAS 2012
+```
+
+The system must support this distinction.
+
+A project or record may need to document:
+
+- the standard used to evaluate the existing condition
+- the standard used for recommended corrective work
+- why those standards differ
+
+---
+
+## 18. Standard Record Model
+
+The `master_standards` library uses a unified schema.
+
+Standard relation types include:
+
+```text
 Standard
 Advisory
 Exception
 Figure
 Table
+```
 
-Optional:
+Optional fields may include:
 
-imageUrl?
-imageCaption?
-🧬 Concept vs Version
-12. Concept Layer (Deferred)
-
-Future-ready:
-
-conceptId (planned, not implemented)
-13. Version Layer
-
-Each concept exists as:
-
-ADA version
-TAS version
-UFAS version
-Context-specific version
-14. Controlled Duplication
-
-Duplicate findings across standards are:
-
-EXPECTED and CORRECT
-🔁 Data Flow
-15. Library → Glossary
-
-Copy:
-
-text
-measurements
-costs
-standards
-16. Glossary → Data Record
-
-Copy all fields.
-
-Records become fully independent.
-
-17. Integrity Rule
-Records NEVER update glossary
-Glossary NEVER updates library automatically
-🧰 Library Management (Future)
-18. Library System Expansion
-
-Future UI:
-
-Library Explorer
-Library Builder
-19. Clone Workflow
-Copy ADA → TAS
-
-Rules:
-
-copy text
-reset standard context
-require new citations
-20. Library Sync (Explicit Only)
-
-Allowed:
-
-manual sync tools
-compare vs source
-update selected records
-
-NOT allowed:
-
-automatic updates
-
-Must include:
-
-backup protection before sync
-🏗️ Project Types
-
-Project Types are:
-
-presets, NOT constraints
-
-Define:
-
-default glossaries
-default standards
-report behavior
-🧪 UI Strategy
-21. Dual Mode
-Field (mobile) → fast input, access to mobile device camera
-Office (desktop) → full management
-📸 Image Architecture (Future)
-
-Planned:
-
-ordering
-primary report images
-appendices
-metadata-based storage
-🔐 Firebase Safety
-no uncontrolled writes
-no loops
-explicit triggers only
-scoped queries
-use operation locks
-🧠 User Mental Model
-1. Choose a glossary
-2. Select a finding
-3. Adjust as needed
-4. Add standards if needed
-
-Users should NOT need to understand:
-
-joins
-normalization
-schema complexity
-🧭 Design Philosophy
-
-System must balance:
-
-Flexibility
-Clarity
-Traceability
-Accuracy
-Usability
-🟢 Final Architecture Summary
-Libraries → define language
-Glossaries → define context
-Projects → define scope
-Records → define truth
-Standards → define authority
-🚀 Next Steps
-Firestore schema design
-UI workflow alignment
-migration planning
-✅ Architectural Decisions Locked
-Concept layer → deferred, future-ready
-Glossaries → context-driven
-Standards handling → implicit multi-citation model
-Library sync → explicit only, never automatic, with backup protection
+```text
+imageUrl
+imageCaption
+content_text
+citation_num
+citation_name
+fldStandardType
+fldStandardVersion
+```
 
 ---
 
-## Future Phase 2: Custom Record Promotion and Glossary Governance
+# 🧬 Concept vs Version
 
-Phase 1 allows users to create **project-only custom data records** that are not linked to the glossary or library.
+## 19. Concept Layer — Deferred
 
-Phase 2 will define how high-quality custom records can be reviewed and promoted into reusable library/glossary content.
+A future concept layer may be added.
 
-### Core Principle
+Planned field:
 
-Custom project records are allowed for one-off field conditions, but they do not automatically become part of the reusable library or glossary.
+```text
+conceptId
+```
+
+The concept layer would allow the system to associate equivalent or related requirements across standard versions.
+
+Example:
+
+```text
+Accessible route running slope
+  → ADA 2010 version
+  → TAS 2012 version
+  → UFAS version
+  → ANSI version
+```
+
+This is deferred but should remain future-ready.
+
+---
+
+## 20. Version Layer
+
+Each concept may eventually exist as:
+
+- ADA version
+- TAS version
+- UFAS version
+- ANSI version
+- IBC version
+- context-specific version
+
+For now, controlled duplication across standards is acceptable and expected.
+
+---
+
+# 🔁 Data Flow
+
+## 21. Library → Glossary
+
+When creating a glossary record from library content, copy:
+
+- finding text
+- recommendation text
+- measurement metadata
+- cost defaults
+- standards/citations
+- category/item/finding/recommendation IDs
+
+The glossary record becomes independently editable.
+
+Later changes to the library do not automatically update the glossary.
+
+---
+
+## 22. Glossary → Data Record
+
+When creating a project data record from a glossary record, copy:
+
+- finding text
+- recommendation text
+- measurement metadata
+- cost defaults
+- standards/citations
+- glossary linkage
+- category/item/finding/recommendation context as needed
+
+The project data record becomes independently editable.
+
+Later changes to the glossary do not automatically update the data record.
+
+---
+
+## 23. Integrity Rule
+
+```text
+Records NEVER update glossary automatically.
+Glossary NEVER updates library automatically.
+Library changes NEVER silently mutate glossary or project data.
+Glossary changes NEVER silently mutate saved project data.
+```
+
+Explicit sync or refresh tools may be added in the future, but they must be:
+
+- intentional
+- reviewable
+- selective
+- reversible where possible
+- protected by backup or confirmation safeguards
+
+---
+
+# 🧾 Record-Level Citations
+
+## 24. Citation Snapshot Model
+
+The citation model follows the broader snapshot inheritance architecture:
+
+```text
+Library → Glossary → Project Data Record
+```
+
+Citations may eventually exist at all three layers:
+
+```text
+Finding / Recommendation Library Citations
+        ↓ copied into
+Glossary Citations
+        ↓ copied into
+Project Data Record Citations
+```
+
+Each layer inherits defaults from the layer above, but once copied, the citation set becomes an editable snapshot for that layer.
+
+---
+
+## 25. Project Data Citations
+
+✅ DECIDED: Project data citations are stored on:
+
+```text
+projectData.fldStandards
+```
+
+This field represents the final citation set for that specific record.
+
+For glossary-based records:
+
+- citations are inherited from the glossary when the record is created
+- the user may add or remove citations for that specific data record
+- changes apply only to that data record
+
+For custom records:
+
+- citations start empty unless the user adds them
+- the user may add citations manually
+
+Reports use `projectData.fldStandards` as the final citation source.
+
+---
+
+## 26. Citation Reporting Policy
+
+✅ DECIDED: Reports treat `projectData.fldStandards` as authoritative.
+
+If `projectData.fldStandards` exists as an array:
+
+- use that array
+- even if it is empty
+
+If an older glossary-linked record has no `fldStandards` field:
+
+- fallback to `glossary.fldStandards` for legacy display only
+
+Do not union record citations with glossary citations at report time.
+
+This prevents removed record-level citations from reappearing in reports.
+
+---
+
+## 27. Future Citation Drift / Refresh Workflow
+
+Changes to citations at an upstream layer should not automatically mutate downstream records.
+
+Example:
+
+```text
+finding.fldStandards changes
+```
+
+should not automatically update:
+
+```text
+glossary.fldStandards
+projectData.fldStandards
+```
+
+A future workflow may allow users/admins to compare current library citation defaults against citations currently stored on a glossary record.
+
+Possible UI action:
+
+```text
+Review Library Citation Updates
+```
+
+This action would compare:
+
+```text
+Current Library Defaults
+vs.
+Current Glossary Citations
+```
+
+Example:
+
+```text
+Current Glossary Citations
+- TAS 302.1
+- TAS 403.5.1
+
+Current Library Defaults
+- TAS 302.1
+- TAS 403.5.2
+```
+
+The user/admin could then decide whether to:
+
+- add a newly inherited citation
+- remove an outdated citation
+- replace a citation
+- keep the glossary as-is
+- apply all suggested changes
+- ignore the difference for this glossary record
+
+---
+
+## 28. Citation Refresh Options
+
+### Option A: Per-Glossary Review
+
+Add a review action directly in Glossary Builder.
+
+Example:
+
+```text
+Review Library Citation Updates
+```
+
+This evaluates only the currently selected glossary record.
+
+Benefits:
+
+- simple mental model
+- lower risk
+- good for case-by-case review
+- avoids accidental bulk changes
+
+This is likely the best first implementation.
+
+### Option B: Admin Citation Drift Audit
+
+Create a future admin/audit panel that identifies glossary records whose citations differ from their underlying library defaults.
+
+Example:
+
+```text
+Glossary Citation Drift Audit
+```
+
+The audit could list:
+
+- glossary record
+- associated category/item/finding/recommendation
+- current glossary citations
+- current library default citations
+- added/removed/different citation IDs
+- suggested action
+
+This should require explicit approval before changes are applied.
+
+### Option C: Bulk Refresh With Preview
+
+A future advanced admin workflow could allow selected glossary records to be refreshed from library defaults in bulk.
+
+This should only be allowed with:
+
+- clear preview
+- selective approval
+- backup protection
+- duplicate detection
+- ability to skip records
+- confirmation before write
+
+Bulk refresh must never be silent or automatic.
+
+---
+
+## 29. Possible Citation Metadata for Future Sync
+
+Future records may store citation inheritance metadata such as:
+
+```text
+fldInheritedFindingStandardsSnapshot
+fldInheritedRecommendationStandardsSnapshot
+fldCitationLastSyncedAt
+fldCitationSourceVersion
+```
+
+These fields are not required immediately, but may help distinguish:
+
+- citations originally inherited from the library
+- citations added directly to the glossary
+- citations removed intentionally at the glossary level
+- citations that differ because the library changed later
+
+A simpler first implementation can compare live library citation values against current glossary citation values without additional metadata.
+
+---
+
+# 📏 Measurement Metadata
+
+## 30. Measurement Metadata Snapshot
+
+✅ DECIDED: Project data snapshots measurement metadata from the finding/library context at record creation.
+
+Project data stores:
+
+```text
+projectData.fldMeasurementType
+projectData.fldMeasurementUnit
+projectData.fldMeasurement
+```
+
+Library findings store:
+
+```text
+finding.fldMeasurementType
+finding.fldUnitType
+```
+
+Examples:
+
+```text
+fldMeasurementType: "Slope"
+fldMeasurementUnit: "%"
+fldMeasurement: 2.5
+```
+
+```text
+fldMeasurementType: "Width"
+fldMeasurementUnit: "IN"
+fldMeasurement: 31.5
+```
+
+Data Entry does not allow direct editing of measurement type for glossary-based records.
+
+This protects statistical consistency and prevents users from accidentally mixing incompatible measurement types.
+
+---
+
+## 31. Measurement Metadata Repair
+
+If a data record is missing measurement metadata, the correct process is:
+
+```text
+Fix source metadata upstream.
+Review affected data records.
+Apply repair explicitly.
+```
+
+Do not silently mutate existing project data when library metadata changes.
+
+A read-only measurement metadata audit panel may identify records where:
+
+```text
+projectData.fldMeasurementType is missing
+projectData.fldMeasurementUnit is missing
+```
+
+A repair workflow may explicitly update selected project data records from linked finding metadata.
+
+Repair rules:
+
+- update projectData only
+- never update glossary/library records from repair
+- fill missing fields only by default
+- do not overwrite non-empty measurement metadata unless a future explicit overwrite workflow is designed
+- do not infer from text
+
+The temporary audit/repair panel may be hidden from the UI after cleanup, but retained in the codebase for future admin use.
+
+---
+
+# 🧰 Custom Project Records
+
+## 32. Custom Record Mode
+
+✅ DECIDED: Data Entry supports custom project-only records.
+
+Custom records:
+
+- are not linked to a glossary
+- do not create library records
+- do not create glossary records
+- are project-specific
+- save `fldRecordSource: "custom"`
+- save `fldData: ""`
+
+Custom records may store:
+
+```text
+fldPDataCategoryID
+fldPDataItemID
+fldPDataMasterFindID
+fldPDataMasterRecID
+```
+
+Template IDs are trace fields only. They do not create glossary linkage.
+
+---
+
+## 33. Custom Record Template Copy
+
+In Custom Record mode, users may:
+
+- write a finding freehand
+- write a recommendation freehand
+- optionally copy a finding template from the library
+- optionally copy a recommendation template from the library
+
+Copying from the library:
+
+- copies text/default values into the data record
+- does not link the record to the glossary
+- does not create a glossary record
+- does not create a library record
+- remains editable before save
+
+Finding template copy may populate:
+
+```text
+fldFindShort
+fldFindLong
+fldMeasurementType
+fldMeasurementUnit
+```
+
+Recommendation template copy may populate:
+
+```text
+fldRecShort
+fldRecLong
+fldUnitCost
+fldUnitType
+```
+
+---
+
+## 34. Custom Record Promotion — Future Phase
+
+Phase 1 allows users to create project-only custom data records that are not linked to the glossary or library.
+
+A future phase will define how high-quality custom records can be reviewed and promoted into reusable library/glossary content.
+
+Core principle:
 
 ```text
 Custom Project Record ≠ Library Record
+Custom Project Record ≠ Glossary Record
+```
 
+Promotion into the library/glossary must be intentional and controlled.
+
+---
+
+## 35. Request Add to Glossary — Future Phase
+
+A future workflow may allow a user to submit a custom data record for review.
+
+Example action:
+
+```text
+Request Add to Glossary
+```
+
+This action should create a pending request, not a glossary record.
+
+Possible collection:
+
+```text
 glossaryRequests
+```
 
 Possible fields:
 
+```text
 sourceProjectDataId
 sourceProjectId
 sourceFacilityId
@@ -369,264 +1222,320 @@ status
 reviewedBy
 reviewedAt
 reviewNotes
+```
 
 Suggested statuses:
 
+```text
 pending
 approved
 rejected
 duplicate
 needs_revision
-Admin Review Workflow
+```
+
+---
+
+## 36. Admin Review Workflow — Future Phase
 
 Admins should eventually have a review queue for pending glossary requests.
 
 Admin actions may include:
 
-Approve as new glossary entry
-Reject request
-Mark as duplicate
-Edit before approving
-Link to an existing finding
-Link to an existing recommendation
-Create new finding and/or recommendation records
-Create final glossary link row
+- approve as new glossary entry
+- reject request
+- mark as duplicate
+- edit before approving
+- link to an existing finding
+- link to an existing recommendation
+- create new finding and/or recommendation records
+- create final glossary link row
 
 Approval may create or update:
 
+```text
 findings
 recommendations
 glossary
+```
 
 depending on whether reusable library records already exist.
-
-Promotion Rules
 
 Promotion should avoid creating duplicate or low-quality library records.
 
 Before approval, the admin should be able to compare the requested custom record against existing:
 
-Categories
-Items
-Findings
-Recommendations
-Glossary rows
-Standards associations
+- categories
+- items
+- findings
+- recommendations
+- glossary rows
+- standards associations
 
 The admin should decide whether to:
 
+```text
 Use existing library records
 Create new library records
 Create only a new glossary link
 Reject as project-specific only
-Design Goal
+```
 
-The purpose of Phase 2 is to preserve flexibility without weakening library quality.
+---
 
-Users can document unusual field conditions.
-Admins control what becomes reusable content.
-Glossaries remain curated and intentional.
+# 🏗️ Project Types / Project Families
 
-## Future Memo: Citation Inheritance, Drift, and Refresh Workflow
+## 37. Project Families
 
-The citation model follows the broader snapshot inheritance architecture:
+Project Families are practical compliance contexts.
+
+Examples:
 
 ```text
-Library → Glossary → Project Data Record
+Housing with Federal Funding
+Housing without Federal Funding
+TDLR / RAS Project
+ADA Title II Assessment
+ADA Title III Assessment
+Fair Housing Review
+Public Right-of-Way Review
+```
 
-Citations may eventually exist at all three layers:
+Project Families are:
 
-Finding / Recommendation Library Citations
-        ↓ copied into
-Glossary Citations
-        ↓ copied into
-Project Data Record Citations
+```text
+prescriptive defaults
+not restrictive gates
+```
 
-Each layer inherits defaults from the layer above, but once copied, the citation set becomes an editable snapshot for that layer.
+They may suggest:
 
-Core Rule
+- applicable Glossary Sets
+- default active Glossary Set
+- report defaults
+- workflow defaults
+- likely standards
 
-Changes to citations at an upstream layer should not automatically mutate downstream records.
+They may not prevent users from enabling additional Glossary Sets.
 
-For example, if a citation is later added to or changed on a library finding record:
+---
 
-finding.fldStandards
+## 38. Harris Center Example
 
-that should not automatically update:
+The Harris Center project is an example of a complex housing assessment.
 
-glossary.fldStandards
+Example context:
 
-and should not automatically update:
+```text
+Client:
+Harris Center
 
+Project:
+Accessibility Assessment
+
+Project Family:
+Housing with Federal Funding
+
+Possible relevant Glossary Sets:
+- UFAS
+- ADA 2010
+- FHA Guidelines
+- ANSI A117.1 2009
+- IBC 2020
+- TAS 2012
+```
+
+Because the project involves housing, federal funding, disability programs, and Texas facilities, multiple standards may apply.
+
+The user may use:
+
+- TAS for exterior/site/public facility elements where TAS is most stringent or required
+- UFAS for federally funded program requirements
+- ADA 2010 when applicable or adopted by agency policy
+- FHA / ANSI / IBC for dwelling-unit or multifamily housing conditions
+- other standards as professional judgment requires
+
+The app may help organize these choices in the future, but the user must remain able to exercise professional judgment.
+
+---
+
+# 🧪 UI Strategy
+
+## 39. Dual Mode
+
+FREDAsoft supports two broad usage modes:
+
+```text
+Field / mobile → fast input, access to mobile device camera
+Office / desktop → full management, review, reporting, cleanup
+```
+
+Data Entry must remain efficient in the field.
+
+Management and cleanup tools may be more detailed and desktop-oriented.
+
+---
+
+## 40. Data Entry Modes
+
+Data Entry supports:
+
+```text
+Glossary Record mode
+Custom Record mode
+```
+
+Glossary Record mode:
+
+- uses approved glossary records
+- saves a glossary link
+- inherits defaults from the glossary
+- allows project-specific edits
+
+Custom Record mode:
+
+- creates a project-only record
+- does not require glossary linkage
+- allows freehand finding/recommendation text
+- may copy library templates as starting points
+
+---
+
+## 41. Citation UI in Data Entry
+
+Data Entry uses the Standards Browser for record-level citations.
+
+Users may:
+
+- search and filter standards
+- click `+` to add a citation
+- drag/drop citations into the record citation area
+- remove selected citations
+
+All changes affect only:
+
+```text
 projectData.fldStandards
+```
 
-This protects historical work, avoids unexpected report changes, and preserves the principle that each layer is independently reviewable.
+---
 
-Current Direction
+# 📸 Image Architecture — Future
 
-The intended long-term behavior is:
+Planned image features:
 
-Library citation changes do not automatically mutate glossaries.
-Glossaries may be manually refreshed from library defaults.
-Project data records do not automatically mutate from glossary changes.
+- image ordering
+- primary report images
+- appendix images
+- metadata-based image storage
+- caption management
+- image source tracking
 
-A glossary record may inherit citations from its underlying finding/recommendation library records when it is created, but later changes to those library records require explicit review before being applied to the glossary.
+Project data records may store image arrays, but reporting should eventually support richer image metadata.
 
-Likewise, a project data record may inherit citations from the glossary when it is created, but later changes to the glossary do not automatically update the already-saved project data record.
+---
 
-Why Automatic Sync Is Risky
+# 🔐 Firebase Safety
 
-Automatic downstream updates could unintentionally alter:
+Firestore behavior must follow these principles:
 
-Existing glossary records
-Previously completed project data
-Report citations
-Historical audit trails
-Cost/recommendation documentation associated with a completed inspection or review
+- no uncontrolled writes
+- no loops
+- explicit triggers only
+- scoped queries
+- use operation locks where needed
+- avoid runtime migrations in production
+- avoid broad unreviewed batch updates
+- use confirmation and backup protection for destructive or broad operations
 
-For example, if a finding library citation is corrected from one standard section to another, that may be appropriate for future glossaries, but not necessarily for every existing glossary or every completed project record.
+---
 
-Preferred Future Flow: Explicit Citation Review
+# 🧭 User Mental Model
 
-A future workflow should allow users/admins to compare current library citation defaults against the citations currently stored on a glossary record.
+Users should understand:
 
-Possible UI action:
+```text
+Libraries define reusable language.
+Glossary Sets define standard/version context.
+Glossary Records define approved combinations.
+Project Families suggest applicable Glossary Sets.
+Projects enable one or more Glossary Sets.
+Data Records are final project-specific truth.
+Standards define legal/technical authority.
+```
 
-Review Library Citation Updates
+Users should not need to understand:
 
-This action would compare:
+- joins
+- normalization
+- database structure
+- many-to-many relationships
+- Firestore document IDs
 
-Current Library Defaults
-vs.
-Current Glossary Citations
+---
 
-Example:
+# 🧭 Design Philosophy
 
-Current Glossary Citations
-- TAS 302.1
-- TAS 403.5.1
+The system must balance:
 
-Current Library Defaults
-- TAS 302.1
-- TAS 403.5.2
+- flexibility
+- clarity
+- traceability
+- accuracy
+- usability
+- historical stability
+- professional judgment
 
-The user/admin could then decide whether to:
+The system should guide users, not trap them.
 
-Add a newly inherited citation
-Remove an outdated citation
-Replace a citation
-Keep the glossary as-is
-Apply all suggested changes
-Ignore the difference for this glossary record
-Option A: Per-Glossary Review
+Defaults should be helpful, but not restrictive.
 
-Add a review action directly in Glossary Builder.
+---
 
-Example:
+# 🟢 Final Architecture Summary
 
-Review Library Citation Updates
+```text
+Libraries → define reusable language and defaults
+Glossary Sets → define standard/version working contexts
+Glossary Records → define approved category/item/finding/recommendation combinations
+Project Families → suggest applicable Glossary Sets
+Projects → enable one or more Glossary Sets
+Project Data Records → define final project-specific truth
+Standards → define legal/technical authority
+```
 
-This would evaluate only the currently selected glossary record.
+---
 
-Benefits:
+# ✅ Architectural Decisions Locked
 
-Simple mental model
-Lower risk
-Good for case-by-case review
-Avoids accidental bulk changes
+- Concept layer → deferred, future-ready
+- Snapshot inheritance → copied downward, independently editable
+- Glossary records → standard/version-indexed through Glossary Set metadata
+- Project Families / Project Types → prescriptive defaults only, never restrictive
+- Standards handling → implicit multi-citation model
+- Library sync → explicit only, never automatic, with backup protection
+- Citation inheritance → copied downward, later refresh explicit only
+- Measurement metadata → snapshotted onto project data records
+- Custom records → project-only unless promoted through future admin workflow
+- Project data records → final reporting source
 
-This is likely the best first implementation.
+---
 
-Option B: Admin Citation Drift Audit
+# 🚀 Next Steps
 
-Create a future admin/audit panel that identifies glossary records whose citations differ from their underlying library defaults.
+Near-term:
 
-Example:
+- implement Phase 1 Glossary Set metadata
+- tag current Harris Center glossary work as UFAS
+- expose Glossary Set metadata in Glossary Builder
+- show/filter Glossary Set metadata in Glossary Explorer
 
-Glossary Citation Drift Audit
+Later:
 
-The audit could list:
-
-Glossary record
-Associated category/item/finding/recommendation
-Current glossary citations
-Current library default citations
-Added/removed/different citation IDs
-Suggested action
-
-Benefits:
-
-Better for larger cleanup efforts
-Helps identify outdated glossary records
-Allows admins to review multiple records efficiently
-
-This should still require explicit approval before changes are applied.
-
-Option C: Bulk Refresh With Preview
-
-A future advanced admin workflow could allow selected glossary records to be refreshed from library defaults in bulk.
-
-This should only be allowed with:
-
-Clear preview
-Selective approval
-Backup protection
-Duplicate detection
-Ability to skip records
-Confirmation before write
-
-Bulk refresh should never be silent or automatic.
-
-Possible Metadata for Future Sync
-
-To support better review workflows, future records may store citation inheritance metadata such as:
-
-fldInheritedFindingStandardsSnapshot
-fldInheritedRecommendationStandardsSnapshot
-fldCitationLastSyncedAt
-fldCitationSourceVersion
-
-These fields are not required immediately, but may help distinguish:
-
-Citations originally inherited from the library
-Citations added directly to the glossary
-Citations removed intentionally at the glossary level
-Citations that differ because the library changed later
-
-A simpler first implementation can compare live library citation values against current glossary citation values without additional metadata.
-
-Project Data Records
-
-Project data records should remain even more protected than glossary records.
-
-Once a data record has inherited citations from the glossary, its citations are stored in:
-
-projectData.fldStandards
-
-That field represents the final citation set for that specific record.
-
-✅ DECIDED: Project data also snapshots measurement metadata from the library finding at record creation (`fldMeasurementType`, `fldMeasurementUnit` from `finding.fldMeasurementType` / `finding.fldUnitType`). Data Entry does not allow editing measurement type on the project record; saved values are not auto-updated when the library finding later changes.
-
-Later changes to either:
-
-glossary.fldStandards
-
-or:
-
-finding/recommendation.fldStandards
-
-should not automatically update saved project data records.
-
-If project-level citation refresh is ever needed, it should be treated as a separate explicit workflow with strong safeguards.
-
-Design Principle
-Defaults may flow downward.
-Edits do not automatically propagate downward.
-Refreshes must be explicit, reviewable, and reversible.
-
-This preserves flexibility while protecting historical accuracy and user trust.
-
-Users can update reusable defaults.
-Admins can review drift.
-Glossaries can be refreshed intentionally.
-Project data remains stable unless directly edited.
+- add formal `glossarySets` registry
+- add Project Family presets
+- allow projects to enable multiple Glossary Sets
+- add active Glossary Set selector in Data Entry
+- add explicit citation drift review
+- add custom record promotion workflow
+- continue Firestore security hardening

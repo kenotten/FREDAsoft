@@ -30,6 +30,7 @@ import { cn, sanitizeData, sortEntities, compareEntities } from '../lib/utils';
 import { Button, Select, Card, Input, Modal } from './ui/core';
 import { toast } from 'sonner';
 import { firestoreService, OperationType, handleFirestoreError } from '../services/firestoreService';
+import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
 import { 
   Category, 
   Item, 
@@ -177,6 +178,7 @@ export function GlossaryBuilder({
       if (existing) {
         const matchedFinding = findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
         const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
+        setSelectedGlossarySetId(existing.fldGlossarySetId || '');
 
         onSelectionChange({
           ...selections,
@@ -212,6 +214,7 @@ export function GlossaryBuilder({
 
   const [newType, setNewType] = useState<'category' | 'item' | 'finding' | 'recommendation' | 'glossary_record' | 'link_recommendation' | null>(null);
   const masterRecsSource = Array.isArray(masterRecommendations) ? masterRecommendations : [];
+  const [selectedGlossarySetId, setSelectedGlossarySetId] = useState<string>('');
 
   const [formData, setFormData] = useState({
     catName: '', catOrder: '', itemName: '', itemOrder: '', findShort: '', findLong: '', findOrder: '', fldUnitType: '', recShort: '', recLong: '', recOrder: '', unit: '', uom: '',
@@ -346,6 +349,7 @@ export function GlossaryBuilder({
     try {
       setIsSynced(false);
       const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
+      const selectedSet = glossarySetById(selectedGlossarySetId);
       
       // COMMIT STAGED CHANGES TO MASTER LIBRARY
       if (selectedFind) {
@@ -377,6 +381,10 @@ export function GlossaryBuilder({
         fldItem: selectedItem,
         fldFind: selectedFind,
         fldRec: selectedRec,
+        fldGlossarySetId: selectedSet?.id || null,
+        fldGlossarySetName: selectedSet?.name || null,
+        fldGlossaryStandardType: selectedSet?.standardType || null,
+        fldGlossaryStandardVersion: selectedSet?.standardVersion || null,
         fldImages: images,
         fldUnitCost: selections.fldUnitCost !== undefined ? selections.fldUnitCost : null,
         fldUnitType: selections.fldUnitType !== undefined ? selections.fldUnitType : null,
@@ -428,6 +436,7 @@ export function GlossaryBuilder({
 
   const saveNewGlossaryRecord = async () => {
     try {
+      const selectedSet = glossarySetById(selectedGlossarySetId);
       let findId = selectedFind;
       if (!selectedFind || (selectedCat && selectedItem && selectedFind && selectedRec)) {
         findId = uuidv4();
@@ -474,6 +483,10 @@ export function GlossaryBuilder({
 
       const glossaryPayload = sanitizeData({
         fldGlosId: glosId, 
+        fldGlossarySetId: selectedSet?.id || null,
+        fldGlossarySetName: selectedSet?.name || null,
+        fldGlossaryStandardType: selectedSet?.standardType || null,
+        fldGlossaryStandardVersion: selectedSet?.standardVersion || null,
         fldCat: selectedCat || '', 
         fldItem: selectedItem || '', 
         fldFind: findId || '', 
@@ -847,6 +860,23 @@ export function GlossaryBuilder({
         </div>
 
         <div className="space-y-4">
+          <div className="flex gap-2 items-end">
+            <Select
+              className="flex-1"
+              label="Glossary Set"
+              value={selectedGlossarySetId}
+              onChange={(e: any) => setSelectedGlossarySetId(e.target.value || '')}
+              options={GLOSSARY_SET_DEFS.map((s) => ({
+                value: s.id,
+                label: `${s.name} (${s.standardType}${s.standardVersion ? ` ${s.standardVersion}` : ''})`,
+              }))}
+              placeholder="Legacy / Unassigned"
+            />
+            <div className="mb-1 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+              {selectedGlossarySetId ? (glossarySetById(selectedGlossarySetId)?.name || selectedGlossarySetId) : 'Unassigned'}
+            </div>
+          </div>
+
           <div className="flex gap-2 items-end">
             <Select 
               className="flex-1" 
