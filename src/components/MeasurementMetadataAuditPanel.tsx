@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { AlertCircle, Wrench, ClipboardList } from 'lucide-react';
+import { AlertCircle, Wrench, ClipboardList, CheckSquare, Square, X } from 'lucide-react';
 import { Card } from './ui/core';
 import { cn } from '../lib/utils';
+import { toast } from 'sonner';
+import { firestoreService } from '../services/firestoreService';
 
 function normId(v: any): string {
   return String(v || '').trim().toLowerCase();
@@ -52,6 +54,13 @@ type AuditRow = {
   isFlaggedDefault: boolean;
 };
 
+function isRepairableRow(r: AuditRow): boolean {
+  if (!r.hasSuggestion) return false;
+  const canFillType = r.missingType && !strEmpty(r.suggestedType);
+  const canFillUnit = r.missingUnit && !strEmpty(r.suggestedUnit);
+  return canFillType || canFillUnit;
+}
+
 export function MeasurementMetadataAuditPanel({
   projectData,
   glossary,
@@ -69,6 +78,10 @@ export function MeasurementMetadataAuditPanel({
   const [filterNoSuggestion, setFilterNoSuggestion] = useState(false);
   const [filterIncludeComplete, setFilterIncludeComplete] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isApplying, setIsApplying] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const rows = useMemo((): AuditRow[] => {
     const glosById = new Map<string, any>();
@@ -225,6 +238,15 @@ export function MeasurementMetadataAuditPanel({
     });
   }, [projectData, glossary, findings, items, categories, locations, projects, facilities]);
 
+  const rowById = useMemo(() => {
+    const m = new Map<string, AuditRow>();
+    rows.forEach((r) => {
+      const k = String(r.id || '').trim();
+      if (k && k !== '(missing id)') m.set(k, r);
+    });
+    return m;
+  }, [rows]);
+
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
       if (!filterIncludeComplete && !r.isFlaggedDefault) return false;
@@ -253,6 +275,23 @@ export function MeasurementMetadataAuditPanel({
     sourceFilter,
   ]);
 
+  const visibleRepairableIds = useMemo(() => {
+    return new Set(
+      filteredRows
+        .filter((r) => isRepairableRow(r))
+        .map((r) => String(r.id || '').trim())
+        .filter((id) => id && id !== '(missing id)')
+    );
+  }, [filteredRows]);
+
+  const selectedRepairableIds = useMemo(() => {
+    const out: string[] = [];
+    selectedIds.forEach((id) => {
+      if (visibleRepairableIds.has(id)) out.push(id);
+    });
+    return out;
+  }, [selectedIds, visibleRepairableIds]);
+
   const summary = useMemo(() => {
     const flagged = rows.filter((r) => r.isFlaggedDefault);
     const repairAvailable = flagged.filter((r) => r.hasSuggestion);
@@ -263,6 +302,98 @@ export function MeasurementMetadataAuditPanel({
       noSuggestion: noSuggestion.length,
     };
   }, [rows]);
+
+  const confirmSummary = useMemo(() => {
+    let recordCount = 0;
+    let fillTypeCount = 0;
+    let fillUnitCount = 0;
+    selectedRepairableIds.forEach((id) => {
+      const r = rowById.get(id);
+      if (!r) return;
+      if (!isRepairableRow(r)) return;
+      recordCount++;
+      if (r.missingType && !strEmpty(r.suggestedType)) fillTypeCount++;
+      if (r.missingUnit && !strEmpty(r.suggestedUnit)) fillUnitCount++;
+    });
+    return { recordCount, fillTypeCount, fillUnitCount };
+  }, [selectedRepairableIds, rowById]);
+
+  const selectAllRepairable = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      visibleRepairableIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const applySelectedRepairs = async () => {
+    const ids = [...selectedRepairableIds];
+    if (ids.length === 0) return;
+
+    const updates: { id: string; data: any }[] = [];
+    let skippedNoOp = 0;
+    let filledType = 0;
+    let filledUnit = 0;
+
+    ids.forEach((id) => {
+      const r = rowById.get(id);
+      if (!r) return;
+      if (!isRepairableRow(r)) return;
+
+      const patch: any = {};
+
+      if (r.missingType && !strEmpty(r.suggestedType)) {
+        patch.fldMeasurementType = r.suggestedType;
+        filledType++;
+      }
+      if (r.missingUnit && !strEmpty(r.suggestedUnit)) {
+        patch.fldMeasurementUnit = r.suggestedUnit;
+        filledUnit++;
+      }
+
+      if (Object.keys(patch).length === 0) {
+        skippedNoOp++;
+        return;
+      }
+
+      // projectData document id convention: `fldPDataID`
+      updates.push({ id, data: patch });
+    });
+
+    if (updates.length === 0) {
+      toast.info('No applicable repairs found for the current selection.');
+      clearSelection();
+      return;
+    }
+
+    setIsApplying(true);
+    const loadingToast = toast.loading(`Applying repairs to ${updates.length} record(s)...`);
+    try {
+      await firestoreService.batchUpdate('projectData', updates, true);
+      toast.success(
+        `Repairs applied: ${updates.length} record(s). Filled type: ${filledType}. Filled unit: ${filledUnit}.`
+      );
+      clearSelection();
+      setConfirmOpen(false);
+    } catch (e: any) {
+      console.error(e);
+      toast.error('Failed to apply repairs.');
+    } finally {
+      toast.dismiss(loadingToast);
+      setIsApplying(false);
+    }
+  };
 
   return (
     <Card className="p-4 border-zinc-200 bg-white shadow-sm">
@@ -289,6 +420,60 @@ export function MeasurementMetadataAuditPanel({
             <span className="px-2 py-1 rounded-lg bg-amber-50 text-[10px] font-black uppercase tracking-widest text-amber-800 border border-amber-200">
               No suggestion: {summary.noSuggestion}
             </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={selectAllRepairable}
+              disabled={visibleRepairableIds.size === 0 || isApplying}
+              className={cn(
+                'inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-colors',
+                visibleRepairableIds.size === 0 || isApplying
+                  ? 'bg-zinc-50 text-zinc-400 border-zinc-200 cursor-not-allowed'
+                  : 'bg-white text-zinc-800 border-zinc-200 hover:bg-zinc-50'
+              )}
+              title="Select all repairable rows currently visible"
+            >
+              <CheckSquare size={14} />
+              Select all repairable
+            </button>
+            <button
+              type="button"
+              onClick={clearSelection}
+              disabled={selectedIds.size === 0 || isApplying}
+              className={cn(
+                'inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-colors',
+                selectedIds.size === 0 || isApplying
+                  ? 'bg-zinc-50 text-zinc-400 border-zinc-200 cursor-not-allowed'
+                  : 'bg-white text-zinc-800 border-zinc-200 hover:bg-zinc-50'
+              )}
+            >
+              <X size={14} />
+              Clear selection
+            </button>
+            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+              Selected: {selectedRepairableIds.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmOpen(true)}
+              disabled={selectedRepairableIds.length === 0 || isApplying}
+              className={cn(
+                'inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-colors',
+                selectedRepairableIds.length === 0 || isApplying
+                  ? 'bg-zinc-50 text-zinc-400 border-zinc-200 cursor-not-allowed'
+                  : 'bg-black text-white border-black hover:bg-zinc-800'
+              )}
+              title="Apply selected repairs (fills missing snapshot fields only)"
+            >
+              <Wrench size={14} />
+              Apply Selected Repairs
+            </button>
           </div>
         </div>
 
@@ -365,6 +550,7 @@ export function MeasurementMetadataAuditPanel({
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                <th className="px-3 py-2 w-10"></th>
                 <th className="px-3 py-2 w-24">Source</th>
                 <th className="px-3 py-2 min-w-[260px]">Project / Facility / Location</th>
                 <th className="px-3 py-2 min-w-[200px]">Category / Item</th>
@@ -380,7 +566,7 @@ export function MeasurementMetadataAuditPanel({
             <tbody className="divide-y divide-zinc-100 bg-white">
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-3 py-4 text-sm text-zinc-500 italic">
+                  <td colSpan={11} className="px-3 py-4 text-sm text-zinc-500 italic">
                     No records match the current filters.
                   </td>
                 </tr>
@@ -395,6 +581,31 @@ export function MeasurementMetadataAuditPanel({
 
                   return (
                     <tr key={r.id} className="align-top">
+                      <td className="px-3 py-2">
+                        {isRepairableRow(r) ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleSelection(r.id)}
+                            disabled={isApplying}
+                            className={cn(
+                              'w-5 h-5 rounded border flex items-center justify-center transition-all',
+                              selectedIds.has(r.id)
+                                ? 'bg-blue-600 border-blue-600 text-white'
+                                : 'bg-white border-zinc-300 text-transparent hover:border-zinc-400',
+                              isApplying && 'opacity-60 cursor-not-allowed'
+                            )}
+                            title="Select for repair"
+                          >
+                            {selectedIds.has(r.id) ? (
+                              <CheckSquare size={14} className="text-white" />
+                            ) : (
+                              <Square size={14} className="text-transparent" />
+                            )}
+                          </button>
+                        ) : (
+                          <div className="w-5 h-5" />
+                        )}
+                      </td>
                       <td className="px-3 py-2">
                         <span
                           className={cn(
@@ -468,6 +679,74 @@ export function MeasurementMetadataAuditPanel({
           </table>
         </div>
       </div>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl overflow-hidden bg-white shadow-2xl border border-zinc-200">
+            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
+              <div className="text-sm font-black uppercase tracking-widest text-zinc-900">
+                Confirm repairs
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(false)}
+                disabled={isApplying}
+                className="p-2 hover:bg-zinc-200 rounded-full transition-colors"
+                title="Close"
+              >
+                <X size={16} className="text-zinc-500" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="text-sm text-zinc-800">
+                You are about to update <span className="font-bold">{confirmSummary.recordCount}</span> project data record(s).
+              </div>
+              <div className="text-xs text-zinc-700 space-y-1">
+                <div>
+                  Measurement types to fill: <span className="font-bold">{confirmSummary.fillTypeCount}</span>
+                </div>
+                <div>
+                  Measurement units to fill: <span className="font-bold">{confirmSummary.fillUnitCount}</span>
+                </div>
+              </div>
+              <div className="text-[11px] text-zinc-600 leading-snug bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <span className="font-black uppercase tracking-widest text-amber-800">Warning</span>
+                {' — '}
+                This updates project data records only and does not change glossary or library records.
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-zinc-100 bg-white flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(false)}
+                disabled={isApplying}
+                className={cn(
+                  'px-3 py-2 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-colors',
+                  isApplying
+                    ? 'bg-zinc-50 text-zinc-400 border-zinc-200 cursor-not-allowed'
+                    : 'bg-white text-zinc-800 border-zinc-200 hover:bg-zinc-50'
+                )}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={applySelectedRepairs}
+                disabled={confirmSummary.recordCount === 0 || isApplying}
+                className={cn(
+                  'px-3 py-2 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-colors inline-flex items-center gap-2',
+                  confirmSummary.recordCount === 0 || isApplying
+                    ? 'bg-zinc-50 text-zinc-400 border-zinc-200 cursor-not-allowed'
+                    : 'bg-black text-white border-black hover:bg-zinc-800'
+                )}
+              >
+                <Wrench size={14} />
+                {isApplying ? 'Applying...' : 'Confirm & Apply'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
