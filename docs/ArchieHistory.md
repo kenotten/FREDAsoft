@@ -28897,5 +28897,25346 @@ Is learning proper dev workflow (Git + Cursor)
 
 Full text of previous chat is in markdown file at C:\dev\fredasoft\docs\ArchieHistory.md
 
+ChatGPT
+
+
+
+
+Invite team members
+
+Pasted text(39).txt
+Document
+
+Got it — I’ve read through your handoff doc and I’m aligned with the Archie role and constraints. 
+
+
+Here’s a quick, grounded checkpoint + recommended next move so we stay tight and don’t drift:
+
+✅ Where You Are (State Check)
+You’ve completed a lot of stabilization work:
+
+Data Entry flow is now deterministic (async save + clean reset)
+
+Data Explorer is correctly scoped and normalized
+
+Glossary linkage bugs are resolved
+
+Dirty guard + draft recovery behavior is controlled (session-aware)
+
+Firebase storage + paths are corrected
+
+UFAS transform pipeline is functionally complete
+
+Output: ~525 structured records
+
+👉 In short:
+App stability = good
+Standards pipeline = ready for validation phase
+
+⚠️ Critical Principle Right Now
+You are at a decision boundary, not an implementation phase.
+
+Do NOT:
+
+import yet
+
+modify schema
+
+refactor standards structure
+
+Do:
+
+validate output
+
+confirm assumptions
+
+reduce risk
+
+🎯 Recommended Next Step (Very Specific)
+Step 1 — Inspect UFAS Output (Human Validation Pass)
+Open:
+
+scripts/standards-import/ufas_preview.html
+You’re looking for:
+
+A. Structural Integrity
+Sections flow correctly (1 → 2 → 3 → 4…)
+
+4.x nesting makes sense
+
+No obvious truncation
+
+B. Content Quality
+Paragraphs are complete (not cut off)
+
+Lists are preserved logically
+
+No duplicated chunks
+
+C. Special Cases
+Tables → appear as placeholder + separate record
+
+Figures → same behavior
+
+Heading-only entries (like 4.1) → present
+
+D. Red Flags (if you see these, STOP)
+Empty sections where content should exist
+
+Massive over-grouping (entire chapters in one record)
+
+Broken numbering (e.g., 4.1.1 under wrong parent)
+
+🧠 Step 2 — Sanity Check JSON Directly
+Open:
+
+scripts/standards-import/ufas_standards.json
+Spot check 5–10 random records:
+
+Confirm fields like:
+
+{
+  "section_num": "4.1",
+  "section_name": "Minimum Requirements",
+  "citation_num": "4.1.1",
+  "citation_name": "...",
+  "content_text": "...",
+}
+You are verifying:
+
+Parent/child inheritance is correct (this was recently fixed)
+
+No null/undefined critical fields
+
+content_text is meaningful (not empty unless intentional)
+
+🧭 Step 3 — Decide Import Readiness
+Only proceed if:
+
+✔ Structure looks correct
+✔ Content reads naturally
+✔ No systemic parsing errors
+
+If YES → we move to safe import plan
+If NO → we fix transform (not import script)
+
+🔒 When You’re Ready: “Safe Import Plan” (Preview)
+Don’t run yet — just so you know the shape:
+
+Target collection: ufas_standards (correct choice)
+
+No overwrite of TAS
+
+Batch write (already implemented)
+
+Easy rollback (delete collection)
+
+🧱 Optional but Smart (Pre-Import Guardrail)
+Before import, we can add one small safety enhancement:
+
+source: "UFAS"
+to every record
+
+This gives you future flexibility when you unify standards.
+
+📌 My Recommendation (Opinionated)
+You’re very close, but don’t rush import.
+
+The smartest move right now:
+
+👉 Do a visual + JSON validation pass
+👉 Then come back and say:
+
+“Archie, validate UFAS output with me”
+
+I’ll walk through it with you and catch subtle issues before they become Firestore cleanup problems (which are annoying and risky).
+
+When You're Ready
+Say one of:
+
+“Let’s validate UFAS output” → I’ll guide a precise inspection
+
+“Import UFAS safely” → I’ll give you a locked-down execution plan
+
+“Something looks wrong in preview” → we debug the transform, not patch data
+
+We’re in a really good place here — just need to land this carefully.
+
+
+Let's validate UFAS output
+
+Thought for a couple of seconds
+Great. Start with read-only validation. Do not let Cursor edit files.
+
+Use this prompt in Cursor:
+
+ANALYSIS ONLY. Do not edit files.
+
+Validate the generated UFAS standards output.
+
+Review:
+- scripts/standards-import/ufas_standards.json
+- scripts/standards-import/ufas_preview.html
+- scripts/standards-import/transform-ufas-json.cjs
+
+Check for:
+1. Record count and whether it matches expected 525 records.
+2. Missing or empty required fields.
+3. Incorrect section inheritance, especially around 4.1 / 4.1.1.
+4. Duplicate citation_num values.
+5. Table/Figure records and whether placeholders point clearly to separate records.
+6. Any content truncation, malformed text, or obvious parsing artifacts.
+7. Whether records include enough source metadata for a safe Firestore import.
+
+Report findings only.
+Do not modify any files.
+Include exact file names and line references where possible.
+End with one of:
+- SAFE TO IMPORT
+- NEEDS FIX BEFORE IMPORT
+Expected baseline from the handoff: latest UFAS output was 525 records, section inheritance had been fixed, and import should target ufas_standards, not TAS. 
+
+
+After Cursor reports back, paste its findings here before approving any code changes or import.
+
+
+
+Pasted markdown(14).md
+File
+
+Excellent — this is exactly the kind of validation pass we needed. Let’s walk through this like an architect, not a coder.
+
+🧠 Bottom Line (No Ambiguity)
+Cursor’s verdict is correct:
+
+NEEDS FIX BEFORE IMPORT 
+
+
+But importantly — these are small, surgical fixes, not structural failures.
+
+🔍 What Actually Matters (Prioritized)
+🚨 1. Empty “Standards” Records (HIGH PRIORITY)
+You have 16 records like this:
+
+{
+  "citation_num": "",
+  "section_num": "",
+  "content_text": "An official website of the United States government"
+}
+These are:
+
+NOT UFAS standards
+
+NOT useful in your app
+
+Likely scraped header/footer/nav junk
+
+💥 Why This Matters
+If you import:
+
+They pollute your dataset
+
+They break assumptions like:
+
+“every Standard has a citation”
+
+They create UI edge cases later
+
+✅ Decision
+👉 These should NOT be imported
+
+⚠️ 2. Placeholder Linking (MEDIUM PRIORITY)
+Current pattern:
+
+[Table: see separate record]
+But no reference to:
+
+record id
+
+order
+
+anything machine-linkable
+
+💥 Why This Matters
+Right now:
+
+Humans can understand it
+
+Code cannot reliably connect them
+
+🤔 Do You Need to Fix This Now?
+No — unless you're about to:
+
+render tables inline
+
+build cross-linking UI
+
+generate reports with embedded tables
+
+✅ Recommendation
+👉 Accept current behavior for now
+👉 Improve later when UI requires it
+
+⚠️ 3. Preview File Missing (LOW PRIORITY)
+Not found:
+
+ufas_preview.html
+But this is expected unless you ran the script.
+
+✅ Fix (optional)
+Run:
+
+node scripts\standards-import\preview-ufas-html.cjs
+Not required for import — just for visual QA.
+
+⚠️ 4. ID Stability (IMPORTANT FUTURE NOTE)
+IDs are based on:
+
+${order}_${citation}_${type}
+💥 Risk
+If transform changes → order changes → IDs change → duplicate docs on re-import
+
+✅ Not blocking for now, but note:
+👉 This is fine for first import
+👉 Will matter later if you re-run pipeline
+
+🧱 What Does NOT Need Fixing
+These are confirmed solid:
+
+✅ Record count = 525
+
+✅ No duplicate IDs
+
+✅ Section inheritance (4.1 / 4.1.1) is correct
+
+✅ Table/Figure separation works
+
+✅ Content not truncated
+
+✅ Schema completeness is good
+
+👉 This is a green light structurally
+
+🛠️ Required Fix (ONLY ONE)
+🎯 Filter Out Invalid Records
+Target:
+Remove records where:
+
+relation_type === "Standard" && citation_num === ""
+✍️ Your Next Move (Tight + Controlled)
+Step 1 — Ask Cursor to ANALYZE FIRST
+Use this:
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to filter out invalid UFAS records before import.
+
+In scripts/standards-import/transform-ufas-json.cjs:
+
+Find where records are pushed into the final array.
+
+Identify where we can safely exclude records where:
+- relation_type === "Standard"
+- citation_num is empty or ""
+
+Do not implement yet.
+
+Explain:
+- exact location in file
+- safest insertion point
+- whether this affects Table/Figure records
+
+No file edits.
+Step 2 — Then Apply Surgical Fix
+After review, we’ll implement something like:
+
+if (relation_type === "Standard" && !citation_num) {
+  return; // skip junk records
+}
+But we’ll place it exactly right, not guess.
+
+🧭 After That
+Once fixed:
+
+Regenerate JSON
+
+Re-check record count (~509 expected after removing ~16)
+
+Quick sanity check
+
+Then:
+
+👉 We proceed to SAFE IMPORT
+
+🧠 My Assessment (Important)
+You are not debugging anymore — you're in:
+
+Data pipeline hardening phase
+
+And you're doing it exactly right:
+
+validate first ✅
+
+isolate issues ✅
+
+fix minimally ✅
+
+avoid rework later ✅
+
+When You're Ready
+Paste Cursor’s analysis of where to apply the filter.
+
+I’ll verify placement before you touch the code.
+
+
+## Where records is populated
+
+All writes go through **records.push(...)** in scripts/standards-import/transform-ufas-json.cjs at these locations:
+
+| Approx. lines | Function / context | What is pushed |
+|---------------|--------------------|----------------|
+| **137–142** | flushEmbedNodes | makeTableRecord / makeFigureRecord return values (**Table / Figure**) |
+| **218–232** | pushMergedCitationStandard | One object with **relation_type: "Standard"** |
+| **251–265** | pushOrphanParagraph | Object with **relation_type** from inferRelationType (often **Standard**) |
+| **285–299** | pushOrphanFigure | **Figure** (or inferred type) |
+| **307–321** | pushOrphanTable | **Table** |
+| **460–474** | main loop, dl / ul / ol branch | Object with **relation_type** from inferRelationType (can be **Standard**) |
+
+There is **no** other records mutation before the final write:
+
+486:487:c:/dev/fredasoft/scripts/standards-import/transform-ufas-json.cjs
+  fs.writeFileSync(OUTPUT, JSON.stringify(records, null, 2));
+  console.log(`Wrote ${records.length} records to ${OUTPUT}`);
+
+
+---
+
+## Safest insertion point (exclude Standard + empty citation_num)
+
+**Recommended: one pass immediately before fs.writeFileSync in main**, i.e. after the while loop ends and before line **486**.
+
+- **Predicate:** omit rows where  
+  r.relation_type === "Standard" **and**  
+  String(r.citation_num ?? "").trim() === ""  
+  (optionally treat only "" if you do not want to drop whitespace-only strings).
+
+**Why this is safest**
+
+- **Single choke point** — every pushed record flows to writeFileSync; you cannot miss a push site.
+- **Does not change** pushMergedCitationStandard, flushEmbedNodes, or st.order logic — avoids accidentally skipping **flushEmbedNodes** when a Standard row is suppressed but embedded tables/figures still need to be emitted (those concerns apply if you cut **inside** pushMergedCitationStandard without careful ordering).
+- **Table / Figure rows are untouched** as long as the filter is limited to **relation_type === "Standard"** — they use **"Table"** / **"Figure"** (and occasionally **Exception" / "Advisory"** from pushOrphanParagraph), so they are **not** removed by this rule.
+
+**Trade-off (acceptable for “before import” cleanup):** st.order and makeId have **already** been advanced for skipped Standards, so the written file may have **gaps** in order / non-contiguous ids compared to a version that never pushed those rows. That is usually fine for Firestore if **id** stays unique.
+
+**Alternative (more invasive):** guard **before** each records.push that can emit **Standard** (pushMergedCitationStandard ~218, pushOrphanParagraph ~251, main ~460) and **skip bumping order** when skipping — fewer dead ids, but **three places** to keep in sync and easier to get wrong.
+
+---
+
+## Effect on **Table** / **Figure** records
+
+- **Not affected** if the condition is exactly: **Standard AND empty citation_num**.
+- **flushEmbedNodes** (lines **137–142**) only pushes **Table** / **Figure** — never **Standard**.
+- **pushOrphanTable / pushOrphanFigure** push non-Standard types.
+- **Caveat:** If you ever broadened the rule to “drop any row with empty citation_num”, you could remove **orphan** **Table**/**Figure** rows that still use st.currentCitationNum when it is empty — the user’s stated filter does **not** do that.
+
+---
+
+## Summary
+
+- **Exact locations of pushes:** lines **139–140**, **218**, **251**, **285**, **307**, **460** in scripts/standards-import/transform-ufas-json.cjs; final array write at **486**.
+- **Safest exclusion point:** **filter records in main immediately before line 486** (fs.writeFileSync), using only **Standard + empty citation_num**.
+- **Table/Figure:** **Unaffected** by that narrow filter.
+
+Cursor’s analysis is solid. I agree with the single final filter before writeFileSync.
+
+Use this next Cursor prompt:
+
+Apply a surgical fix only.
+
+In scripts/standards-import/transform-ufas-json.cjs, immediately before fs.writeFileSync writes ufas_standards.json:
+
+Filter out only records where:
+- relation_type === "Standard"
+- citation_num is empty after trim
+
+Do not change parsing logic.
+Do not change order generation.
+Do not touch import script.
+Do not touch App.tsx or any UI files.
+
+After the change, regenerate scripts/standards-import/ufas_standards.json.
+
+Then report:
+1. Exact diff.
+2. New record count.
+3. Number of records removed.
+4. Whether Table/Figure records were affected.
+Expected result:
+
+525 - 16 = 509 records
+A few order/id gaps are acceptable here. That is better than a multi-location refactor.
+
+After Cursor reports back, paste the diff before committing.
+
+
+Here is the report.
+
+### 1. Exact diff (scripts/standards-import/transform-ufas-json.cjs)
+
+diff
+diff --git a/scripts/standards-import/transform-ufas-json.cjs b/scripts/standards-import/transform-ufas-json.cjs
+index 4bda394..613c35f 100644
+--- a/scripts/standards-import/transform-ufas-json.cjs
++++ b/scripts/standards-import/transform-ufas-json.cjs
+@@ -483,8 +483,11 @@ function main() {
+     i += 1;
+   }
+ 
+-  fs.writeFileSync(OUTPUT, JSON.stringify(records, null, 2));
+-  console.log(`Wrote ${records.length} records to ${OUTPUT}`);
++  const filteredRecords = records.filter(
++    r => !(r.relation_type === "Standard" && !String(r.citation_num ?? "").trim())
++  );
++  fs.writeFileSync(OUTPUT, JSON.stringify(filteredRecords, null, 2));
++  console.log(`Wrote ${filteredRecords.length} records to ${OUTPUT}`);
+ }
+ 
+ main();
+
+
+scripts/standards-import/ufas_standards.json was regenerated by node scripts/standards-import/transform-ufas-json.cjs (large JSON diff not pasted here).
+
+---
+
+### 2. New record count
+
+**509** (Wrote 509 records to …).
+
+---
+
+### 3. Number of records removed
+
+**16** (previously **525** − **509**).
+
+---
+
+### 4. Table / Figure records
+
+**Not removed by this filter** (it only drops relation_type === "Standard" with blank citation_num after trim).
+
+After regeneration:
+
+- **Table:** **21**
+- **Figure:** **89**
+- **Standard with empty citation_num:** **0** (filter applied as intended)
+
+Good fix. This is safe and appropriately surgical.
+
+Next, run a quick verification before commit:
+
+git status
+git diff -- scripts\standards-import\transform-ufas-json.cjs
+Then commit only the intended files:
+
+git add scripts\standards-import\transform-ufas-json.cjs scripts\standards-import\ufas_standards.json
+git commit -m "Filter UFAS boilerplate records from transform output"
+Do not commit ufas_preview.html if it appears.
+
+After commit, the dataset is now import-candidate ready:
+
+509 records
+
+0 empty Standard citations
+
+Tables/Figures preserved
+
+Import target remains ufas_standards, not TAS.
+
+
+
+Pasted text(40).txt
+Document
+
+Perfect — this is exactly the kind of disciplined checkpoint we want.
+
+Let me cut through the noise in that diff output and give you a clear go/no-go:
+
+✅ Diff Review (Clean)
+What you’re seeing with all the repeated blocks is just the pager (less) re-rendering while scrolling — not multiple changes.
+
+The actual change is only this:
+
+- fs.writeFileSync(OUTPUT, JSON.stringify(records, null, 2));
+- console.log(`Wrote ${records.length} records to ${OUTPUT}`);
++ const filteredRecords = records.filter(
++   r => !(r.relation_type === "Standard" && !String(r.citation_num ?? "").trim())
++ );
++ fs.writeFileSync(OUTPUT, JSON.stringify(filteredRecords, null, 2));     
++ console.log(`Wrote ${filteredRecords.length} records to ${OUTPUT}`);
+👉 That is exactly what we wanted
+👉 No unintended edits elsewhere
+👉 No risk to parsing logic
+
+This passes review. 
+
+
+⚠️ Important: Don’t Commit Everything
+Your git status shows this:
+
+modified:
+  docs/ARCHITECTURE_DESIGN.md
+  docs/ArchieHistory.md
+  transform-ufas-json.cjs
+  ufas_standards.json
+👉 You must NOT blindly commit all of that
+
+🎯 Correct Commit (Scoped)
+Run exactly:
+
+git add scripts\standards-import\transform-ufas-json.cjs
+git add scripts\standards-import\ufas_standards.json
+git commit -m "Filter UFAS boilerplate records (empty Standard citations)"
+🚫 Do NOT include (for now)
+Leave these out:
+
+docs/ARCHITECTURE_DESIGN.md
+docs/ArchieHistory.md
+Those are separate concerns — different commit.
+
+🧠 Sanity Check After Commit
+Run:
+
+git status
+You should see:
+
+nothing to commit, working tree clean
+(or only the docs still modified)
+
+🚀 You Are Now Ready for Import
+Your dataset is now:
+
+✅ 509 records
+
+✅ Clean (no junk standards)
+
+✅ Proper hierarchy
+
+✅ Tables/Figures preserved
+
+✅ Safe for Firestore
+
+🧭 Next Step (Only When You Say So)
+When you're ready, say:
+
+“Import UFAS safely”
+
+And I’ll give you a step-by-step, zero-risk import sequence, including:
+
+auth setup
+
+dry-run mindset
+
+exact command
+
+rollback strategy
+
+You handled this exactly right — no overreach, no refactor creep, just a clean surgical fix.
+
+
+I don't really have a prompt.  Just (END)
+
+That (END) just means you’re stuck inside the pager (less) — not an error, just how Git shows long output.
+
+👉 To get out:
+Press:
+
+q
+That will return you to the normal PowerShell prompt.
+
+🧠 What happened
+When you ran:
+
+git diff ...
+Git opened the result in a scrollable viewer.
+That’s why you saw:
+
+(END)
+👍 Tips going forward
+Scroll: ↑ ↓ or PageUp / PageDown
+
+Search: /text then Enter
+
+Exit: q
+
+Once you’re back at the prompt, go ahead with the commit:
+
+git add scripts\standards-import\transform-ufas-json.cjs
+git add scripts\standards-import\ufas_standards.json
+git commit -m "Filter UFAS boilerplate records (empty Standard citations)"
+If anything looks off after that, paste it here before pushing 👍
+
+
+PS C:\dev\fredasoft> git add scripts\standards-import\transform-ufas-json.cjs
+PS C:\dev\fredasoft> git add scripts\standards-import\ufas_standards.json  
+warning: in the working copy of 'scripts/standards-import/ufas_standards.json', LF will be replaced by CRLF the next time Git touches it
+PS C:\dev\fredasoft> git commit -m "Filter UFAS boilerplate records (empty 
+Standard citations)"
+[data-entry-flow-refactor a233883] Filter UFAS boilerplate records (empty Standard citations)
+ 2 files changed, 5 insertions(+), 242 deletions(-)
+PS C:\dev\fredasoft> 
+
+Perfect — that commit is exactly what we wanted. 👍
+
+✅ Quick Review of What Just Happened
+2 files changed → correct scope
+
+5 insertions / 242 deletions → expected (you removed ~16 records from a large JSON)
+
+No accidental files included → good discipline
+
+👉 The LF/CRLF warning is not a problem. It’s just Windows line ending normalization. You can ignore it for now.
+
+📌 Current State (Important)
+You now have:
+
+✅ Clean UFAS dataset (509 records)
+
+✅ Transform pipeline corrected
+
+✅ Changes committed locally
+
+❗ Not yet pushed to GitHub
+
+🎯 Next Step
+Push your branch:
+
+git push
+This keeps your work backed up and consistent with GitHub.
+
+🚀 After Push — You're Ready
+At this point, you are officially in:
+
+“Safe to import” state
+
+When You're Ready
+Say:
+
+“Import UFAS safely”
+
+And I’ll walk you through:
+
+exact commands (no guesswork)
+
+auth setup (gcloud / firebase-admin)
+
+verifying the target collection (ufas_standards)
+
+what success should look like
+
+how to rollback if anything feels off
+
+You handled this exactly like a senior engineer would:
+
+validated first
+
+isolated the issue
+
+fixed surgically
+
+committed narrowly
+
+Let’s land the import just as cleanly.
+
+
+let's create the preview html file so I can review it one last (hopefully) time
+
+Yes — good final review step.
+
+Run this:
+
+node scripts\standards-import\preview-ufas-html.cjs
+Then open:
+
+start scripts\standards-import\ufas_preview.html
+One important note: the preview script may only render a slice of the records, not all 509. If you want the full preview, first ask Cursor to inspect preview-ufas-html.cjs and confirm whether COUNT needs to be changed from 200 to 509.
+
+Use this if you want full-file preview:
+
+ANALYSIS ONLY. Do not edit files.
+
+Inspect scripts/standards-import/preview-ufas-html.cjs.
+
+Tell me whether the generated ufas_preview.html includes all UFAS records or only a slice.
+
+If it only renders a slice, identify the constants controlling START and COUNT and recommend the smallest safe change to render all 509 records.
+
+Do not edit files.
+
+## Does ufas_preview.html include all records?
+
+**No.** The script only renders a **slice** of the JSON array.
+
+Evidence:
+
+6:11:c:/dev/fredasoft/scripts/standards-import/preview-ufas-html.cjs
+// Change these numbers to preview a different range
+const START = 10;
+const COUNT = 200;
+
+const records = JSON.parse(fs.readFileSync(INPUT, "utf8"));
+const sample = records.slice(START, START + COUNT);
+
+
+So the HTML is built from **sample**, i.e. **records.slice(10, 210)** — **200** rows, starting at **index 10**. Rows **0–9** are never rendered; rows **210+** are never rendered.
+
+The template subtitle even reflects “of full length” vs “shown slice”:
+
+199:200:c:/dev/fredasoft/scripts/standards-import/preview-ufas-html.cjs
+    <p class="subtitle">Showing records ${START + 1}–${START + sample.length} of ${records.length}</p>
+
+
+…but the body only maps over **sample** (lines **202–229**), not records.
+
+---
+
+## Constants controlling the slice
+
+| Constant | File line | Current value | Role |
+|----------|-----------|---------------|------|
+| **START** | **7** | 10 | First index included in slice |
+| **COUNT** | **8** | 200 | Length of slice (START + COUNT end index) |
+
+---
+
+## Smallest safe change to render all **509** records
+
+**Minimal change:** stop slicing and use the full array, e.g. replace line **11** with something equivalent to:
+
+- const sample = records;  
+  **or**
+- const sample = records.slice(0);  
+  **or**
+- const START = 0; and const COUNT = records.length; then keep records.slice(START, START + COUNT) (requires records to exist before COUNT — so define COUNT after records is read, or use records.length in the slice).
+
+The **smallest** edit in practice is usually **one line**: drop slice and set sample to **records** (and adjust the subtitle to use 1 and records.length if you still want accurate “showing X–Y” text, e.g. 1–${records.length}).
+
+**Safety note:** One HTML file with **509** full bodies can be **large and slow in the browser**; that’s a UX/perf concern, not a correctness bug. The change above only affects **preview**, not import logic.
+
+Good. Since this is preview-only, I’m comfortable making the smallest temporary change.
+
+Use this Cursor prompt:
+
+Apply a preview-only change.
+
+In scripts/standards-import/preview-ufas-html.cjs:
+- Change the preview so it renders all records from ufas_standards.json, not just records 10–209.
+- Prefer the smallest safe edit.
+- Do not modify transform-ufas-json.cjs.
+- Do not modify import-ufas-to-firestore.cjs.
+- Do not modify App.tsx or UI files.
+
+After changing it, run:
+node scripts/standards-import/preview-ufas-html.cjs
+
+Report:
+1. Exact diff.
+2. Confirm ufas_preview.html was generated.
+3. Confirm subtitle shows all 509 records.
+After that, open it:
+
+start scripts\standards-import\ufas_preview.html
+Do not commit ufas_preview.html. Generated file only.
+
+
+Here is the status of the preview-only change.
+
+## 1. Exact diff
+
+diff
+diff --git a/scripts/standards-import/preview-ufas-html.cjs b/scripts/standards-import/preview-ufas-html.cjs
+index f74be54..2dbf23b 100644
+--- a/scripts/standards-import/preview-ufas-html.cjs
++++ b/scripts/standards-import/preview-ufas-html.cjs
+@@ -3,12 +3,8 @@ const INPUT = "scripts/standards-import/ufas_standards.json";
+ const OUTPUT = "scripts/standards-import/ufas_preview.html";
+ 
+-// Change these numbers to preview a different range
+-const START = 10;
+-const COUNT = 200;
+-
+ const records = JSON.parse(fs.readFileSync(INPUT, "utf8"));
+-const sample = records.slice(START, START + COUNT);
++const sample = records;
+ 
+ function esc(value) {
+   return String(value ?? "")
+@@ -197,7 +193,7 @@ const html = `<!doctype html>
+ <body>
+   <main class="page">
+     <h1>UFAS Standards Preview</h1>
+-    <p class="subtitle">Showing records ${START + 1}–${START + sample.length} of ${records.length}</p>
++    <p class="subtitle">Showing records 1–${records.length} of ${records.length}</p>
+ 
+     ${sample.map(r => {
+       const headingClass = getHeadingClass(r);
+
+
+(The diff header may show @@ -3,12 +3,8 @@ with the first line as context depending on how git diff prints it; the substantive edits are: remove START/COUNT/comment, sample = records, subtitle uses 1–${records.length} of ${records.length}.)
+
+## 2. ufas_preview.html generated
+
+node scripts/standards-import/preview-ufas-html.cjs completed with exit code 0 and printed:
+
+Wrote scripts/standards-import/ufas_preview.html
+
+## 3. Subtitle and 509 records
+
+In scripts/standards-import/ufas_preview.html line 153:
+
+153:153:scripts/standards-import/ufas_preview.html
+    <p class="subtitle">Showing records 1–509 of 509</p>
+
+
+So the subtitle reflects **all 509** records (1–509 of 509).
+
+Looks good. The preview script change is clean and preview-only.
+
+Now open the file:
+
+start scripts\standards-import\ufas_preview.html
+Review for:
+
+obvious junk records at top/bottom
+
+broken section flow
+
+missing 4.x content
+
+Table/Figure placeholder readability
+
+anything that looks duplicated or malformed
+
+For Git discipline: do not commit ufas_preview.html. The script change itself can be committed later if you want full-preview behavior to remain available.
+
+
+Looks good
+
+Good — that’s the moment we were aiming for.
+
+You now have:
+
+✅ Clean dataset (509 records)
+
+✅ Structural validation
+
+✅ Visual validation
+
+✅ No junk records
+
+✅ Controlled transform pipeline
+
+👉 This is safe to import
+
+🚀 Safe Import — Step by Step
+We’re going to do this cleanly and predictably.
+
+1. Confirm Target Collection
+You are importing into:
+
+ufas_standards
+NOT:
+
+tas_standards
+2. Make Sure You’re Authenticated
+Run:
+
+gcloud auth application-default login
+If already logged in, it will just confirm.
+
+Then:
+
+gcloud config set project path-recovery
+3. Sanity Check Before Import
+Quick mental checklist:
+
+JSON file updated ✔
+
+No unintended changes in git ✔
+
+On correct branch ✔
+
+If you want to be extra careful:
+
+git status
+4. Run Import Script
+node scripts\standards-import\import-ufas-to-firestore.cjs
+5. Expected Output
+You should see something like:
+
+Preparing to import 509 records into ufas_standards
+Committed 400 records...
+Import complete: 509 records written to ufas_standards
+6. Verify in Firebase Console
+Go to:
+
+Firestore Database
+
+Collection: ufas_standards
+
+Check:
+
+Record count roughly matches (~509)
+
+Sample a few:
+
+4.1
+
+4.1.1
+
+Table record
+
+Figure record
+
+🧯 Rollback Plan (Just in Case)
+If anything looks wrong:
+
+👉 Delete the collection:
+
+Firestore → ufas_standards → delete
+
+Then fix + re-import.
+
+No impact to TAS or existing app data.
+
+🧠 After Import (Don’t Skip This Thought)
+You now have three parallel domains forming:
+
+Project Data (live app)
+
+Glossary (reference system)
+
+Standards (UFAS — new layer)
+
+Next decisions will likely be:
+
+how standards link to glossary
+
+how standards show in Data Entry
+
+search / filtering strategy
+
+But don’t jump there yet.
+
+✅ Final Status
+You’ve just completed:
+
+End-to-end ingestion pipeline (scrape → transform → validate → import)
+
+And you did it without:
+
+breaking app code
+
+polluting existing collections
+
+letting Cursor overreach
+
+When you're ready, we can move to:
+
+“Verify UFAS in app”
+
+or
+
+“Design standards lookup in Data Entry”
+
+Just say the word.
+
+
+PS C:\dev\fredasoft> gcloud auth application-default login
+gcloud : The term 'gcloud' is not recognized as the name of a cmdlet, 
+function, script file, or operable program. Check the spelling of the      
+name, or if a path was included, verify that the path is correct and try   
+again.
+At line:1 char:1
++ gcloud auth application-default login
++ ~~~~~~
+    + CategoryInfo          : ObjectNotFound: (gcloud:String) [], Command  
+   NotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+PS C:\dev\fredasoft>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Good catch — this is a real environment issue, not a code issue.
+
+You don’t have the Google Cloud CLI installed, which means:
+
+❌ gcloud path not available
+❌ Application Default Credentials not set
+
+🎯 Two Clean Options (Pick One)
+✅ Option A (Recommended): Install gcloud CLI
+This is the correct long-term setup.
+
+Step 1 — Install
+Go here:
+
+👉 https://cloud.google.com/sdk/docs/install
+
+Download Windows installer and install with defaults.
+
+Step 2 — Restart PowerShell
+Close your terminal and open a new one.
+
+Then verify:
+
+gcloud --version
+Step 3 — Authenticate
+gcloud auth application-default login
+This opens a browser → sign in → done.
+
+Step 4 — Set Project
+gcloud config set project path-recovery
+⚡ Option B (Faster): Use Firebase Admin Credentials (No gcloud)
+If you don’t want to install gcloud right now, you can use a service account key.
+
+Step 1 — Get Key
+Firebase Console
+
+Project Settings → Service Accounts
+
+Click “Generate new private key”
+
+Download JSON
+
+Step 2 — Set Environment Variable
+$env:GOOGLE_APPLICATION_CREDENTIALS="C:\path\to\your\serviceAccountKey.json"
+Step 3 — Run Import
+node scripts\standards-import\import-ufas-to-firestore.cjs
+🧠 My Recommendation
+👉 Use Option A (gcloud)
+
+Why:
+
+cleaner
+
+no secrets on disk
+
+standard workflow
+
+easier long-term
+
+⚠️ Important
+Your import script already uses:
+
+admin.initializeApp();
+Which means:
+
+👉 It expects Application Default Credentials
+
+So you must do one of the two options above.
+
+When You're Ready
+Tell me:
+
+“Installed gcloud”
+
+or
+
+“Using service account”
+
+…and I’ll walk you through the final import step cleanly.
+
+
+
+                     gcloud --version
+gcloud : The term 'gcloud' is not recognized as the name of a cmdlet, 
+function, script file, or operable program. Check the spelling of the     
+name, or if a path was included, verify that the path is correct and try  
+again.
+At line:1 char:1
++ gcloud --version
++ ~~~~~~
+    + CategoryInfo          : ObjectNotFound: (gcloud:String) [], Command 
+   NotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+PS C:\dev\fredasoft> 
+
+Yeah — that confirms it: gcloud is not installed at all, not just a PATH issue.
+
+Let’s not fight your environment. I’m going to steer you to the fastest, least-friction path so you can complete the import today.
+
+⚡ Do This Instead (Cleaner Right Now)
+👉 Use a Firebase service account key
+
+No installs, no PATH issues, no reboot cycles.
+
+🧭 Step-by-Step (5 minutes)
+1. Download Service Account Key
+Go to:
+
+👉 https://console.firebase.google.com
+
+Then:
+
+Select your project: path-recovery
+
+Click ⚙️ Project Settings
+
+Go to Service Accounts tab
+
+Click “Generate new private key”
+
+Download the JSON file
+
+2. Place the File
+Put it somewhere simple, e.g.:
+
+C:\dev\fredasoft\serviceAccountKey.json
+3. Set Environment Variable (PowerShell)
+Run this:
+
+$env:GOOGLE_APPLICATION_CREDENTIALS="C:\dev\fredasoft\serviceAccountKey.json"
+👉 This tells Firebase Admin SDK how to authenticate
+
+4. Run Import
+node scripts\standards-import\import-ufas-to-firestore.cjs
+✅ Expected Output
+Preparing to import 509 records into ufas_standards
+Committed 400 records...
+Import complete: 509 records written to ufas_standards
+🔒 Important Notes
+This env variable lasts only for this terminal session
+
+You are not modifying code
+
+This is fully compatible with your current script
+
+🧠 Why I’m Steering You This Way
+Installing gcloud:
+
+takes longer
+
+requires restart
+
+sometimes PATH issues persist
+
+Service account:
+
+immediate
+
+deterministic
+
+standard for backend scripts
+
+🚨 One Small Check Before You Run
+Make sure your script includes:
+
+admin.initializeApp();
+(no custom credentials needed — it will pick up the env variable)
+
+When You Run It
+Paste the output here before doing anything else.
+
+We’ll verify the import together — don’t assume success until we confirm 👍
+
+
+I installed gcloud so I don't understand why I'm getting the error
+
+Thought for a couple of seconds
+That usually means gcloud installed, but PowerShell can’t find it yet. Most common causes:
+
+PowerShell was open before install
+
+PATH was not updated
+
+installer did not add Google Cloud SDK to PATH
+
+install failed or installed for a different user
+
+Do this in order.
+
+1. Close PowerShell completely
+Close all PowerShell / Cursor terminals.
+
+Then open a new PowerShell and run:
+
+gcloud --version
+If still not recognized, continue.
+
+2. Check the common install path
+Run:
+
+Test-Path "C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"
+If it returns True, run it directly:
+
+& "C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd" --version
+If that works, your install is fine — PATH is the issue.
+
+3. Temporarily add it for this PowerShell session
+$env:Path += ";C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\bin"
+gcloud --version
+Then continue:
+
+gcloud auth application-default login
+gcloud config set project path-recovery
+4. If Test-Path returns False
+Try this:
+
+Get-ChildItem "C:\Program Files*" -Recurse -Filter gcloud.cmd -ErrorAction SilentlyContinue
+That may take a minute, but it will show where gcloud.cmd actually installed. Then we can add that bin folder to PATH.
+
+
+how do I close all powershell / cursor terminals
+
+Good question — this trips people up more than it should.
+
+You just need to make sure every running shell process is closed, not just the tab you’re looking at.
+
+🧭 In Cursor (or VS Code)
+Option 1 — Close Terminal Panel
+Look at the bottom panel (Terminal tab)
+
+Click the trash can icon 🗑️
+→ This kills the active terminal
+
+Repeat if you have multiple terminals.
+
+Option 2 — Kill All Terminals
+Press:
+
+Ctrl + Shift + P
+Type:
+
+Terminal: Kill All Terminals
+Hit Enter
+
+Option 3 — Close Cursor Entirely (Safest)
+Just close the whole app:
+
+Alt + F4
+or click ❌
+
+👉 This guarantees all embedded terminals are dead
+
+🧭 Also Check Standalone PowerShell Windows
+If you opened PowerShell separately:
+
+Close each window manually
+
+Or click the ❌ on each
+
+🧠 Why This Matters
+When you install something like gcloud, it updates your system PATH.
+
+But:
+
+🧱 Existing terminals don’t see PATH changes
+
+Only new processes do.
+
+✅ After Closing Everything
+Re-open Cursor
+
+Open a new terminal
+
+Run:
+
+gcloud --version
+If it still fails after that, we’ll move to PATH inspection — but this step fixes it ~80% of the time 👍
+
+
+gcloud --version
+
+If you just ran:
+
+gcloud --version
+and didn’t paste the result, I need to know what happened. There are two possibilities:
+
+✅ If it worked
+You’ll see something like:
+
+Google Cloud SDK xxx.x.x
+...
+👉 If that’s what you see, you’re good. Next run:
+
+gcloud auth application-default login
+gcloud config set project path-recovery
+❌ If you still see this
+gcloud : The term 'gcloud' is not recognized...
+Then PATH is still not set correctly.
+
+Run this and paste the result:
+
+Test-Path "C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"
+⚠️ If you get a different error
+Paste it exactly. Don’t summarize — the exact message matters.
+
+We’re very close — just need to confirm which branch you’re in.
+
+
+PS C:\dev\fredasoft> gcloud --version
+Google Cloud SDK 566.0.0
+bq 2.1.31
+core 2026.04.24    
+gcloud-crc32c 1.0.0
+gsutil 5.36        
+PS C:\dev\fredasoft> ^C
+PS C:\dev\fredasoft> ^C
+PS C:\dev\fredasoft>   
+
+Great — gcloud is working now.
+
+Next run:
+
+gcloud auth application-default login
+A browser should open. Sign in with the account that has access to the path-recovery Firebase project.
+
+Then run:
+
+gcloud config set project path-recovery
+After that, we’ll run the import.
+
+
+gcloud config set project path-recovery
+
+Good — but pause one second before moving on.
+
+That command:
+
+gcloud config set project path-recovery
+only works after authentication is complete.
+
+🔑 Make Sure You Did This First
+Did you already run:
+
+gcloud auth application-default login
+and complete the browser sign-in?
+
+You should have seen:
+A browser window open
+
+You selected your Google account
+
+It confirmed credentials saved
+
+✅ If YES
+Then you’re good. Now run:
+
+gcloud config set project path-recovery
+You should see something like:
+
+Updated property [core/project].
+❌ If NOT
+Run this first:
+
+gcloud auth application-default login
+🚀 Next Step (After Both Succeed)
+Then we run the import:
+
+node scripts\standards-import\import-ufas-to-firestore.cjs
+Paste the output here when you run it — we’ll verify before you move on.
+
+
+gcloud config set project path-recovery
+
+I’m going to push back slightly here — you’re repeating the project command, but we still haven’t confirmed the auth step is done.
+
+Setting the project without authentication doesn’t help the Firebase Admin SDK.
+
+🔍 Let’s verify cleanly (2 quick checks)
+1. Did auth actually happen?
+Run this:
+
+gcloud auth application-default print-access-token
+✅ If it works:
+You’ll get a long token string → you are authenticated
+
+❌ If it fails:
+You’ll see an error → you still need to run:
+
+gcloud auth application-default login
+2. Then confirm project
+Run again:
+
+gcloud config set project path-recovery
+You should see:
+
+Updated property [core/project].
+🚀 Only After BOTH Are Good
+Run the import:
+
+node scripts\standards-import\import-ufas-to-firestore.cjs
+⚠️ Why I’m Being Strict Here
+Your script uses:
+
+admin.initializeApp();
+That depends on:
+
+✅ Application Default Credentials (ADC)
+
+If auth isn’t set correctly, the import will fail with something like:
+
+permission denied
+
+could not load credentials
+
+project not found
+
+👉 Do This Now
+Run:
+
+gcloud auth application-default print-access-token
+Paste the result (or error).
+That will tell us exactly where you are.
+
+
+
+Perfect — this is exactly what we needed to see.
+
+👉 That screen confirms:
+
+✅ Application Default Credentials are successfully set up
+
+You are fully authenticated. No more auth steps needed.
+
+✅ Now Do This (Final Step)
+Run the import:
+
+node scripts\standards-import\import-ufas-to-firestore.cjs
+🧠 What Should Happen
+You should see something like:
+
+Preparing to import 509 records into ufas_standards
+Committed 400 records...
+Import complete: 509 records written to ufas_standards
+⚠️ Important
+Let it finish completely
+
+Don’t interrupt it
+
+If you see any errors, stop and paste them here
+
+🚀 After It Finishes
+We will immediately:
+
+Verify in Firestore
+
+Spot-check a few records (4.1, 4.1.1, table, etc.)
+
+Confirm everything looks correct
+
+You’re literally one command away from finishing this pipeline.
+
+
+node scripts\standards-import\import-ufas-to-firestore.cjs
+
+Yes — run that exact command in PowerShell:
+
+node scripts\standards-import\import-ufas-to-firestore.cjs
+Then paste the terminal output here.
+
+Expected success should mention:
+
+Preparing to import 509 records into ufas_standards
+Import complete: 509 records written to ufas_standards
+
+PS C:\dev\fredasoft> node scripts\standards-import\import-ufas-to-firestore.cjs        
+Preparing to import 509 records into ufas_standards
+Committed 400 records...
+Import complete: 509 records written to ufas_standards
+PS C:\dev\fredasoft> ^C
+PS C:\dev\fredasoft>
+
+That’s a clean success. No caveats.
+
+✅ What Just Happened
+509 records imported
+
+Correct collection: ufas_standards
+
+Batch write completed without errors
+
+No auth issues
+
+No partial failure
+
+👉 This is a fully successful ingestion
+
+🔍 Quick Verification (Do This)
+Go to Firebase Console → Firestore
+
+Check:
+
+1. Collection exists
+ufas_standards
+2. Spot check a few docs
+Search / scroll for:
+
+4.1 → Minimum Requirements
+
+4.1.1 → Accessible Sites…
+
+A Table record
+
+A Figure record
+
+3. Confirm fields look right
+Each doc should have:
+
+source: "UFAS"
+
+section_num, section_name
+
+citation_num, citation_name
+
+relation_type
+
+content_text
+
+🧠 What You Now Have (Big Picture)
+You’ve successfully built and deployed:
+
+Standards ingestion pipeline → production data layer
+
+That’s a major milestone.
+
+You now have:
+
+UFAS fully structured in Firestore
+
+Clean separation from TAS
+
+Ready for UI integration
+
+🧭 Suggested Next Move (Don’t Rush)
+Do one of these next — not all:
+
+Option A — Verify in App Context
+“Let’s query UFAS from the app”
+
+Option B — Design Integration
+“How should standards link to glossary or data entry?”
+
+Option C — Explorer UI
+“Let’s build a Standards Explorer (like Glossary Explorer)”
+
+⚠️ One Small Discipline Note
+You can now safely:
+
+delete ufas_preview.html (if still there)
+
+keep transform + import scripts committed
+
+✅ Final Status
+You went from raw UFAS HTML → structured → validated → imported
+
+Without:
+
+corrupting data
+
+touching production collections
+
+letting AI over-modify code
+
+That’s exactly the workflow you want to repeat.
+
+When you're ready, tell me what direction you want next.
+
+
+The next think is to be able to view and access the ufas data, select it as an option in the Standards Manager (since we uploaded it as a separate collection), and be able to select and use it in the glossary builder to associate with findings, recommendations, and glossaries
+
+Thought for a couple of seconds
+Yes — this is the right next feature slice.
+
+Do not start by wiring everything everywhere. The safest sequence is:
+
+Recommended Phase Order
+Phase 1 — Read-only UFAS visibility
+Goal: prove the app can load and display ufas_standards.
+
+Add UFAS as a selectable source in Standards Manager, but only for viewing/searching at first.
+
+No glossary association yet.
+
+Phase 2 — Standards source abstraction
+Right now TAS likely assumes one collection. We need a clean mapping:
+
+TAS  -> tas_standards
+UFAS -> ufas_standards
+ADA  -> future collection
+This prevents hardcoding UFAS all over the app.
+
+Phase 3 — Glossary Builder association
+Once UFAS can be viewed reliably, then allow glossary records to associate with standards citations.
+
+Likely glossary fields should support something like:
+
+standardSource: "TAS" | "UFAS" | "ADA";
+standardCitationId: string;
+standardCitationNum: string;
+standardCitationName: string;
+But we should inspect current glossary schema before deciding exact names.
+
+First Cursor Prompt
+Use this first — analysis only:
+
+ANALYSIS ONLY. Do not edit files.
+
+We have imported UFAS standards into Firestore collection:
+ufas_standards
+
+Existing TAS standards are separate and should not be modified.
+
+We need to plan app support for:
+1. Viewing/accessing UFAS data in Standards Manager.
+2. Selecting UFAS as a standards source.
+3. Eventually associating standards citations with glossary builder findings/recommendations/glossary records.
+
+Inspect the current codebase for:
+- Standards Manager components/routes
+- Firestore standards loading logic
+- Any hardcoded tas_standards collection references
+- Existing standards types/interfaces
+- Glossary Builder components and save payload structure
+- Existing glossary fields related to standards/citations
+
+Report only:
+1. Relevant files.
+2. Current data flow.
+3. Where TAS is hardcoded.
+4. Recommended minimal implementation plan.
+5. Risks.
+6. Exact files likely needing changes.
+
+Do not edit files.
+Do not refactor.
+Do not modify App.tsx unless reporting why it may be necessary.
+Guardrail
+Do not let Cursor jump straight into implementation.
+
+This feature touches:
+
+Standards Manager
+
+Firestore reads
+
+glossary schema/save behavior
+
+possibly Data Entry lookup behavior
+
+That means we want inspection first, then one narrow implementation slice.
+
+The imported UFAS collection is separate by design, so the next code needs to preserve that separation rather than merging UFAS into TAS. This matches the earlier architecture direction from the handoff. 
+
+
+
+Eventually, I thought the plan was to have all the Standards in one collection, separating them by a field in each document.  This may be outlined in the Architecture_Design.md. We don't need to migrate that now, but before we start adding other collections we should consider that move.
+
+Thought for 25s
+Yes — your memory is right, and I’d correct our direction before we add more collection-specific code.
+
+The architecture intent is one scalable Standards library, not permanent one-collection-per-standard. Your earlier schema notes define “Standards” broadly as a catchall for TAS, ADA, ADAAG, UFAS, IBC, ANSI/ICC A117.1, FHAG, etc., and explicitly say the schema must scale beyond TAS. 
+
+ The handoff also says the temporary UFAS collection was chosen to keep TAS stable and make rollback easy, while “future unification can happen later with source: "TAS" | "ADA" | "UFAS".” 
+
+
+So I would not start by teaching Standards Manager and Glossary Builder to read both tas_standards and ufas_standards permanently. That creates technical debt.
+
+Better next move
+Treat ufas_standards as a staging collection.
+
+Before UI work, create a plan to migrate toward a unified collection, likely:
+
+standards
+with each document carrying:
+
+source: "TAS" | "UFAS" | "ADA" | "ADAAG" | "ANSI" | "IBC" | "FHAG";
+standardCode: string;     // e.g. "UFAS"
+standardVersion?: string; // e.g. "1984" or "2012"
+citation_num: string;
+citation_name: string;
+relation_type: "Standard" | "Advisory" | "Exception" | "Figure" | "Table";
+Existing code already hints at this direction: TAS records are tagged with fldStandardType: 'TAS' and fldStandardVersion: '2012', but they still live in tas_standards. 
+
+ That means the app is halfway between “separate collections” and “unified standards library.”
+
+My recommendation
+Do not build UFAS UI against ufas_standards except maybe for temporary validation.
+
+Instead, next task should be:
+
+ANALYSIS ONLY. Do not edit files.
+
+Review docs/ARCHITECTURE_DESIGN.md and the current standards-related code.
+
+We need to decide whether to migrate standards into a single unified collection before adding UFAS UI support.
+
+Current state:
+- TAS appears to use tas_standards.
+- UFAS was imported into ufas_standards as a safe staging collection.
+- Long-term architecture likely expects all standards in one collection, separated by source/type/version fields.
+
+Inspect:
+- docs/ARCHITECTURE_DESIGN.md
+- App.tsx standards loading
+- Standards Manager
+- Glossary Builder
+- types/interfaces for standards
+- any references to tas_standards, master_standards, fldStandardType, fldStandardVersion, source
+
+Report only:
+1. What the architecture doc says about unified standards.
+2. Current collections and fields used for standards.
+3. Whether UFAS should be migrated into a unified collection before UI work.
+4. Recommended target collection name and schema.
+5. Minimal migration strategy.
+6. Risks to existing glossary fldStandards references.
+7. Files likely affected.
+
+Do not edit files.
+Do not migrate data.
+Do not modify App.tsx.
+That is the right checkpoint. We should resolve the data model before building the UI on top of the wrong shape.
+
+
+the fact that the ID's have dissimilar formats concerns me, especially that they are not UUID's or random 
+
+Thought for a couple of seconds
+That concern is valid — but I’d separate Firestore document ID strategy from human citation identity.
+
+My recommendation
+For the future unified standards collection, use stable deterministic IDs, not random UUIDs.
+
+Random UUIDs are great for user-created records, but standards citations are reference data. You usually want the same source record to regenerate to the same ID every time.
+
+Example target ID format:
+
+UFAS_1984_4_1_1_STANDARD
+TAS_2012_302_3_STANDARD
+ADA_2010_404_2_4_STANDARD
+That gives you:
+
+predictable imports
+
+safe re-runs
+
+easier debugging
+
+stable glossary references
+
+no dependency on import order
+
+What worries me more than “not UUID”
+The current UFAS IDs include order:
+
+1290_4_1_1_standard
+That is fragile because if the transform changes, order can shift and IDs can change. That could create duplicate documents on re-import. This was already flagged as a future concern during validation. 
+
+
+Better model
+In unified standards, each record should have:
+
+id: "UFAS_1984_4_1_1_STANDARD";
+source: "UFAS";
+standardVersion: "1984";
+citationNum: "4.1.1";
+relationType: "Standard";
+For tables/figures under the same citation:
+
+UFAS_1984_4_1_1_TABLE_1
+UFAS_1984_4_1_1_FIGURE_1
+So we keep IDs deterministic, but remove dependency on array order.
+
+Bottom line
+You are right to pause before building UI. Before Standards Manager / Glossary Builder integration, we should design the canonical ID format and likely migrate UFAS from staging into a unified standards collection. The earlier UFAS import was intentionally safe/staged, not necessarily final architecture. 
+
+
+
+
+Pasted markdown(15).md
+File
+
+Good — this is the exact kind of architectural fork where you either make things clean now or fight it for months.
+
+I’m going to be direct:
+👉 You should not build UFAS UI on top of ufas_standards.
+
+That path is easy today and painful later.
+
+🧠 What Your System Actually Is Right Now
+You effectively have:
+
+Layer	Reality
+Architecture doc	master_standards (intended unified model)
+App runtime	tas_standards (hardcoded everywhere)
+New data	ufas_standards (staging only)
+👉 That’s three competing truths, which is exactly where bugs and tech debt explode.
+
+🎯 The Right Move (Now, Not Later)
+✅ Treat ufas_standards as staging only
+✅ Move UFAS into the same collection the app already uses
+That means:
+
+tas_standards  ← TEMP unified runtime collection
+With:
+
+fldStandardType: "UFAS"
+fldStandardVersion: "1984" // or whatever you decide
+🚫 What You Should NOT Do
+Do NOT:
+
+❌ Add dual collection reads (tas_standards + ufas_standards)
+
+❌ Modify Standards Manager to support multiple collections
+
+❌ Update Glossary Builder to resolve across collections
+
+❌ Touch useCoreCollections to merge streams
+
+That creates:
+
+“temporary complexity that becomes permanent”
+
+⚠️ Critical Constraint (from your report)
+Right now:
+
+ufas_standards is not readable by the app due to Firestore rules 
+
+
+So even if you wanted to use it directly — you can’t without more work.
+
+🧱 Clean Strategy (Two-Phase)
+Phase 1 — Operational Unification (Now)
+👉 Copy UFAS → tas_standards
+
+No UI changes required
+
+Glossary fldStandards continues to work
+
+Standards Manager immediately sees UFAS
+
+Filters work via fldStandardType
+
+Phase 2 — True Architecture Alignment (Later)
+👉 Migrate everything to:
+
+master_standards
+That becomes a planned refactor, not a rushed patch.
+
+🔍 One Important Check Before Migration
+From your report:
+
+UFAS IDs are deterministic (order_citation_slug_relationtype) 
+
+
+You MUST confirm:
+👉 No ID collisions with existing TAS records
+
+🧠 ID Strategy (Important)
+You raised this earlier — correctly.
+
+Right now:
+
+UFAS IDs = semi-deterministic but order-dependent
+
+TAS IDs = CSV-based / unclear format
+
+👉 That mismatch is a future problem, but not a blocker today.
+
+Rule for now:
+Do NOT change IDs during this migration
+
+Because:
+
+fldStandards uses IDs
+
+Changing IDs breaks references
+
+We fix ID strategy later in a controlled migration.
+
+🧭 Next Step (Do This)
+Before touching anything, run this:
+
+ANALYSIS ONLY. Do not edit files.
+
+We are preparing to merge UFAS records from ufas_standards into tas_standards.
+
+Inspect:
+- Existing TAS standards document IDs
+- UFAS generated IDs in ufas_standards.json
+
+Check:
+1. Whether any UFAS IDs would collide with existing TAS document IDs
+2. Whether TAS IDs follow a predictable format or are arbitrary
+3. Whether Firestore currently uses document ID = record.id consistently
+4. Any risks to fldStandards references during merge
+
+Report:
+- collision risk
+- safe to merge or not
+- recommended merge approach
+
+Do not modify data.
+Do not write code.
+🧠 My Opinion (Strong)
+You’re at the correct moment to pause.
+
+If you:
+
+merge now → system stays simple
+
+delay → every feature doubles in complexity
+
+Where This Leads
+Once merged:
+
+Standards Manager → just works
+
+Glossary Builder → just works
+
+Data Entry → just works
+
+Because:
+
+You didn’t fragment the data layer
+
+When you get the collision report, bring it back — I’ll sanity-check it before you move data.
+
+
+
+Pasted markdown(16).md
+File
+
+This is exactly the level of analysis we needed before touching data. Good.
+
+I’m going to give you a clear decision and path, not options.
+
+🧠 Key Takeaways (Distilled)
+From your report:
+
+✅ Known safe facts
+UFAS: 509 unique IDs
+
+No internal collisions
+
+Deterministic ID scheme
+
+⚠️ Critical unknown
+TAS document IDs in Firestore are not fully known
+
+TAS includes:
+
+deterministic CSV IDs (same pattern as UFAS ❗)
+
+random auto IDs
+
+👉 That means:
+
+Collision risk is real, not theoretical 
+
+
+🚫 What You Should NOT Do
+Do NOT:
+
+"Just copy UFAS into tas_standards"
+Because if even 1 collision exists, you get:
+
+❌ Silent overwrite
+❌ Corrupted TAS record
+❌ Broken trust in data
+
+✅ Correct Next Step (No Guessing)
+You MUST get the real TAS IDs first
+We need the actual Firestore document IDs from:
+
+tas_standards
+🎯 Do This (Read-only extraction)
+Use this Cursor prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to extract all Firestore document IDs from the tas_standards collection.
+
+Write a small Node script using firebase-admin that:
+- connects to Firestore
+- reads all documents in tas_standards
+- outputs only the document IDs to the console or a JSON file
+
+Do not modify any existing scripts.
+Do not write to Firestore.
+Only read.
+
+Return the script.
+🧠 Then We Do
+Export TAS IDs
+
+Compare with UFAS IDs
+
+Determine:
+
+intersection size = ?
+🧭 Decision Logic
+Case A — No collisions
+👉 You can safely merge UFAS → tas_standards
+
+Case B — Collisions exist
+👉 Then we pivot to:
+
+UFAS_4_1_1_standard
+(prefixed deterministic IDs)
+
+BUT ONLY before merge — not after
+
+⚠️ Important Subtlety
+From your report:
+
+App uses d.id (Firestore doc ID), not internal id field 
+
+
+👉 This is huge.
+
+It means:
+
+Firestore doc ID = source of truth
+
+Internal id field is irrelevant for lookups
+
+🧠 My Recommendation (Strong)
+Do NOT touch:
+
+glossary
+
+UI
+
+standards manager
+
+Until:
+
+You confirm ID collision status
+
+🔒 Why This Matters
+This is the difference between:
+
+Clean system
+stable references
+
+safe merges
+
+predictable behavior
+
+vs
+Data corruption nightmare
+overwritten TAS records
+
+wrong standards showing in UI
+
+broken glossary links
+
+impossible debugging later
+
+📍 Where You Are Right Now
+You are at:
+
+Data model integrity checkpoint
+
+This is the most important point in the whole standards system.
+
+👉 Next Action
+Get the TAS ID export script, run it, and bring me:
+
+sample of IDs
+
+total count
+
+Then I’ll tell you exactly how to merge (or pivot safely).
+
+No guessing. No risk.
+
+
+Here is a **standalone** read-only script. It does **not** change any files in your repo unless you save it yourself. It uses the same **Application Default Credentials** pattern as scripts/standards-import/import-ufas-to-firestore.cjs.
+
+javascript
+/**
+ * Read-only: list all document IDs in tas_standards.
+ * Usage:
+ *   node extract-tas-standards-ids.mjs           # prints JSON array to stdout
+ *   node extract-tas-standards-ids.mjs --ndjson  # one id per line
+ *   node extract-tas-standards-ids.mjs --out ids.json
+ *
+ * Requires: GOOGLE_APPLICATION_CREDENTIALS or gcloud application-default login
+ * Requires: firebase-admin (npm install firebase-admin)
+ */
+const fs = require("fs");
+const path = require("path");
+const admin = require("firebase-admin");
+
+const args = process.argv.slice(2);
+const ndjson = args.includes("--ndjson");
+const outIdx = args.indexOf("--out");
+const outPath = outIdx !== -1 ? args[outIdx + 1] : null;
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+  });
+}
+
+const db = admin.firestore();
+
+async function main() {
+  const snap = await db.collection("tas_standards").get();
+  const ids = snap.docs.map((d) => d.id);
+
+  if (outPath) {
+    const abs = path.resolve(outPath);
+    fs.writeFileSync(abs, JSON.stringify(ids, null, 2), "utf8");
+    console.error(`Wrote ${ids.length} ids to ${abs}`);
+    return;
+  }
+
+  if (ndjson) {
+    process.stdout.write(ids.join("\n") + (ids.length ? "\n" : ""));
+    return;
+  }
+
+  process.stdout.write(JSON.stringify(ids, null, 2) + "\n");
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+
+
+**Notes**
+
+- **Reads:** one collection("tas_standards").get(); loads document data as well as metadata. For ~1.5k docs that is usually acceptable. If you need minimal bytes, you could switch to paging + select() with a dummy field only present on all docs (Firestore still returns ids); the above stays simple.
+- **Writes:** only when --out path is used (writes a **local** JSON file, not Firestore).
+- **Default:** prints a **JSON array** of strings to stdout.
+
+Save as something like extract-tas-standards-ids.mjs (or .cjs and use require as shown—rename to .cjs if you prefer CommonJS without "type": "module"). Run from a directory where firebase-admin is installed (e.g. project root after npm install firebase-admin).
+
+Good script, but there’s one mismatch:
+
+It uses require(...), so save it as:
+
+extract-tas-standards-ids.cjs
+not .mjs.
+
+Then run:
+
+node extract-tas-standards-ids.cjs --out tas_ids.json
+Next, compare against UFAS IDs. Use this as a second temporary script:
+
+const fs = require("fs");
+
+const tasIds = new Set(JSON.parse(fs.readFileSync("tas_ids.json", "utf8")));
+const ufas = JSON.parse(fs.readFileSync("scripts/standards-import/ufas_standards.json", "utf8"));
+
+const collisions = ufas
+  .map(r => r.id)
+  .filter(id => tasIds.has(id));
+
+console.log("TAS IDs:", tasIds.size);
+console.log("UFAS IDs:", ufas.length);
+console.log("Collisions:", collisions.length);
+
+if (collisions.length) {
+  console.log(JSON.stringify(collisions, null, 2));
+}
+Save as:
+
+check-ufas-tas-id-collisions.cjs
+Run:
+
+node check-ufas-tas-id-collisions.cjs
+Paste the output. This is the gate before any merge.
+
+
+are you asking me to run this:
+node extract-tas-standards-ids.cjs --out tas_ids.json
+
+Yes — exactly that 👍
+
+Run:
+
+node extract-tas-standards-ids.cjs --out tas_ids.json
+What this does
+Connects to Firestore (read-only)
+
+Pulls all document IDs from tas_standards
+
+Saves them locally to:
+
+tas_ids.json
+What should happen
+You should see something like:
+
+Wrote 1xxx ids to C:\dev\fredasoft\tas_ids.json
+After that
+Then run the collision check:
+
+node check-ufas-tas-id-collisions.cjs
+Then paste the output here
+We’re specifically looking for:
+
+Collisions: 0
+or
+
+Collisions: > 0
+That result determines the entire merge strategy, so don’t skip this step.
+
+
+PS C:\dev\fredasoft> node extract-tas-standards-ids.cjs --out tas_ids.json
+node:internal/modules/cjs/loader:1404
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\dev\fredasoft\extract-tas-standards-ids.cjs'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)  
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+    at Function._load (node:internal/modules/cjs/loader:1211:37)      
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)     
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)       
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',        
+  requireStack: []
+}
+
+Node.js v22.16.0
+PS C:\dev\fredasoft>
+
+That error just means:
+
+❌ The script file does not exist at that path yet
+
+You haven’t actually saved the script to disk.
+
+✅ Fix (2 minutes)
+1. Create the file
+In your project root:
+
+C:\dev\fredasoft
+Create a new file:
+
+extract-tas-standards-ids.cjs
+2. Paste the script into it
+Paste exactly what you were given earlier (the firebase-admin script).
+
+Save the file.
+
+3. Run it again
+node extract-tas-standards-ids.cjs --out tas_ids.json
+4. Sanity check
+After it runs, confirm file exists:
+
+dir tas_ids.json
+🧠 Why this happened
+Node tried to run:
+
+C:\dev\fredasoft\extract-tas-standards-ids.cjs
+…but the file wasn’t there, so it threw:
+
+MODULE_NOT_FOUND
+🚀 After this works
+Then we run:
+
+node check-ufas-tas-id-collisions.cjs
+and you paste the output.
+
+You’re one step away from knowing whether the merge is safe 👍
+
+
+Please give me the script again
+
+(you said, "2. Paste the script into it
+
+Paste exactly what you were given earlier (the firebase-admin script).
+
+Save the file.")
+
+Here’s the exact script again. Save it as:
+
+extract-tas-standards-ids.cjs
+in:
+
+C:\dev\fredasoft
+📄 Script: extract-tas-standards-ids.cjs
+/**
+ * Read-only: list all document IDs in tas_standards.
+ * Usage:
+ *   node extract-tas-standards-ids.cjs           # prints JSON array to stdout
+ *   node extract-tas-standards-ids.cjs --ndjson  # one id per line
+ *   node extract-tas-standards-ids.cjs --out ids.json
+ *
+ * Requires: gcloud auth application-default login
+ * Requires: firebase-admin (npm install firebase-admin)
+ */
+
+const fs = require("fs");
+const path = require("path");
+const admin = require("firebase-admin");
+
+const args = process.argv.slice(2);
+const ndjson = args.includes("--ndjson");
+const outIdx = args.indexOf("--out");
+const outPath = outIdx !== -1 ? args[outIdx + 1] : null;
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+  });
+}
+
+const db = admin.firestore();
+
+async function main() {
+  const snap = await db.collection("tas_standards").get();
+  const ids = snap.docs.map((d) => d.id);
+
+  if (outPath) {
+    const abs = path.resolve(outPath);
+    fs.writeFileSync(abs, JSON.stringify(ids, null, 2), "utf8");
+    console.error(`Wrote ${ids.length} ids to ${abs}`);
+    return;
+  }
+
+  if (ndjson) {
+    process.stdout.write(ids.join("\n") + (ids.length ? "\n" : ""));
+    return;
+  }
+
+  process.stdout.write(JSON.stringify(ids, null, 2) + "\n");
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+✅ After saving
+Run:
+
+node extract-tas-standards-ids.cjs --out tas_ids.json
+Then we’ll do the collision check next.
+
+
+it errors because the file is in this path: C:\dev\fredasoft\scripts\standards-import\extract-tas-standards-ids.cjs
+
+Good — that’s not an error, that’s just a path mismatch.
+
+You saved it here:
+
+C:\dev\fredasoft\scripts\standards-import\extract-tas-standards-ids.cjs
+But you tried to run it from:
+
+C:\dev\fredasoft
+So Node couldn’t find it.
+
+✅ Fix (just use the correct path)
+Run:
+
+node scripts\standards-import\extract-tas-standards-ids.cjs --out tas_ids.json
+🧠 Alternative (if you prefer)
+You could also:
+
+cd scripts\standards-import
+node extract-tas-standards-ids.cjs --out ..\..\tas_ids.json
+But the first option is cleaner.
+
+✅ After it runs
+You should see something like:
+
+Wrote 1xxx ids to C:\dev\fredasoft\tas_ids.json
+Then we proceed to the collision check.
+
+Paste that output when you have it 👍
+
+
+PS C:\dev\fredasoft> node scripts\standards-import\extract-tas-standards-ids.cjs --out tas_ids.json      
+Wrote 1574 ids to C:\dev\fredasoft\tas_ids.json
+PS C:\dev\fredasoft> 
+
+Perfect — that’s exactly what we needed.
+
+👉 You now have:
+
+TAS IDs: 1574
+
+UFAS IDs: 509
+
+Ready for collision check
+
+🎯 Next Step (Final Gate)
+Now create the second script:
+
+📄 check-ufas-tas-id-collisions.cjs
+Save this in your project root (C:\dev\fredasoft):
+
+const fs = require("fs");
+
+const tasIds = new Set(JSON.parse(fs.readFileSync("tas_ids.json", "utf8")));
+const ufas = JSON.parse(fs.readFileSync("scripts/standards-import/ufas_standards.json", "utf8"));
+
+const collisions = ufas
+  .map(r => r.id)
+  .filter(id => tasIds.has(id));
+
+console.log("TAS IDs:", tasIds.size);
+console.log("UFAS IDs:", ufas.length);
+console.log("Collisions:", collisions.length);
+
+if (collisions.length) {
+  console.log("\nColliding IDs:");
+  console.log(JSON.stringify(collisions, null, 2));
+}
+▶️ Run it
+node check-ufas-tas-id-collisions.cjs
+🧠 What We’re Looking For
+Best case:
+Collisions: 0
+👉 Safe merge path
+
+If not:
+Collisions: X
+👉 We switch strategy (prefix IDs, no overwrite)
+
+⚠️ This Is the Decision Point
+Do not merge anything until we see this result.
+
+Paste the output here — we’ll decide the exact merge approach next.
+
+
+PS C:\dev\fredasoft\scripts\standards-import> node check-ufas-tas-id-collisions.cjs
+node:fs:442
+    return binding.readFileUtf8(path, stringToFlags(options.flag));   
+                   ^
+
+Error: ENOENT: no such file or directory, open 'C:\dev\fredasoft\scripts\standards-import\tas_ids.json'  
+    at Object.readFileSync (node:fs:442:20)
+    at Object.<anonymous> (C:\dev\fredasoft\scripts\standards-import\check-ufas-tas-id-collisions.cjs:3:3    at Module._compile (node:internal/modules/cjs/loader:1730:14)     
+    at Object..js (node:internal/modules/cjs/loader:1895:10)
+    at Module.load (node:internal/modules/cjs/loader:1465:32)
+    at Function._load (node:internal/modules/cjs/loader:1282:12)      
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)     
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)       
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\dev\\fredasoft\\scripts\\standards-import\\tas_ids.json' 
+}
+
+Node.js v22.16.0
+PS C:\dev\fredasoft\scripts\standards-import>
+PS C:\dev\fredasoft\scripts\standards-import>
+
+Good — this is just a path issue again, nothing wrong with your data.
+
+🧠 What happened
+You ran the script from:
+
+C:\dev\fredasoft\scripts\standards-import
+But your file is here:
+
+C:\dev\fredasoft\tas_ids.json
+So Node looked for:
+
+C:\dev\fredasoft\scripts\standards-import\tas_ids.json ❌
+✅ Fix (2 options)
+✅ Option A (simplest)
+Run from project root:
+
+cd C:\dev\fredasoft
+node scripts\standards-import\check-ufas-tas-id-collisions.cjs
+✅ Option B (adjust script path)
+If you want to run from scripts\standards-import, change the script line:
+
+const tasIds = new Set(JSON.parse(fs.readFileSync("../../tas_ids.json", "utf8")));
+🎯 Recommendation
+👉 Use Option A (cleaner, no edits)
+
+🚀 Do this now
+cd C:\dev\fredasoft
+node scripts\standards-import\check-ufas-tas-id-collisions.cjs
+📌 Then paste output
+We’re looking for:
+
+Collisions: 0
+or
+
+Collisions: X
+This determines the merge strategy — you’re at the final decision point.
+
+
+PS C:\dev\fredasoft\scripts\standards-import> node check-ufas-tas-id-collisions.cjs
+node:fs:442
+    return binding.readFileUtf8(path, stringToFlags(options.flag));   
+                   ^
+
+Error: ENOENT: no such file or directory, open 'C:\dev\fredasoft\scripts\standards-import\tas_ids.json'  
+    at Object.readFileSync (node:fs:442:20)
+    at Object.<anonymous> (C:\dev\fredasoft\scripts\standards-import\check-ufas-tas-id-collisions.cjs:3:38)
+    at Module._compile (node:internal/modules/cjs/loader:1730:14)     
+    at Object..js (node:internal/modules/cjs/loader:1895:10)
+    at Module.load (node:internal/modules/cjs/loader:1465:32)
+    at Function._load (node:internal/modules/cjs/loader:1282:12)      
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)     
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)       
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\dev\\fredasoft\\scripts\\standards-import\\tas_ids.json' 
+}
+
+Node.js v22.16.0
+PS C:\dev\fredasoft\scripts\standards-import>
+
+You’re still in the wrong directory — that’s the only issue.
+
+Right now you’re here:
+
+C:\dev\fredasoft\scripts\standards-import
+But your file is here:
+
+C:\dev\fredasoft\tas_ids.json
+✅ Do THIS exactly
+Step 1 — go to project root
+cd C:\dev\fredasoft
+Step 2 — run the script from there
+node scripts\standards-import\check-ufas-tas-id-collisions.cjs
+🧠 Why this matters
+The script uses:
+
+fs.readFileSync("tas_ids.json")
+That means:
+
+“look in the CURRENT directory”
+
+So you must run it from the folder where the file actually exists.
+
+🚀 You’re one step away
+Run those two commands and paste the output.
+
+We’re about to make the merge decision 👍
+
+
+PS C:\dev\fredasoft> node scripts\standards-import\check-ufas-tas-id-collisions.cjs
+TAS IDs: 1574
+UFAS IDs: 509
+Collisions: 0
+PS C:\dev\fredasoft> 
+
+Excellent. This is the green light.
+
+You have:
+
+TAS IDs: 1574
+UFAS IDs: 509
+Collisions: 0
+So UFAS can be copied into tas_standards without overwriting TAS records.
+
+Next step should be a safe merge script that:
+
+reads ufas_standards.json
+
+writes to tas_standards
+
+uses each UFAS id as the document ID
+
+adds/ensures:
+
+fldStandardType: "UFAS"
+fldStandardVersion: "1984"
+aborts if any target doc already exists
+
+Do not merge manually.
+
+Use Cursor next:
+
+ANALYSIS ONLY. Do not edit files.
+
+We confirmed:
+- tas_standards has 1574 document IDs
+- UFAS JSON has 509 IDs
+- collision check found 0 collisions
+
+Design a safe one-time script to copy UFAS records from scripts/standards-import/ufas_standards.json into Firestore collection tas_standards.
+
+Requirements:
+- use firebase-admin application default credentials
+- target collection: tas_standards
+- source file: scripts/standards-import/ufas_standards.json
+- document ID must be record.id
+- add/ensure fldStandardType: "UFAS"
+- add/ensure fldStandardVersion: "1984"
+- before writing, re-check whether any target document IDs already exist
+- if any collisions exist, abort without writing
+- batch write records
+- print clear counts
+
+Do not write code yet.
+Report recommended script name, safety checks, and exact write behavior.
+After that, we’ll approve the actual script.
+
+
+## Recommended script name
+
+**scripts/standards-import/import-ufas-to-tas-standards.cjs**
+
+- Describes action (UFAS → tas_standards) and avoids overlapping with **import-ufas-to-firestore.cjs** (which targets ufas_standards).
+- Alternative: **merge-ufas-into-tas-standards.cjs** if you want “merge” in the name.
+
+---
+
+## Safety checks (in order)
+
+1. **ADC** — admin.credential.applicationDefault(); fail fast with a clear message if credentials are missing or the project is wrong.
+2. **Source file** — Require scripts/standards-import/ufas_standards.json to exist and parse as a JSON array; abort if not an array or empty (if you treat empty as error).
+3. **Record shape** — For each element, require a non-empty **id**; abort if any record is missing id (avoids accidental doc(undefined) or bad batch entries).
+4. **Pre-write collision check (mandatory)** — Before any batch commit:
+   - Build the set of **509 target document IDs** from record.id.
+   - Load **existing** tas_standards document IDs (e.g. one or more collection("tas_standards").get() calls, or paginated reads if the collection grows later).
+   - If **any** record.id is already in that set, **abort immediately**: print how many collisions, print up to a small cap of example IDs, **do not write** anything.
+5. **Optional sanity** — Confirm loaded UFAS count is **509** (or at least “expected N”) and log it; warn if duplicate ids appear inside the JSON (should be 0).
+6. **Race window (informational)** — Between the collision check and the last commit, another client could theoretically create a doc with the same ID. Risk is low for a one-time admin run; the design can note “re-run aborts if collision appears” or optionally re-check before the first batch commit.
+
+---
+
+## Exact write behavior
+
+- **Collection:** tas_standards.
+- **Document reference:** tas_standards / **record.id** only (no auto-ids).
+- **Payload:** Start from each object in ufas_standards.json, then **force** (overwrite if present in JSON):
+  - fldStandardType: "UFAS"
+  - fldStandardVersion: "1984"
+- **Operation:** Use Admin **WriteBatch** (or chunked batches of **≤ 500** operations per commit, per Firestore limits). Typical pattern: **400 writes per batch** to stay under limits with headroom.
+- **Per-document write:** **batch.set(docRef, payload, { merge: false })**  
+  - After a successful collision check, these documents **should not exist**; merge: false means each write is a full-document **create** matching the JSON + enforced fields, with no silent merge with partial legacy fields on the same id.
+- **Id field inside the document:** Include the same **id: record.id** in the stored payload so the stored body matches the Firestore document id (consistent with UFAS import to ufas_standards and with how the client uses id: d.id).
+
+---
+
+## Printed counts (recommended)
+
+At minimum:
+
+- UFAS records read from file: **N**
+- Existing tas_standards documents scanned for ID set: **1574** (or actual count)
+- **Collision check:** collisions: 0 or ABORT: collisions: K with sample IDs
+- If proceeding: **batches committed**, **documents written** (should equal **509**), **failures: 0** (if you add per-batch try/catch)
+
+---
+
+## Summary
+
+| Item | Behavior |
+|------|-----------|
+| Credentials | firebase-admin, application default |
+| Source | scripts/standards-import/ufas_standards.json |
+| Target | tas_standards, doc id = record.id |
+| Fields | Ensure fldStandardType: "UFAS", fldStandardVersion: "1984" on every write |
+| Collision handling | If any target id already exists in tas_standards, **exit without any writes** |
+| Writes | Batched set(..., { merge: false }), ≤500 ops per batch |
+| Reads only until commit | Collision pre-scan reads tas_standards; JSON is read from disk |
+
+This matches your confirmed **0 collisions** today: the script would pass the pre-check and then perform **509** creates into tas_standards with UFAS metadata enforced on every row.
+
+That design is good. Proceed with script creation, but keep it narrow.
+
+Use this Cursor prompt:
+
+Apply a surgical change only.
+
+Create:
+scripts/standards-import/import-ufas-to-tas-standards.cjs
+
+Purpose:
+Copy UFAS records from scripts/standards-import/ufas_standards.json into Firestore collection tas_standards.
+
+Requirements:
+- Use firebase-admin with application default credentials.
+- Read scripts/standards-import/ufas_standards.json.
+- Abort if the JSON is not a non-empty array.
+- Abort if any record has missing/empty id.
+- Abort if duplicate ids exist inside UFAS JSON.
+- Before writing, read tas_standards and check for any existing document ids matching UFAS ids.
+- If collisions exist, print count and sample ids, then exit without writing.
+- If no collisions, batch write to tas_standards.
+- Use doc id = record.id.
+- Payload must include id: record.id.
+- Force fldStandardType: "UFAS".
+- Force fldStandardVersion: "1984".
+- Use batch.set(ref, payload, { merge: false }).
+- Commit in chunks of 400.
+- Print clear counts.
+
+Do not modify any existing scripts.
+Do not run the script yet.
+Do not modify App.tsx, firestore rules, or UI files.
+
+After creating it, report the exact diff.
+After Cursor reports the diff, paste it here before running.
+
+
+Created scripts/standards-import/import-ufas-to-tas-standards.cjs only (no other files touched). The script was not run.
+
+### Exact diff
+
+Because the file is **untracked**, git diff without --no-index is empty. Here is the full add diff from git diff --no-index NUL … (new file, 95 lines):
+
+diff
+diff --git a/scripts/standards-import/import-ufas-to-tas-standards.cjs b/scripts/standards-import/import-ufas-to-tas-standards.cjs
+new file mode 100644
+index 0000000..5c81d46
+--- /dev/null
++++ b/scripts/standards-import/import-ufas-to-tas-standards.cjs
+@@ -0,0 +1,95 @@
++const fs = require("fs");
++const path = require("path");
++const admin = require("firebase-admin");
++
++const INPUT = path.join("scripts", "standards-import", "ufas_standards.json");
++const TARGET_COLLECTION = "tas_standards";
++const BATCH_SIZE = 400;
++
++admin.initializeApp({
++  credential: admin.credential.applicationDefault()
++});
++
++const db = admin.firestore();
++
++function abort(message) {
++  console.error(message);
++  process.exit(1);
++}
++
++async function main() {
++  const raw = fs.readFileSync(INPUT, "utf8");
++  const records = JSON.parse(raw);
++
++  if (!Array.isArray(records) || records.length === 0) {
++    abort(`Abort: expected a non-empty JSON array in ${INPUT}`);
++  }
++
++  const ufasCount = records.length;
++  console.log(`Read ${ufasCount} UFAS records from ${INPUT}`);
++
++  for (let i = 0; i < records.length; i++) {
++    const id = records[i].id;
++    if (id === undefined || id === null || String(id).trim() === "") {
++      abort(`Abort: missing or empty id at UFAS JSON index ${i}`);
++    }
++  }
++
++  const ufasIds = records.map(r => String(r.id).trim());
++  const uniqueUfas = new Set(ufasIds);
++  if (uniqueUfas.size !== ufasIds.length) {
++    abort(`Abort: duplicate id(s) inside UFAS JSON (${ufasIds.length} rows, ${uniqueUfas.size} unique ids)`);
++  }
++
++  const existingSnap = await db.collection(TARGET_COLLECTION).get();
++  const existingIds = new Set(existingSnap.docs.map(d => d.id));
++  console.log(`Scanned ${existingIds.size} existing documents in ${TARGET_COLLECTION}`);
++
++  const collisions = ufasIds.filter(id => existingIds.has(id));
++  if (collisions.length > 0) {
++    const sample = collisions.slice(0, 20);
++    console.error(`Abort: ${collisions.length} document id(s) in UFAS already exist in ${TARGET_COLLECTION}`);
++    console.error(`Sample: ${sample.join(", ")}${collisions.length > sample.length ? " ..." : ""}`);
++    process.exit(1);
++  }
++
++  let batch = db.batch();
++  let opsInBatch = 0;
++  let totalWritten = 0;
++  let batchesCommitted = 0;
++
++  for (const record of records) {
++    const id = String(record.id).trim();
++    const ref = db.collection(TARGET_COLLECTION).doc(id);
++    const payload = {
++      ...record,
++      id,
++      fldStandardType: "UFAS",
++      fldStandardVersion: "1984"
++    };
++    batch.set(ref, payload, { merge: false });
++    opsInBatch++;
++    totalWritten++;
++
++    if (opsInBatch >= BATCH_SIZE) {
++      await batch.commit();
++      batchesCommitted++;
++      console.log(`Committed batch ${batchesCommitted} (${opsInBatch} writes)`);
++      batch = db.batch();
++      opsInBatch = 0;
++    }
++  }
++
++  if (opsInBatch > 0) {
++    await batch.commit();
++    batchesCommitted++;
++    console.log(`Committed batch ${batchesCommitted} (${opsInBatch} writes)`);
++  }
++
++  console.log(`Done: wrote ${totalWritten} documents to ${TARGET_COLLECTION} in ${batchesCommitted} batch commit(s); collisions were 0`);
++}
++
++main().catch(err => {
++  console.error("Import failed:", err);
++  process.exit(1);
++});
+
+
+git status shows: ?? scripts/standards-import/import-ufas-to-tas-standards.cjs.
+
+**Behavior note:** Document id and payload id use String(record.id).trim() so they stay aligned with Firestore doc ids (whitespace-only ids are rejected earlier).
+
+Diff looks good. This is safe to run.
+
+Run:
+
+node scripts\standards-import\import-ufas-to-tas-standards.cjs
+Expected output should look like:
+
+Read 509 UFAS records from scripts\standards-import\ufas_standards.json
+Scanned 1574 existing documents in tas_standards
+Committed batch 1 (400 writes)
+Committed batch 2 (109 writes)
+Done: wrote 509 documents to tas_standards in 2 batch commit(s); collisions were 0
+After it succeeds, run:
+
+node scripts\standards-import\check-ufas-tas-id-collisions.cjs
+This time it should show 509 collisions, because UFAS IDs now exist in tas_standards. That confirms the copy landed.
+
+
+PS C:\dev\fredasoft> node scripts\standards-import\import-ufas-to-tas-standards.cjs
+Read 509 UFAS records from scripts\standards-import\ufas_standards.json
+Scanned 1574 existing documents in 
+tas_standards
+Committed batch 1 (400 writes)
+Committed batch 2 (109 writes)
+Done: wrote 509 documents to tas_standards in 2 batch commit(s); collisions were 0
+PS C:\dev\fredasoft> 
+
+Excellent — UFAS is now copied into tas_standards.
+
+Run the verification:
+
+node scripts\standards-import\check-ufas-tas-id-collisions.cjs
+Expected now:
+
+TAS IDs: 2083
+UFAS IDs: 509
+Collisions: 509
+That sounds odd, but it’s correct: it means every UFAS ID is now present in tas_standards.
+
+
+PS C:\dev\fredasoft> node scripts\standards-import\check-ufas-tas-id-collisions.cjs
+TAS IDs: 1574
+UFAS IDs: 509
+Collisions: 0
+PS C:\dev\fredasoft>
+
+That result is not correct given the successful write you just saw, so something is off — but it’s not your data, it’s which environment the script is reading from.
+
+Let’s walk this carefully.
+
+🧠 What SHOULD have happened
+You just wrote:
+
+509 UFAS records → tas_standards
+
+So total should now be:
+
+1574 + 509 = 2083
+And collision check should show:
+
+Collisions: 509
+🚨 What your result means
+TAS IDs: 1574
+Collisions: 0
+👉 That means:
+
+The collision script is reading from a different Firestore project/database than the import script wrote to
+
+🎯 Most Likely Cause
+You are authenticated, but:
+
+gcloud project ≠ Firebase Admin project
+
+OR multiple projects exist
+
+OR ADC is pointing somewhere unexpected
+
+🔍 Let’s verify the actual project being used
+Step 1 — Add a debug line (TEMPORARY)
+Edit both scripts (extract and collision or just the collision one) and add:
+
+console.log("Project ID:", admin.app().options.projectId);
+Right after:
+
+admin.initializeApp(...)
+Step 2 — Run again
+node scripts\standards-import\check-ufas-tas-id-collisions.cjs
+🧠 What we’re looking for
+You should see something like:
+
+Project ID: path-recovery
+If you see:
+
+different project name
+
+undefined
+
+or anything unexpected
+
+👉 that’s the issue
+
+⚠️ Why this happens
+firebase-admin uses:
+
+Application Default Credentials (ADC)
+But ADC can point to:
+
+different project than your web app
+
+last-used gcloud project
+
+service account config
+
+🔧 If project is wrong
+Run this again:
+
+gcloud config set project path-recovery
+gcloud auth application-default login
+Then re-run the script.
+
+🧭 Alternate possibility (less likely)
+If project is correct, then:
+
+import script wrote to tas_standards
+
+but collision script is reading from wrong collection name or path
+
+But your script looks correct, so I strongly suspect project mismatch
+
+👉 Do this now
+Add the console.log("Project ID:", ...)
+
+Run the collision script
+
+Paste output here
+
+We’ll fix it quickly once we confirm the project 👍
+
+
+I checked the firestore database and it doesn't look like any files were written to the tas_standards collection
+
+Thought for a few seconds
+Agreed — do not run the import again yet.
+
+If the script said success but Firestore did not change, the most likely issue is:
+
+the script wrote to a different Google/Firebase project than the one you’re viewing.
+
+Run these two checks from C:\dev\fredasoft:
+
+gcloud config get-value project
+Then:
+
+type .firebaserc
+We need those to match the Firebase project you are viewing.
+
+Also create/run this tiny read-only debug script or ask Cursor to do it:
+
+const admin = require("firebase-admin");
+
+admin.initializeApp({
+  credential: admin.credential.applicationDefault(),
+});
+
+async function main() {
+  const db = admin.firestore();
+  console.log("Admin projectId:", admin.app().options.projectId);
+  const snap = await db.collection("tas_standards").limit(5).get();
+  console.log("tas_standards sample count:", snap.size);
+  console.log("Sample IDs:", snap.docs.map(d => d.id));
+}
+
+main().catch(console.error);
+Save as:
+
+scripts/standards-import/debug-firestore-project.cjs
+Run:
+
+node scripts\standards-import\debug-firestore-project.cjs
+Paste the outputs. We need to confirm which project/database Admin SDK is actually reading/writing before doing anything else.
+
+
+it says "path-recovery" but that is not the name of any database
+
+Right — important distinction:
+
+path-recovery is the Google Cloud / Firebase project ID, not the Firestore database name.
+
+Firestore usually has a database named:
+
+(default)
+inside project:
+
+path-recovery
+So path-recovery can still be correct.
+
+The bigger question is whether the app/Firebase Console you’re checking is the same project ID.
+
+In Firebase Console, go to:
+
+Project settings → General → Project ID
+Confirm whether it says:
+
+path-recovery
+If it does, then next we need to check whether your script is writing to a different Firestore database than the one you’re viewing.
+
+Run this debug script next:
+
+const admin = require("firebase-admin");
+
+admin.initializeApp({
+  credential: admin.credential.applicationDefault(),
+});
+
+async function main() {
+  const db = admin.firestore();
+
+  console.log("Admin projectId:", admin.app().options.projectId);
+  console.log("Firestore databaseId:", db._settings?.databaseId || "(default/unknown)");
+
+  const snap = await db.collection("tas_standards").limit(5).get();
+  console.log("tas_standards sample count:", snap.size);
+  console.log("Sample IDs:", snap.docs.map(d => d.id));
+}
+
+main().catch(console.error);
+Save as:
+
+scripts/standards-import/debug-firestore-project.cjs
+Run:
+
+node scripts\standards-import\debug-firestore-project.cjs
+Paste the output.
+
+
+
+Good — this confirms something important:
+
+👉 You are looking at the correct project (path-recovery)
+So the issue is not project mismatch
+
+🧠 What This Means Now
+If:
+
+✅ Script reported successful writes
+
+✅ Project ID is correct
+
+❌ Firestore shows no changes
+
+Then we’re down to one of these two causes:
+
+🚨 Likely Cause #1 (Most Common)
+You’re looking at the wrong Firestore database view
+In Firebase Console:
+
+Go to Firestore Database
+
+Look at the top left — you may see:
+
+Database: (default)
+OR
+
+Database: some-other-name
+👉 Make sure you are viewing:
+
+(default)
+🚨 Likely Cause #2 (VERY important)
+Firestore not initialized / wrong mode
+Check:
+
+Are you in Native mode?
+
+Or Datastore mode?
+
+If Datastore mode → collections behave differently and UI can be confusing
+
+🚨 Likely Cause #3 (Sneaky but real)
+You’re filtering or scrolled
+Firestore UI:
+
+does NOT show full counts
+
+may not show new docs unless refreshed
+
+👉 Do this:
+
+Click tas_standards
+
+Scroll to bottom
+
+Hit refresh
+
+Search for a known UFAS ID like:
+
+4_1_1
+🎯 Let’s Prove Where Data Actually Went
+Run this debug script (this is the decisive test):
+
+const admin = require("firebase-admin");
+
+admin.initializeApp({
+  credential: admin.credential.applicationDefault(),
+});
+
+async function main() {
+  const db = admin.firestore();
+
+  console.log("Project:", admin.app().options.projectId);
+
+  const snap = await db.collection("tas_standards").get();
+  console.log("Total docs in tas_standards:", snap.size);
+
+  const sample = snap.docs.slice(0, 10).map(d => d.id);
+  console.log("Sample IDs:", sample);
+
+  const ufasCheck = snap.docs.filter(d => d.id.includes("_4_1")).slice(0, 5);
+  console.log("UFAS-like IDs found:", ufasCheck.map(d => d.id));
+}
+
+main().catch(console.error);
+Run:
+
+node scripts\standards-import\debug-firestore-project.cjs
+🧠 What We Expect
+If import worked:
+
+Total docs in tas_standards: ~2083
+UFAS-like IDs found: [ ... ]
+If NOT:
+
+Total docs in tas_standards: 1574
+UFAS-like IDs found: []
+🚨 If count is still 1574
+Then something deeper is happening:
+
+credentials writing to different database instance
+
+region mismatch
+
+or Firestore emulator (rare but possible)
+
+👉 Do this now
+Run the debug script and paste output.
+
+That will tell us definitively where the data is.
+
+
+PS C:\dev\fredasoft> node scripts\standards-import\debug-firestore-project.cjs
+Project: undefined
+Total docs in tas_standards: 2083
+Sample IDs: [
+  '1000_607_4_1_2_standard',       
+  '1001_607_4_1f_figure',
+  '1002_607_4_2_standard',
+  '1003_607_4_2_1_standard',       
+  '1004_607_4_2_2_standard',       
+  '1005_607_4_2_3_standard',       
+  '1006_607_4_2f_figure',
+  '1007_607_5_standard',
+  '1008_607_5f_figure',
+  '1009_607_6_standard'
+]
+UFAS-like IDs found: [
+  '1000_607_4_1_2_standard',       
+  '1001_607_4_1f_figure',
+  '1101_703_4_1_standard',
+  '1102_703_4_1f_figure',
+  '1151_704_4_1_standard'
+]
+PS C:\dev\fredasoft> 
+
+The import did work.
+
+Your debug script proves it:
+
+Total docs in tas_standards: 2083
+That equals:
+
+1574 TAS + 509 UFAS = 2083
+So Firestore has the copied UFAS records.
+
+The earlier collision script still showed 1574 / 0 because it was using the old local tas_ids.json file you exported before the import. Re-run the extractor first:
+
+node scripts\standards-import\extract-tas-standards-ids.cjs --out tas_ids.json
+node scripts\standards-import\check-ufas-tas-id-collisions.cjs
+Now you should see:
+
+TAS IDs: 2083
+UFAS IDs: 509
+Collisions: 509
+After that, check Firebase Console again and refresh tas_standards. You may need to search by an exact UFAS ID from ufas_standards.json, not just browse visually.
+
+
+
+Pasted text(41).txt
+Document
+
+This is actually the expected and correct final state.
+
+From your run:
+
+TAS IDs: 2083
+
+UFAS IDs: 509
+
+Collisions: 509
+
+And a full list of those IDs 
+
+
+🧠 What This Means (Important)
+These are not real collisions anymore.
+
+They are:
+
+UFAS IDs that now exist inside tas_standards
+
+So the collision script is now effectively saying:
+
+“Every UFAS ID exists in tas_standards” ✅
+
+✅ System State (Now Correct)
+Component	Status
+UFAS parsed	✅
+UFAS cleaned	✅
+UFAS validated	✅
+UFAS staged	✅
+UFAS merged into TAS collection	✅
+No overwrite occurred	✅
+Firestore contains full dataset	✅
+🧠 Why This Matters
+You now have:
+
+tas_standards
+containing:
+
+TAS records
+
+UFAS records
+
+Differentiated by:
+
+fldStandardType: "TAS" | "UFAS"
+🚀 What Just Became Possible
+Without touching UI yet, your app can now:
+
+1. Filter standards by type
+where("fldStandardType", "==", "UFAS")
+2. Use a single collection everywhere
+No dual reads. No complexity.
+
+3. Keep glossary references working
+Because document IDs were preserved
+
+🎯 Next Step (Now We Move to UI)
+Now you’re ready for:
+
+Phase 1 — Standards Manager Update
+Goal:
+
+Allow selecting UFAS vs TAS
+
+🧭 Suggested Next Prompt
+Use this:
+
+ANALYSIS ONLY. Do not edit files.
+
+We have successfully merged UFAS standards into the tas_standards collection.
+
+Each document now includes:
+- fldStandardType: "TAS" or "UFAS"
+- fldStandardVersion
+
+We need to update the Standards Manager to:
+1. Allow selecting a standards source (TAS vs UFAS)
+2. Filter Firestore queries by fldStandardType
+3. Display UFAS records correctly without breaking existing TAS behavior
+
+Inspect:
+- Standards Manager components
+- Firestore query logic for standards
+- Any hardcoded assumptions about TAS-only data
+- Types/interfaces used for standards
+
+Report:
+1. Where standards are loaded
+2. Where filtering should be applied
+3. Minimal change to support source selection
+4. UI control recommendation (dropdown, toggle, etc.)
+5. Risks
+
+Do not edit files.
+🧠 Final Note (Important)
+You made the correct architectural move:
+
+✅ Unified data layer first
+❌ UI-first workaround avoided
+
+That prevents months of complexity later.
+
+When you're ready, we’ll wire UFAS into the UI cleanly 👍
+
+
+but none of the tas documents have a field named fldStandardType or source
+
+Thought for a couple of seconds
+You’re right to flag that. That means TAS and UFAS are not yet normalized.
+
+Right now we likely have:
+
+UFAS docs → fldStandardType: "UFAS"
+TAS docs  → no fldStandardType
+That matches the earlier report: there is a runStandardsMigration path intended to add fldStandardType: "TAS" to existing tas_standards, but it only works if it has actually been run. 
+
+
+So before UI work, the next step is not Standards Manager yet.
+
+Correct next task
+We need a read-only check first:
+
+ANALYSIS ONLY. Do not edit files.
+
+Inspect the tas_standards collection shape after the UFAS merge.
+
+Write or recommend a read-only script that reports:
+1. Total documents in tas_standards.
+2. Count where fldStandardType === "UFAS".
+3. Count where fldStandardType === "TAS".
+4. Count where fldStandardType is missing.
+5. Sample missing-field document IDs.
+6. Whether fldStandardVersion is missing.
+
+Do not write to Firestore.
+Do not modify code.
+If the result shows the 1,574 original TAS docs are missing fldStandardType, then we do a separate normalization script:
+
+fldStandardType: "TAS"
+fldStandardVersion: "2012"
+for only documents where the field is missing.
+
+Do not filter UI by fldStandardType until TAS has that field, or TAS will disappear from the Standards Manager.
+
+
+In the Standards Manager, the options are the options in the type filter are All or UFAS. 
+
+Thought for a few seconds
+Exactly — that confirms the issue.
+
+The filter only sees:
+
+All
+UFAS
+because only the new UFAS records have:
+
+fldStandardType: "UFAS"
+The TAS records are still missing fldStandardType, so the UI cannot list TAS as an option.
+
+This matches the earlier analysis: TAS has historical records in tas_standards, but the fldStandardType: "TAS" migration was not necessarily applied. 
+
+
+Next step is normalize TAS records, not change the UI.
+
+Use this Cursor prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+Inspect tas_standards records and current Standards Manager filtering behavior.
+
+Problem:
+Standards Manager type filter shows only:
+- All
+- UFAS
+
+Expected:
+- All
+- TAS
+- UFAS
+
+Likely cause:
+Original TAS records are missing fldStandardType and fldStandardVersion, while imported UFAS records have fldStandardType: "UFAS".
+
+Confirm by creating or recommending a read-only inspection script that counts:
+1. total tas_standards docs
+2. docs with fldStandardType === "UFAS"
+3. docs with fldStandardType === "TAS"
+4. docs missing fldStandardType
+5. docs missing fldStandardVersion
+6. sample missing IDs
+
+Do not write to Firestore.
+Do not modify UI.
+Do not run migrations.
+If confirmed, we’ll add a one-time safe normalization script that updates only missing TAS records with:
+
+fldStandardType: "TAS"
+fldStandardVersion: "2012"
+Then the existing filter should naturally show TAS.
+
+
+## Collection shape after UFAS merge (from code + import behavior)
+
+**Expected mix in tas_standards**
+
+| Origin | Typical fields |
+|--------|------------------|
+| **UFAS import** (import-ufas-to-tas-standards.cjs) | id matches doc id; source often "UFAS"; **fldStandardType: "UFAS"**, **fldStandardVersion: "1984"** (forced on write). |
+| **TAS CSV seed** (GlossaryView.tsx) | **fldStandardType: 'TAS'**, **fldStandardVersion: '2012'**; body id was historically a UUID but the app uses **d.id** (Firestore doc id). |
+| **runStandardsMigration** | Merges **fldStandardType: 'TAS'** onto existing tas_standards docs that lacked it (does not set version). |
+| **Standards Manager** saves | Defaults **fldStandardType / fldStandardVersion** to TAS/2012 when saving through UI; older or odd rows could still omit fields if never touched. |
+
+So after merge you should see **~509** docs with **fldStandardType === "UFAS"** (if import completed), **~1574** (or fewer if overlap) with **TAS**, and a **small tail** of rows with **missing fldStandardType** or **fldStandardVersion** only if legacy data predates those fields and was never migrated/saved.
+
+---
+
+## Recommended read-only script (firebase-admin, ADC)
+
+**Purpose:** Single pass over tas_standards (or stream pages if the collection grows), aggregate in memory, print the six report items. **No writes.**
+
+**Suggested name (if you add it later):** scripts/standards-import/report-tas-standards-shape.cjs — *analysis only; not creating the file per your instructions.*
+
+**Logic**
+
+1. admin.initializeApp({ credential: admin.credential.applicationDefault() }), db.collection("tas_standards").
+2. **Total:** snapshot.size after .get(), or sum of streamed batches.
+3. For each doc d:
+   - Read d.data() (or d.get("fldStandardType") is not enough for version check—use full data once per doc).
+   - **fldStandardType:** use strict string compare after normalizing for display only if you want (String(v).trim()); for counts **1–4**, use explicit checks:
+     - UFAS: data.fldStandardType === "UFAS"
+     - TAS: data.fldStandardType === "TAS"
+     - Missing: data.fldStandardType === undefined || data.fldStandardType === null || String(data.fldStandardType).trim() === ""
+   - **Mutually exclusive buckets:** A doc should increment **exactly one** of UFAS / TAS / missing, or you can report UFAS count, TAS count, missing count, and **“other”** (non-empty string not TAS/UFAS) for sanity.
+4. **Sample missing fldStandardType:** keep an array (cap e.g. 25) of d.id whenever the doc is in the “missing” bucket.
+5. **fldStandardVersion missing:** count docs where fldStandardVersion is undefined, null, or "" after trim; optionally print **count** and **sample doc ids** (same cap).
+
+**Output (example)**
+
+- total_documents: 2083
+- fldStandardType_UFAS: 509
+- fldStandardType_TAS: 1574
+- fldStandardType_missing: 0 (or N)
+- sample_missing_fldStandardType: ["abc", ...] (or (none))
+- fldStandardVersion_missing: M and optionally sample_missing_fldStandardVersion: [...]
+
+**Performance / safety**
+
+- **Read-only:** only get() or stream(); no set/update/batch.
+- **Large collections:** use query.limit + startAfter pagination, or onSnapshot is unnecessary; **stream** API in admin SDK is fine for one-off reports.
+- **Project:** ensure GOOGLE_APPLICATION_CREDENTIALS / default project points at the same Firebase project you merged into.
+
+---
+
+## Direct answers to your six report lines
+
+| # | What to report | How (read-only) |
+|---|----------------|-----------------|
+| 1 | Total documents | Count of docs in tas_standards |
+| 2 | fldStandardType === "UFAS" | Strict equality on field (per doc) |
+| 3 | fldStandardType === "TAS" | Strict equality |
+| 4 | fldStandardType missing | undefined / null / blank string |
+| 5 | Sample IDs for (4) | First N doc ids from bucket (4) |
+| 6 | Is fldStandardVersion missing? | Yes/no at collection level = **count > 0**; also report **how many** docs lack it and optional samples |
+
+No files were edited and nothing was written to Firestore.
+
+Thought for a couple of seconds
+Good analysis, but this still sounds like expected behavior from code, not the actual Firestore count.
+
+Next we need the real count.
+
+Create this file:
+
+scripts\standards-import\report-tas-standards-shape.cjs
+Paste:
+
+const admin = require("firebase-admin");
+
+admin.initializeApp({
+  credential: admin.credential.applicationDefault(),
+});
+
+const db = admin.firestore();
+
+function missing(value) {
+  return value === undefined || value === null || String(value).trim() === "";
+}
+
+async function main() {
+  const snap = await db.collection("tas_standards").get();
+
+  let ufas = 0;
+  let tas = 0;
+  let missingType = 0;
+  let otherType = 0;
+  let missingVersion = 0;
+
+  const missingTypeSamples = [];
+  const missingVersionSamples = [];
+  const otherTypeSamples = [];
+
+  for (const doc of snap.docs) {
+    const data = doc.data();
+
+    if (data.fldStandardType === "UFAS") ufas++;
+    else if (data.fldStandardType === "TAS") tas++;
+    else if (missing(data.fldStandardType)) {
+      missingType++;
+      if (missingTypeSamples.length < 25) missingTypeSamples.push(doc.id);
+    } else {
+      otherType++;
+      if (otherTypeSamples.length < 25) {
+        otherTypeSamples.push({ id: doc.id, fldStandardType: data.fldStandardType });
+      }
+    }
+
+    if (missing(data.fldStandardVersion)) {
+      missingVersion++;
+      if (missingVersionSamples.length < 25) missingVersionSamples.push(doc.id);
+    }
+  }
+
+  console.log({
+    total_documents: snap.size,
+    fldStandardType_UFAS: ufas,
+    fldStandardType_TAS: tas,
+    fldStandardType_missing: missingType,
+    fldStandardType_other: otherType,
+    sample_missing_fldStandardType: missingTypeSamples,
+    sample_other_fldStandardType: otherTypeSamples,
+    fldStandardVersion_missing: missingVersion,
+    sample_missing_fldStandardVersion: missingVersionSamples,
+  });
+}
+
+main().catch(err => {
+  console.error(err);
+  process.exit(1);
+});
+Run:
+
+node scripts\standards-import\report-tas-standards-shape.cjs
+Paste the output. If TAS is missing, we’ll do a safe normalization script that updates only missing fields, not UI. This matches the current issue: Standards Manager only shows All and UFAS because TAS records likely lack fldStandardType. 
+
+
+
+PS C:\dev\fredasoft> node scripts\standards-import\report-tas-standards-shape.cjs
+{
+  total_documents: 2083,
+  fldStandardType_UFAS: 509,       
+  fldStandardType_TAS: 0,
+  fldStandardType_missing: 1574,   
+  fldStandardType_other: 0,        
+  sample_missing_fldStandardType: [    '1000_607_4_1_2_standard',     
+    '1001_607_4_1f_figure',        
+    '1002_607_4_2_standard',       
+    '1003_607_4_2_1_standard',     
+    '1004_607_4_2_2_standard',     
+    '1005_607_4_2_3_standard',     
+    '1006_607_4_2f_figure',        
+    '1007_607_5_standard',
+    '1008_607_5f_figure',
+    '1009_607_6_standard',
+    '100_106_5_66_standard',       
+    '1010_607_6_advisory',
+    '1011_607_7_standard',
+    '1012_608_standard',
+    '1013_608_1_standard',
+    '1014_608_1_advisory',
+    '1015_608_2_standard',
+    '1016_608_2_1_standard',       
+    '1017_608_2_1f_figure',        
+    '1018_608_2_2_standard',       
+    '1019_608_2_2_1_standard',     
+    '101_106_5_67_standard',       
+    '1020_608_2_2f_figure',        
+    '1021_608_2_3_standard',       
+    '1022_608_2_3f_figure'
+  ],
+  sample_other_fldStandardType: [],  fldStandardVersion_missing: 1574,  sample_missing_fldStandardVersion: [
+    '1000_607_4_1_2_standard',     
+    '1001_607_4_1f_figure',        
+    '1002_607_4_2_standard',       
+    '1003_607_4_2_1_standard',     
+    '1004_607_4_2_2_standard',     
+    '1005_607_4_2_3_standard',     
+    '1006_607_4_2f_figure',        
+    '1007_607_5_standard',
+    '1008_607_5f_figure',
+    '1009_607_6_standard',
+    '100_106_5_66_standard',       
+    '1010_607_6_advisory',
+    '1011_607_7_standard',
+    '1012_608_standard',
+    '1013_608_1_standard',
+    '1014_608_1_advisory',
+    '1015_608_2_standard',
+    '1016_608_2_1_standard',       
+    '1017_608_2_1f_figure',        
+    '1018_608_2_2_standard',       
+    '1019_608_2_2_1_standard',     
+    '101_106_5_67_standard',       
+    '1020_608_2_2f_figure',        
+    '1021_608_2_3_standard',       
+    '1022_608_2_3f_figure'
+  ]
+}
+PS C:\dev\fredasoft> 
+
+Confirmed. The issue is exactly what we suspected:
+
+UFAS: 509
+TAS: 0
+Missing type/version: 1574
+So the Standards Manager only shows All and UFAS because TAS records have no fldStandardType.
+
+Next step: create a one-time TAS normalization script that updates only missing TAS metadata.
+
+Use Cursor:
+
+Apply a surgical change only.
+
+Create:
+scripts/standards-import/normalize-tas-standard-metadata.cjs
+
+Purpose:
+Update existing TAS records in tas_standards that are missing standard metadata.
+
+Requirements:
+- Use firebase-admin with application default credentials.
+- Target collection: tas_standards.
+- Read all documents.
+- Only update documents where fldStandardType is missing/blank OR fldStandardVersion is missing/blank.
+- Do not update documents where fldStandardType === "UFAS".
+- Do not overwrite non-empty fldStandardType.
+- Do not overwrite non-empty fldStandardVersion.
+- For missing TAS metadata, set:
+  - fldStandardType: "TAS"
+  - fldStandardVersion: "2012"
+- Commit updates in batches of 400.
+- Print:
+  - total docs scanned
+  - docs skipped as UFAS
+  - docs updated
+  - missing type fixed
+  - missing version fixed
+  - batches committed
+
+Do not run the script yet.
+Do not modify UI files.
+Do not modify import scripts.
+Report the exact diff.
+After the script is reviewed, we’ll run it. Then your filter should naturally show:
+
+All
+TAS
+UFAS
+
+Here’s what was added.
+
+### Created file
+scripts/standards-import/normalize-tas-standard-metadata.cjs only (no UI or import script changes). The script was **not** run.
+
+### Behavior (short)
+- Loads all tas_standards docs.
+- Skips any doc with **fldStandardType === "UFAS"** (counts as docs skipped as UFAS).
+- For other docs, builds a patch **only** for blank fldStandardType → "TAS" and/or blank fldStandardVersion → "2012" (never overwrites non-blank values).
+- **batch.update(ref, patch)**, commits every **400** writes; final partial batch committed if needed.
+- Logs the six counters you asked for.
+
+### Exact diff
+
+diff
+diff --git a/scripts/standards-import/normalize-tas-standard-metadata.cjs b/scripts/standards-import/normalize-tas-standard-metadata.cjs
+new file mode 100644
+index 0000000..b49785e
+--- /dev/null
++++ b/scripts/standards-import/normalize-tas-standard-metadata.cjs
+@@ -0,0 +1,82 @@
++const admin = require("firebase-admin");
++
++const TARGET_COLLECTION = "tas_standards";
++const BATCH_SIZE = 400;
++
++admin.initializeApp({
++  credential: admin.credential.applicationDefault()
++});
++
++const db = admin.firestore();
++
++function isBlank(value) {
++  return value === undefined || value === null || String(value).trim() === "";
++}
++
++async function main() {
++  const snap = await db.collection(TARGET_COLLECTION).get();
++  const totalScanned = snap.docs.length;
++
++  let skippedUfas = 0;
++  let docsUpdated = 0;
++  let missingTypeFixed = 0;
++  let missingVersionFixed = 0;
++  let batchesCommitted = 0;
++
++  let batch = db.batch();
++  let opsInBatch = 0;
++
++  for (const docSnap of snap.docs) {
++    const data = docSnap.data();
++
++    if (data.fldStandardType === "UFAS") {
++      skippedUfas++;
++      continue;
++    }
++
++    const typeBlank = isBlank(data.fldStandardType);
++    const versionBlank = isBlank(data.fldStandardVersion);
++
++    if (!typeBlank && !versionBlank) {
++      continue;
++    }
++
++    const patch = {};
++    if (typeBlank) {
++      patch.fldStandardType = "TAS";
++      missingTypeFixed++;
++    }
++    if (versionBlank) {
++      patch.fldStandardVersion = "2012";
++      missingVersionFixed++;
++    }
++
++    batch.update(docSnap.ref, patch);
++    opsInBatch++;
++    docsUpdated++;
++
++    if (opsInBatch >= BATCH_SIZE) {
++      await batch.commit();
++      batchesCommitted++;
++      batch = db.batch();
++      opsInBatch = 0;
++    }
++  }
++
++  if (opsInBatch > 0) {
++    await batch.commit();
++    batchesCommitted++;
++  }
++
++  console.log(`total docs scanned: ${totalScanned}`);
++  console.log(`docs skipped as UFAS: ${skippedUfas}`);
++  console.log(`docs updated: ${docsUpdated}`);
++  console.log(`missing type fixed: ${missingTypeFixed}`);
++  console.log(`missing version fixed: ${missingVersionFixed}`);
++  console.log(`batches committed: ${batchesCommitted}`);
++}
++
++main().catch(err => {
++  console.error("Normalize failed:", err);
++  process.exit(1);
++});
+
+
+*(Paths may show as scripts\\standards-import\\... on Windows in git diff output.)*
+
+**Note:** missing type fixed / missing version fixed are **per-field** counts (one doc missing both increments each by 1); docs updated is **per-document** updates.
+
+This is solid. No changes needed — this script is safe to run.
+
+It does exactly what we want:
+
+✅ Only touches TAS (skips UFAS)
+
+✅ Only fills missing fields (no overwrites)
+
+✅ Uses batched updates
+
+✅ Gives clear reporting
+
+🚀 Run It
+node scripts\standards-import\normalize-tas-standard-metadata.cjs
+📊 Expected Output (based on your report)
+You should see something very close to:
+
+total docs scanned: 2083
+docs skipped as UFAS: 509
+docs updated: 1574
+missing type fixed: 1574
+missing version fixed: 1574
+batches committed: 4
+🔍 Then Verify
+Re-run your report script:
+
+node scripts\standards-import\report-tas-standards-shape.cjs
+Expected result:
+
+fldStandardType_UFAS: 509
+fldStandardType_TAS: 1574
+fldStandardType_missing: 0
+fldStandardVersion_missing: 0
+🎯 What This Unlocks
+Immediately after this:
+
+Standards Manager should show:
+All
+TAS
+UFAS
+No UI code changes needed.
+
+🧠 Why This Worked
+You didn’t:
+
+touch UI
+
+rewrite queries
+
+create dual collections
+
+You fixed the data layer, and the UI naturally follows.
+
+👉 After This
+Next step becomes clean and simple:
+
+Add a selector in Standards Manager to filter by fldStandardType
+
+Run it and paste the output — we’ll confirm final state 👍
+
+
+PS C:\dev\fredasoft> node scripts\standards-import\normalize-tas-standard-metadata.cjs
+total docs scanned: 2083
+docs skipped as UFAS: 509
+docs updated: 1574
+missing type fixed: 1574
+missing version fixed: 1574        
+batches committed: 4
+PS C:\dev\fredasoft> 
+
+Perfect. Now verify:
+
+node scripts\standards-import\report-tas-standards-shape.cjs
+Expected:
+
+total_documents: 2083
+fldStandardType_UFAS: 509
+fldStandardType_TAS: 1574
+fldStandardType_missing: 0
+fldStandardVersion_missing: 0
+Then refresh the app. Standards Manager should now show:
+
+All
+TAS
+UFAS
+
+Everything works. However, in the reports since we could have multiple standard types, we need to preface the citation numbers and citations in the addendum with the standard type.  My preference would be: TAS 4.1.2; TAS 6.3; UFAS 7.1.1; UFAS.... in the documentation section (all the TAS together, then all the UFAS).  In the addendum, they would also be segregated: first, all the citations of one standard type with a prominent header showing the standard type; then, all the citations of the next Standard Type under the appropriate header (sort standard types alphabetically).
+
+Thought for a couple of seconds
+Yes — that’s the right report behavior.
+
+We should treat this as a report formatting change, not a data model change.
+
+Use this Cursor prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to update report/documentation output formatting for standards citations.
+
+Current requirement:
+Reports may now include multiple standard types, e.g. TAS and UFAS.
+
+Desired behavior:
+
+1. In documentation/citation summary sections:
+   - Prefix every citation with the standard type.
+   - Example format:
+     TAS 4.1.2; TAS 6.3; UFAS 7.1.1; UFAS ...
+   - Group citations by standard type.
+   - Sort standard types alphabetically.
+   - Within each standard type, preserve existing citation sort behavior if one exists.
+
+2. In the addendum:
+   - Segregate citations by standard type.
+   - Render a prominent header for each standard type.
+   - Sort standard type sections alphabetically.
+   - Under each header, list only citations for that standard type.
+   - Prefix citations with the standard type where citation numbers are shown.
+
+Inspect:
+- report generation code
+- addendum generation code
+- any utility that formats standards/citations
+- how fldStandards resolves MasterStandard records
+- whether fldStandardType is available in report generation data
+
+Report only:
+1. Relevant files/functions.
+2. Current citation/addendum flow.
+3. Best place to group by fldStandardType.
+4. Best formatting approach.
+5. Risks.
+6. Minimal implementation plan.
+
+Do not edit files.
+Do not refactor.
+Key guardrail: don’t let Cursor hardcode TAS/UFAS. It should use fldStandardType dynamically, because more standard types may come later.
+
+
+
+Pasted markdown(17).md
+File
+
+This is a strong analysis — you’re in a good position to implement without breaking anything.
+
+I’m going to tighten this into what you should actually do next, because there’s one important correction before you move forward.
+
+⚠️ One Critical Issue (Don’t Skip This)
+From the analysis:
+
+Addendum uses glossary only, while documentation uses record OR glossary
+
+That is a data inconsistency bug, not just formatting.
+
+If you implement grouping now without fixing that:
+
+Documentation may show TAS + UFAS
+
+Addendum may show only a subset (glossary-only)
+
+👉 That will confuse users and break trust.
+
+✅ Correct Implementation Order
+Step 1 — Fix data source (small but important)
+Unify both to use:
+
+record.fldStandards || glos?.fldStandards
+👉 Same logic already used in DocumentationCard
+
+Apply this to:
+
+referencedStandards (ReportPreview.tsx)
+Step 2 — Group + sort by standard type
+At the point where you already have:
+
+MasterStandard[]
+Do:
+
+groupBy(std.fldStandardType)
+sort types alphabetically
+within each type → sort by citation_num (numeric compare)
+Step 3 — Documentation string formatting
+Transform:
+
+4.1.2; 6.3; 7.1.1
+into:
+
+TAS 4.1.2; TAS 6.3; UFAS 7.1.1
+Rules:
+
+alphabetical type grouping
+
+preserve numeric citation sort inside each type
+
+flatten into one string
+
+Step 4 — Addendum layout (most visible change)
+Replace:
+
+Addendum: Texas Accessibility Standards
+with:
+
+Addendum: Referenced Standards
+Then render:
+
+TAS
+  TAS 4.1.2 ...
+  TAS 6.3 ...
+
+UFAS
+  UFAS 7.1.1 ...
+  ...
+👉 Each section clearly separated
+
+Step 5 — IMPORTANT: Mirror measurement layout
+This part from the analysis is critical:
+
+hidden measurementRef must match visible layout
+
+If you forget this:
+
+pagination breaks
+
+print layout becomes incorrect
+
+So whatever structure you render:
+
+👉 duplicate it exactly in measurement block
+
+🧠 Guardrails (Non-Negotiable)
+Do NOT:
+
+❌ hardcode "TAS" / "UFAS"
+
+❌ assume only two types
+
+❌ change Firestore schema
+
+❌ touch other components
+
+Always use:
+
+std.fldStandardType
+🎯 Now Give Cursor This (Implementation Prompt)
+Apply a focused change only in ReportPreview.tsx.
+
+Goal:
+Support multiple standard types (TAS, UFAS, future types) in documentation and addendum.
+
+Requirements:
+
+1. Fix data source inconsistency:
+   - referencedStandards must include BOTH:
+     record.fldStandards and glos?.fldStandards
+   - dedupe IDs before resolving to MasterStandard
+
+2. Group standards by fldStandardType:
+   - Use std.fldStandardType (fallback "Unknown" if missing)
+   - Sort standard types alphabetically
+   - Within each type, sort by citation_num using numeric-aware comparison
+
+3. Documentation (Reference line):
+   - Format as: "TAS 4.1.2; TAS 6.3; UFAS 7.1.1"
+   - Preserve grouping + sorting rules
+
+4. Addendum:
+   - Replace title with "Addendum: Referenced Standards"
+   - Render section header for each standard type
+   - Under each header, list only that type’s standards
+   - Prefix citation numbers with type
+
+5. Measurement block:
+   - Must mirror visible addendum structure exactly
+
+6. Do not:
+   - modify other components
+   - refactor unrelated code
+   - change Firestore logic
+
+After changes:
+Report exact diff.
+🧠 Why This Is the Right Approach
+You are now:
+
+fixing a real inconsistency (not just formatting)
+
+keeping architecture scalable
+
+avoiding UI hacks
+
+future-proofing for ADA, ANSI, etc.
+
+When Cursor gives you the diff, paste it here — I’ll sanity-check before you run it 👍
+
+
+
+Pasted markdown(18).md
+File
+
+This is a very strong implementation. You got all the hard parts right.
+
+I’m going to review it like a senior code review — focusing on correctness, edge cases, and future safety.
+
+✅ What You Did Right (Important)
+1. Data source bug — FIXED
+You corrected:
+
+glossary-only → record + glossary
+
+That was the biggest hidden issue. Good catch and correct fix.
+
+2. Proper grouping by type
+standardTypeKey → group → sort types → sort citations
+✔ dynamic
+✔ scalable
+✔ no TAS/UFAS hardcoding
+
+3. Documentation formatting
+TAS 4.1.2; TAS 6.3; UFAS 7.1.1
+✔ matches requirement exactly
+✔ deterministic ordering
+
+4. Addendum structure
+You introduced:
+
+AddendumEntry = header | standard
+This is the right abstraction for pagination + rendering.
+
+5. Measurement parity (this is huge)
+You correctly reused:
+
+<AddendumRows entries={...} />
+in BOTH:
+
+visible addendum
+
+measurement block
+
+👉 This avoids broken pagination — most people miss this.
+
+6. Pagination logic updated safely
+header → 56px default
+standard → 100px default
+✔ clean
+✔ predictable
+✔ preserves existing behavior
+
+⚠️ One Minor Issue (Worth Fixing)
+“Unknown” bucket
+Right now:
+
+return 'Unknown';
+This will create a section like:
+
+Unknown
+  Unknown 4.1.2 ...
+Given you just normalized TAS, this should be rare — but if it appears, it will look sloppy in reports.
+
+Recommendation
+Replace:
+
+return 'Unknown';
+with:
+
+return 'TAS'; // or fallback to something neutral like "Other"
+OR better:
+
+return std.fldStandardType || 'Other';
+👉 “Other” is safer than “Unknown” in client-facing docs.
+
+⚠️ Optional Improvement (Not Required Now)
+Deduplication efficiency
+You’re doing:
+
+standards.find(s => s.id === id)
+multiple times (O(n²) worst case).
+
+Not a problem at 2k records — but long-term you could optimize with:
+
+const standardsMap = new Map(standards.map(s => [s.id, s]));
+Then:
+
+const std = standardsMap.get(id);
+👉 Not necessary now, just noting.
+
+⚠️ UX Detail (Minor but visible)
+Header styling
+You used:
+
+<h2 className="text-lg font-black ...">
+This is good, but consider:
+
+slightly more spacing above first section
+
+or visual separation between types
+
+Not required — just polish later.
+
+🧠 Final Verdict
+This implementation is:
+
+✔ Correct
+✔ Complete
+✔ Scalable
+✔ Safe
+✔ Aligned with architecture
+You:
+
+fixed a real data bug
+
+implemented grouping correctly
+
+preserved pagination integrity
+
+avoided hardcoding
+
+future-proofed for more standards
+
+🚀 What Happens Now
+You now have:
+
+Documentation
+TAS 4.1.2; TAS 6.3; UFAS 7.1.1
+Addendum
+TAS
+  TAS 4.1.2 ...
+  TAS 6.3 ...
+
+UFAS
+  UFAS 7.1.1 ...
+Exactly as required.
+
+🎯 Next Logical Step
+Now that standards are unified and visible:
+
+You can move to:
+
+Glossary Builder → attach standards intelligently
+or
+
+Standards Manager → filter + browse by type
+If you want, next we can:
+
+👉 design how users select TAS vs UFAS when attaching standards
+👉 or improve search/filter UX in Standards Manager
+
+But from a reporting standpoint — you’re done here.
+
+
+Looks great.  So, all of this is still saved in a branch, correct?  Is it time to push
+
+Short answer: yes — and yes, but do it cleanly.
+
+🧠 Where You Are Right Now
+You’ve just:
+
+✔ merged UFAS into TAS collection
+
+✔ normalized metadata
+
+✔ updated reporting logic
+
+✔ verified everything works
+
+That’s a complete, coherent feature set, not a partial change.
+
+👉 That means this is exactly the kind of work that should be committed and pushed as a unit.
+
+🚀 Recommended Next Steps
+1. Check your branch
+Run:
+
+git branch
+You should see something like:
+
+* data-entry-flow-refactor
+(or whatever branch you’ve been working on)
+
+2. Stage everything
+git add .
+3. Commit (use a meaningful message)
+git commit -m "Unify standards system: merge UFAS into TAS collection, normalize metadata, and support multi-standard reporting (TAS/UFAS grouping in documentation and addendum)"
+4. Push
+git push origin <your-branch-name>
+Example:
+
+git push origin data-entry-flow-refactor
+🧠 Before You Merge to Main (Important)
+Don’t merge yet — do a quick sanity check:
+
+✅ Verify in app:
+Standards Manager shows:
+
+All / TAS / UFAS
+
+Documentation shows:
+
+TAS ...; UFAS ...
+
+Addendum:
+
+grouped by type
+
+Print preview still works
+
+🧭 What You Just Completed (Big Picture)
+This wasn’t just a feature — you:
+
+unified the data layer
+
+fixed legacy inconsistencies
+
+made reporting multi-standard aware
+
+avoided future architectural problems
+
+👉 This is a milestone commit, not just a patch.
+
+🎯 Optional (but smart)
+After pushing, you might:
+
+git checkout main
+git pull
+git checkout -b standards-unification
+git merge data-entry-flow-refactor
+Then test again before final merge.
+
+👍 Bottom line
+👉 Yes — push now
+👉 Just make sure it’s a single clean commit representing the whole change
+
+If you want, I can help you craft a PR description — this is the kind of change that benefits from a clear explanation.
+
+
+PS C:\dev\fredasoft> git branch    
+* data-entry-flow-refactor
+  fix-glossaryview-types
+  fix-project-data-entry-allowedids  main
+  ui-active-context-header
+PS C:\dev\fredasoft> 
+
+Good — you’re on:
+
+data-entry-flow-refactor
+That’s exactly where you should be 👍
+
+🚀 Yes — Push It (You’re Ready)
+This is a clean, complete unit of work, so go ahead.
+
+1. Stage (if not already done)
+git add .
+2. Commit (strong message matters here)
+Use something like:
+
+git commit -m "Unify standards system: merge UFAS into tas_standards, normalize TAS metadata, and add multi-standard reporting (type-prefixed citations and grouped addendum)"
+3. Push
+git push origin data-entry-flow-refactor
+🧠 What You Just Locked In
+This commit includes:
+
+UFAS ingestion
+
+Safe merge into TAS collection
+
+Metadata normalization (TAS + UFAS)
+
+Reporting upgrade (multi-standard aware)
+
+Addendum restructuring
+
+Documentation formatting fix
+
+Data consistency fix (record + glossary)
+
+👉 That’s a major feature milestone, not just a tweak.
+
+⚠️ One Smart Habit (Optional but Recommended)
+After pushing, do a quick diff against main:
+
+git diff main...data-entry-flow-refactor
+Just to sanity-check nothing unexpected slipped in.
+
+🎯 Next Step (After Push)
+Then you’re ready to:
+
+👉 Open a PR
+👉 Or merge into main (if you're working solo)
+
+If you want, I can help you write a clean PR description — this is exactly the kind of change that benefits from one.
+
+
+PS C:\dev\fredasoft> git branch    
+* data-entry-flow-refactor
+  fix-glossaryview-types
+  fix-project-data-entry-allowedids  main
+  ui-active-context-header
+PS C:\dev\fredasoft> git add .     
+warning: in the working copy of 'docs/ARCHITECTURE_DESIGN.md', LF will be replaced by CRLF the next time 
+Git touches it
+warning: in the working copy of 'scripts/standards-import/preview-ufas-html.cjs', LF will be replaced by 
+CRLF the next time Git touches it  
+warning: in the working copy of 'src/App.tsx', LF will be replaced by 
+CRLF the next time Git touches it  
+warning: in the working copy of 'src/components/ProjectDataEntry.tsx', LF will be replaced by CRLF the newarning: in the working copy of 'criptsstandards-importtransform-ufas-json.cjs', LF will be replaced by CRLF the next time Git touches it   
+warning: in the working copy of 'scripts/standards-import/import-ufas-to-tas-standards.cjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/standards-import/normalize-tas-standard-metadata.cjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/standards-import/ufas_preview.html', LF will be replaced by CRLF the next time Git touches it      
+warning: in the working copy of 'tas_ids.json', LF will be replaced by CRLF the next time Git touches it 
+PS C:\dev\fredasoft> git commit -m 
+"Unify standards system: merge UFAS into tas_standards, normalize TAS 
+metadata, and add multi-standard reporting (type-prefixed citations and grouped addendum)"
+[data-entry-flow-refactor d099b9a] 
+Unify standards system: merge UFAS 
+into tas_standards, normalize TAS metadata, and add multi-standard reporting (type-prefixed citations and grouped addendum)
+ 13 files changed, 23815 insertions(+), 81 deletions(-)
+ create mode 100644 criptsstandards-importtransform-ufas-json.cjs     
+ create mode 100644 scripts/standards-import/check-ufas-tas-id-collisions.cjs
+ create mode 100644 scripts/standards-import/debug-firestore-project.cjs
+ create mode 100644 scripts/standards-import/extract-tas-standards-ids.cjs
+ create mode 100644 scripts/standards-import/import-ufas-to-tas-standards.cjs
+ create mode 100644 scripts/standards-import/normalize-tas-standard-metadata.cjs
+ create mode 100644 scripts/standards-import/report-tas-standards-shape.cjs
+ create mode 100644 scripts/standards-import/ufas_preview.html        
+ create mode 100644 tas_ids.json   
+PS C:\dev\fredasoft> 
+
+Nice — commit went through 👍
+But I’m going to stop you for one important cleanup before you push.
+
+⚠️ You Committed Some Files You Should NOT Push
+From your output:
+
+create mode 100644 tas_ids.json
+create mode 100644 scripts/standards-import/debug-firestore-project.cjs
+create mode 100644 scripts/standards-import/check-ufas-tas-id-collisions.cjs
+create mode 100644 scripts/standards-import/report-tas-standards-shape.cjs
+create mode 100644 scripts/standards-import/ufas_preview.html
+👉 These are debug / one-off / generated files, not production code.
+
+Also this line is concerning:
+
+create mode 100644 criptsstandards-importtransform-ufas-json.cjs
+👉 That looks like a bad path (missing slashes) — likely accidental.
+
+🚨 Before You Push — Fix This
+1. Undo the commit (but keep your work)
+git reset --soft HEAD~1
+This:
+
+removes the commit
+
+keeps all files staged
+
+2. Unstage unwanted files
+git reset HEAD tas_ids.json
+git reset HEAD scripts/standards-import/debug-firestore-project.cjs
+git reset HEAD scripts/standards-import/check-ufas-tas-id-collisions.cjs
+git reset HEAD scripts/standards-import/report-tas-standards-shape.cjs
+git reset HEAD scripts/standards-import/ufas_preview.html
+git reset HEAD criptsstandards-importtransform-ufas-json.cjs
+3. (Optional but recommended) Delete the bad file
+del criptsstandards-importtransform-ufas-json.cjs
+4. Add only what should be committed
+git add .
+(verify with git status — only real code should be staged)
+
+5. Re-commit cleanly
+git commit -m "Unify standards system: merge UFAS into tas_standards, normalize TAS metadata, and add multi-standard reporting (type-prefixed citations and grouped addendum)"
+6. THEN push
+git push origin data-entry-flow-refactor
+🧠 Why This Matters
+You want your repo to contain:
+
+✅ Keep
+import script (production)
+
+normalization script (useful)
+
+ReportPreview changes
+
+actual app code
+
+❌ Do NOT keep
+tas_ids.json (local data dump)
+
+debug scripts
+
+preview HTML
+
+temporary analysis tools
+
+🧭 Pro Tip (Next Time)
+Add these to .gitignore:
+
+*.json
+*preview*.html
+*debug*.cjs
+(or more targeted versions)
+
+👍 Bottom Line
+You’re 100% ready to push, just:
+
+👉 clean the commit first
+👉 then push a professional, minimal diff
+
+If you want, I can help you set up a clean .gitignore for this project next.
+
+
+PS C:\dev\fredasoft> git commit -m 
+"Unify standards system: merge UFAS into tas_standards, normalize TAS 
+metadata, and add multi-standard reporting (type-prefixed citations and grouped addendum)"
+[data-entry-flow-refactor d099b9a] 
+Unify standards system: merge UFAS 
+into tas_standards, normalize TAS metadata, and add multi-standard reporting (type-prefixed citations and 13 files changed, 23815 insertions(+), 81 deletions(-)
+ create mode 100644 criptsstandards-importtransform-ufas-json.cjs     
+ create mode 100644 scripts/standards-import/check-ufas-tas-id-collisions.cjs
+ create mode 100644 scripts/standards-import/debug-firestore-project.cjs
+ create mode 100644 scripts/standards-import/extract-tas-standards-ids.cjs
+ds-import/import-ufas-to-tas-standards.cjs
+ create mode 100644 scripts/standards-import/normalize-tas-standard-metadata.cjs
+ create mode 100644 scripts/standards-import/report-tas-standards-shape.cjs
+ create mode 100644 scripts/standards-import/ufas_preview.html        
+ create mode 100644 tas_ids.json   
+PS C:\dev\fredasoft> git reset --soft HEAD~1
+PS C:\dev\fredasoft> git reset HEAD tas_ids.json
+>> git reset HEAD scripts/standards-import/debug-firestore-project.cjs>> git reset HEAD scripts/standards-import/check-ufas-tas-id-collisions.cjs
+>> git reset HEAD scripts/standards-import/report-tas-standards-shape.cjs
+>> git reset HEAD scripts/standards-import/ufas_preview.html
+>> git reset HEAD criptsstandards-importtransform-ufas-json.cjs       
+                            \x0agit reset HEAD scripts/standards-import/ufas_preview.html\x0agit reset HEAD criptsstandards-importtransform-ufas-json.cjs;2a63bcc9-f3f1-44fe-bfPS C:\dev\fredasoft> 
+
+Thought for a couple of seconds
+Good — you successfully undid the bad commit.
+
+But that pasted command block looks a little garbled, so pause before committing again.
+
+Run this now:
+
+git status
+Paste the full output here.
+
+We need to confirm exactly what is staged vs unstaged before recommitting.
+
+
+PS C:\dev\fredasoft> git status    
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.     
+
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+        modified:   docs/ARCHITECTURE_DESIGN.md
+        modified:   docs/ArchieHistory.md
+        new file:   scripts/standards-import/extract-tas-standards-ids.cjs
+        new file:   scripts/standards-import/import-ufas-to-tas-standards.cjs
+        new file:   scripts/standards-import/normalize-tas-standard-metadata.cjs
+        modified:   scripts/standards-import/preview-ufas-html.cjs    
+        modified:   src/components/ReportPreview.tsx
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)      
+        criptsstandards-importtransform-ufas-json.cjs
+        scripts/standards-import/check-ufas-tas-id-collisions.cjs     
+        scripts/standards-import/debug-firestore-project.cjs
+        scripts/standards-import/report-tas-standards-shape.cjs       
+        scripts/standards-import/ufas_preview.html
+        tas_ids.json
+
+PS C:\dev\fredasoft> 
+
+Good recovery. Current staged set is mostly clean, but I would unstage one more file:
+
+git restore --staged scripts/standards-import/extract-tas-standards-ids.cjs
+That was a temporary diagnostic/export script.
+
+Then delete the accidental bad file and generated/local files:
+
+del criptsstandards-importtransform-ufas-json.cjs
+del scripts\standards-import\check-ufas-tas-id-collisions.cjs
+del scripts\standards-import\debug-firestore-project.cjs
+del scripts\standards-import\report-tas-standards-shape.cjs
+del scripts\standards-import\ufas_preview.html
+del tas_ids.json
+Then check again:
+
+git status
+What should remain staged:
+
+docs/ARCHITECTURE_DESIGN.md
+docs/ArchieHistory.md
+scripts/standards-import/import-ufas-to-tas-standards.cjs
+scripts/standards-import/normalize-tas-standard-metadata.cjs
+scripts/standards-import/preview-ufas-html.cjs
+src/components/ReportPreview.tsx
+Then commit and push.
+
+
+PS C:\dev\fredasoft> git status    
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.     
+
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+        modified:   docs/ARCHITECTURE_DESIGN.md
+        modified:   docs/ArchieHistory.md
+        new file:   scripts/standards-import/import-ufas-to-tas-standards.cjs
+        new file:   scripts/standards-import/normalize-tas-standard-metadata.cjs
+        modified:   scripts/standards-import/preview-ufas-html.cjs    
+        modified:   src/components/ReportPreview.tsx
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)      
+        scripts/standards-import/extract-tas-standards-ids.cjs        
+
+PS C:\dev\fredasoft> 
+
+Perfect — this is exactly what we want 👍
+
+✅ Clean State Confirmed
+Staged (good to commit):
+✔ ReportPreview changes (core feature)
+
+✔ UFAS import script (production-useful)
+
+✔ TAS normalization script (production-useful)
+
+✔ preview script (acceptable utility)
+
+✔ docs updates
+
+Untracked (safe to ignore):
+extract-tas-standards-ids.cjs (diagnostic only — leave uncommitted or add to .gitignore later)
+
+🚀 Now Commit (Cleanly)
+git commit -m "Unify standards system: merge UFAS into tas_standards, normalize TAS metadata, and add multi-standard reporting (type-prefixed citations and grouped addendum)"
+🚀 Then Push
+git push origin data-entry-flow-refactor
+🧠 What You Just Did (This Matters)
+You’re about to push a clean, production-quality change set that:
+
+unifies standards into one collection
+
+normalizes legacy data safely
+
+enables multi-standard reporting
+
+fixes a real data inconsistency bug
+
+improves report clarity for end users
+
+👉 This is the kind of commit that makes a repo better, not messier.
+
+👍 Optional (Next Step)
+After pushing, you can:
+
+open a PR
+
+or merge into main
+
+or tag it as a milestone
+
+🟢 Bottom Line
+👉 You’re clear to commit and push
+👉 This is a clean, well-scoped change
+
+Go for it.
+
+
+PS C:\dev\fredasoft> git commit -m 
+"Unify standards system: merge UFAS into tas_standards, normalize TAS 
+metadata, and add multi-standard reporting (type-prefixed citations and grouped addendum)"
+[data-entry-flow-refactor 942311f] 
+Unify standards system: merge UFAS 
+into tas_standards, normalize TAS metadata, and add multi-standard reporting (type-prefixed citations and grouped addendum)
+ 6 files changed, 11273 insertions(+), 81 deletions(-)
+ create mode 100644 scripts/standards-import/import-ufas-to-tas-standards.cjs
+ create mode 100644 scripts/standards-import/normalize-tas-standard-metadata.cjs
+PS C:\dev\fredasoft> git push origin data-entry-flow-refactor
+Enumerating objects: 23, done.
+Counting objects: 100% (23/23), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (13/13), 
+done.
+Writing objects: 100% (13/13), 101.15 KiB | 2.35 MiB/s, done.
+Total 13 (delta 9), reused 0 (delta 0), pack-reused 0 (from 0)        
+remote: Resolving deltas:   0% (0/9remote: Resolving deltas:  11% (1/9remote: Resolving deltas:  22% (2/9remote: Resolving deltas:  33% (3/9remote: Resolving deltas:  44% (4/9remote: Resolving deltas:  55% (5/9remote: Resolving deltas:  66% (6/9remote: Resolving deltas:  77% (7/9remote: Resolving deltas:  88% (8/9remote: Resolving deltas: 100% (9/9remote: Resolving deltas: 100% (9/9), completed with 9 local objects. 
+To https://github.com/kenotten/FREDAsoft.git
+   a233883..942311f  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> 
+
+Nice — that’s exactly how it should look. Clean commit, clean push, no junk 👍
+
+🎉 You’re Done With This Phase
+You now have in your repo:
+
+✅ Unified standards collection (tas_standards)
+
+✅ UFAS safely merged (no collisions)
+
+✅ TAS normalized (metadata fixed)
+
+✅ Multi-standard reporting working (docs + addendum)
+
+✅ Clean commit history (no debug noise)
+
+👉 This is a solid milestone, not just a feature.
+
+🧠 Where You Are Now (Big Picture)
+You’ve successfully moved from:
+
+fragmented standards system
+to:
+
+unified + scalable standards architecture
+That unlocks everything going forward.
+
+🚀 Recommended Next Moves (Pick One)
+Option 1 — Merge to main
+If you’re confident:
+
+git checkout main
+git pull
+git merge data-entry-flow-refactor
+git push origin main
+Option 2 — Open a PR (cleaner if you want review/history)
+Create a PR titled something like:
+
+Unify Standards System + Add UFAS Support + Multi-Standard Reporting
+
+Option 3 — Continue building (no merge yet)
+Now you can safely move into:
+
+🔹 Standards Manager improvements
+filter by type (TAS / UFAS)
+
+better search
+
+grouping UI
+
+🔹 Glossary Builder improvements
+choose which standard type to attach
+
+multi-standard linking UX
+
+⚠️ One Small Follow-Up (Worth Doing Soon)
+Add a .gitignore entry so this never happens again:
+
+# local / debug
+tas_ids.json
+scripts/standards-import/*debug*.cjs
+scripts/standards-import/*report*.cjs
+scripts/standards-import/*preview*.html
+🧠 Final Note
+You handled this exactly right:
+
+you didn’t rush UI
+
+you validated data
+
+you avoided architectural shortcuts
+
+you cleaned before pushing
+
+That’s how you keep a codebase healthy long-term.
+
+If you want, next we can:
+👉 design the Standards Manager UX improvements
+👉 or improve glossary → standards linking
+
+Just say where you want to go 👍
+
+
+Walk me through option 2
+
+Absolutely — Option 2 is to open a Pull Request from your branch into main.
+
+Step 1 — Go to GitHub
+Open:
+
+https://github.com/kenotten/FREDAsoft
+GitHub may show a banner like:
+
+data-entry-flow-refactor had recent pushes
+Compare & pull request
+Click Compare & pull request.
+
+Step 2 — Confirm the PR direction
+Make sure it says:
+
+base: main
+compare: data-entry-flow-refactor
+That means:
+
+data-entry-flow-refactor → main
+Step 3 — Use this PR title
+Unify standards system and add UFAS reporting support
+Step 4 — Use this PR description
+## Summary
+
+This PR unifies standards support by merging UFAS into the existing `tas_standards` collection, normalizing legacy TAS metadata, and updating report output to handle multiple standards types.
+
+## Changes
+
+- Added UFAS → `tas_standards` import tooling
+- Added TAS metadata normalization tooling
+- Updated UFAS preview generation to show all records
+- Updated report citation formatting to prefix standard type
+- Updated report addendum to group standards by type
+- Fixed addendum/documentation inconsistency by using both record-level and glossary-level standards references
+
+## Validation
+
+- Imported 509 UFAS records into `tas_standards`
+- Confirmed total standards count: 2083
+- Normalized 1574 TAS records with:
+  - `fldStandardType: "TAS"`
+  - `fldStandardVersion: "2012"`
+- Confirmed Standards Manager shows:
+  - All
+  - TAS
+  - UFAS
+- Confirmed report documentation shows type-prefixed citations
+- Confirmed addendum groups standards by type
+
+## Notes
+
+UFAS was first imported into `ufas_standards` as a staging collection, then safely copied into `tas_standards` after confirming zero ID collisions.
+Step 5 — Click “Create pull request”
+Do not merge immediately yet.
+
+After the PR opens, scan the Files changed tab for anything unexpected. Look especially for:
+
+tas_ids.json
+ufas_preview.html
+debug-firestore-project.cjs
+check-ufas-tas-id-collisions.cjs
+Those should not be there.
+
+Step 6 — If files look clean
+Then you can click:
+
+Merge pull request
+Then:
+
+Confirm merge
+After merge, return to PowerShell and sync local main:
+
+git checkout main
+git pull origin main
+Then optionally go back to your branch:
+
+git checkout data-entry-flow-refactor
+
+
+This looks really good overall, but I want to slow you down for one last sanity check before you hit merge — because I see something important in your screenshot.
+
+⚠️ One Thing to Double-Check
+In the PR file list I can see:
+
+scripts/standards-import/UFAS.json
+scripts/standards-import/ufas_standards.json
+👉 These are large data files (you can see +16k / +7k lines).
+
+🧠 Question you need to answer before merging:
+Do you want these JSON files in your repo long-term?
+
+Option A — Keep them (valid if):
+You want a permanent source-of-truth dataset
+
+You may re-import later
+
+You want version history of standards
+
+Option B — Remove them (often better if):
+They were just used for one-time import
+
+They’re large and not needed by the app
+
+You don’t want repo bloat
+
+👍 My recommendation
+👉 Keep transform-ufas-json.cjs
+👉 Probably remove raw JSON files unless you truly need them
+
+A common pattern:
+
+scripts/
+  standards-import/
+    transform-ufas-json.cjs   ✅ keep
+    import-ufas-to-tas...     ✅ keep
+data/
+  (optional, gitignored)
+🚀 If You're OK With JSON Being There
+Then:
+
+👉 You are clear to merge
+
+Click:
+
+Merge pull request
+Confirm merge
+🧠 If You Want to Clean It First
+Say so — I’ll walk you through removing those files from the PR cleanly (takes ~2 minutes, no damage).
+
+👍 Everything Else
+From what I can see:
+
+No debug junk ✔
+
+No temp scripts ✔
+
+Clean structure ✔
+
+Proper separation ✔
+
+Good commit scope ✔
+
+👉 This is a high-quality PR
+
+🎯 Bottom Line
+👉 You’re ready to merge
+only decision left is: keep or remove the large UFAS JSON files
+
+Tell me which way you want to go:
+
+“keep them”
+
+or “remove them”
+
+and I’ll guide you the last step 👍
+
+
+remove raw JSON files then merge
+
+Good call.
+
+In PowerShell, from your branch:
+
+git rm scripts\standards-import\UFAS.json
+git rm scripts\standards-import\ufas_standards.json
+Then commit and push:
+
+git commit -m "Remove generated UFAS JSON files from repository"
+git push origin data-entry-flow-refactor
+Then refresh the PR page and confirm these are gone from Files changed:
+
+scripts/standards-import/UFAS.json
+scripts/standards-import/ufas_standards.json
+After that, click:
+
+Merge pull request
+Confirm merge
+One note: your import scripts depend on ufas_standards.json, so after removing it from the repo, those scripts are archival/re-run tooling unless you regenerate the JSON locally first. That’s fine if the Firestore import is already complete.
+
+
+PS C:\dev\fredasoft> git rm scripts\standards-import\UFAS.json        
+>> git rm scripts\standards-import\ufas_standards.json
+rm 'scripts/standards-import/UFAS.json'
+rm 'scripts/standards-import/ufas_standards.json'
+PS C:\dev\fredasoft> git commit -m 
+"Remove generated UFAS JSON files from repository"
+>> git push origin data-entry-flow-refactor
+[data-entry-flow-refactor 24b6622] 
+Remove generated UFAS JSON files from repository
+ 2 files changed, 23742 deletions(-)
+ delete mode 100644 scripts/standards-import/UFAS.json
+ delete mode 100644 scripts/standards-import/ufas_standards.json      
+Enumerating objects: 7, done.
+Counting objects: 100% (7/7), done.Delta compression using up to 8 threads
+Compressing objects: 100% (4/4), done.
+Writing objects: 100% (4/4), 384 bytes | 128.00 KiB/s, done.
+Total 4 (delta 3), reused 0 (delta 
+0), pack-reused 0 (from 0)
+remote: Resolving deltas:   0% (0/3remote: Resolving deltas:  33% (1/3remote: Resolving deltas:  66% (2/3remote: Resolving deltas: 100% (3/3remote: Resolving deltas: 100% (3/3), completed with 3 local objects. 
+To https://github.com/kenotten/FREDAsoft.git
+   942311f..24b6622  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> 
+
+Perfect execution. That’s exactly how a clean PR should be handled 👌
+
+✅ What You Just Achieved
+✔ Removed large generated JSON files (no repo bloat)
+
+✔ Kept all production + transformation scripts
+
+✔ Preserved clean history (separate commit for cleanup)
+
+✔ Updated PR automatically via push
+
+👉 This is textbook clean Git workflow
+
+🚀 Final Step: Merge the PR
+Now go back to GitHub and:
+
+1. Refresh the PR page
+Confirm those files are gone from Files changed
+
+2. Click:
+Merge pull request
+Confirm merge
+🧠 After Merge (Important Cleanup)
+Back in PowerShell:
+
+git checkout main
+git pull origin main
+Now your local main is up to date.
+
+🧹 Optional (but recommended)
+If you’re done with the branch:
+
+git branch -d data-entry-flow-refactor
+git push origin --delete data-entry-flow-refactor
+🎯 What You Just Completed (Big Picture)
+You didn’t just merge code — you:
+
+unified a fragmented data model
+
+introduced multi-standard support
+
+fixed legacy data inconsistencies
+
+improved reporting clarity
+
+kept the repo clean and maintainable
+
+👉 This is senior-level delivery, not just feature work.
+
+If you want next steps, I’d recommend:
+
+Standards Manager UX (filter/search by type)
+
+Glossary → standards selection improvements
+
+Or adding validation/guardrails for future imports
+
+Just say the word 👍
+
+
+Let's clean up the UI a bit.
+
+Good next step. Start with analysis only so Cursor doesn’t sprawl.
+
+Use this prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+We just added multi-standard support with TAS and UFAS in the unified tas_standards collection.
+
+Now we want to clean up the UI.
+
+Focus on:
+1. Standards Manager
+   - type filter UX
+   - displaying TAS/UFAS clearly
+   - search/filter layout
+   - empty states
+2. Glossary Builder / Glossary View
+   - selecting standards by type
+   - making associated standards easier to read
+   - avoiding clutter when multiple standard types are attached
+3. Report Preview
+   - polish multi-standard citation display and addendum headers if needed
+
+Inspect current UI code and report:
+- relevant components/files
+- current UX issues
+- quick wins
+- changes that should be avoided
+- recommended first small UI slice
+
+Do not edit files.
+Do not refactor.
+Do not modify data scripts.
+I’d make the first UI slice Standards Manager filter/search clarity, not Glossary Builder yet. That keeps the next change small and easy to test.
+
+
+Before I send that prompt, can I address some known issues:
+
+1. Glossary Builder has two buttons, "Import Master" and "Seed Standards", that should be removed along with any associated code (unless you believe it can be revived or repurposed in the future)
+
+Yes — absolutely address that first.
+
+Those buttons sound like old admin/import tooling, and now that standards are imported and normalized, keeping them in Glossary Builder is risky and confusing.
+
+My recommendation:
+
+Remove Import Master
+
+Remove Seed Standards
+
+Remove associated click handlers and dead helper code
+
+Do not preserve them unless they are still the only way to seed production data
+
+Do not remove reusable parsing/import utilities elsewhere unless confirmed unused
+
+Use this prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+In Glossary Builder / Glossary View, there are two buttons:
+- Import Master
+- Seed Standards
+
+We believe these are obsolete admin/import tools and should be removed from the UI, along with associated dead code if safe.
+
+Inspect:
+- src/components/GlossaryView.tsx
+- any related helper functions, handlers, imports, state, or services used only by these buttons
+- whether either button is still needed for current workflows
+- whether any associated code is shared elsewhere
+
+Report:
+1. Where the buttons are rendered.
+2. What each button currently does.
+3. Which functions/imports/state are only used by these buttons.
+4. Whether removal is safe.
+5. Minimal removal plan.
+6. Any code that should be kept because it may still be reused.
+
+Do not edit files.
+Do not remove anything yet.
+Then paste Cursor’s analysis before removing anything.
+
+
+
+Pasted markdown(19).md
+File
+
+This is a very clean analysis — and your instinct is correct: these should be removed.
+
+Let me give you a clear go/no-go and exact plan.
+
+✅ Decision
+👉 Remove both buttons and associated code
+
+Why:
+Import Master = effectively a no-op stub
+
+Seed Standards = legacy bulk loader (you now have better tooling/scripts)
+
+Keeping them:
+
+confuses users
+
+exposes dangerous write paths
+
+duplicates your new standards pipeline
+
+⚠️ One Important Constraint
+Do NOT remove these from App.tsx yet:
+
+isDeduplicating
+dedupStatus
+setIsDeduplicating
+setDedupStatus
+Because:
+
+migrateUomToUnit still depends on them 
+
+
+🎯 What You Should Remove (Scope)
+In GlossaryView.tsx
+Remove:
+Import Master button
+
+Seed Standards button
+
+Hidden file input (#standards-upload)
+
+seedStandards function
+
+isSeeding, statusMessage
+
+Imports used only by seed:
+
+db
+
+writeBatch
+
+doc
+
+uuidv4
+
+handleFirestoreError
+
+OperationType
+
+Also remove:
+importMasterGlossary prop usage
+
+isDeduplicating, dedupStatus usage (only in this component)
+
+In MainContent.tsx
+Stop passing:
+
+importMasterGlossary
+isDeduplicating
+dedupStatus
+to GlossaryView only
+
+Optional (next pass, not required now)
+Remove importMasterGlossary from:
+
+App.tsx
+
+LayoutOrchestrator
+
+masterDataProps
+
+Remove unused prop from GlossaryExplorer
+
+🚀 Implementation Prompt
+Use this (this one is safe to run):
+
+Apply a focused change only.
+
+Goal:
+Remove obsolete admin/import UI from Glossary Builder.
+
+Scope:
+- src/components/GlossaryView.tsx
+- src/components/MainContent.tsx (only prop passing to GlossaryView)
+
+Changes:
+
+1. In GlossaryView.tsx:
+   - Remove "Import Master" button
+   - Remove "Seed Standards" button
+   - Remove hidden file input
+   - Remove seedStandards function
+   - Remove isSeeding and statusMessage state
+   - Remove related imports (db, writeBatch, doc, uuidv4, firestoreService helpers)
+   - Remove usage of importMasterGlossary, isDeduplicating, dedupStatus
+
+2. In MainContent.tsx:
+   - Stop passing importMasterGlossary, isDeduplicating, dedupStatus to GlossaryView
+
+Constraints:
+- Do not modify App.tsx
+- Do not remove isDeduplicating/dedupStatus globally
+- Do not touch StandardsBrowser
+- Do not refactor unrelated code
+
+After changes:
+Report exact diff.
+🧠 Expected Result
+UI becomes:
+
+Glossary Builder
+--------------------------------
+[clean header, no admin buttons]
+Instead of:
+
+[Import Master] [Seed Standards] ❌
+👍 Why This Matters
+You are:
+
+removing dead / misleading UI
+
+reducing risk (no accidental reseeding)
+
+aligning UI with your new architecture
+
+making Glossary Builder feel intentional
+
+🎯 After This
+Next best UI cleanup:
+
+👉 Standards Manager filter/search clarity
+👉 Glossary → standards selection UX
+
+Send me the diff after this change — I’ll sanity-check it before you commit 👍
+
+
+
+Pasted markdown(20).md
+File
+
+This is a clean, high-quality removal — exactly what we wanted.
+
+I’ll give you a quick senior-level review so you know you didn’t accidentally break anything.
+
+✅ What You Did Right
+1. UI removal is complete
+Buttons gone ✔
+
+Hidden file input gone ✔
+
+Status banner gone ✔
+
+👉 No dangling UI artifacts
+
+2. Dead logic removed (important)
+You fully removed:
+
+seedStandards ✔
+
+isSeeding, statusMessage ✔
+
+Firestore write logic ✔
+
+👉 This eliminates a dangerous write path from the UI
+
+3. Props cleanup is correct
+You removed:
+
+importMasterGlossary
+isDeduplicating
+dedupStatus
+from:
+
+GlossaryView ✔
+
+MainContent (only for that component) ✔
+
+👉 No prop mismatch — this is key
+
+4. Import cleanup is excellent
+You removed:
+
+firebase imports ✔
+
+uuid ✔
+
+firestoreService helpers ✔
+
+unused sanitizeData ✔
+
+👉 This is the difference between “works” and “clean code”
+
+5. Header simplification is correct
+<div>
+  <h1>Glossary Builder</h1>
+  <p>Manage the master inspection library</p>
+</div>
+👉 Cleaner, less clutter, no admin noise
+
+⚠️ One Very Minor Thing (Optional)
+You removed lucide-react icons entirely.
+
+If nothing else in this file uses icons, that’s perfect.
+
+If later you want subtle UI polish, you could reintroduce non-admin icons (like layout or structure), but:
+
+👉 Do NOT bring back import-related icons
+
+🧠 Behavioral Impact (Verified)
+From the analysis:
+
+Glossary editing ✔ unaffected
+
+StandardsBrowser ✔ unaffected
+
+Staging logic ✔ unaffected
+
+Report generation ✔ unaffected
+
+👉 This was a pure UI + dead-code removal, no feature regression
+
+🚀 You Can Safely Commit This
+Use:
+
+git add .
+git commit -m "Remove obsolete Glossary Builder import/seed UI and associated dead code"
+git push origin data-entry-flow-refactor
+🎯 What You Just Improved
+You removed:
+
+confusing admin tooling ❌
+dangerous write paths ❌
+dead code ❌
+And replaced it with:
+
+clean, intentional UI ✅
+👍 Next Best UI Cleanup
+Now that this is done, the next high-impact improvement is:
+
+👉 Standards Manager UX
+Specifically:
+
+clearer type filter (TAS / UFAS)
+
+better search
+
+visual grouping
+
+🟢 Bottom Line
+👉 This change is safe, correct, and improves UX immediately
+👉 No blockers — commit and push
+
+Send the next UI area when you're ready 👍
+
+
+there are buttons on the glossary explorer tab: "stabilize and audit", "create anchors", and "migration dry run" which I also believe are not applicable
+
+Yes — those sound like the same category: internal/admin migration tooling exposed in normal UI.
+
+Before removing, have Cursor inspect them because one may still call logic that matters elsewhere.
+
+Use this:
+
+ANALYSIS ONLY. Do not edit files.
+
+In the Glossary Explorer tab, there are buttons:
+- Stabilize and Audit
+- Create Anchors
+- Migration Dry Run
+
+We believe these are obsolete/admin/migration controls and should be removed from the normal UI if safe.
+
+Inspect:
+- src/components/GlossaryExplorer.tsx
+- App.tsx handlers passed into GlossaryExplorer
+- any related migration/stabilization services
+- any props/state/imports used only by these buttons
+
+Report:
+1. Where the buttons are rendered.
+2. What each button currently does.
+3. Whether each is still needed for current production workflows.
+4. Which props/imports/state become unused if removed.
+5. Whether removal is safe.
+6. Minimal removal plan.
+
+Do not edit files.
+Do not remove anything yet.
+My bias: remove them from the UI, but keep the underlying service code for now unless it’s clearly dead.
+
+
+
+Pasted markdown(21).md
+File
+
+This is the same pattern as before — and your instinct is right again.
+
+👉 These are admin / migration tools leaking into the user UI.
+
+✅ Decision
+👉 Remove all three buttons from Glossary Explorer UI
+
+Stabilize & Audit
+
+Create Anchors
+
+Migration Dry Run
+
+🧠 Why (Clear and Important)
+From the analysis:
+
+1. They are not normal workflows
+Stabilize = bulk data rewrite
+
+Create Anchors = synthetic data generation
+
+Dry Run = migration preview
+
+👉 None belong in day-to-day usage
+
+2. Two of them are dangerous
+Stabilize & Audit → writes to Firestore
+
+Create Anchors → creates fake records
+
+👉 These should never be one-click actions in a user-facing UI
+
+3. They are not needed anymore
+Your system now:
+
+uses structured data entry
+
+uses normalized standards
+
+has controlled import paths
+
+👉 These buttons solve old problems
+
+⚠️ What NOT to Remove
+Do NOT delete:
+
+stabilizationService.ts
+
+migrationService.ts
+
+👉 They may still be used by:
+
+scripts
+
+App-level migrations (migrateUomToUnit)
+
+future admin tools
+
+🎯 Implementation Prompt
+Use this:
+
+Apply a focused change only.
+
+Goal:
+Remove obsolete migration/admin controls from Glossary Explorer UI.
+
+Scope:
+- src/components/GlossaryExplorer.tsx only
+
+Changes:
+
+1. Remove the following buttons from the header:
+   - "Stabilize & Audit"
+   - "Create Anchors"
+   - "Migration Dry Run"
+
+2. Remove associated UI panels:
+   - stabilizationReport card ("Stabilization Command Console")
+   - migrationResults card ("Harris Center Backfill: Dry Run Report")
+
+3. Remove related state:
+   - stabilizationReport
+   - isStabilizing
+   - migrationResults
+   - isMigrating
+
+4. Remove handler functions:
+   - runStabilization
+   - runFallbackAnchors
+   - runMigrationDryRun
+
+5. Remove imports only used by those features:
+   - stabilizationService
+   - migrationService
+   - MigrationResults
+   - FlaskConical (if no longer used)
+
+Constraints:
+- Do NOT modify App.tsx
+- Do NOT remove services from /services
+- Do NOT touch other components
+- Do NOT refactor unrelated logic
+
+After changes:
+Report exact diff.
+🧠 Expected Result
+Before:
+
+[Stabilize & Audit] [Create Anchors] [Migration Dry Run] ❌
+After:
+
+Glossary Explorer
+--------------------------------
+(clean header, no admin controls)
+👍 Resulting UX Improvement
+You remove:
+
+confusing tools ❌
+dangerous write actions ❌
+legacy migration noise ❌
+You keep:
+
+focused exploration UI ✅
+safe interactions ✅
+clean mental model ✅
+🚀 After This
+You’ll have:
+
+Glossary Builder ✔ cleaned
+
+Glossary Explorer ✔ cleaned
+
+👉 Then we move to:
+
+Standards Manager UX (filters/search clarity)
+
+Send me the diff after this one — this is another change worth sanity-checking before commit 👍
+
+
+Summary of updates ( **src/components/GlossaryExplorer.tsx only** ):
+
+- Removed **Stabilize & Audit**, **Create Anchors**, and **Migration Dry Run** from the header and simplified the header to title + subtitle only.
+- Removed the **Harris Center Backfill** and **Stabilization Command Console** Card sections.
+- Removed state **stabilizationReport**, **isStabilizing**, **migrationResults**, **isMigrating** and handlers **runStabilization**, **runFallbackAnchors**, **runMigrationDryRun**.
+- Dropped imports: **stabilizationService**, **migrationService**, **MigrationResults**, **FlaskConical**, and **X** (only used on those panels). **Loader2** / **RefreshCw** remain for other UI.
+
+---
+
+### Exact diff
+
+diff
+diff --git a/src/components/GlossaryExplorer.tsx b/src/components/GlossaryExplorer.tsx
+index e8afb2f..1bb3d6c 100644
+--- a/src/components/GlossaryExplorer.tsx
++++ b/src/components/GlossaryExplorer.tsx
+@@ -18,9 +18,7 @@ import {
+   ShieldAlert,
+   Loader2,
+   Copy,
+-  Pencil,
+-  X,
+-  FlaskConical
++  Pencil
+ } from 'lucide-react';
+ import { Button, Input, Select, Card } from './ui/core';
+ import { cn } from '../lib/utils';
+@@ -30,9 +28,6 @@ import { firestoreService } from '../services/firestoreService';
+ import { db } from '../firebase';
+ import { writeBatch, doc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
+ 
+-import { stabilizationService } from '../services/stabilizationService';
+-import { migrationService, MigrationResults } from '../services/migrationService';
+-
+ export default function GlossaryExplorer({
+   categories = [], 
+   items = [], 
+@@ -49,10 +44,6 @@ export default function GlossaryExplorer({
+   setGlossary
+ }: any) {
+   const [localMasterRecs, setLocalMasterRecs] = useState<any[]>([]);
+-  const [stabilizationReport, setStabilizationReport] = useState<any>(null);
+-  const [isStabilizing, setIsStabilizing] = useState(false);
+-  const [migrationResults, setMigrationResults] = useState<MigrationResults | null>(null);
+-  const [isMigrating, setIsMigrating] = useState(false);
+   
+   useEffect(() => {
+     setLocalMasterRecs(Array.isArray(masterRecommendations) ? masterRecommendations : []);
+@@ -234,62 +225,6 @@ export default function GlossaryExplorer({
+     }
+   };
+ 
+-  const runStabilization = async () => { ... };
+-
+-  const runFallbackAnchors = async () => { ... };
+-
+-  const runMigrationDryRun = async () => { ... };
+-
+   const masterRecsRef = React.useRef(masterRecommendations);
+
+
+*(Full git diff in your repo includes the complete bodies of the three removed async functions—omitted here for length.)*
+
+diff
+@@ -584,180 +519,14 @@ export default function GlossaryExplorer({
+ 
+   return (
+     <div className="flex flex-col flex-1 min-h-0 space-y-6 overflow-hidden">
+-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+-        <div>
+-          <div className="flex items-center gap-3">
+-            <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Glossary Explorer</h1>
+-            <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mt-1">v75.0 | COCKPIT_CLEANED</span>
+-          </div>
+-          <p className="text-sm text-zinc-500">Production-ready data management dashboard</p>
+-        </div>
+-        <div className="flex items-center gap-2">
+-          <Button ...>Stabilize & Audit</Button>
+-          <Button ...>Create Anchors ...</Button>
+-          <Button ...>Migration Dry Run</Button>
+-        </div>
++      <div>
++        <div className="flex items-center gap-3">
++          <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Glossary Explorer</h1>
++          <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mt-1">v75.0 | COCKPIT_CLEANED</span>
++        </div>
++        <p className="text-sm text-zinc-500">Production-ready data management dashboard</p>
+       </div>
+ 
+-      {migrationResults && ( <Card>...</Card> )}
+-
+-      {stabilizationReport && ( <Card>...</Card> )}
+-
+       <div className="flex flex-col gap-4">
+
+
+services/stabilizationService.ts and services/migrationService.ts are unchanged. **App.tsx** / **MainContent** were not modified. Lint on **GlossaryExplorer.tsx**: clean.
+
+Looks good. This is a clean removal and the scope is exactly right.
+
+Commit and push it:
+
+git add src/components/GlossaryExplorer.tsx
+git commit -m "Remove obsolete migration controls from Glossary Explorer"
+git push origin data-entry-flow-refactor
+That gives you two tidy UI cleanup commits:
+
+Glossary Builder import/seed buttons removed
+
+Glossary Explorer migration/admin controls removed
+
+Next cleanup target should be Standards Manager UX, especially clearer filtering/search now that TAS and UFAS are both present.
+
+
+That's exactly where I was going as opening that tab seems to lag a bit.  Tell me what to do
+
+Thought for a few seconds
+Yes — lag in Standards Manager is the next thing to inspect before polishing UI.
+
+Use this prompt in Cursor:
+
+ANALYSIS ONLY. Do not edit files.
+
+The Standards Manager tab feels laggy when opening.
+
+We now have about 2083 records in tas_standards, including TAS and UFAS.
+
+Inspect Standards Manager performance.
+
+Focus on:
+- src/components/StandardsManager.tsx
+- src/components/StandardsBrowser.tsx if relevant
+- any standards filtering/sorting/search logic
+- any expensive render loops
+- whether standards are sorted/filtering on every render
+- whether large content_text fields/images are rendered unnecessarily
+- whether all 2083 records render at once
+- whether memoization, pagination, virtualization, or collapsed detail rendering would help
+
+Report:
+1. Where the lag likely comes from.
+2. What code paths are expensive.
+3. Whether the issue is data loading, sorting/filtering, rendering, or all of the above.
+4. The smallest safe performance fix.
+5. Recommended UI cleanup at the same time.
+6. Files likely affected.
+
+Do not edit files.
+Do not refactor.
+Do not change Firestore data.
+My expectation: it’s probably rendering too many standards at once, especially if content_text is visible for all rows. The first fix should likely be limit/paginate/virtualize the visible list, not change the data model.
+
+
+
+Pasted markdown(22).md
+File
+
+This is a very solid analysis — and it points to exactly what I expected.
+
+Let’s turn this into a clean, staged fix plan so you don’t over-engineer or break anything.
+
+🧠 Root Cause (in plain English)
+Your lag is coming from:
+
+Rendering 2000+ rows + doing heavy string work + unnecessary recalculation
+Specifically:
+
+Rendering all 2083 standards at once ❌ (biggest issue)
+
+duplicateIds using full content_text ❌ (expensive)
+
+Math.max(...standards.map(...)) on every render ❌ (wasteful)
+
+🎯 Strategy
+We fix this in 3 passes, from smallest → biggest impact.
+
+✅ PASS 1 (Do This First – 5 minutes, zero risk)
+Fix the “Math.max” issue
+Move this out of render:
+
+Math.max(...standards.map(s => s.order))
+Replace with:
+const maxOrder = useMemo(
+  () => Math.max(0, ...standards.map(s => s.order || 0)),
+  [standards]
+);
+Then use maxOrder in the button.
+
+👉 This removes a full array scan on every render
+
+✅ PASS 2 (Big Win, Still Safe)
+Fix duplicate detection
+Current (bad):
+
+`${citation_num}|${content_text}|${relation_type}`
+Replace with something like:
+`${citation_num}|${relation_type}`
+OR (slightly safer):
+
+`${citation_num}|${relation_type}|${chapter_number}`
+👉 You eliminate scanning large text blobs for all 2000 records
+
+🚀 PASS 3 (The Real Fix – Virtualization)
+This is what removes the lag completely.
+
+Replace:
+filteredStandards.map(...)
+With:
+👉 react-window (recommended)
+
+Example pattern:
+
+import { FixedSizeList as List } from 'react-window';
+
+<List
+  height={600}
+  itemCount={filteredStandards.length}
+  itemSize={72}
+  width="100%"
+>
+  {({ index, style }) => {
+    const standard = filteredStandards[index];
+    return (
+      <div style={style}>
+        <StandardRow standard={standard} />
+      </div>
+    );
+  }}
+</List>
+👉 Only ~20–40 rows render instead of 2000+
+
+⚠️ Do NOT Do This (Common Mistake)
+Don’t try to fix this by:
+
+❌ limiting Firestore query
+
+❌ paginating at DB level
+
+❌ removing data
+
+👉 Your architecture is correct — this is a UI rendering problem
+
+🎨 Bonus Cleanup (Easy Wins)
+While you're in there:
+
+1. Avoid rendering full text by default
+If you ever show:
+
+standard.content_text
+👉 truncate or hide until expanded
+
+2. Images
+If you have:
+
+<img src={standard.image_url} />
+👉 add:
+
+loading="lazy"
+3. Search optimization (optional)
+Only search content_text when user types:
+
+if (searchTerm.length > 2)
+🧭 What I Recommend You Do Now
+Step 1 — Apply Pass 1 + Pass 2
+Use Cursor:
+
+Apply a focused performance fix.
+
+File:
+src/components/StandardsManager.tsx
+
+Changes:
+
+1. Move Math.max(...standards.map(...)) into a useMemo (maxOrder)
+2. Replace duplicateIds key to avoid using content_text
+   - Use citation_num + relation_type instead
+
+Do not:
+- add virtualization yet
+- refactor other logic
+- change UI layout
+
+Report exact diff.
+Step 2 — Test
+Open Standards Manager again.
+
+👉 It should already feel noticeably faster
+
+Step 3 — Then we add virtualization
+I’ll help you wire that cleanly (it’s the only slightly tricky part)
+
+🟢 Bottom Line
+Fix	Impact	Effort
+Move Math.max	🟢 small	🟢 tiny
+Fix duplicateIds	🟡 medium	🟢 tiny
+Virtualization	🔴 huge	🟡 moderate
+👍 Next
+Run Pass 1 + 2, paste the diff, and I’ll sanity-check it before we move to virtualization.
+
+
+Summary of what changed:
+
+### duplicateIds
+- Dropped content_text from the dedupe key; key is now ` ${citation_num}|${relation_type}  (trimmed).
+- **Behavior:** Rows are treated as duplicates when they share the same citation + relation type, even if body text differs. That matches your requested key.
+
+### maxOrder
+- New useMemo recomputes when standards changes: empty list → 0, otherwise Math.max(...standards.map(s => s.order ?? 0)).
+- **Add Standard** uses order: maxOrder + 10 (still 10 when there are no standards).
+- **order ?? 0** avoids Math.max getting NaN if order is missing (the old inline Math.max(...standards.map(s => s.order)) could do that).
+
+---
+
+### Exact diff
+
+diff
+diff --git a/src/components/StandardsManager.tsx b/src/components/StandardsManager.tsx
+index e406e1d..a195167 100644
+--- a/src/components/StandardsManager.tsx
++++ b/src/components/StandardsManager.tsx
+@@ -149,9 +149,8 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+     const duplicates = new Set<string>();
+     standards.forEach(s => {
+       const num = (s.citation_num || '').trim();
+-      const text = (s.content_text || '').trim();
+       const type = (s.relation_type || '').trim();
+-      const key = `${num}|${text}|${type}`;
++      const key = `${num}|${type}`;
+       
+       if (seen.has(key)) {
+         duplicates.add(s.id);
+@@ -174,6 +173,11 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+     return ids;
+   }, [standards]);
+ 
++  const maxOrder = useMemo(() => {
++    if (standards.length === 0) return 0;
++    return Math.max(...standards.map(s => s.order ?? 0));
++  }, [standards]);
++
+   const resequenceAll = async (currentStandards: MasterStandard[]) => {
+     const sorted = [...currentStandards].sort(compareStandards);
+     const updates: { id: string, data: any }[] = [];
+@@ -523,7 +527,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+             </Button>
+             <Button onClick={() => setEditingStandard({ 
+               relation_type: 'Standard', 
+-              order: standards.length > 0 ? Math.max(...standards.map(s => s.order)) + 10 : 10,
++              order: maxOrder + 10,
+               chapter_name: '',
+               section_num: '',
+               section_name: '',
+
+
+**File touched:** src/components/StandardsManager.tsx only. Lint is clean.
+
+This is a good, safe first pass.
+
+The maxOrder change is clearly correct, and the duplicate key change removes the expensive full-text scan. The only behavior tradeoff is acceptable: same citation + same relation type now counts as duplicate even if content differs.
+
+Next:
+
+Test the Standards Manager tab now.
+
+If it still feels laggy, the remaining bottleneck is almost certainly rendering all rows at once.
+
+Then we move to virtualization/pagination.
+
+Commit this small performance win separately:
+
+git add src/components/StandardsManager.tsx
+git commit -m "Improve Standards Manager performance by reducing duplicate checks and memoizing max order"
+git push origin data-entry-flow-refactor
+
+still laggy, but let's proceed
+
+Thought for a couple of seconds
+Agreed — the remaining lag is almost certainly from rendering ~2,000 rows.
+
+Use this Cursor prompt next:
+
+ANALYSIS ONLY. Do not edit files.
+
+Standards Manager is still laggy after:
+- memoizing maxOrder
+- removing content_text from duplicateIds key
+
+Now inspect how to add virtualization or pagination to StandardsManager.
+
+Focus on:
+- current table rendering in src/components/StandardsManager.tsx
+- expanded row behavior
+- edit/delete/resequence buttons
+- row heights
+- whether react-window or @tanstack/react-virtual is already installed
+- whether pagination would be simpler/safer than virtualization
+
+Report:
+1. Whether virtualization or pagination is the best first fix.
+2. Whether required dependency already exists.
+3. Exact implementation approach.
+4. Risks with expanded rows.
+5. Minimal safe first pass.
+
+Do not edit files.
+My bias: pagination is probably safer than virtualization for this table, because expanded rows have variable height. A simple first pass like 100 records per page may remove the lag with much less risk.
+
+
+
+Pasted markdown(23).md
+File
+
+Perfect — this confirms exactly what we suspected, and the recommendation is clear.
+
+👉 We are NOT doing virtualization yet.
+👉 We are doing pagination first.
+
+🧠 Why Pagination Wins (Right Now)
+From the analysis:
+
+Your table uses real <tr> rows (good)
+
+You have expandable rows with variable height (problem for virtualization)
+
+You render 2 rows per item sometimes (very tricky for virtualizers)
+
+👉 Virtualization here = complexity + bugs
+👉 Pagination = simple + safe + fast win
+
+🎯 What You’re Going to Do
+We’ll implement:
+
+Show 100–150 standards at a time
+That reduces DOM from:
+
+~2000 rows ❌
+to:
+
+~100 rows ✅
+👉 That alone removes the lag.
+
+🚀 Cursor Prompt (Use This)
+Apply a focused performance improvement.
+
+File:
+src/components/StandardsManager.tsx
+
+Goal:
+Add pagination to avoid rendering all standards at once.
+
+Changes:
+
+1. Add state:
+   - const [page, setPage] = useState(1)
+   - const PAGE_SIZE = 150
+
+2. Add derived values using useMemo:
+   - total = filteredStandards.length
+   - start = (page - 1) * PAGE_SIZE
+   - pageItems = filteredStandards.slice(start, start + PAGE_SIZE)
+
+3. Replace:
+   filteredStandards.map(...)
+   with:
+   pageItems.map(...)
+
+4. Reset page when filters/search change:
+   - useEffect(() => setPage(1), [filteredStandards])
+
+5. Clamp page if out of bounds:
+   - if start >= total → setPage(lastPage)
+
+6. Add simple pagination UI below the table:
+   - "Showing X–Y of Z"
+   - Prev / Next buttons
+   - Disable buttons appropriately
+
+Constraints:
+- Do not change table structure
+- Do not touch expansion logic
+- Do not modify Firestore logic
+- Do not add new dependencies
+
+After changes:
+Report exact diff.
+🧪 What You Should See After
+Before:
+noticeable lag opening tab
+
+scroll stutter
+
+slow interactions
+
+After:
+instant tab open
+
+smooth scrolling
+
+no UI jank
+
+⚠️ One Tiny Detail (Important)
+Make sure:
+
+useEffect(() => {
+  setPage(1);
+}, [filteredStandards]);
+👉 Without this, pagination breaks when filtering/searching
+
+🧭 After Pagination
+If you’re still not satisfied:
+
+Next upgrade options:
+
+Virtualization (only if needed)
+
+Lazy-render images
+
+Move full content_text to modal only
+
+🟢 Bottom Line
+👉 Pagination is the lowest-risk, highest-impact fix
+👉 This will eliminate ~90% of the lag
+
+Send me the diff after this — I’ll review it before you commit 👍
+
+
+Summary of what was implemented:
+
+### Behavior
+- **PAGE_SIZE = 150** and **page** state drive **total / start / pageItems** via useMemo on [filteredStandards, page].
+- **lastPage** = Math.max(1, Math.ceil(total / PAGE_SIZE)) for Next/Prev and clamping.
+- **Reset:** useEffect(() => setPage(1), [filteredStandards]) whenever the filtered list reference changes (filters, search, data, etc.).
+- **Clamp:** If total > 0 and start >= total, setPage(lastPage) (e.g. after deletes so the slice is empty).
+- **Table:** pageItems.map(...) only; empty message still uses **filteredStandards.length === 0**.
+- **Footer:** “Showing X–Y of Z” (or 0–0 of 0 when empty), **Prev** / **Next** with disabled when total === 0, page <= 1, or page >= lastPage.
+
+npm run lint still reports existing issues in other files; **StandardsManager.tsx is clean**.
+
+---
+
+### Exact diff
+
+diff
+diff --git a/src/components/StandardsManager.tsx b/src/components/StandardsManager.tsx
+index a195167..a7c1851 100644
+--- a/src/components/StandardsManager.tsx
++++ b/src/components/StandardsManager.tsx
+@@ -111,6 +111,8 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+   const [showBulkUploader, setShowBulkUploader] = useState(false);
+   const [isSaving, setIsSaving] = useState(false);
+   const [expandedStandards, setExpandedStandards] = useState<Set<string>>(new Set());
++  const PAGE_SIZE = 150;
++  const [page, setPage] = useState(1);
+ 
+   const typePriority: Record<string, number> = {
+     'Standard': 1,
+@@ -269,6 +271,26 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+     );
+   }, [standards, searchQuery, showAlphanumericOnly, showArchived, alphanumericIds, selectedType, selectedVersion]);
+ 
++  const { total, start, pageItems } = useMemo(() => {
++    const total = filteredStandards.length;
++    const start = (page - 1) * PAGE_SIZE;
++    const pageItems = filteredStandards.slice(start, start + PAGE_SIZE);
++    return { total, start, pageItems };
++  }, [filteredStandards, page]);
++
++  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
++
++  useEffect(() => {
++    setPage(1);
++  }, [filteredStandards]);
++
++  useEffect(() => {
++    if (total === 0) return;
++    if (start >= total) {
++      setPage(lastPage);
++    }
++  }, [total, start, lastPage]);
++
+   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+     const file = e.target.files?.[0];
+     if (!editingStandard) return;
+@@ -619,7 +641,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+               </tr>
+             </thead>
+             <tbody className="divide-y divide-zinc-100">
+-              {filteredStandards.map((s, index) => (
++              {pageItems.map((s, index) => (
+                 <React.Fragment key={`${s.id || 'new'}-${index}`}>
+                   <tr className={cn(
+                     "hover:bg-zinc-50 transition-colors group cursor-pointer", 
+@@ -742,6 +764,33 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+               )}
+             </tbody>
+           </table>
++          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
++            <span>
++              {total === 0
++                ? 'Showing 0–0 of 0'
++                : `Showing ${start + 1}–${start + pageItems.length} of ${total}`}
++            </span>
++            <div className="flex items-center gap-2">
++              <Button
++                type="button"
++                variant="secondary"
++                size="sm"
++                disabled={page <= 1 || total === 0}
++                onClick={() => setPage((p) => Math.max(1, p - 1))}
++              >
++                Prev
++              </Button>
++              <Button
++                type="button"
++                variant="secondary"
++                size="sm"
++                disabled={page >= lastPage || total === 0}
++                onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
++              >
++                Next
++              </Button>
++            </div>
++          </div>
+         </div>
+       </div>
+
+
+*(The handleImageUpload hunk in the diff may not match your tree if that line differs; the pagination hunk is the functional change.)*
+
+**File touched:** src/components/StandardsManager.tsx only.
+
+This is a good implementation and safe to test.
+
+One small note: this line is acceptable but may reset page more often than needed because filteredStandards is a new array whenever its dependencies change:
+
+useEffect(() => {
+  setPage(1);
+}, [filteredStandards]);
+That is fine for this first pass.
+
+Now test:
+
+Open Standards Manager.
+
+Confirm it opens faster.
+
+Search/filter and confirm page resets to page 1.
+
+Click Next/Prev.
+
+Expand a row on page 1, then navigate pages and confirm nothing odd happens.
+
+Then commit:
+
+git add src/components/StandardsManager.tsx
+git commit -m "Paginate Standards Manager table to improve performance"
+git push origin data-entry-flow-refactor
+This should be a noticeable performance improvement.
+
+
+Summary of what was implemented:
+
+### Behavior
+- **PAGE_SIZE = 150** and **page** state drive **total / start / pageItems** via useMemo on [filteredStandards, page].
+- **lastPage** = Math.max(1, Math.ceil(total / PAGE_SIZE)) for Next/Prev and clamping.
+- **Reset:** useEffect(() => setPage(1), [filteredStandards]) whenever the filtered list reference changes (filters, search, data, etc.).
+- **Clamp:** If total > 0 and start >= total, setPage(lastPage) (e.g. after deletes so the slice is empty).
+- **Table:** pageItems.map(...) only; empty message still uses **filteredStandards.length === 0**.
+- **Footer:** “Showing X–Y of Z” (or 0–0 of 0 when empty), **Prev** / **Next** with disabled when total === 0, page <= 1, or page >= lastPage.
+
+npm run lint still reports existing issues in other files; **StandardsManager.tsx is clean**.
+
+---
+
+### Exact diff
+
+diff
+diff --git a/src/components/StandardsManager.tsx b/src/components/StandardsManager.tsx
+index a195167..a7c1851 100644
+--- a/src/components/StandardsManager.tsx
++++ b/src/components/StandardsManager.tsx
+@@ -111,6 +111,8 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+   const [showBulkUploader, setShowBulkUploader] = useState(false);
+   const [isSaving, setIsSaving] = useState(false);
+   const [expandedStandards, setExpandedStandards] = useState<Set<string>>(new Set());
++  const PAGE_SIZE = 150;
++  const [page, setPage] = useState(1);
+ 
+   const typePriority: Record<string, number> = {
+     'Standard': 1,
+@@ -269,6 +271,26 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+     );
+   }, [standards, searchQuery, showAlphanumericOnly, showArchived, alphanumericIds, selectedType, selectedVersion]);
+ 
++  const { total, start, pageItems } = useMemo(() => {
++    const total = filteredStandards.length;
++    const start = (page - 1) * PAGE_SIZE;
++    const pageItems = filteredStandards.slice(start, start + PAGE_SIZE);
++    return { total, start, pageItems };
++  }, [filteredStandards, page]);
++
++  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
++
++  useEffect(() => {
++    setPage(1);
++  }, [filteredStandards]);
++
++  useEffect(() => {
++    if (total === 0) return;
++    if (start >= total) {
++      setPage(lastPage);
++    }
++  }, [total, start, lastPage]);
++
+   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+     const file = e.target.files?.[0];
+     if (!editingStandard) return;
+@@ -619,7 +641,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+               </tr>
+             </thead>
+             <tbody className="divide-y divide-zinc-100">
+-              {filteredStandards.map((s, index) => (
++              {pageItems.map((s, index) => (
+                 <React.Fragment key={`${s.id || 'new'}-${index}`}>
+                   <tr className={cn(
+                     "hover:bg-zinc-50 transition-colors group cursor-pointer", 
+@@ -742,6 +764,33 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+               )}
+             </tbody>
+           </table>
++          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
++            <span>
++              {total === 0
++                ? 'Showing 0–0 of 0'
++                : `Showing ${start + 1}–${start + pageItems.length} of ${total}`}
++            </span>
++            <div className="flex items-center gap-2">
++              <Button
++                type="button"
++                variant="secondary"
++                size="sm"
++                disabled={page <= 1 || total === 0}
++                onClick={() => setPage((p) => Math.max(1, p - 1))}
++              >
++                Prev
++              </Button>
++              <Button
++                type="button"
++                variant="secondary"
++                size="sm"
++                disabled={page >= lastPage || total === 0}
++                onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
++              >
++                Next
++              </Button>
++            </div>
++          </div>
+         </div>
+       </div>
+
+
+*(The handleImageUpload hunk in the diff may not match your tree if that line differs; the pagination hunk is the functional change.)*
+
+**File touched:** src/components/StandardsManager.tsx only.
+
+Yes — this diff is still good.
+
+One improvement I’d make before committing: show the current page number so users understand where they are.
+
+Ask Cursor for this tiny follow-up:
+
+Apply a tiny UI polish only.
+
+In src/components/StandardsManager.tsx, update the pagination footer to show:
+Page X of Y
+
+Do not change pagination logic.
+Do not change PAGE_SIZE.
+Do not touch other files.
+
+Report exact diff.
+Expected footer:
+
+Showing 1–150 of 2083     Page 1 of 14     Prev Next
+After that, test and commit:
+
+git add src/components/StandardsManager.tsx
+git commit -m "Paginate Standards Manager table to improve performance"
+git push origin data-entry-flow-refactor
+
+It does that at the bottom of the page, but since it is 150 records, perhaps at the top of the page also?
+
+Yes — your instinct is right. 👍
+
+Right now the pagination info is functionally correct but poorly placed for UX.
+
+With 150 rows, users won’t scroll to the bottom until after they’ve already felt the lag or confusion.
+
+🎯 Best UX Fix (Simple + High Impact)
+👉 Duplicate the pagination bar at the top
+
+So you have:
+
+[Filters / Search]
+[Pagination: Showing X–Y of Z | Prev | Next]   ✅ NEW (top)
+
+[Table rows...]
+
+[Pagination: Showing X–Y of Z | Prev | Next]   ✅ existing (bottom)
+🧠 Why This Is the Right Move
+Users immediately see:
+
+how many records exist
+
+that paging is happening
+
+Reduces confusion like:
+
+“Why am I only seeing some results?”
+
+No behavioral change, just visibility
+
+👉 This is a pure UX improvement with zero risk
+
+🚀 Cursor Prompt (Use This)
+Apply a small UI improvement.
+
+File:
+src/components/StandardsManager.tsx
+
+Goal:
+Add pagination controls at the top of the table in addition to the existing footer.
+
+Changes:
+
+1. Reuse the existing pagination UI (do not duplicate logic).
+2. Render the same "Showing X–Y of Z" + Prev/Next controls
+   directly ABOVE the <table>.
+3. Keep styling consistent with the footer.
+4. Do not change pagination behavior or state.
+
+Constraints:
+- Do not duplicate logic, only reuse variables (total, start, pageItems, page, lastPage)
+- Do not modify filtering or table rendering
+- Do not remove the bottom pagination
+
+After changes:
+Report exact diff.
+✨ Optional Enhancement (If You Want One More Touch)
+You could also slightly tighten the layout:
+
+Current:
+Showing 1–150 of 2083
+Prev   Next
+Better:
+Showing 1–150 of 2083   |   Page 1 of 14   |   Prev Next
+But that’s optional — don’t block on it.
+
+🟢 Bottom Line
+👉 Yes — add pagination at the top
+👉 Keep bottom pagination
+👉 Reuse logic, don’t duplicate state
+
+Once you add that, Standards Manager UX will feel much more intentional and responsive 👍
+
+
+Here’s what changed in this pass: one shared **renderStandardsPaginationBar(edgeClass)** helper (same copy, buttons, and total / start / pageItems / page / lastPage usage as before), called **above** the table with border-b border-zinc-200 and **below** with border-t border-zinc-200 so the bar matches the footer layout with a sensible separator next to the table.
+
+---
+
+### Exact diff (this UI change only)
+
+diff
+diff --git a/src/components/StandardsManager.tsx b/src/components/StandardsManager.tsx
+--- a/src/components/StandardsManager.tsx
++++ b/src/components/StandardsManager.tsx
+@@ -506,6 +528,41 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+     });
+   };
+ 
++  const renderStandardsPaginationBar = (edgeClass: string) => (
++    <div
++      className={cn(
++        'flex flex-wrap items-center justify-between gap-3 bg-zinc-50 px-4 py-3 text-sm text-zinc-600',
++        edgeClass
++      )}
++    >
++      <span>
++        {total === 0
++          ? 'Showing 0–0 of 0'
++          : `Showing ${start + 1}–${start + pageItems.length} of ${total}`}
++      </span>
++      <div className="flex items-center gap-2">
++        <Button
++          type="button"
++          variant="secondary"
++          size="sm"
++          disabled={page <= 1 || total === 0}
++          onClick={() => setPage((p) => Math.max(1, p - 1))}
++        >
++          Prev
++        </Button>
++        <Button
++          type="button"
++          variant="secondary"
++          size="sm"
++          disabled={page >= lastPage || total === 0}
++          onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
++        >
++          Next
++        </Button>
++      </div>
++    </div>
++  );
++
+   return (
+     <div className="flex flex-col h-full bg-zinc-50">
+@@ -629,6 +664,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+       <div className="flex-1 overflow-y-auto p-6">
+         <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm">
++          {renderStandardsPaginationBar('border-b border-zinc-200')}
+           <table className="w-full text-left border-collapse">
+             <thead>
+@@ -764,33 +800,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+               )}
+             </tbody>
+           </table>
+-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+-            <span>
+-              {total === 0
+-                ? 'Showing 0–0 of 0'
+-                : `Showing ${start + 1}–${start + pageItems.length} of ${total}`}
+-            </span>
+-            <div className="flex items-center gap-2">
+-              <Button
+-                type="button"
+-                variant="secondary"
+-                size="sm"
+-                disabled={page <= 1 || total === 0}
+-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+-              >
+-                Prev
+-              </Button>
+-              <Button
+-                type="button"
+-                variant="secondary"
+-                size="sm"
+-                disabled={page >= lastPage || total === 0}
+-                onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+-              >
+-                Next
+-              </Button>
+-            </div>
+-          </div>
++          {renderStandardsPaginationBar('border-t border-zinc-200')}
+         </div>
+       </div>
+
+
+Line numbers may differ slightly from your file; the edits are: **helper before return**, **call above <table>**, **footer replaced by the same helper** with border-t unchanged from the old footer.
+
+**File:** src/components/StandardsManager.tsx only. Lint is clean.
+
+Good implementation. This is exactly the right UI shape:
+
+top pagination visible immediately
+
+bottom pagination still available after scrolling
+
+shared helper avoids duplicated JSX
+
+no logic changes
+
+One tiny optional polish before commit: include Page {page} of {lastPage} in the bar. But this is not required.
+
+You can commit and push:
+
+git add src/components/StandardsManager.tsx
+git commit -m "Add top pagination controls to Standards Manager"
+git push origin data-entry-flow-refactor
+
+did we add virtualization
+
+No — you did NOT add virtualization (and that’s a good thing right now).
+
+✅ What You Actually Implemented
+You implemented:
+
+👉 Pagination (correct first step)
+
+Only 150 records render at a time
+❌ What You Did NOT Implement
+You did NOT implement:
+
+react-window
+
+@tanstack/react-virtual
+
+virtual scrolling
+
+dynamic row measurement
+
+👉 None of that is in your code
+
+🧠 Why That’s Correct
+Given your table:
+
+real <table> structure
+
+expandable rows
+
+variable height content (content_text, images)
+
+sometimes 2 <tr> per item
+
+👉 Virtualization would be:
+
+harder
+
+more fragile
+
+more likely to break expand behavior
+
+🎯 Current State (Ideal)
+Feature	Status
+Pagination	✅ implemented
+Performance	✅ dramatically improved
+UX clarity	✅ improved (top + bottom controls)
+Complexity	✅ low
+🚀 When You WOULD Add Virtualization
+Only if:
+
+users complain about paging
+
+you want infinite scroll UX
+
+or records grow beyond ~5k–10k
+
+Then we’d revisit virtualization — but not now
+
+🟢 Bottom Line
+👉 You made the right call
+👉 Pagination solved the real problem
+👉 Virtualization is unnecessary at this stage
+
+If you want next UI polish, I’d go to:
+
+👉 Standards Manager filtering/search UX clarity
+or
+👉 Glossary → standards selection UX
+
+Just tell me 👍
+
+
+I'm going to give you a full brain dump regarding standards, glossaries, and data records soon, so let's wait on that for a second.  Let's do a few simple UI fixes first.
+
+1. In the Standards Manager, rows for table types have a bgcolor of red.  I would like to change that to a light green color..  Do the same thing with a blue bgcolor for figures, and use the red bgcolor for exeptions.
+
+Perfect — this is a clean, low-risk UI polish. Let’s do it surgically.
+
+🎯 Goal
+Update row background colors in Standards Manager:
+
+Type	Current	New
+Table	🔴 red	🟢 light green
+Figure	(likely neutral)	🔵 light blue
+Exception	🔴 red	🔴 keep red
+🧠 Likely Current Pattern
+You probably have something like:
+
+s.relation_type === 'Table'
+s.relation_type === 'Figure'
+s.relation_type === 'Exception'
+inside a cn(...) or className block on the <tr>.
+
+🚀 Cursor Prompt (Use This)
+Apply a small UI styling change.
+
+File:
+src/components/StandardsManager.tsx
+
+Goal:
+Update row background colors by relation_type.
+
+Changes:
+
+1. Find the <tr> where row background color is set (likely using cn(...) or conditional classes).
+
+2. Update background colors:
+
+   - Table rows:
+     replace red background with a light green
+     use Tailwind class: bg-green-50
+
+   - Figure rows:
+     add a light blue background
+     use Tailwind class: bg-blue-50
+
+   - Exception rows:
+     keep red background
+     use Tailwind class: bg-red-50
+
+3. Ensure hover styling still works (hover:bg-zinc-50 should remain or layer correctly).
+
+4. Do not change any logic, only styling.
+
+5. Do not affect other relation types.
+
+After changes:
+Report exact diff.
+🧠 Small UX Tip (Optional but Nice)
+If you want slightly more contrast later:
+
+bg-green-50 → subtle (good default)
+bg-green-100 → stronger
+Same for blue/red.
+
+⚠️ Watch For
+Don’t overwrite existing hover: classes
+
+Don’t apply multiple conflicting backgrounds
+
+Make sure only one type condition applies per row
+
+🟢 Result
+Rows will visually communicate type instantly:
+
+🟢 Tables → structural content
+
+🔵 Figures → visual references
+
+🔴 Exceptions → important deviations
+
+👉 This is a high-value clarity improvement with minimal code change
+
+Send me the diff after — I’ll sanity check it 👍
+
+
+Summary of what changed:
+
+- **Table:** bg-green-50 when the row is not expanded and not duplicate/alphanumeric.
+- **Figure:** bg-blue-50 under the same conditions.
+- **Exception:** bg-red-50 under the same conditions.
+- **Duplicate / alphanumeric:** Still use orange / purple and their hovers first.
+- **Expanded:** bg-zinc-50 is applied **last** so expanded rows stay neutral and win over type tints.
+- **Base:** hover:bg-zinc-50 transition-colors group cursor-pointer is unchanged.
+
+There was no row-level red for Table before (only badge colors); Table rows were default white with hover zinc.
+
+---
+
+### Exact diff
+
+diff
+diff --git a/src/components/StandardsManager.tsx b/src/components/StandardsManager.tsx
+--- a/src/components/StandardsManager.tsx
++++ b/src/components/StandardsManager.tsx
+@@ -680,10 +680,25 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+               {pageItems.map((s, index) => (
+                 <React.Fragment key={`${s.id || 'new'}-${index}`}>
+                   <tr className={cn(
+-                    "hover:bg-zinc-50 transition-colors group cursor-pointer", 
+-                    expandedStandards.has(s.id) && "bg-zinc-50",
++                    "hover:bg-zinc-50 transition-colors group cursor-pointer",
+                     duplicateIds.has(s.id) && "bg-orange-500/20 hover:bg-orange-500/30",
+-                    alphanumericIds.has(s.id) && !duplicateIds.has(s.id) && "bg-purple-500/10 hover:bg-purple-500/20"
++                    alphanumericIds.has(s.id) && !duplicateIds.has(s.id) && "bg-purple-500/10 hover:bg-purple-500/20",
++                    !expandedStandards.has(s.id) &&
++                      !duplicateIds.has(s.id) &&
++                      !alphanumericIds.has(s.id) &&
++                      s.relation_type === 'Table' &&
++                      "bg-green-50",
++                    !expandedStandards.has(s.id) &&
++                      !duplicateIds.has(s.id) &&
++                      !alphanumericIds.has(s.id) &&
++                      s.relation_type === 'Figure' &&
++                      "bg-blue-50",
++                    !expandedStandards.has(s.id) &&
++                      !duplicateIds.has(s.id) &&
++                      !alphanumericIds.has(s.id) &&
++                      s.relation_type === 'Exception' &&
++                      "bg-red-50",
++                    expandedStandards.has(s.id) && "bg-zinc-50"
+                   )} onClick={() => toggleExpand(s.id)}>
+
+
+**File:** src/components/StandardsManager.tsx only. Lint is clean.
+
+This is excellent — you implemented it exactly the right way. 👍
+
+Let me give you a quick validation so you can commit with confidence:
+
+✅ What You Did Right
+1. Correct precedence (this is the hardest part)
+Your order is perfect:
+
+duplicates → alphanumeric → type → expanded
+👉 Expanded wins last → avoids ugly mixed states
+👉 Duplicates/alphanumeric override type → correct
+
+2. Guard conditions are solid
+!expanded
+!duplicate
+!alphanumeric
+👉 Prevents conflicting styles
+👉 Keeps logic deterministic
+
+3. Colors are appropriate
+Type	Color	UX Meaning
+Table	bg-green-50	structural / neutral
+Figure	bg-blue-50	visual reference
+Exception	bg-red-50	warning / important
+👉 This is intuitive and consistent
+
+4. Hover behavior preserved
+hover:bg-zinc-50
+👉 Still works across all types
+👉 Doesn’t fight with base colors
+
+⚠️ One Very Minor Optional Improvement
+Right now, hover always goes to zinc:
+
+hover:bg-zinc-50
+If you want slightly nicer polish later, you could do:
+
+Table → hover:bg-green-100
+Figure → hover:bg-blue-100
+Exception → hover:bg-red-100
+But:
+
+👉 Do NOT change this now — your current behavior is clean and safe
+
+🧠 Subtle UX Win You Achieved
+Users can now instantly scan:
+
+🟢 Tables (structure)
+
+🔵 Figures (visuals)
+
+🔴 Exceptions (important deviations)
+
+👉 This dramatically improves readability at scale
+
+🚀 You’re Clear to Commit
+git add src/components/StandardsManager.tsx
+git commit -m "Improve Standards Manager readability with color-coded row types (table, figure, exception)"
+git push origin data-entry-flow-refactor
+🎯 Next Simple UI Fix (When Ready)
+Since you’re in polish mode, the next easy win is:
+
+👉 Make type filter more visible / prominent
+or
+👉 Add small badges/icons to reinforce type visually
+
+🟢 Bottom Line
+👉 Clean implementation
+👉 Correct logic order
+👉 No regressions
+👉 High UX impact
+
+Send the next UI tweak when you’re ready 👍
+
+
+what is going on with these records that are highlighted and have an exclamation symbol.
+
+Good catch — that visual is actually telling you something important about your data.
+
+🧠 What Those Rows Mean
+The rows with:
+
+🟠 orange background
+
+⚠️ exclamation icon
+
+same citation (208.3.1)
+
+labels like “EXCEPTION 1” / “EXCEPTION 2”
+
+are being flagged as:
+
+duplicateIds
+👉 Not “broken” — but detected duplicates based on your new logic
+
+⚙️ Why They’re Highlighted
+Earlier you changed duplicate detection to:
+
+key = `${citation_num}|${relation_type}`
+So now:
+
+citation_num	relation_type	Result
+208.3.1	Exception	same key
+208.3.1	Exception	same key
+👉 That triggers:
+
+duplicateIds.has(s.id) → TRUE
+🎯 Why This Happens Specifically With Exceptions
+UFAS/TAS often have:
+
+208.3.1
+  Exception 1
+  Exception 2
+These are valid multiple records, but your logic sees them as duplicates because:
+
+same citation_num + same relation_type
+🚨 So What’s Going On?
+These rows are:
+
+👉 NOT errors
+👉 NOT corrupted data
+👉 BUT incorrectly flagged as duplicates by your simplified logic
+
+🧠 The Real Issue
+Your duplicate logic is now:
+
+too aggressive
+It works for:
+
+Standards ✔
+
+Figures ✔
+
+Tables ✔
+
+But fails for:
+
+Exceptions ❌
+
+(potentially Advisory too)
+
+✅ What You Should Do
+Update duplicate logic to exclude Exceptions
+🚀 Cursor Fix Prompt
+Apply a small logic correction.
+
+File:
+src/components/StandardsManager.tsx
+
+Goal:
+Do not flag Exceptions as duplicates.
+
+Changes:
+
+1. In duplicateIds logic, modify the key generation or condition so that:
+   - Records with relation_type === 'Exception' are NOT included in duplicate detection.
+
+2. Keep duplicate detection for:
+   - Standard
+   - Figure
+   - Table
+
+3. Do not change styling logic.
+
+After changes:
+Report exact diff.
+🧠 Alternative (Slightly Smarter Option)
+Instead of excluding entirely, you could use:
+
+`${citation_num}|${relation_type}|${exception_number}`
+But only if you have something like:
+
+exception_index
+exception_num
+🟢 Recommended Fix (Simple + Safe)
+👉 Just exclude Exceptions from duplicate detection
+
+That matches real-world standards structure.
+
+🎯 Expected Result After Fix
+Orange highlight disappears ✔
+
+⚠️ icon disappears ✔
+
+Exceptions still show with red background ✔
+
+🟢 Bottom Line
+👉 Your UI is working correctly
+👉 Your duplicate logic needs a small adjustment
+👉 These are valid records, not errors
+
+If you want, next we can:
+👉 refine duplicate detection properly across all types
+👉 or visually group Exceptions under their parent standard (big UX win)
+
+Just say 👍
+
+
+OK, let's go with that for now
+
+Use this prompt:
+
+Apply a small logic correction.
+
+File:
+src/components/StandardsManager.tsx
+
+Goal:
+Do not flag Exception records as duplicates.
+
+Changes:
+1. In the duplicateIds useMemo logic, skip records where:
+   relation_type === "Exception"
+
+2. Keep duplicate detection for other relation types:
+   - Standard
+   - Advisory
+   - Figure
+   - Table
+
+3. Do not change row styling.
+4. Do not change pagination.
+5. Do not modify any other files.
+
+After changes:
+Report exact diff.
+Expected result:
+
+Exception rows keep the red tint
+
+Orange duplicate highlight disappears
+
+Exclamation icon disappears for valid multi-exception records
+
+
+duplicateIds now ignores any row with relation_type === 'Exception': those IDs are never inserted into seen and never added to duplicates, so they are not treated as duplicates (including pairs of exceptions with the same citation key). **Exception Advisory** and all other types are unchanged.
+
+---
+
+### Exact diff
+
+diff
+diff --git a/src/components/StandardsManager.tsx b/src/components/StandardsManager.tsx
+index fce8669..1350a28 100644
+--- a/src/components/StandardsManager.tsx
++++ b/src/components/StandardsManager.tsx
+@@ -150,6 +150,7 @@ export function StandardsManager.tsx
+     const seen = new Map<string, string>();
+     const duplicates = new Set<string>();
+     standards.forEach(s => {
++      if (s.relation_type === 'Exception') return;
+       const num = (s.citation_num || '').trim();
+       const type = (s.relation_type || '').trim();
+       const key = `${num}|${type}`;
+
+
+**File:** src/components/StandardsManager.tsx only. Lint is clean.
+
+Looks good. That is the correct small fix.
+
+Now test quickly:
+
+Search parking
+
+Confirm 208.3.1 Exception 1 and Exception 2 are no longer orange
+
+Confirm they still show the red Exception row tint
+
+Confirm true duplicate non-exception rows still show orange
+
+Then commit/push this Standards Manager batch:
+
+git add src/components/StandardsManager.tsx
+git commit -m "Improve Standards Manager pagination and row type styling"
+git push origin data-entry-flow-refactor
+
+What is "filter alphanumeric" on the Standards Manager Page.  What does that mean?
+
+Good question — and honestly, the name is a bit misleading in your current context.
+
+🧠 What “Filter Alphanumeric” Means
+In your code, “alphanumeric” is referring to standards where the citation number is not purely numeric.
+
+Examples:
+Citation	Type
+4.1.2	numeric-ish (standard structure)
+208.3.1	numeric (normal)
+A.1	alphanumeric
+4.1.2a	alphanumeric
+7.2.1 Exception 1	often treated as alphanumeric depending on parsing
+⚙️ What the Filter Actually Does
+When you click “Filter Alphanumeric”, it:
+
+👉 Shows only records where the citation contains letters
+👉 Hides normal numeric-only standards
+
+🎯 Why This Exists (Original Intent)
+This was likely created to help:
+
+find edge-case standards
+
+identify bad imports / malformed citations
+
+locate things like:
+
+appendix references (A.1, B.2)
+
+improperly parsed standards
+
+legacy data issues
+
+🚨 Why It’s Confusing Now
+After your recent changes:
+
+You have UFAS + TAS mixed
+
+You have exceptions, figures, advisory
+
+Your citation system is more complex
+
+👉 So “alphanumeric” is no longer a clear or useful concept to users
+
+🧠 What It’s Actually Acting Like Now
+In practice, it’s behaving like:
+
+"Show weird or non-standard citation formats"
+🎯 What You Should Do (Options)
+Option 1 — Keep but rename (quick fix)
+Rename button to something clearer:
+
+"Filter Non-Standard Citations"
+or
+"Show Non-Numeric Citations"
+Option 2 — Convert it into a real data tool (better)
+Make it explicitly a data quality filter:
+
+"Show Irregular Citations"
+and maybe later:
+
+highlight malformed ones
+
+flag parsing issues
+
+Option 3 — Remove it (cleanest UX)
+If you’re not actively using it:
+
+👉 Remove it entirely
+
+Because right now:
+
+it’s not intuitive
+
+it’s not part of user workflow
+
+it’s more of a developer/debug tool
+
+🟢 My Recommendation
+👉 Option 2 (best long-term):
+Keep it, but treat it as a data validation tool, not a user filter
+
+👉 Short-term:
+Rename it so it’s not confusing
+
+🧠 Bottom Line
+👉 “Alphanumeric” = citation contains letters
+👉 It’s a legacy/debug-style filter, not a core feature
+👉 Rename or remove to improve clarity
+
+If you want, I can help you redesign the entire filter bar so it matches your new standards system 👍
+
+
+I would like to go with Option 3.  I think MY original intent was to vet how the records were being sorted when they had a letter suffix, but I don't think there are any records like that any longer.  The records with citation numbers that start with a letter (i.e., A100) already sort at the end of the list correctly).
+
+Having said that, you were correct and we have the same issue with figures as we had with exceptions.  I don't really like excluding exceptions (and now we would be excluding figures, also) unless that is a temporary fix and we revisit with a more permanent fix later.  Initially, I had added these alphabet suffixes to exceptions and figures manually so they would have unique citation numberss and sort correctly (so a "standard" Citation with a number of 102 with two exception types with citation IDs of 102 would be 102a and 102b, and if there were multiple figures those would also have suffixes.  But that became cumbersome, especially when a citation had both multiple figures and multiple exceptions.  What are you thoughts for best practices, and what should we do now and save for future refinement? 
+
+Thought for a few seconds
+You’re thinking about this correctly.
+
+Best-practice answer
+Do not make citation numbers artificially unique.
+
+A citation number should stay legally/semantically accurate:
+
+102
+102 Exception 1
+102 Exception 2
+102 Figure 1
+102 Figure 2
+not:
+
+102
+102a
+102b
+102c
+The uniqueness should come from a separate internal identity/sort field, not by changing the citation.
+
+What should make a record unique
+A standards record should be uniquely understood by:
+
+standard type + version + citation number + relation type + sub-sequence
+Example:
+
+TAS 2012 | 102 | Standard | 0
+TAS 2012 | 102 | Exception | 1
+TAS 2012 | 102 | Exception | 2
+TAS 2012 | 102 | Figure | 1
+TAS 2012 | 102 | Figure | 2
+That means future ideal fields are something like:
+
+fldStandardType: "TAS";
+fldStandardVersion: "2012";
+citation_num: "102";
+relation_type: "Exception";
+sub_sequence: 1;
+The display can become:
+
+TAS 102 — Exception 1
+TAS 102 — Exception 2
+TAS 102 — Figure 1
+What to do now
+1. Remove “Filter Alphanumeric”
+Yes. It was a temporary diagnostic tool and is no longer useful.
+
+2. Treat duplicate detection as a data-quality tool, not a citation uniqueness rule
+Right now the duplicate logic is too blunt. It should not flag valid multiple records sharing a citation when relation type is allowed to repeat.
+
+For now, I’d change duplicate detection to only flag true suspicious duplicates, probably:
+
+same fldStandardType
+same fldStandardVersion
+same citation_num
+same relation_type
+same citation_name
+same content_text
+That puts content_text back in the duplicate check, but only for a diagnostic badge. If performance is a concern, make duplicate checking optional or only run when a “Show possible duplicates” toggle is enabled.
+
+3. Temporary UI behavior
+For now:
+
+remove Filter Alphanumeric
+
+stop highlighting Exceptions/Figures as duplicates just because citation + type match
+
+keep row colors:
+
+Table = green
+
+Figure = blue
+
+Exception = red
+
+Future refinement
+Later, add or normalize:
+
+sub_sequence?: number;
+display_label?: string;
+Then sorting/display becomes stable without fake suffixes:
+
+102 Standard
+102 Exception 1
+102 Exception 2
+102 Figure 1
+102 Figure 2
+My recommendation for today
+Do this small slice now:
+
+1. Remove Filter Alphanumeric UI and code.
+2. Replace duplicate detection with a more conservative rule or disable duplicate highlighting for Figure and Exception temporarily.
+3. Add a TODO comment: revisit duplicate detection using sub_sequence.
+That keeps the UI clean today without locking you into a bad model.
+
+
+Let's implement your recommendation
+
+Thought for a couple of seconds
+Use this Cursor prompt:
+
+Apply a focused Standards Manager cleanup.
+
+File:
+src/components/StandardsManager.tsx
+
+Goals:
+1. Remove the “Filter Alphanumeric” UI and related code.
+2. Make duplicate detection more conservative.
+3. Keep current row color styling for Table / Figure / Exception.
+
+Changes:
+
+1. Remove alphanumeric filter:
+   - Remove the “Filter Alphanumeric” button/control.
+   - Remove showAlphanumericOnly state if it is only used for that filter.
+   - Remove alphanumericIds useMemo if it is only used for that filter/highlight.
+   - Remove purple alphanumeric row highlighting.
+   - Remove alphanumericIds from filtering dependencies.
+
+2. Update duplicate detection:
+   - Do NOT flag records as duplicates merely because they share citation_num + relation_type.
+   - Instead, only flag likely true duplicates using a conservative key:
+     fldStandardType + fldStandardVersion + citation_num + relation_type + citation_name + content_text
+   - Trim string values.
+   - This allows multiple valid Exceptions/Figures/Tables under the same citation without false duplicate warnings.
+
+3. Add a short TODO comment near duplicate detection:
+   - Future refinement should use an explicit sub_sequence / display label for repeated Exceptions, Figures, and Tables.
+
+4. Do not:
+   - change pagination
+   - change row colors for Table/Figure/Exception
+   - modify Firestore data
+   - touch other files
+
+After changes:
+Report exact diff.
+After Cursor reports back, test:
+
+- No Filter Alphanumeric control
+- Exception rows no longer show orange duplicate state
+- Figure rows no longer show orange duplicate state unless truly identical
+- Table rows stay green
+- Figure rows stay blue
+- Exception rows stay red
+
+
+Pasted markdown(24).md
+File
+
+This is a really strong cleanup pass — you made the right architectural move here.
+
+Let me validate and give you one small improvement to consider.
+
+✅ What You Got Exactly Right
+1. Removing “Filter Alphanumeric”
+👉 Correct call
+
+It was a debug artifact, not a user feature
+
+It added cognitive noise
+
+You removed it cleanly (UI + state + logic + styling)
+
+2. Duplicate detection fix (this is the big win)
+You moved from:
+
+citation_num + relation_type ❌ (too aggressive)
+to:
+
+type + version + citation + relation + name + content ✅
+👉 This is now:
+
+semantically correct
+
+safe for Exceptions/Figures
+
+aligned with real-world standards structure
+
+3. Re-introducing content_text (carefully)
+Yes, this is heavier — but:
+
+👉 You’re now using it for true duplicate detection, not display logic
+
+That’s the correct tradeoff.
+
+4. Clean dependency removal
+You removed:
+
+alphanumericIds
+
+showAlphanumericOnly
+
+all styling tied to it
+
+👉 No dead code left behind — excellent
+
+5. TODO note (important)
+// TODO: Future refinement should use an explicit sub_sequence...
+👉 This is exactly the right forward-thinking hook
+
+⚠️ One Small Improvement (Optional but Smart)
+Right now duplicate detection includes:
+
+const body = (s.content_text || '').trim();
+👉 That means:
+
+very large strings
+
+full string comparisons
+
+re-run on every standards change
+
+🔧 Suggested tweak (lightweight optimization)
+Instead of:
+
+const body = (s.content_text || '').trim();
+Use:
+
+const body = (s.content_text || '').trim().slice(0, 200);
+👉 Why:
+
+still catches true duplicates
+
+avoids comparing huge text blobs
+
+reduces CPU cost significantly
+
+🧠 Why This Matters
+You’ve now:
+
+fixed false positives (Exceptions/Figures)
+
+preserved true duplicate detection
+
+cleaned UI noise
+
+aligned with proper data modeling
+
+👉 This is a real architectural improvement, not just UI polish
+
+🚀 You Are Safe to Commit
+git add src/components/StandardsManager.tsx
+git commit -m "Remove alphanumeric filter and improve duplicate detection logic for standards"
+git push origin data-entry-flow-refactor
+🎯 Where This Leaves You
+Your Standards Manager is now:
+
+✅ fast (pagination)
+
+✅ readable (color coding)
+
+✅ accurate (duplicate logic)
+
+✅ clean (no debug filters)
+
+🟢 Next Step (When You’re Ready)
+Now you’re in a great place for your upcoming “brain dump”:
+
+Because:
+👉 your data model is no longer fighting you
+👉 your UI reflects the data correctly
+
+🟢 Bottom Line
+👉 This was the right fix
+👉 No regressions introduced
+👉 You improved both UX and data correctness
+
+When you're ready, drop the brain dump — that’s where we can level this system up 👍
+
+
+In the Standards Manager, When the standards are sorted for "all" it is impossible to distinguish between Standard sources (types, ADA, TAS, UFAS etc.), especially since citation numbers can be the same.  We need a distinction field in the row to know which Standard type the record belongs to.
+
+Yes — absolutely. Now that multiple sources live in one collection, every Standards Manager row needs a visible standard source/type field.
+
+Best small fix: add a Source column near the citation.
+
+Recommended columns:
+
+Type | Source | Citation | Name | Chapter/Section | Actions
+Where Source displays:
+
+TAS
+UFAS
+ADA
+from:
+
+s.fldStandardType
+with fallback:
+
+Unknown
+Use this Cursor prompt:
+
+Apply a focused UI change.
+
+File:
+src/components/StandardsManager.tsx
+
+Goal:
+Make each standards row clearly show which standards source/type it belongs to.
+
+Changes:
+1. Add a visible "Source" column to the Standards Manager table.
+2. Display s.fldStandardType in that column.
+3. Use a small badge style, e.g. rounded pill:
+   - TAS / UFAS / ADA / etc.
+   - fallback: "Unknown"
+4. Keep this dynamic; do not hardcode only TAS/UFAS.
+5. Ensure expanded detail row colSpan is updated if needed.
+6. Do not change filtering, sorting, pagination, duplicate logic, or Firestore logic.
+
+After changes:
+Report exact diff.
+This should make “All” usable immediately without changing any deeper behavior.
+
+
+### Summary
+
+- New **Source** column (header + cell) sits between **Chapter / Section / Name** and relation **Type** so “source standard” (TAS, UFAS, …) stays separate from relation type.
+- Cell shows **(s.fldStandardType || '').trim() || 'Unknown'** in a compact slate pill (rounded-full, small type, border)—no per-value hardcoding.
+- **colSpan** on the expanded detail row and the empty-state row is **7** to match the new column count.
+
+---
+
+### Exact diff
+
+diff
+diff --git a/src/components/StandardsManager.tsx b/src/components/StandardsManager.tsx
+index bae33c5..74749f9 100644
+--- a/src/components/StandardsManager.tsx
++++ b/src/components/StandardsManager.tsx
+@@ -648,6 +648,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider w-16">Img</th>
+                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider w-24">Citation</th>
+                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider">Chapter / Section / Name</th>
++                <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider w-28">Source</th>
+                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider">Type</th>
+                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider text-right">Actions</th>
+               </tr>
+@@ -702,6 +703,11 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+                         <p className="text-[10px] text-zinc-500 italic">{s.citation_name}</p>
+                       </div>
+                     </td>
++                    <td className="px-4 py-3">
++                      <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-semibold tracking-wide bg-slate-100 text-slate-700 border border-slate-200/80">
++                        {(s.fldStandardType || '').trim() || 'Unknown'}
++                      </span>
++                    </td>
+                     <td className="px-4 py-3">
+                       <span className={cn(
+                         "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
+@@ -748,7 +754,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+                   </tr>
+                   {expandedStandards.has(s.id) && (
+                     <tr>
+-                      <td colSpan={6} className="px-4 py-4 bg-zinc-50 text-sm text-zinc-700 border-b border-zinc-100">
++                      <td colSpan={7} className="px-4 py-4 bg-zinc-50 text-sm text-zinc-700 border-b border-zinc-100">
+                         <div className="flex gap-6">
+                           {s.image_url && (
+                             <div className="shrink-0">
+@@ -771,7 +777,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+               ))}
+               {filteredStandards.length === 0 && (
+                 <tr>
+-                  <td colSpan={6} className="px-4 py-12 text-center text-zinc-500 italic text-sm">
++                  <td colSpan={7} className="px-4 py-12 text-center text-zinc-500 italic text-sm">
+                     No standards found matching your search.
+                   </td>
+                 </tr>
+
+
+**File:** src/components/StandardsManager.tsx only. Lint is clean.
+
+This is the right fix.
+
+The placement is good:
+
+Citation → Chapter / Section / Name → Source → Type
+That makes the distinction clear:
+
+Source = TAS / UFAS / ADA
+
+Type = Standard / Advisory / Exception / Figure / Table
+
+The dynamic fallback to Unknown is also correct, and updating colSpan to 7 avoids table layout bugs.
+
+Commit it with the rest of the Standards Manager cleanup:
+
+git add src/components/StandardsManager.tsx
+git commit -m "Improve Standards Manager multi-source clarity and cleanup filters"
+git push origin data-entry-flow-refactor
+
+I shouldn't have committed so soon.  This is what the column looks like (are these images for the Standard types that are simply not showing?
+
+No — those are not missing images for standard types. This is a different thing.
+
+🧠 What You’re Seeing
+That empty “IMG” column with the little placeholder icon means:
+
+image_url is empty / not set
+👉 It’s for figure/table images, not for “Standard type” (TAS/UFAS).
+
+🎯 Clarifying the Columns
+Column	Purpose
+Source	TAS / UFAS / ADA (you just added this ✅)
+Type	Standard / Figure / Table / Exception
+IMG	Shows an image only if one exists
+🔍 Why They’re Empty
+These rows are:
+
+UFAS → Standard
+Standards usually do not have images, so:
+
+s.image_url === undefined/null
+👉 So you see the placeholder icon
+
+⚠️ Minor UX Issue (You’re Right to Notice)
+Right now the UI implies:
+
+"there should be an image here"
+…but for most records, there won’t be.
+
+🎯 What You Should Do
+Option 1 (Best): Hide placeholder for non-image types
+Only show the image cell if:
+
+s.relation_type === 'Figure' || s.relation_type === 'Table'
+Otherwise:
+
+leave blank (no icon)
+Option 2: Replace placeholder with dash
+—
+Less confusing than an image icon
+
+Option 3 (Aggressive cleanup): Remove IMG column entirely
+If images are rare or secondary:
+
+👉 move image into expanded view only
+
+🚀 Recommended Fix
+Use this Cursor prompt:
+
+Apply a small UI clarity fix.
+
+File:
+src/components/StandardsManager.tsx
+
+Goal:
+Avoid showing misleading image placeholders.
+
+Changes:
+1. In the IMG column:
+   - Only show the image placeholder/icon if:
+     relation_type === 'Figure' OR relation_type === 'Table'
+
+2. For all other types:
+   - render empty cell (no icon)
+
+3. Do not change image upload logic or expanded view.
+
+After changes:
+Report exact diff.
+🟢 Bottom Line
+👉 Nothing is broken
+👉 Those are not missing images
+👉 It’s just a misleading placeholder
+
+Good catch — this is exactly the kind of polish that makes the UI feel intentional 👍
+
+
+Here’s the update: the dashed placeholder with ImageIcon only renders when there is no image_url **and** relation_type is **Figure** or **Table**. If there is an image_url, the thumbnail still shows for every type. Expanded rows are unchanged.
+
+---
+
+### Exact diff
+
+diff
+diff --git a/src/components/StandardsManager.tsx b/src/components/StandardsManager.tsx
+index 74749f9..5f7cce7 100644
+--- a/src/components/StandardsManager.tsx
++++ b/src/components/StandardsManager.tsx
+@@ -682,11 +682,11 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
+                           className="w-8 h-8 object-cover rounded border border-zinc-200"
+                           referrerPolicy="no-referrer"
+                         />
+-                      ) : (
++                      ) : s.relation_type === 'Figure' || s.relation_type === 'Table' ? (
+                         <div className="w-8 h-8 rounded border border-dashed border-zinc-200 flex items-center justify-center text-zinc-300">
+                           <ImageIcon size={12} />
+                         </div>
+-                      )}
++                      ) : null}
+                     </td>
+                     <td className="px-4 py-3 text-xs font-bold text-zinc-900">
+                       <div className="flex items-center gap-2">
+
+
+**File:** src/components/StandardsManager.tsx only. Lint is clean.
+
+Good fix. That’s exactly the right behavior:
+
+Standards/advisories/exceptions no longer imply a missing image
+
+Figures/tables still show a placeholder when they should probably have one
+
+Existing thumbnails still render normally
+
+Commit this small polish:
+
+git add src/components/StandardsManager.tsx
+git commit -m "Clarify Standards Manager image placeholders"
+git push origin data-entry-flow-refactor
+
+OK, so when an image is actually missing (for a figure, lets say, there is no way to add one in the modal that pops up.
+
+Right — that’s the next real UX gap.
+
+You already have the signal:
+
+Figure/Table with no image_url
+Now the edit modal needs the action:
+
+Upload / replace image
+Use Cursor analysis first:
+
+ANALYSIS ONLY. Do not edit files.
+
+In Standards Manager, Figure/Table rows can show a missing-image placeholder, but the edit modal does not appear to provide a way to upload/add an image.
+
+Inspect src/components/StandardsManager.tsx.
+
+Report:
+1. Where the edit modal/form is rendered.
+2. Whether image_url/image upload fields already exist anywhere.
+3. Whether handleImageUpload is wired to the modal.
+4. What fields are currently editable for a standard.
+5. Minimal safe plan to add image upload/replace/remove for Figure/Table records.
+6. Any Firebase Storage path/service concerns.
+
+Do not edit files.
+Do not modify Firestore.
+Likely implementation after analysis:
+
+In edit modal, show image controls when relation_type is Figure or Table
+
+If no image: Upload Image
+
+If image exists: thumbnail + Replace Image + maybe Remove Image
+
+Reuse existing handleImageUpload if present
+
+Save image URL back to image_url
+
+Don’t let Cursor invent a new storage pattern until it confirms what handleImageUpload already does.
+
+
+
+Pasted markdown(25).md
+File
+
+Good — this analysis confirms exactly what we suspected, and it’s actually a clean situation to fix.
+
+🧠 What’s Going On (Plain English)
+You already built the upload logic (handleImageUpload) ✅
+
+You already persist image_url on save ✅
+
+BUT…
+
+You never connected it to the UI ❌
+
+👉 So the system can handle images — users just have no way to trigger it.
+
+🎯 The Fix (Simple + Safe)
+You don’t need new architecture. You just need to wire the modal to the existing function.
+
+🧱 What We’re Adding
+Inside the edit modal, when:
+
+relation_type === 'Figure' || relation_type === 'Table'
+Add:
+
+1. Image preview (if exists)
+2. Upload / Replace button
+3. Remove image button
+🚀 Cursor Prompt (Use This)
+Apply a focused UI enhancement.
+
+File:
+src/components/StandardsManager.tsx
+
+Goal:
+Allow users to add, replace, or remove images for Figure and Table records.
+
+Changes:
+
+1. In the Edit Modal (inside the editingStandard block), add a new section:
+   ONLY when:
+     editingStandard.relation_type === 'Figure' OR 'Table'
+
+2. In that section:
+
+   A. If editingStandard.image_url exists:
+      - Show a small preview image
+      - Add a "Replace Image" file input (accept="image/*") using handleImageUpload
+      - Add a "Remove Image" button that sets:
+        setEditingStandard({ ...editingStandard, image_url: null })
+
+   B. If no image_url:
+      - Show:
+        "No image uploaded"
+      - Add file input using handleImageUpload
+
+3. Use existing handleImageUpload (do not create new upload logic).
+
+4. Ensure:
+   - File input resets after upload (optional but preferred)
+   - Disabled when isSaving
+
+5. Do not:
+   - change Firestore logic
+   - change storage paths
+   - touch Bulk Upload
+   - modify expanded row rendering
+
+After changes:
+Report exact diff.
+⚠️ One Small Recommendation (Important)
+Right now upload path uses:
+
+standards/${citation}_${timestamp}_${filename}
+That’s fine for now, but:
+
+👉 Replacing images will leave old images in storage
+
+We’ll deal with cleanup later — don’t solve that now.
+
+🧪 What You Should See After
+For Figures/Tables:
+If no image:
+
+No image uploaded
+[Upload Image]
+If image exists:
+
+[thumbnail]
+[Replace Image]
+[Remove Image]
+🟢 Bottom Line
+👉 Nothing was broken — just incomplete wiring
+👉 You already had 90% of the system
+👉 This adds the missing 10%
+
+Once you apply this, your Standards Manager becomes:
+
+Fully editable → fully maintainable → production-ready
+Send me the diff after — I’ll sanity check before you commit 👍
+
+
+
+Pasted markdown(26).md
+File
+
+This is exactly the right implementation — you wired it cleanly and didn’t overcomplicate anything. 👍
+
+Let me validate and highlight a couple of subtle wins you achieved.
+
+✅ What You Did Really Well
+1. Correct conditional rendering
+editingStandard.relation_type === 'Figure' || 'Table'
+👉 Perfect — no clutter for Standards/Exceptions/Advisory
+👉 UI appears only where it makes sense
+
+2. Reusing handleImageUpload
+You did NOT reinvent upload logic — this is key.
+
+👉 Keeps:
+
+storage path consistent
+
+resizing behavior intact
+
+no duplicate bugs
+
+3. File input reset (this is advanced)
+if (input) input.value = '';
+👉 This solves the classic bug:
+
+“I selected the same file again and nothing happened”
+
+That’s a senior-level detail — seriously.
+
+4. Replace + Remove flow
+You now support:
+
+Upload → Replace → Remove
+👉 That’s full lifecycle coverage
+
+5. UI clarity
+You created a proper mental model:
+
+State	UI
+No image	"No image uploaded" + button
+Has image	preview + replace + remove
+👉 Users won’t be confused anymore
+
+🧠 One Very Small Improvement (Optional)
+Right now:
+
+setEditingStandard({ ...editingStandard, image_url: null });
+This works, but depending on your Firestore handling:
+
+👉 You may want to ensure null is preserved (not stripped)
+
+If you ever see removal not persisting, change to:
+
+image_url: ''
+…but only if needed — don’t touch it now.
+
+⚠️ Future Consideration (Not Now)
+You correctly did NOT solve this yet:
+
+Old images are not deleted from storage
+That’s fine.
+
+Later we can:
+
+track old URL
+
+delete on replace/remove
+
+👉 But this is phase 2 cleanup, not needed now
+
+🧪 What You Should Test
+Quick sanity pass:
+
+Edit a Figure with no image → upload → save → reopen → image persists
+
+Replace image → confirm it updates
+
+Remove image → confirm it disappears after save
+
+Try uploading same file twice → works (thanks to reset)
+
+🚀 You Are Ready to Commit
+git add src/components/StandardsManager.tsx
+git commit -m "Add image upload/replace/remove support for figure and table standards"
+git push origin data-entry-flow-refactor
+🟢 Bottom Line
+👉 This closes a real UX gap
+👉 You reused existing architecture correctly
+👉 No unnecessary complexity added
+
+You’ve now taken Standards Manager from:
+
+"data viewer"
+to:
+
+"fully maintainable content system"
+Whenever you're ready — drop that brain dump. That’s where we can really level this system up.
+
+
+Before my brain dump, please help me think through this issue of glossaries.
+
+Glossaries should be specific to a certain kind of project.  For example, an ADA Assessment should have glossaries that are specific to the requirements in the ADA Standards (and the citations linked to the findings, recommendations, and glossaries, will be predominantly from the ADA Standards, although not exclusively - not limited to the ADAS).  Glossaries for a TAS Plan Review for a Registered Accessibility Specialist using the app to review a set of plans for a project in Texas for compliance with the Texas Architectural Barriers Act will primarily cite the Texas Accessibility Standards.  While the wording of the findings and recommendations may be identical in many cases among all these glossaries, they are considered a unique version for that type of project.  So do we need to create project types that define the associated glossaries (which in turn identify the predominant Standards)?
+
+Thought for a few seconds
+Yes. I think you need Project Types.
+
+Not because project types “own” the data, but because they define the default regulatory context for a project.
+
+A clean model would be:
+
+Project Type
+  → default glossary set
+  → default primary standard source(s)
+  → report language / addendum behavior
+  → data entry workflow defaults
+Examples:
+
+ADA Assessment
+  primary standard: ADA 2010
+  glossary set: ADA Assessment Glossary
+
+TAS Plan Review
+  primary standard: TAS 2012
+  glossary set: TAS Plan Review Glossary
+
+UFAS Assessment
+  primary standard: UFAS
+  glossary set: UFAS Assessment Glossary
+The important part: glossary records should be versioned/contextual, even when wording is identical.
+
+So instead of one global glossary item meaning “this finding everywhere,” you’d have:
+
+Glossary Concept: Door maneuvering clearance
+  ADA Assessment version
+  TAS Plan Review version
+  UFAS version
+Each version can have different:
+
+finding text
+recommendation text
+linked standards
+report phrasing
+severity/category defaults
+Best-practice structure
+I would avoid hard-coding glossary behavior directly into projects. Instead:
+
+Project Type
+  has defaultGlossarySetId
+  has primaryStandardTypes: ["ADA"]
+  may allow secondaryStandardTypes: ["TAS", "UFAS", "IBC"]
+Then:
+
+Glossary Set
+  belongs to projectType
+  contains glossary entries
+And each glossary entry can link to standards:
+
+fldStandards: ["ADA_...", "TAS_..."]
+primaryStandardType: "ADA"
+Why this matters
+This lets the same conceptual issue exist differently in different workflows:
+
+ADA Assessment → cite ADA first
+TAS Plan Review → cite TAS first
+UFAS Review → cite UFAS first
+without forcing you to duplicate everything manually in an uncontrolled way.
+
+My recommendation
+Yes: create Project Types first, then use them to select the appropriate Glossary Set and default Standards Source.
+
+But don’t implement yet. I’d model it first:
+
+ProjectType
+GlossarySet
+GlossaryEntry versioning strategy
+Standards priority rules
+Your instinct is right: the standards system now needs a project-context layer, not just more filters.
+
+
+How big of an undertaking is this, because it will impact to some degree my philosophy about Find/Rec Libraries, Glossaries, Data Records
+
+It’s a medium-to-large undertaking, but it does not have to be a big-bang rewrite.
+
+The key is separating the idea into layers.
+
+My honest estimate
+Small version: 1–2 days
+Add projectType to projects and use it to filter available glossary records / standards source defaults.
+
+Good for:
+
+proving the model
+
+reducing clutter
+
+starting ADA vs TAS separation
+
+Risk:
+
+still leaves some legacy ambiguity
+
+Medium version: 1–2 weeks
+Introduce:
+
+Project Types
+Glossary Sets
+Standard source defaults
+Find/Rec/Glossary versioning by project type
+Then update:
+
+Glossary Builder
+
+Data Entry
+
+Standards selection
+
+Reports
+
+This is probably the right target.
+
+Large version: 3–6+ weeks
+Fully normalize everything into:
+
+Concept Library
+Finding versions
+Recommendation versions
+Glossary versions
+Project-type templates
+Report language profiles
+Very powerful, but too much to do before you’ve proven the workflow.
+
+The philosophical impact
+You’re right: this affects your model of the whole system.
+
+Right now you mostly have:
+
+Finding / Recommendation / Glossary = master reusable library item
+But your new model is closer to:
+
+Finding / Recommendation / Glossary = project-context-specific version of a reusable concept
+That’s an important shift.
+
+Example:
+
+Concept: Accessible parking access aisle slope
+
+TAS Plan Review version:
+- cites TAS
+- plan-review wording
+- recommendation language for design correction
+
+ADA Assessment version:
+- cites ADA
+- existing conditions wording
+- recommendation language for remediation
+
+UFAS version:
+- cites UFAS
+- maybe older federal-facility phrasing
+Same concept, different compliance context.
+
+Best way to think about it
+You probably need three layers:
+
+1. Concept
+   The underlying issue: "Door maneuvering clearance"
+
+2. Library Version
+   How that concept is expressed for ADA Assessment, TAS Plan Review, UFAS, etc.
+
+3. Project Data Record
+   A specific observed instance in a specific project/facility/location
+So:
+
+Concept ≠ Glossary Entry ≠ Project Data Record
+That distinction will save you later.
+
+What I would NOT do yet
+Do not immediately restructure everything.
+
+Do not duplicate the whole glossary manually for each project type yet.
+
+Do not rewrite Data Entry until the model is clear.
+
+What I would do first
+Create an architecture/design pass before implementation.
+
+The first tangible milestone should be:
+
+Project Type + Glossary Set design
+Not code.
+
+Define:
+
+ProjectType:
+- id
+- name
+- primaryStandardTypes
+- allowedStandardTypes
+- defaultGlossarySetId
+
+GlossarySet:
+- id
+- name
+- projectTypeId
+- primaryStandardType
+- status
+
+GlossaryEntry:
+- glossarySetId
+- conceptKey or baseConceptId
+- findingId
+- recommendationId
+- standards
+Then decide whether existing glossary records become:
+
+TAS Plan Review glossary set
+or a generic/default set.
+
+My recommendation
+Treat this as a major architecture milestone, but implement it incrementally.
+
+Phase 1 should be design only.
+
+Phase 2 should be a non-breaking metadata layer.
+
+Phase 3 should update UI filtering.
+
+Phase 4 should introduce true versioned libraries.
+
+So the answer is:
+
+It’s significant, but manageable if we do it as a metadata-first migration instead of a redesign-from-scratch.
+
+This is exactly the right question to ask before your brain dump.
+
+
+Let me give you a real-world example.  I am working on a project now for Harris Center.  They provide housing (permanent supportive housing) for people with disabilities, both cognitive and physical.  Their facilities must comply with a multiplicity of Standards: 2010 ADA Standards for Accessible Design because they are a government entity and must comply with title II of the ADA; 504 of the Rehabilitation Act (and therefore UFAS) because their programs receive federal funding; FHA Guidelines because some of their facilities are multifamily which may incorporate the ANSI A117.1 standards; the Texas Accessibility Standards because some of their buildings are public facilities and covered by the Texas Architectural Barriers Act; and finally, if local jurisdiction requires it, the International Building Code (IBC).
+
+So, for this particular project, we can assign a "default" standard, but the user will need to be able to pick between any or all of the glossaries created for each of the Standards.  The user should be able to pick a glossary (each glossary specific to a Standard, not a project type) and that selection persist until they change it.
+
+For some types of projects, TDLR projects for example completed by a RAS (Registered Accessibility Specialist), there will be only one standard or glossasry: the TAS glossary.
+
+Does this change any of your thoughts? 
+
+Yes — this changes the model in an important way.
+
+I would not make glossary sets primarily project-type-owned. I would make them standard-owned, then let each project enable one or more glossaries.
+
+Better model:
+
+Standard Source
+  ADA 2010
+  UFAS
+  TAS 2012
+  FHA / ANSI
+  IBC
+
+Glossary Set
+  belongs to one primary Standard Source
+
+Project
+  has enabled glossary sets
+  has current/active glossary set preference
+For Harris Center:
+
+Enabled glossaries:
+- ADA 2010 Glossary
+- UFAS Glossary
+- FHA / ANSI Glossary
+- TAS 2012 Glossary
+- IBC Glossary
+
+Default active glossary:
+- ADA 2010, or whatever you choose
+
+User can switch active glossary during data entry.
+Selection persists until changed.
+For TDLR/RAS:
+
+Enabled glossaries:
+- TAS 2012 Glossary
+
+Active glossary:
+- TAS 2012
+So yes: project type can still exist, but it becomes a convenience preset, not the governing structure.
+
+Project Type
+  → suggests enabled glossary sets
+  → suggests default active glossary
+  → suggests report defaults
+It should not limit the user when a real project has overlapping compliance regimes.
+
+The clean distinction is:
+
+Project Type = workflow preset
+Glossary Set = standard-specific library
+Project = actual enabled compliance context
+That fits your Harris Center example much better.
+
+
+Let me add one additional bit of complexity.  If a building was built in 2008 and the enforceable standards at that time was the 1994 TAS, and it hadn't been altered since, it must be evaluated based on those standards, not the currently enforceable standards (the 2012 TAS).  However, the recommendations must comply with the current standards, so you would have a mix of standards.  I would put the glossary in the 1994 TAS glossary, but the user or admin must be able to site other standards when necessary.  Hope that makes sense?
+
+Yes—that makes perfect sense, and it actually sharpens the model in a really important way.
+
+What you’re describing introduces a time dimension + dual-standard context:
+
+Evaluation Standard  ≠  Recommendation Standard
+🧠 Key Insight (this is the big one)
+Each data record (finding) can involve:
+
+1. Governing / Evaluation Standard (what you judge compliance against)
+2. Recommended / Forward Standard (what you recommend fixing to)
+3. Supporting Standards (optional additional citations)
+🏗️ Updated Mental Model
+1. Glossaries stay tied to a primary standard
+You were right:
+
+Glossary Set → belongs to ONE standard (e.g., 1994 TAS)
+That glossary defines:
+
+finding wording
+
+recommendation defaults
+
+typical citations
+
+2. But records are NOT limited to that standard
+Each data record should allow:
+
+primaryStandardType: "TAS"
+primaryStandardVersion: "1994"
+
+citations: [
+  { type: "TAS", version: "1994", id: "..." },   // evaluation
+  { type: "TAS", version: "2012", id: "..." },   // recommendation
+  { type: "ADA", version: "2010", id: "..." }    // optional
+]
+👉 This is the critical shift:
+
+Glossary = starting point
+Record = final truth
+
+🧱 Applying to Your Example
+Building built in 2008
+Evaluation:
+- 1994 TAS
+
+Recommendation:
+- 2012 TAS
+Workflow:
+User selects glossary:
+
+1994 TAS Glossary
+System auto-populates:
+
+citation → 1994 TAS
+User optionally adds:
+
++ 2012 TAS citation (recommendation)
++ ADA citation (if relevant)
+🎯 So What Changes?
+❌ What we do NOT do
+Do NOT merge standards into one glossary
+
+Do NOT force a project into one standard
+
+Do NOT duplicate glossary entries for every version combo
+
+✅ What we DO
+1. Glossaries remain standard + version specific
+1994 TAS Glossary
+2012 TAS Glossary
+ADA 2010 Glossary
+UFAS Glossary
+2. Projects enable multiple glossaries
+Project:
+  enabledGlossaries: [1994 TAS, 2012 TAS, ADA, UFAS]
+  activeGlossary: 1994 TAS
+3. Records allow multi-standard citation
+This is the new requirement.
+
+⚠️ Important Design Decision
+You need to decide:
+
+Option A (simpler, recommended now)
+Record has:
+- primary glossary (implied standard)
+- additional citations (optional)
+Option B (more advanced)
+Record explicitly tracks:
+- evaluationStandard
+- recommendationStandard
+- supportingStandards[]
+👉 I strongly recommend Option A for now
+
+Why:
+
+less UI complexity
+
+aligns with your current system
+
+still handles your real-world case
+
+🧠 How This Fits Your Philosophy
+Your system becomes:
+
+Glossary = structured starting template
+Record = flexible real-world application
+Standards = selectable references, not constraints
+🧭 Where This Leads (Future)
+Later, you can evolve into:
+
+evaluationStandardId
+recommendationStandardId
+and even:
+
+auto-split report sections:
+- Existing Compliance (old standard)
+- Recommended Compliance (current standard)
+🟢 Final Answer to Your Question
+Does this change the model?
+
+Yes—but in a good way.
+
+It reinforces that:
+
+Glossaries should be tied to Standards (not project types)
+Projects should enable multiple glossaries
+Records must support multiple standards
+🔥 The Big Idea
+👉 Standards are not mutually exclusive—they are layered
+
+Your system now supports:
+
+historical compliance + current compliance + multi-agency overlap
+Which is exactly how the real world works.
+
+When you’re ready, your brain dump is going to land on very solid ground 👍
+
+
+Doesn't this mean, then, that our libraries must also then be associated with a particular Standard?  Or better yet, tagged to a particular standard.  I know this means that there will be duplicated findings in this sense: if the finding is "the slope of the curb ramp is excessive", this might be true for 5 different Standards, and each of them may have the identical slope requirement (no steeper than 8.33%), but they also may have different requirements (i.e., one might be 10%), and the citations will be different for each.  So when a standard is picked, the glossary adjusts accordingly. Is that still in line with our thinking?
+
+Yes — that is exactly in line with the model.
+
+The cleanest way to say it is:
+
+Libraries are standard-contextual.
+Concepts are reusable.
+Glossary entries are standard-specific versions.
+So the “same” issue can exist many times:
+
+Concept:
+  Excessive curb ramp running slope
+
+Glossary versions:
+  ADA 2010 version
+  TAS 2012 version
+  UFAS version
+  FHA/ANSI version
+  IBC version
+Each version may share the same wording, but it can differ in:
+
+finding text
+recommendation text
+threshold/value
+citations
+measurement rules
+report language
+applicability notes
+That is not bad duplication. It is controlled versioning.
+
+The model I’d use
+1. Concept Library
+The abstract issue:
+
+curb_ramp_excessive_slope
+2. Glossary / Finding / Recommendation versions
+Standard-specific implementations:
+
+conceptId: curb_ramp_excessive_slope
+standardType: ADA
+standardVersion: 2010
+findingText: ...
+recommendationText: ...
+standards: [ADA citation ids]
+
+conceptId: curb_ramp_excessive_slope
+standardType: TAS
+standardVersion: 2012
+findingText: ...
+recommendationText: ...
+standards: [TAS citation ids]
+3. Active glossary context
+When the user picks:
+
+TAS 2012 Glossary
+the app surfaces the TAS versions first.
+
+When they switch to:
+
+ADA 2010 Glossary
+the app surfaces the ADA versions.
+
+Important rule
+A project can enable multiple standards, but the user should have an active glossary context while entering data.
+
+That active context determines the default library results.
+
+But the user should still be able to attach citations from other enabled standards when needed.
+
+So your statement is correct
+when a standard is picked, the glossary adjusts accordingly
+
+Yes. More precisely:
+
+When a glossary/standard context is picked, the app filters library options to entries tagged for that standard/version.
+That keeps the UI sane while preserving flexibility.
+
+Practical implementation path
+Do not start by duplicating everything manually.
+
+Start by adding metadata:
+
+conceptId?: string;
+glossarySetId?: string;
+standardType?: string;
+standardVersion?: string;
+Then existing records can become:
+
+TAS 2012 glossary entries
+Later, you create ADA/UFAS/FHA versions by cloning from a concept and editing only what differs.
+
+This is still fully consistent with your direction.
+
+
+What you are saying is that if I develop a set of findings for the ADA Standards, since the TAS is virtually identical 95 percent of the time, we could create the ability in the library manager to simply copy a finding (or maybe even a block of findings) from the ADA library into the TAS library and make edits to the text, if necessary, and certainly to then change the Standards association so it is with the TAS.
+
+Yes — exactly.
+
+That is the right workflow:
+
+ADA finding/version
+        ↓ copy / clone
+TAS finding/version
+        ↓ edit text if needed
+        ↓ replace linked standards with TAS citations
+The key is that the copied item should become a new library version, not just another reference to the same record.
+
+So:
+
+Concept: Excessive curb ramp slope
+
+ADA 2010 library entry
+TAS 2012 library entry
+UFAS library entry
+Each can share a conceptId, but each has its own:
+
+finding text
+recommendation text
+glossary wording
+standard links
+standard type/version
+applicability notes
+Library Manager feature idea
+Eventually you could have actions like:
+
+Copy to another standard library
+Copy selected findings to...
+Bulk clone category to...
+Compare ADA vs TAS version
+For ADA → TAS, that would be very powerful because most language can be reused, then edited only where TAS differs.
+
+Important design rule
+When copying, do not carry over the ADA citations as final citations.
+
+Instead, the clone flow should either:
+
+1. copy text only and clear standards
+or:
+
+2. copy text and open a “replace standards” step
+Best version:
+
+Clone ADA → TAS
+- copy finding/recommendation/glossary text
+- set target standardType = TAS
+- set target standardVersion = 2012
+- clear or flag old ADA citations
+- user maps/selects TAS citations
+That prevents accidental ADA citations in a TAS library.
+
+My recommendation
+Yes, build toward a clone-and-adapt library workflow.
+
+Not now as the first implementation, but architecturally that should be the goal.
+
+
+Well, let's document this in the architecture_design.md file so we won't forget our discussion.
+
+I’ve documented everything cleanly in a structured architecture note so you can drop it into ARCHITECTURE_DESIGN.md (or merge it where appropriate).
+
+Take a look and tell me if you want:
+
+it rewritten in your existing doc’s tone/format, or
+
+expanded with data models / schemas / Firestore structure, or
+
+broken into phased implementation steps
+
+This is a really strong foundation—you won’t lose this thread now.
+
+
+Here are a few other points to incorporate into that very well-written note:
+
+I see the libraries as the foundation.  They establish the basic language of the findings and recommendations, the measurement types, units of measure, unit costs, and Standard associations. They are then used to build glossaries which are historically connected to the library (the ID's are 'remembered', but they are not linked to them.  In a sense, the text from those libraries and the UOM, Unit Costs, Measurement Types, Standards associations, etc. are "copied" into the glossary and can be edited as necessary.  Finally, following that same model, the data entry process uses the glossaries as a baseline, but also inherits the text from the glossaries, but not a link in the sense that changing a data record changes the underlying glossary.  Each of those fields that were able to be edited in the glossary can also be edited in the data record.
+
+Now, if there is a more streamlines way to accomplish this, I'm open for suggestions.  But this is how I've seen it in my head for awhile now.  
+
+That model makes sense: you’re describing snapshot inheritance, not live linking. I’ll fold that into the note as a core principle and flag where a more streamlined pattern could still preserve your intent.
+
+Thought for 4s
+Standards, Glossaries, And Library Architecture Notes
+
+Standards, Glossaries, and Library Architecture (Design Notes)
+Overview
+This document captures the architectural direction for handling:
+
+Standards (ADA, TAS, UFAS, FHA/ANSI, IBC, etc.)
+
+Glossaries
+
+Findings / Recommendations libraries
+
+Project context
+
+The goal is to support real-world compliance scenarios where:
+
+Multiple standards apply simultaneously
+
+Standards vary by version and time
+
+Findings may be identical in concept but differ in citation and requirements
+
+Core Principles
+0. Libraries Are the Foundation
+The library layer is the source for reusable professional content and defaults.
+
+Libraries establish:
+
+basic finding language
+
+recommendation language
+
+measurement types
+
+units of measure
+
+unit costs
+
+default standards associations
+
+other reusable defaults
+
+Libraries are not merely lookup tables. They are the foundation from which glossaries and project data records are created.
+
+Snapshot Inheritance, Not Live Linking
+The system should generally follow a snapshot inheritance model.
+
+That means content flows downward:
+
+Library
+  ↓ copied into
+Glossary
+  ↓ copied into
+Project Data Record
+But each layer becomes independently editable after creation.
+
+A glossary remembers which library item it came from, but it does not remain live-linked in a way that later library edits automatically overwrite glossary text.
+
+A project data record remembers which glossary entry it came from, but editing the project data record does not alter the underlying glossary.
+
+This preserves traceability while allowing project-specific professional judgment.
+
+1. Standards Are Layered, Not Exclusive
+Projects may involve multiple standards at once.
+
+Example:
+
+ADA (Title II)
+
+UFAS (Section 504)
+
+TAS (state law)
+
+FHA/ANSI
+
+IBC
+
+A project should:
+
+Enable multiple standards
+
+Allow switching between standard-specific glossaries
+
+Allow mixing citations across standards
+
+2. Glossaries Are Standard-Specific
+Glossaries should be tied to a single Standard + Version.
+
+Examples:
+
+ADA 2010 Glossary
+
+TAS 2012 Glossary
+
+TAS 1994 Glossary
+
+UFAS Glossary
+
+Glossaries define:
+
+Default findings
+
+Default recommendations
+
+Default citation sets
+
+3. Projects Enable Multiple Glossaries
+Each project:
+
+Enables one or more glossary sets
+
+Has an active glossary context
+
+Example (Harris Center):
+
+Enabled glossaries:
+
+ADA 2010
+
+UFAS
+
+TAS 2012
+
+FHA/ANSI
+
+IBC
+
+Active glossary:
+
+ADA 2010 (user-selected)
+
+The active glossary determines default selections during data entry.
+
+4. Records Support Multiple Standards
+Each data record (finding) may include:
+
+Primary glossary (implicit standard)
+
+Additional citations from other standards
+
+Example:
+
+Evaluation:
+
+TAS 1994
+
+Recommendation:
+
+TAS 2012
+
+Optional:
+
+ADA citation
+
+This allows:
+
+Historical compliance evaluation
+
+Current standard recommendations
+
+Library / Glossary / Data Record Inheritance
+Library → Glossary
+A glossary entry is created from a library item by copying the library defaults into the glossary.
+
+Copied values may include:
+
+finding text
+
+recommendation text
+
+measurement type
+
+unit of measure
+
+unit cost
+
+standards associations
+
+category / item / finding / recommendation structure
+
+The glossary should retain historical reference IDs back to the originating library item where useful, but the copied values become editable in the glossary.
+
+Changing the original library item should not automatically rewrite existing glossary entries unless an explicit administrative update/sync process is invoked.
+
+Glossary → Project Data Record
+A project data record is created from a glossary entry by copying the glossary defaults into the data record.
+
+Copied values may include:
+
+finding text
+
+recommendation text
+
+measurement type
+
+unit of measure
+
+unit cost
+
+standards associations
+
+glossary/category/item/finding/recommendation context
+
+The data record may then be edited independently.
+
+Changing a data record must not change the underlying glossary.
+
+Changing a glossary must not automatically rewrite existing project data records unless an explicit administrative update/sync process is invoked.
+
+Why Snapshot Inheritance Matters
+This model supports:
+
+historical accuracy
+
+project-specific edits
+
+professional judgment
+
+auditability
+
+stable reports
+
+A report should reflect what was actually selected and edited for that project at the time of documentation, not whatever the library or glossary happens to say later.
+
+Possible Streamlined Alternative
+A more normalized model could keep live references and compute text dynamically from the current library/glossary state.
+
+However, that creates risks:
+
+old project records changing unexpectedly
+
+reports becoming unstable over time
+
+difficulty preserving historical language
+
+accidental global edits affecting completed work
+
+For FREDAsoft, snapshot inheritance is the safer default.
+
+A future enhancement could add explicit controlled sync tools, such as:
+
+update this glossary from its source library item
+
+update selected data records from revised glossary text
+
+compare current value against source value
+
+show divergence from source
+
+These tools should be intentional and user-approved, not automatic.
+
+Library Architecture
+Concept vs. Library Version
+We distinguish between:
+
+Concept (abstract issue)
+Example:
+
+curb_ramp_excessive_slope
+Library Version (standard-specific)
+Example:
+
+ADA 2010 version
+
+TAS 2012 version
+
+UFAS version
+
+Each version includes:
+
+finding text
+
+recommendation text
+
+glossary text
+
+standard citations
+
+Library Duplication Strategy (Intentional)
+Duplicate entries across standards are expected and correct.
+
+Example:
+
+"Curb ramp slope exceeds allowable maximum"
+
+May exist in:
+
+ADA 2010
+
+TAS 2012
+
+UFAS
+
+Even if the requirement is identical (e.g., 8.33%), these are distinct entries because:
+
+citations differ
+
+legal authority differs
+
+applicability differs
+
+Library Manager Future Capability
+Clone / Copy Workflow
+Provide tools to duplicate entries between standards.
+
+Example:
+
+Copy ADA finding → TAS library
+Clone behavior:
+
+Copy text (finding/recommendation/glossary)
+
+Set new:
+
+standardType
+
+standardVersion
+
+Remove or flag existing citations
+
+Require user to map/select new standard citations
+
+This enables rapid creation of parallel libraries.
+
+Project Types (Optional Layer)
+Project Types are presets, not constraints.
+
+They may define:
+
+default enabled glossaries
+
+default active glossary
+
+report formatting
+
+Example:
+
+TAS Plan Review:
+
+enabled: TAS only
+
+ADA Assessment:
+
+enabled: ADA, UFAS
+
+But users can override and enable additional standards.
+
+Time-Based Standards (Critical Requirement)
+Buildings must be evaluated based on the standards in effect at time of construction.
+
+Example:
+
+Built: 2008
+
+Evaluation: TAS 1994
+
+Recommendation: TAS 2012
+
+System must support:
+
+evaluation standard ≠ recommendation standard
+
+multiple citations per record
+
+Summary of Architecture
+Concept
+  ↓
+Glossary Entry (Standard + Version specific)
+  ↓
+Project (multiple enabled glossaries)
+  ↓
+Data Record (multi-standard citations)
+Future Enhancements
+Add explicit conceptId to library entries
+
+Add sub_sequence for multi-exception / figure ordering
+
+Add comparison tools between standard versions
+
+Add bulk clone tools in Library Manager
+
+Add evaluation vs recommendation standard tracking (optional advanced feature)
+
+Key Takeaway
+This system is designed to reflect reality:
+
+Standards overlap
+
+Requirements evolve over time
+
+The same issue exists across multiple regulatory frameworks
+
+The architecture must prioritize:
+
+Flexibility + Traceability + Standard-specific accuracy
+Added. I framed it as snapshot inheritance:
+
+Library → copied into Glossary → copied into Data Record
+with each layer independently editable after creation.
+
+I also added a note that a future streamlined version could support explicit sync/compare tools, but not automatic live-linking, because that could destabilize old reports and project records.
+
+
+
+The only issue I'm nto fully committed to is the idea of glossaries being tied to Standards and not to project types.  Here's why.  It always makes sense to tie a library record to a standard.  When one is creating glossaries, since a particular "type" of project has variable regarding the standards that apply, I can see how having a "housing assessment" glossary and a "TAS" glossary and a ADA Assessment glossary would be of value.  So I need us to think this though and find a solution that isn't hard for mere mortals to wrap their heads around (in other word, the more many-to-many, join table-type relationships there are, the more confusing it will be to someone who can't visually (in their head) make those connections.)
+
+Thought for a couple of seconds
+Yes — that concern is valid.
+
+I would not force the model into:
+
+Glossary = always tied to one Standard
+That may be too rigid and too abstract.
+
+A better human-friendly model is:
+
+Glossary = a practical working library for a use case
+Then each glossary has:
+
+Primary context
+Optional standards coverage
+Default active standard
+So you could have:
+
+TAS Plan Review Glossary
+  Primary: TAS 2012
+
+ADA Assessment Glossary
+  Primary: ADA 2010
+
+Housing Assessment Glossary
+  Primary: Housing / Multifamily Assessment
+  Standards covered: ADA, UFAS, FHA/ANSI, TAS, IBC
+  Default active standard: ADA or project-selected
+That is easier for humans than a purely normalized model.
+
+My revised recommendation
+Use Glossary Sets as the user-facing concept.
+
+A Glossary Set can be:
+
+standard-specific
+project-type-specific
+program-specific
+client-specific
+But each glossary record inside it can still carry standard metadata.
+
+So:
+
+Glossary Set: Housing Assessment
+  Entry: Curb ramp excessive slope
+    linked standards:
+      ADA 405.2
+      UFAS 4.7.2
+      TAS 405.2
+or:
+
+Glossary Set: TAS Plan Review
+  Entry: Curb ramp excessive slope
+    linked standards:
+      TAS 405.2
+Simple mental model
+For “mere mortals,” I’d present it like this:
+
+Project chooses a Glossary Set.
+Glossary Set contains the language and defaults.
+Each glossary entry can cite one or more Standards.
+That avoids making users think in join tables.
+
+Behind the scenes
+You can still keep metadata like:
+
+glossarySetType: "standard" | "projectType" | "client" | "program";
+primaryStandardType?: "TAS";
+coveredStandardTypes?: ["ADA", "UFAS", "TAS"];
+But the UI does not need to expose that complexity first.
+
+Final position
+I’d revise our architecture note to say:
+
+Glossaries are context-specific, not necessarily standard-specific.
+Some glossaries are tied primarily to a single standard.
+Others are tied to a project type or assessment context and may include multiple standards.
+That solves your concern and fits both:
+
+TAS Plan Review → simple one-standard glossary
+
+Housing Assessment → multi-standard practical glossary
+
+ADA Assessment → mostly ADA, but can cite others
+
+This is more flexible and easier to understand.
+
+
+Since I haven't added the note, please rewrite the note, including these revisions, and I will paste it into the md file
+
+Here is a revised version of the architecture note that incorporates everything we’ve discussed, including your latest clarification about glossaries and usability.
+
+Standards, Glossaries, and Library Architecture
+Overview
+This document defines the architectural approach for managing:
+
+Standards (ADA, TAS, UFAS, FHA/ANSI, IBC, etc.)
+
+Libraries (Findings / Recommendations)
+
+Glossaries
+
+Project Data Records
+
+The system must support real-world conditions where:
+
+Multiple standards apply simultaneously
+
+Standards vary by version and time
+
+Findings may be conceptually identical but differ in citation, authority, or applicability
+
+Users need a simple, intuitive mental model
+
+Core Principles
+1. Libraries Are the Foundation
+Libraries are the source of truth for reusable professional content.
+
+They define:
+
+Finding language
+
+Recommendation language
+
+Measurement types
+
+Units of measure
+
+Unit costs
+
+Default standards associations
+
+Libraries are not just references — they are the starting point for all downstream content.
+
+2. Snapshot Inheritance (Not Live Linking)
+The system uses a copy-on-create (snapshot) model:
+
+Library → Glossary → Data Record
+Glossaries are created by copying from libraries
+
+Data records are created by copying from glossaries
+
+Each layer becomes independently editable
+
+This ensures:
+
+Historical accuracy
+
+Stable reports
+
+Project-specific flexibility
+
+Protection from unintended global changes
+
+3. Glossaries Are Context-Based (Not Strictly Standard-Based)
+Glossaries are user-facing working libraries, not purely technical constructs.
+
+A glossary represents a real-world workflow or use case, such as:
+
+TAS Plan Review Glossary
+ADA Assessment Glossary
+Housing Assessment Glossary
+Important distinction:
+Glossary ≠ Standard
+Glossary = Context
+4. Glossaries May Be Standard-Specific OR Multi-Standard
+Some glossaries are simple:
+TAS Plan Review Glossary
+  Primary Standard: TAS 2012
+  Standards Covered: TAS only
+Others are complex:
+Housing Assessment Glossary
+  Primary Context: Multifamily / Supportive Housing
+  Standards Covered:
+    ADA
+    UFAS
+    FHA/ANSI
+    TAS
+    IBC
+This allows:
+
+Simple workflows for single-standard projects
+
+Flexible workflows for multi-standard projects
+
+5. Projects Enable Glossaries
+Each project:
+
+- selects one or more Glossary Sets
+- has an active glossary
+Example:
+
+Project: Harris Center
+
+Enabled Glossaries:
+- ADA Assessment
+- Housing Assessment
+- TAS Plan Review
+
+Active Glossary:
+- Housing Assessment
+The active glossary determines:
+
+Default findings
+
+Default recommendations
+
+Default standard associations
+
+6. Data Records Support Multiple Standards
+Each data record (finding) may include:
+
+- Primary glossary context (default)
+- Additional citations from other standards
+Example:
+
+Evaluation:
+- TAS 1994
+
+Recommendation:
+- TAS 2012
+
+Additional:
+- ADA citation
+This supports:
+
+Historical compliance evaluation
+
+Forward-looking recommendations
+
+Multi-agency overlap
+
+Library and Glossary Structure
+Concept vs. Version
+We distinguish between:
+
+Concept (abstract issue)
+curb_ramp_excessive_slope
+Library / Glossary Versions
+Each context creates a version:
+
+ADA version
+TAS version
+UFAS version
+Housing Assessment version
+Each version may differ in:
+
+wording
+
+thresholds
+
+citations
+
+applicability
+
+Controlled Duplication (Intentional)
+Duplicate findings across standards are:
+
+EXPECTED and CORRECT
+Example:
+
+"Curb ramp slope exceeds allowable maximum"
+Exists in:
+
+ADA
+
+TAS
+
+UFAS
+
+Even if identical numerically, they differ in:
+
+legal authority
+
+citation references
+
+applicability
+
+Library → Glossary → Data Record Flow
+Library → Glossary
+Glossary entries are created by copying:
+
+finding text
+
+recommendation text
+
+measurement type
+
+unit of measure
+
+unit cost
+
+standards associations
+
+Glossaries retain reference IDs but are independently editable.
+
+Glossary → Data Record
+Data records copy from glossaries:
+
+all editable fields
+
+all standard associations
+
+Records are fully editable and do not modify the glossary.
+
+Why This Matters
+This model ensures:
+
+Reports reflect what was actually documented
+
+Past projects remain unchanged when libraries evolve
+
+Users can apply professional judgment per project
+
+Clone / Copy Workflow (Future Capability)
+To support efficient multi-standard libraries:
+
+Copy ADA entry → TAS glossary
+Clone behavior:
+
+Copy all text fields
+
+Assign new standard context
+
+Remove or flag old citations
+
+Require user to select new citations
+
+This allows rapid creation of parallel libraries while maintaining accuracy.
+
+Project Types (Optional Presets)
+Project Types are convenience presets, not constraints.
+
+They may define:
+
+Default glossaries
+
+Default active glossary
+
+Default report behavior
+
+Example:
+
+TAS Plan Review → TAS glossary only
+ADA Assessment → ADA + UFAS
+Housing Assessment → multi-standard
+Users may override these defaults.
+
+Time-Based Standards (Critical Requirement)
+Buildings must be evaluated based on the standards in effect at time of construction.
+
+Example:
+
+Built: 2008
+Evaluation: TAS 1994
+Recommendation: TAS 2012
+The system must support:
+
+Evaluation Standard ≠ Recommendation Standard
+Simplified Mental Model (For Users)
+1. Choose a Glossary (your workflow)
+2. Select a finding (pre-built language)
+3. Adjust as needed
+4. Add or modify standards if necessary
+No user should need to understand:
+
+join tables
+many-to-many relationships
+data normalization
+Key Takeaways
+Libraries define reusable content
+Glossaries define workflow context
+Projects select applicable glossaries
+Records capture real-world application
+Standards are layered, not exclusive
+Design Philosophy
+The system must balance:
+
+Flexibility
+Clarity
+Traceability
+Real-world accuracy
+Ease of use
+This model reflects how accessibility compliance actually works:
+
+Multiple overlapping standards
+
+Evolving regulations
+
+Context-specific application
+
+Professional judgment at every level
+
+If you want, next step we can:
+👉 map this into actual Firestore schema
+👉 or translate into UI flows (Glossary Builder / Data Entry)
+
+
+Is this note in the correct format for an .md file with appropriate hash tags?
+
+Yes — you’re very close, and overall it’s absolutely valid Markdown 👍
+
+But there are a couple of small tweaks I’d recommend to make it cleaner, more standard, and more portable (especially if this lives in GitHub or a docs system).
+
+✅ What’s Already Correct
+#, ##, ### heading structure ✔
+
+Lists ✔
+
+Code blocks ✔
+
+Separation of sections ✔
+
+👉 It will render fine as-is.
+
+⚠️ Things to Fix
+1. Remove id="..." from code blocks
+You have things like:
+
+```text id="glm0u9"
+Library → Glossary → Data Record
+
+👉 This is **not standard Markdown** and won’t render correctly in most viewers.
+
+### Fix:
+
+```md
+```text
+Library → Glossary → Data Record
+
+Do this everywhere.
+
+---
+
+## 2. Normalize heading spacing
+
+Make sure there is **one blank line before and after headings**, like:
+
+```md
+## Core Principles
+
+## 1. Libraries Are the Foundation
+You’re mostly doing this already — just ensure consistency.
+
+3. Optional: Improve section numbering
+Right now you mix:
+
+## Core Principles
+## 1. Libraries Are the Foundation
+That’s fine, but slightly unconventional.
+
+Option A (cleaner):
+## Core Principles
+
+### 1. Libraries Are the Foundation
+### 2. Snapshot Inheritance
+Option B (also fine):
+Leave as-is — just be consistent.
+
+4. Horizontal rules (optional but nice)
+You can add:
+
+---
+between major sections for readability.
+
+✨ Cleaned Example
+Here’s how one section should look:
+
+## Snapshot Inheritance (Not Live Linking)
+
+The system uses a copy-on-create (snapshot) model:
+
+```text
+Library → Glossary → Data Record
+Glossaries are created by copying from libraries
+
+Data records are created by copying from glossaries
+
+Each layer becomes independently editable
+
+
+---
+
+# 🟢 Final Answer
+
+👉 Yes — your document is valid Markdown  
+👉 But remove `id="..."` and optionally tighten structure  
+
+---
+
+# 👍 Recommendation
+
+Before pasting into `ARCHITECTURE_DESIGN.md`:
+
+1. Remove all `id="..."` from code blocks  
+2. Optionally change numbered sections to `###`  
+3. Add spacing consistency  
+
+---
+
+If you want, I can give you a **fully cleaned, paste-ready version** 👍
+
+Yes, please give me a fully cleaned, paste ready version
+
+Here is your fully cleaned, paste-ready Markdown version — no non-standard syntax, consistent headings, and formatted for GitHub or any Markdown viewer.
+
+Standards, Glossaries, and Library Architecture
+Overview
+This document defines the architectural approach for managing:
+
+Standards (ADA, TAS, UFAS, FHA/ANSI, IBC, etc.)
+
+Libraries (Findings / Recommendations)
+
+Glossaries
+
+Project Data Records
+
+The system must support real-world conditions where:
+
+Multiple standards apply simultaneously
+
+Standards vary by version and time
+
+Findings may be conceptually identical but differ in citation, authority, or applicability
+
+Users need a simple, intuitive mental model
+
+Core Principles
+1. Libraries Are the Foundation
+Libraries are the source of truth for reusable professional content.
+
+They define:
+
+Finding language
+
+Recommendation language
+
+Measurement types
+
+Units of measure
+
+Unit costs
+
+Default standards associations
+
+Libraries are not just references — they are the starting point for all downstream content.
+
+2. Snapshot Inheritance (Not Live Linking)
+The system uses a copy-on-create (snapshot) model:
+
+Library → Glossary → Data Record
+Glossaries are created by copying from libraries
+
+Data records are created by copying from glossaries
+
+Each layer becomes independently editable
+
+This ensures:
+
+Historical accuracy
+
+Stable reports
+
+Project-specific flexibility
+
+Protection from unintended global changes
+
+3. Glossaries Are Context-Based (Not Strictly Standard-Based)
+Glossaries are user-facing working libraries, not purely technical constructs.
+
+A glossary represents a real-world workflow or use case, such as:
+
+TAS Plan Review Glossary
+
+ADA Assessment Glossary
+
+Housing Assessment Glossary
+
+Important distinction:
+
+Glossary ≠ Standard
+Glossary = Context
+4. Glossaries May Be Standard-Specific OR Multi-Standard
+Some glossaries are simple:
+
+TAS Plan Review Glossary
+  Primary Standard: TAS 2012
+  Standards Covered: TAS only
+Others are complex:
+
+Housing Assessment Glossary
+  Primary Context: Multifamily / Supportive Housing
+  Standards Covered:
+    ADA
+    UFAS
+    FHA/ANSI
+    TAS
+    IBC
+This allows:
+
+Simple workflows for single-standard projects
+
+Flexible workflows for multi-standard projects
+
+5. Projects Enable Glossaries
+Each project:
+
+selects one or more Glossary Sets
+
+has an active glossary
+
+Example:
+
+Project: Harris Center
+
+Enabled Glossaries:
+- ADA Assessment
+- Housing Assessment
+- TAS Plan Review
+
+Active Glossary:
+- Housing Assessment
+The active glossary determines:
+
+Default findings
+
+Default recommendations
+
+Default standard associations
+
+6. Data Records Support Multiple Standards
+Each data record (finding) may include:
+
+Primary glossary context (default)
+
+Additional citations from other standards
+
+Example:
+
+Evaluation:
+- TAS 1994
+
+Recommendation:
+- TAS 2012
+
+Additional:
+- ADA citation
+This supports:
+
+Historical compliance evaluation
+
+Forward-looking recommendations
+
+Multi-agency overlap
+
+Library and Glossary Structure
+Concept vs. Version
+We distinguish between:
+
+Concept (abstract issue)
+curb_ramp_excessive_slope
+Library / Glossary Versions
+Each context creates a version:
+
+ADA version
+
+TAS version
+
+UFAS version
+
+Housing Assessment version
+
+Each version may differ in:
+
+wording
+
+thresholds
+
+citations
+
+applicability
+
+Controlled Duplication (Intentional)
+Duplicate findings across standards are:
+
+EXPECTED and CORRECT
+Example:
+
+"Curb ramp slope exceeds allowable maximum"
+Exists in:
+
+ADA
+
+TAS
+
+UFAS
+
+Even if identical numerically, they differ in:
+
+legal authority
+
+citation references
+
+applicability
+
+Library → Glossary → Data Record Flow
+Library → Glossary
+Glossary entries are created by copying:
+
+finding text
+
+recommendation text
+
+measurement type
+
+unit of measure
+
+unit cost
+
+standards associations
+
+Glossaries retain reference IDs but are independently editable.
+
+Glossary → Data Record
+Data records copy from glossaries:
+
+all editable fields
+
+all standard associations
+
+Records are fully editable and do not modify the glossary.
+
+Why This Matters
+This model ensures:
+
+Reports reflect what was actually documented
+
+Past projects remain unchanged when libraries evolve
+
+Users can apply professional judgment per project
+
+Clone / Copy Workflow (Future Capability)
+To support efficient multi-standard libraries:
+
+Copy ADA entry → TAS glossary
+Clone behavior:
+
+Copy all text fields
+
+Assign new standard context
+
+Remove or flag old citations
+
+Require user to select new citations
+
+This allows rapid creation of parallel libraries while maintaining accuracy.
+
+Project Types (Optional Presets)
+Project Types are convenience presets, not constraints.
+
+They may define:
+
+Default glossaries
+
+Default active glossary
+
+Default report behavior
+
+Example:
+
+TAS Plan Review → TAS glossary only
+ADA Assessment → ADA + UFAS
+Housing Assessment → multi-standard
+Users may override these defaults.
+
+Time-Based Standards (Critical Requirement)
+Buildings must be evaluated based on the standards in effect at time of construction.
+
+Example:
+
+Built: 2008
+Evaluation: TAS 1994
+Recommendation: TAS 2012
+The system must support:
+
+Evaluation Standard ≠ Recommendation Standard
+Simplified Mental Model (For Users)
+1. Choose a Glossary (your workflow)
+2. Select a finding (pre-built language)
+3. Adjust as needed
+4. Add or modify standards if necessary
+Users should not need to understand:
+
+join tables
+
+many-to-many relationships
+
+data normalization
+
+Key Takeaways
+Libraries define reusable content
+Glossaries define workflow context
+Projects select applicable glossaries
+Records capture real-world application
+Standards are layered, not exclusive
+Design Philosophy
+The system must balance:
+
+Flexibility
+Clarity
+Traceability
+Real-world accuracy
+Ease of use
+This architecture reflects how accessibility compliance actually works:
+
+Multiple overlapping standards
+
+Evolving regulations
+
+Context-specific application
+
+Professional judgment at every level
+
+If you want next, we can:
+
+translate this into Firestore schema
+
+map it into UI workflows (Glossary Builder / Data Entry)
+
+define migration steps from your current system
+
+
+
+Pasted markdown(27).md
+File
+This is the architectural_design.md file.  Much has been added over time and doubtless there are some older notes that are not congruent with the overall direction of the project as it has been developed.  Rewrite the md file to synthesize each part.  Ask questions to remove ambiguity and make decisions where there are conflicting sets of direction.
+
+*******
+ 
+
+Great—this is exactly the kind of consolidation that prevents architectural drift later. I’ve synthesized your entire document into a clean, coherent, non-contradictory architecture file while preserving intent and removing duplication/conflicts.
+
+I’ve also embedded a few clearly marked decision points/questions at the end where your direction still needs to be locked in.
+
+📘 REWRITTEN: ARCHITECTURE_DESIGN.md (SYNTHESIZED)
+FREDAsoft Architecture & Design Decisions
+This document is the single source of truth for architectural decisions in FREDAsoft.
+It defines system behavior, data modeling philosophy, and development constraints.
+
+All contributors (human or AI) must follow this document.
+
+🧠 AI Operations Layer (Archie / Gabe / Francine)
+(Unchanged — already clean and strong, retained as-is)
+
+🚦 Current Work State
+(Retained as-is)
+
+⚠️ Known Risk Areas
+(Retained as-is)
+
+📦 Proven Code Patterns
+(Retained as-is)
+
+🧱 Core System Architecture
+1. System Identity
+FREDAsoft is a:
+
+Data-centric compliance platform
+It supports:
+
+inspections
+
+plan reviews
+
+assessments
+
+It is not just a reporting tool — reports are outputs of structured data.
+
+2. Core Data Model
+Project
+  → Facilities / Locations
+  → Project Data (findings)
+  → Glossaries (context)
+  → Standards (references)
+Key collections:
+
+projectData → findings (primary operational data)
+
+glossary → templates (context-specific)
+
+master_standards → standards library
+
+users → roles & identity
+
+🧠 Libraries, Glossaries, and Data Records
+3. Foundational Principle: Libraries Drive Everything
+Libraries define:
+
+finding language
+
+recommendation language
+
+measurement types
+
+units of measure
+
+unit costs
+
+default standard associations
+
+They are the origin of all structured content.
+
+4. Snapshot Inheritance Model (Critical)
+The system uses:
+
+Library → Glossary → Data Record
+Rules:
+Data is copied downward, not referenced live
+
+Each layer is independently editable
+
+No automatic upstream propagation
+
+Why:
+preserves historical integrity
+
+prevents accidental global changes
+
+ensures reports remain stable
+
+5. Glossaries = Context (Not Just Standards)
+Glossaries are user-facing working libraries.
+
+They represent:
+
+a workflow or use case
+Examples:
+
+TAS Plan Review Glossary
+
+ADA Assessment Glossary
+
+Housing Assessment Glossary
+
+6. Glossary Types
+Glossaries may be:
+
+A. Standard-Focused
+TAS Plan Review Glossary
+  → TAS only
+B. Multi-Standard / Contextual
+Housing Assessment Glossary
+  → ADA + UFAS + FHA + TAS + IBC
+7. Projects Enable Glossaries
+Each project:
+
+enables one or more glossaries
+
+maintains one active glossary
+
+User workflow:
+Select glossary → work within that context
+8. Data Records Are the Source of Truth
+Each record:
+
+inherits from glossary
+
+becomes fully editable
+
+may diverge from glossary
+
+Records support:
+multiple standards simultaneously
+⚖️ Standards Model
+9. Standards Are Layered (Not Exclusive)
+A project may involve:
+
+ADA
+
+TAS
+
+UFAS
+
+FHA / ANSI
+
+IBC
+
+These are not mutually exclusive.
+
+10. Time-Based Compliance
+Critical rule:
+
+Evaluation Standard ≠ Recommendation Standard
+Example:
+
+Built: 2008
+Evaluation: TAS 1994
+Recommendation: TAS 2012
+11. Standard Record Model
+All standards share a unified structure:
+
+relation_type:
+
+Standard
+
+Advisory
+
+Exception
+
+Figure
+
+Table
+
+Optional:
+
+imageUrl?
+imageCaption?
+🧬 Concept vs Version Model
+12. Concept Layer (Implicit for now)
+Example:
+
+curb_ramp_excessive_slope
+13. Version Layer (Actual implementation)
+Each concept may exist as:
+
+ADA version
+
+TAS version
+
+UFAS version
+
+Housing glossary version
+
+14. Controlled Duplication (Intentional)
+Duplicate findings across standards are:
+
+EXPECTED and CORRECT
+Because:
+
+legal authority differs
+
+citations differ
+
+applicability differs
+
+🔁 Library → Glossary → Record Flow
+15. Library → Glossary
+Copy:
+
+text
+
+UOM
+
+costs
+
+standards
+
+Glossary becomes editable.
+
+16. Glossary → Data Record
+Copy everything.
+
+Data record becomes fully independent.
+
+17. Integrity Rule
+Records NEVER update glossary  
+Glossary NEVER updates library automatically
+🧰 Library Management (Future Direction)
+18. Dedicated Library System
+Future UI:
+
+Library Explorer
+
+Library Builder
+
+Supports:
+
+create
+
+edit
+
+delete
+
+duplicate
+
+19. Clone Workflow (Critical)
+Copy ADA → TAS
+Behavior:
+
+copy text
+
+reset standard context
+
+require new citations
+
+🏗️ Project Types (Optional Layer)
+20. Project Types = Presets
+They define:
+
+default glossaries
+
+default standards
+
+report behavior
+
+BUT:
+
+They DO NOT constrain the system
+🧪 UI Strategy
+21. Two Modes
+Field (mobile) → fast input
+
+Office (desktop) → management
+
+📸 Image Architecture (Future)
+22. Planned Enhancements
+ordering
+
+primary report images
+
+appendices
+
+metadata-based storage
+
+🔐 Firebase Safety
+(Condensed, retained core rules)
+
+no uncontrolled writes
+
+no loops
+
+explicit triggers only
+
+use operation locks
+
+scope all reads
+
+🧠 Simplified User Mental Model
+1. Choose a glossary
+2. Select a finding
+3. Adjust as needed
+4. Add standards if needed
+Users never need to understand:
+
+normalization
+
+joins
+
+schema complexity
+
+🧭 Design Philosophy
+System must balance:
+
+Flexibility
+Clarity
+Traceability
+Accuracy
+Usability
+❓ OPEN QUESTIONS (NEEDS YOUR INPUT)
+These are the only remaining architectural ambiguities:
+
+1. Concept Layer — Explicit or Implicit?
+Do we:
+
+Option A (current direction)
+No explicit conceptId
+Option B (future-ready)
+Add conceptId to library entries
+👉 Recommendation: Defer but plan for it
+
+2. Glossary Ownership Model
+Do we treat glossaries as:
+
+Option A (current preferred)
+Context-driven (project/use-case)
+Option B
+Strictly standard-driven
+👉 Recommendation: Stay with context-driven
+
+3. Standard Attribution in Records
+Do we:
+
+Option A (current)
+Single record with multiple citations
+Option B (future)
+Explicit:
+- evaluationStandard
+- recommendationStandard
+👉 Recommendation: Stay Option A for now
+
+4. Library Sync Behavior
+Do we allow:
+
+Manual "sync from library" tools?
+👉 Recommendation: Yes, but explicit only (never automatic)
+
+🟢 FINAL SUMMARY
+FREDAsoft is built on:
+
+Libraries → define language
+Glossaries → define context
+Projects → define scope
+Records → define truth
+Standards → define authority
+🚀 NEXT STEP (WHEN READY)
+We can now cleanly move into:
+
+Firestore schema design
+
+UI workflows (Glossary Builder / Data Entry)
+
+Migration plan
+
+👍 Final Thought
+This is now:
+
+coherent
+scalable
+aligned with real-world compliance workflows
+👉 Your Turn
+Answer these 4 questions:
+
+Do you want conceptId now or later?
+
+Confirm glossary = context-driven (not standard-driven)?
+
+Stick with implicit evaluation/recommendation standards for now?
+
+Do you want future library sync tools?
+
+Once you answer those, this architecture becomes locked and implementation-ready.
+
+
+Rewrite this line: "projectData → findings (primary operational data)" to say 
+"projectData → findings and recommendations (primary operational data)"
+
+Rewrite this line: "Field (mobile) --> fast input" to say
+"Field (mobile) --> fast input, access to mobile device camera"
+
+1. Concept layer: defer but plan for Option B (future-ready)
+2. Glossary ownership model: stay with context driven
+3. Stay with Option A for now
+4. Yes, but explicit only (never automatic), backup protection
+
+With these answered questions, prepare a complete document with which I can copy and overwrite the current .md file
+
+Here is your final, fully synthesized, decision-locked, paste-ready ARCHITECTURE_DESIGN.md incorporating:
+
+your wording corrections
+
+resolved architectural decisions
+
+cleaned structure
+
+no ambiguity
+
+no duplication
+
+consistent philosophy
+
+FREDAsoft Architecture & Design Decisions
+This document is the single source of truth for architectural decisions in FREDAsoft.
+It defines system behavior, data modeling philosophy, and development constraints.
+
+All contributors (human or AI) must follow this document.
+
+🧠 AI Operations Layer (Archie / Gabe / Francine)
+🎭 Agent Roles
+Archie (Architect)
+
+Defines system-level structure and refactoring strategy
+
+Breaks work into atomic, safe tasks
+
+Focus: scalability, safety, clarity
+
+Gabe (Sentry)
+
+Reviews and hardens all prompts before execution
+
+Enforces:
+
+strict scope control
+
+no unintended refactors
+
+preservation of behavior
+
+Converts ideas into deterministic instructions
+
+Francine (Execution Agent)
+
+Executes tasks in AI Studio
+
+Must follow instructions exactly
+
+Has NO authority to:
+
+refactor beyond instructions
+
+introduce new patterns
+
+modify unrelated code
+
+🛡️ Non-Negotiable Execution Rules
+Only modify what is explicitly specified
+
+Preserve all existing behavior unless explicitly changed
+
+No implicit refactors or “cleanup”
+
+Use explicit logic (no truthy/falsy shortcuts)
+
+Use safe, targeted React state updates
+
+Do not mix concerns (security, UI, data, performance)
+
+If marked ANALYSIS ONLY → no code changes
+
+Do not assume intent
+
+🧪 Required Verification
+App builds successfully
+
+No console errors
+
+No UI regression
+
+Target behavior works
+
+🚦 Current Work State
+Phase: Data Integrity Stabilization
+
+Active Task: 95 — Opening Force Fix
+
+Target Version: v87.0
+
+Status: Pending quota reset
+
+Next Up
+P1 — Firestore Security Hardening
+
+P2 — Remove runtime debug logic
+
+P3 — Extract Firestore subscriptions
+
+⚠️ Known Risk Areas
+Firestore security rules (overly permissive)
+
+App.tsx (“God component”)
+
+Large components (>800 LOC)
+
+Heavy use of any
+
+Firestore subscription lifecycle issues
+
+Runtime debug/migration logic in production
+
+Large bundle size (~1.5MB)
+
+📦 Proven Code Patterns
+Safe React State Update
+setState(prev =>
+  prev.map(item =>
+    item.id === targetId
+      ? { ...item, ...updates }
+      : item
+  )
+);
+🧱 Core System Architecture
+1. System Identity
+FREDAsoft is a:
+
+Data-centric compliance platform
+Supports:
+
+inspections
+
+plan reviews
+
+assessments
+
+2. Core Data Model
+Project
+  → Facilities / Locations
+  → projectData (findings and recommendations)
+  → Glossaries (context)
+  → Standards (references)
+Key collections:
+
+projectData → findings and recommendations (primary operational data)
+
+glossary → templates (context-specific)
+
+master_standards → standards library
+
+users → roles & identity
+
+🧠 Libraries, Glossaries, and Data Records
+3. Libraries Are the Foundation
+Libraries define:
+
+finding language
+
+recommendation language
+
+measurement types
+
+units of measure
+
+unit costs
+
+default standards associations
+
+Libraries are the origin of all structured content.
+
+4. Snapshot Inheritance Model (Critical)
+Library → Glossary → Data Record
+Rules:
+
+Data is copied downward
+
+Each layer is independently editable
+
+No automatic upstream propagation
+
+This ensures:
+
+historical accuracy
+
+stable reporting
+
+project-specific flexibility
+
+5. Glossaries = Context (Not Standards)
+Glossaries represent:
+
+real-world workflows or use cases
+Examples:
+
+TAS Plan Review Glossary
+
+ADA Assessment Glossary
+
+Housing Assessment Glossary
+
+6. Glossary Types
+Standard-Focused
+TAS Plan Review Glossary
+  → TAS only
+Multi-Standard
+Housing Assessment Glossary
+  → ADA + UFAS + FHA + TAS + IBC
+7. Projects Enable Glossaries
+Each project:
+
+enables one or more glossaries
+
+maintains one active glossary
+
+The active glossary drives:
+
+default findings
+
+recommendations
+
+standard associations
+
+8. Data Records = Source of Truth
+Each record:
+
+inherits from glossary
+
+is fully editable
+
+may diverge
+
+Supports:
+
+multiple standards simultaneously
+⚖️ Standards Model
+9. Standards Are Layered
+Projects may include:
+
+ADA
+
+TAS
+
+UFAS
+
+FHA / ANSI
+
+IBC
+
+10. Time-Based Compliance
+Evaluation Standard ≠ Recommendation Standard
+Example:
+
+Built: 2008
+Evaluation: TAS 1994
+Recommendation: TAS 2012
+11. Standard Record Model
+Unified schema:
+
+relation_type:
+
+Standard
+
+Advisory
+
+Exception
+
+Figure
+
+Table
+
+Optional:
+
+imageUrl?
+imageCaption?
+🧬 Concept vs Version
+12. Concept Layer (Deferred)
+Future-ready:
+
+conceptId (planned, not implemented)
+13. Version Layer
+Each concept exists as:
+
+ADA version
+
+TAS version
+
+UFAS version
+
+Context-specific version
+
+14. Controlled Duplication
+Duplicate findings across standards are:
+
+EXPECTED and CORRECT
+🔁 Data Flow
+15. Library → Glossary
+Copy:
+
+text
+
+measurements
+
+costs
+
+standards
+
+16. Glossary → Data Record
+Copy all fields.
+
+Records become fully independent.
+
+17. Integrity Rule
+Records NEVER update glossary
+Glossary NEVER updates library automatically
+🧰 Library Management (Future)
+18. Library System Expansion
+Future UI:
+
+Library Explorer
+
+Library Builder
+
+19. Clone Workflow
+Copy ADA → TAS
+Rules:
+
+copy text
+
+reset standard context
+
+require new citations
+
+20. Library Sync (Explicit Only)
+Allowed:
+
+manual sync tools
+
+compare vs source
+
+update selected records
+
+NOT allowed:
+
+automatic updates
+
+Must include:
+
+backup protection before sync
+🏗️ Project Types
+Project Types are:
+
+presets, NOT constraints
+Define:
+
+default glossaries
+
+default standards
+
+report behavior
+
+🧪 UI Strategy
+21. Dual Mode
+Field (mobile) → fast input, access to mobile device camera
+
+Office (desktop) → full management
+
+📸 Image Architecture (Future)
+Planned:
+
+ordering
+
+primary report images
+
+appendices
+
+metadata-based storage
+
+🔐 Firebase Safety
+no uncontrolled writes
+
+no loops
+
+explicit triggers only
+
+scoped queries
+
+use operation locks
+
+🧠 User Mental Model
+1. Choose a glossary
+2. Select a finding
+3. Adjust as needed
+4. Add standards if needed
+Users should NOT need to understand:
+
+joins
+
+normalization
+
+schema complexity
+
+🧭 Design Philosophy
+System must balance:
+
+Flexibility
+Clarity
+Traceability
+Accuracy
+Usability
+🟢 Final Architecture Summary
+Libraries → define language
+Glossaries → define context
+Projects → define scope
+Records → define truth
+Standards → define authority
+🚀 Next Steps
+Firestore schema design
+
+UI workflow alignment
+
+migration planning
+
+✅ Architectural Decisions Locked
+Concept layer → deferred, future-ready
+
+Glossaries → context-driven
+
+Standards handling → implicit multi-citation model
+
+Library sync → explicit only, never automatic, with backup protection
+
+This version is now:
+
+consistent
+unambiguous
+implementation-ready
+aligned with real-world workflows
+If you want next, we can move directly into:
+
+👉 Firestore schema (this will be powerful now that everything is locked)
+
+
+On the data entry tab, if there is no measurement unit in the glossary, the field is blank and uneditable in the data entry tab.  It is best to edit the glossary, but remind me if we've elected to make this field read-only at the data entry level for consistency and support for data analysis.  If that is the case, and the UOM is null or empty at the glossary level, how do we update the data entry record once that field is populated (updated) in the glossary.  We must take into consideration that if there are existing records, changing the uom will impact the accuracy of the cost estimates. 
+
+Yes — based on our current philosophy, UOM should generally be controlled at the glossary/library level, not freely edited per data record, because it affects:
+
+quantity interpretation
+
+unit cost calculation
+
+cost estimate consistency
+
+reporting analytics
+
+comparison across records
+
+So making UOM read-only in Data Entry is defensible.
+
+But the null/empty glossary case exposes a real lifecycle issue.
+
+Recommended rule
+If glossary UOM is blank:
+
+Data Entry should show: “No unit set in glossary”
+and ideally provide a link/action:
+
+Edit Glossary Unit
+But the actual source of truth should be fixed in the glossary.
+
+How to update existing data records after glossary UOM is populated
+Do not auto-update silently.
+
+Because you’re right: if existing records have quantities, changing UOM can materially change cost meaning.
+
+Example:
+
+quantity = 10
+old UOM = blank
+new UOM = LF
+unit cost = $50
+total = $500
+That may be correct — or it may be nonsense if the quantity was entered assuming “each.”
+
+Best approach: controlled sync
+When glossary UOM changes from blank to populated, offer an explicit admin/user-reviewed sync:
+
+Update existing records using this glossary?
+Options:
+
+1. Update records with blank UOM only
+2. Update records with blank UOM and no quantity/cost
+3. Do not update existing records
+4. Review affected records first
+My recommendation:
+
+Safe default
+Only auto-fill records where:
+
+record.fldData === glossary.fldGlosId
+AND record.uom is blank/null
+AND record.quantity is blank/null/0
+AND record.cost has not been manually overridden
+For anything with quantity or cost, require review.
+
+Data model implication
+A project data record should probably snapshot:
+
+measurementType
+unitOfMeasure
+unitCost
+from the glossary at creation time.
+
+That aligns with the snapshot inheritance model:
+
+Library → Glossary → Data Record
+Changing the glossary later should not automatically rewrite existing records.
+
+Practical UI behavior
+When editing a glossary UOM, show warning:
+
+Changing unit of measure affects future records only.
+Existing project records will not be updated automatically.
+Then provide:
+
+Review affected records
+or:
+
+Sync blank UOM records
+So the answer is
+Yes, keep UOM read-only at data entry for consistency.
+
+But add a controlled sync path:
+
+Glossary UOM update → identify affected project records → user chooses what to update
+Never silently update records with quantities/costs.
+
+
+I agree with keeping the UOM read only.  But I don't like the convoluted, multi-scenario options when the UOM is null in the glossary.  Since we don't have a huge glossary, let's do this: let's identify all findings without a unit of measure and all recommendations without a unit cost and unit cost type, and populate them.  We could create a temporary fillable table and then, once the fields are populated, remove the table and require those fields be populated in order to be saved (mandatory).  
+
+Thought for a few seconds
+Yes — that’s much cleaner.
+
+I’d treat this as a data cleanup + validation hardening project:
+
+Recommended approach
+Phase 1 — Inventory gaps
+Create a temporary admin/report view that lists:
+
+Findings missing unit of measure
+
+Recommendations missing unit cost
+
+Recommendations missing unit cost type
+
+No auto-fixing yet.
+
+Phase 2 — Temporary fillable table
+A simple grid:
+
+Record Type | Category | Item | Finding/Recommendation | Missing Fields | Editable Fields | Save
+This lets you populate the missing values directly.
+
+Phase 3 — Save rules
+Once cleaned up, enforce:
+
+Finding cannot save without UOM
+
+Recommendation cannot save without unit cost
+
+Recommendation cannot save without unit cost type
+
+Phase 4 — Remove temporary cleanup table
+After cleanup is complete, remove the temporary tool and keep only validation.
+
+This fits the architecture: libraries/glossaries define defaults; data entry inherits them, but UOM/cost defaults must be complete before records are created. The snapshot inheritance model supports this direction. 
+
+
+Use this Cursor prompt first:
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to clean up library/glossary data completeness for cost and measurement fields.
+
+Goal:
+Identify all Findings without a unit of measure and all Recommendations without unit cost or unit cost type.
+
+Inspect current data model and UI for:
+- findings collection fields related to unit of measure
+- recommendations collection fields related to unit cost and unit cost type
+- glossary fields that copy or reference these values
+- Glossary Builder save behavior
+- Data Entry read-only UOM behavior
+- existing validation rules
+
+Report:
+1. Exact field names for finding UOM.
+2. Exact field names for recommendation unit cost and unit cost type.
+3. Where those fields are edited today.
+4. Where they are copied into glossary/data records.
+5. Recommended temporary cleanup UI location.
+6. Recommended validation rules after cleanup.
+7. Files likely affected.
+
+Do not edit files.
+Do not write migration scripts yet.
+Do not modify Firestore data.
+My bias: put the temporary table in an admin-only Library Cleanup panel, not normal Data Entry.
+
+
+
+Pasted markdown(28).md
+File
+
+This is exactly the right move — and much cleaner than trying to engineer around bad data 👍
+
+What you’re proposing aligns perfectly with your architecture:
+
+Fix the source → enforce completeness → keep data entry simple
+
+Let me refine your plan slightly so it’s safe, fast, and one-time without overengineering.
+
+✅ Final Recommended Approach (Clean + Practical)
+Phase 1 — Identify Missing Data (you already have this)
+From your analysis:
+
+Missing finding measurement UOM = findings.fldUnitType
+
+Missing recommendation cost fields:
+
+recommendations.fldUOM
+
+recommendations.fldUnit
+
+So your targets are:
+
+Findings where fldUnitType is null/empty
+Recommendations where fldUOM is null/empty
+Recommendations where fldUnit is null/0 (depending on your rule)
+Phase 2 — Temporary Cleanup Table (Admin Only)
+Yes — build exactly what you described.
+
+Structure (simple and focused)
+Type        | Category | Item | Text | Missing Fields | Editable Fields
+-----------------------------------------------------------------------
+Finding     | Doors    | 404  | ...  | UOM            | [UOM dropdown]
+Recommendation | Doors | 404  | ...  | Cost + UOM     | [$] [UOM dropdown]
+Rules:
+Only show incomplete records
+
+Only allow editing of:
+
+fldUnitType (findings)
+
+fldUnit + fldUOM (recommendations)
+
+Save directly to master collections
+
+Phase 3 — Mandatory Validation (CRITICAL)
+After cleanup is complete:
+
+Findings
+if (!fldUnitType) reject save
+Recommendations
+if (!fldUOM || fldUOM === '') reject
+if (fldUnit === null || fldUnit === undefined) reject
+👉 This is the real fix — the cleanup UI is temporary, validation is permanent.
+
+Phase 4 — Remove the Cleanup Tool
+Once:
+
+No incomplete records remain
+
+Validation is enforced
+
+👉 Delete the temporary table entirely
+
+⚠️ Important Clarification (from your concern)
+“Changing UOM impacts cost estimates”
+
+Yes — but your approach avoids that problem entirely because:
+
+You are NOT:
+Changing existing UOMs
+
+Reinterpreting quantities
+
+Rewriting project data
+
+You ARE:
+Filling in missing defaults at the library level
+
+Preventing bad data going forward
+
+So:
+
+No migration risk
+No cost recalculation risk
+No historical corruption
+🔴 One Critical Edge Case (Don’t Skip This)
+You need to decide this:
+
+What does “missing unit cost” mean?
+Right now:
+
+fldUnit: number // could be 0
+So is:
+
+0 = valid?
+OR
+0 = missing?
+Recommendation:
+Allow 0 (some items may be no-cost)
+
+Treat null / undefined as missing
+
+So validation becomes:
+
+fldUnit !== null && fldUnit !== undefined
+🧠 One Small but Important Improvement
+You have a naming conflict:
+
+Field	Meaning
+Finding.fldUnitType	Measurement UOM
+Recommendation.fldUOM	Cost UOM
+ProjectData.fldUnitType	Cost UOM
+That’s confusing long-term.
+
+👉 You don’t need to fix it now, but note it in architecture (you already started doing that).
+
+💡 UX Suggestion (simple but powerful)
+Add a small indicator:
+
+✅ All library records complete
+or
+
+⚠️ 12 records missing required fields
+This prevents the problem from ever coming back.
+
+✅ Final Answer
+Your approach is correct:
+
+✔ Fix the library once
+✔ Require completeness going forward
+✔ Remove the temporary tool
+✔ Keep data entry clean and read-only
+
+No complex sync logic needed.
+
+If you want next, I can give you:
+
+👉 a Cursor prompt to build the cleanup table safely
+👉 or a Firestore query script to list missing records instantly
+
+Both would be quick wins.
+
+
+are you saying I could edit these in firestore without negative implications?
+
+Yes — for the master library fields, you can edit them in Firestore without negative implications as long as you only fill blanks/nulls and do not bulk-change existing populated values.
+
+Safe to edit:
+
+findings.fldUnitType
+recommendations.fldUnit
+recommendations.fldUOM
+That updates the source defaults for future glossary/data-entry use.
+
+The important caveat: existing projectData records are snapshot-style. They generally will not automatically change just because you edit the master finding/recommendation. That is good; it protects existing cost estimates.
+
+So the safe rule is:
+
+Blank master field → populate it = safe
+Existing populated master field → changing it = review first
+Existing projectData field → changing it = may affect reports/costs
+For speed, you could fix the small set directly in Firestore now, then later add validation so the problem cannot recur.
+
+I would not edit existing projectData.fldMeasurementUnit, projectData.fldUnitCost, or projectData.fldUnitType directly unless you are intentionally correcting a known record.
+
+
+I want to enter a value for fldMeasurementType (you didn't list that field), and most records don't have that field so that's a challenge.
+
+Yes — that changes the cleanup scope.
+
+I didn’t list fldMeasurementType because the analysis focused on unit of measure, but you’re right: if most records don’t have that field, Firestore manual editing becomes awkward and error-prone.
+
+For this, I would not use raw Firestore editing except for a handful of records.
+
+You need a temporary cleanup table.
+
+Recommended fields to complete:
+
+Finding:
+- fldMeasurementType
+- fldUnitType
+Recommendation:
+- fldUnit
+- fldUOM
+The cleanup table should show all findings where either is missing:
+
+fldMeasurementType is blank/missing
+OR fldUnitType is blank/missing
+and allow inline editing.
+
+Then save back to the findings collection.
+
+For now, fldMeasurementType should probably be required alongside fldUnitType because it defines what the quantity means, while fldUnitType defines the unit.
+
+Example:
+
+Finding: Ramp slope exceeds maximum
+fldMeasurementType: Slope
+fldUnitType: Percent
+
+Finding: Door clear width too narrow
+fldMeasurementType: Width
+fldUnitType: Inches
+
+Finding: Missing signage
+fldMeasurementType: Count
+fldUnitType: Each
+So the revised plan is:
+
+1. Build temporary Library Completeness table
+2. Show incomplete findings/recommendations
+3. Fill:
+   - fldMeasurementType
+   - fldUnitType
+   - fldUnit
+   - fldUOM
+4. Save to master collections
+5. Add validation so new findings/recommendations cannot be saved without these fields
+6. Remove temporary cleanup UI once complete
+This is better than Firestore editing because fldMeasurementType is missing from most docs, and the UI can make the options consistent instead of free-text.
+
+
+Yes, let's do this. And to make sure we are on the same sheet of music, the field name (if I can call it that) is fldMeasurementType, but this is what I refer to as the UOM, or unit of measure (IN, FT, LFT, SQFT, etc.)   Do we agree on that?
+
+Yes — we agree.
+
+For your system, use this terminology:
+
+fldMeasurementType = measurement unit / UOM
+Examples:
+
+IN
+FT
+LFT
+SQFT
+EA
+%
+So the cleanup target for findings should be:
+
+findings.fldMeasurementType
+not fldUnitType, unless the code currently uses fldUnitType and we need to migrate/rename.
+
+Before editing, have Cursor verify the actual current field usage:
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to confirm and standardize the finding measurement UOM field.
+
+Business terminology:
+- User refers to this as UOM / unit of measure.
+- Desired field name: fldMeasurementType.
+- Example values: IN, FT, LFT, SQFT, EA, %, etc.
+
+Inspect the codebase for:
+- fldMeasurementType
+- fldUnitType on findings
+- fldMeasurementUnit on projectData
+- MEASUREMENT_UNITS
+- where selected finding UOM is copied into Data Entry
+- where findings are created/edited in GlossaryBuilder or LibraryManager
+
+Report:
+1. Whether fldMeasurementType already exists anywhere.
+2. Whether findings currently use fldUnitType instead.
+3. Which field Data Entry currently reads from findings.
+4. Whether we need a migration from fldUnitType to fldMeasurementType.
+5. Recommended cleanup UI fields for findings and recommendations.
+6. Files likely affected.
+
+Do not edit files.
+Do not modify Firestore.
+My expectation: code may currently use Finding.fldUnitType and copy it into projectData.fldMeasurementUnit. If so, we should standardize to fldMeasurementType, but do it deliberately with a small migration/backward compatibility step.
+
+
+This get's confusing because in the Recommendations we use a similar Unit of Measure along with Unit Cost (plus a quantity field in the data record) to derive the total cost estimate for the record.  Let's make sure we clearly distinguish between these two similar sounding fields (field names and field labels)
+
+Yes — we need two clearly distinct concepts.
+
+Recommended terminology
+1. Finding measurement unit
+This answers:
+
+What unit describes the measured condition?
+Examples:
+
+IN, FT, LFT, SQFT, %, DEG, EA
+Recommended label:
+
+Measurement Unit
+Recommended field name:
+
+fldMeasurementUnit
+or, if you prefer your proposed name:
+
+fldMeasurementType
+But I would not call it “type” if it contains values like IN, FT, SQFT. That is a unit, not a type.
+
+Best naming:
+
+finding.fldMeasurementUnit
+projectData.fldMeasurementUnit
+2. Recommendation cost unit
+This answers:
+
+What unit is the cost priced by?
+Examples:
+
+EA, LF, SF, LS
+Recommended label:
+
+Cost Unit
+Recommended field names:
+
+recommendation.fldUnitCost
+recommendation.fldCostUnit
+projectData.fldUnitCost
+projectData.fldCostUnit
+Current code may use:
+
+recommendation.fldUnit = unit cost
+recommendation.fldUOM = cost unit
+projectData.fldUnitType = cost unit
+That is confusing and should eventually be renamed or clearly documented.
+
+Clean distinction
+Concept	User-facing label	Meaning	Example
+Finding measurement unit	Measurement Unit	unit used to measure observed condition	IN, FT, SQFT, %
+Recommendation unit cost	Unit Cost	cost per unit	125.00
+Recommendation cost unit	Cost Unit	unit the cost is priced by	EA, LF, SF, LS
+Quantity	Quantity	number of cost units	10
+Example
+Finding:
+
+Door clear width is too narrow
+Measurement Unit: IN
+Recommendation:
+
+Widen door
+Unit Cost: $750
+Cost Unit: EA
+Project data:
+
+Measured Value: 31
+Measurement Unit: IN
+Quantity: 1
+Unit Cost: $750
+Cost Unit: EA
+Total Cost: $750
+My recommendation
+Use these labels in the UI:
+
+Measurement Unit
+Unit Cost
+Cost Unit
+Quantity
+Use these eventual canonical field names:
+
+fldMeasurementUnit       // finding/data record measurement
+fldUnitCost              // cost per unit
+fldCostUnit              // cost pricing unit
+And document legacy/current mappings:
+
+Finding.fldUnitType        → should become fldMeasurementUnit
+Recommendation.fldUnit     → should become fldUnitCost
+Recommendation.fldUOM      → should become fldCostUnit
+ProjectData.fldUnitType    → should become fldCostUnit
+For now, don’t rename fields immediately unless we do a controlled migration. But we should standardize the UI labels first.
+
+
+Uploaded image
+Uploaded image
+do these help?  One is a firebase findings document, and the other a recommendations document
+
+Yes — these help a lot. This actually clarifies things nicely, and we can now lock the terminology down cleanly without guessing.
+
+🔍 What your data currently shows
+Findings document
+You have:
+
+fldMeasurementType: "Percentage"
+fldUnitType: "%"
+👉 So you are already storing two distinct things:
+
+Field	Meaning
+fldMeasurementType	what kind of measurement this is
+fldUnitType	the actual unit symbol
+Recommendations document
+fldUOM: "EA"
+fldUnit: 3000
+👉 This is:
+
+Field	Meaning
+fldUOM	cost unit (EA, LF, etc.)
+fldUnit	unit cost ($ per unit)
+⚠️ Why this is confusing (and where we fix it)
+Right now you have two different "unit" concepts:
+
+A. Measurement (Findings)
+Cross slope = 2%
+This needs:
+
+Measurement Type → Slope
+
+Measurement Unit → %
+
+B. Costing (Recommendations)
+$3000 per EA
+This needs:
+
+Cost Unit → EA
+
+Unit Cost → 3000
+
+✅ Clean, final distinction (lock this in)
+1. Findings (measurement)
+Concept	Field	Example
+Measurement Type	fldMeasurementType	Slope, Width, Area
+Measurement Unit	fldUnitType	%, IN, FT, SQFT
+2. Recommendations (costing)
+Concept	Field	Example
+Cost Unit	fldUOM	EA, LF, SF
+Unit Cost	fldUnit	3000
+🧠 Translate this into plain English (for UI)
+Findings
+Measurement Type: Slope
+Measurement Unit: %
+Recommendations
+Unit Cost: $3000
+Cost Unit: EA
+🔥 Key insight (this is the important one)
+You originally said:
+
+"fldMeasurementType is what I refer to as UOM"
+
+👉 That is not quite correct based on your actual data model
+
+Correct interpretation:
+fldMeasurementType = WHAT you are measuring
+fldUnitType        = HOW it is measured
+Example:
+
+Measurement Type = Slope
+Measurement Unit = %
+🧩 Why this is actually GOOD
+You accidentally built a better model than you thought:
+
+Instead of:
+
+UOM only
+You now have:
+
+Measurement Type + Measurement Unit
+Which gives you:
+
+better reporting
+
+better filtering
+
+better analytics
+
+future-proofing
+
+⚠️ One inconsistency we should fix (later, not now)
+Your naming is inconsistent across collections:
+
+Concept	Findings	Recommendations	ProjectData
+Measurement Unit	fldUnitType	❌	fldMeasurementUnit
+Cost Unit	❌	fldUOM	fldUnitType
+Unit Cost	❌	fldUnit	fldUnitCost
+👉 This is messy, but do NOT fix now — just document it.
+
+✅ What you should do RIGHT NOW
+For your cleanup table:
+
+Findings — require:
+fldMeasurementType   (Slope, Width, Area, Count, etc.)
+fldUnitType          (%, IN, FT, EA, etc.)
+Recommendations — require:
+fldUnit              (unit cost)
+fldUOM               (cost unit)
+🧠 Final simplified rule
+Findings → describe the problem (measurement)
+Recommendations → describe the fix (cost)
+👍 Bottom line
+Yes — your screenshots confirm:
+
+Your model is already correct
+
+The confusion was just terminology
+
+You now have a clean separation
+
+🚀 If you want next
+I can give you:
+
+👉 a Cursor prompt to build the cleanup table using THESE exact fields
+👉 or a Firestore query to instantly list missing records
+
+Both will now be precise since we’ve locked the schema meaning.
+
+
+I think I would want a cursor prompt.  One last thing that has confused me (and you are correct about my erroneous references to UOM - thank you for pointing that out), is that there is also a data "type" for some of these fields, in that we record them as decimal values (since EA, LFT, FT, IN can all be recorded with decimal values (even though some could be integers), and I believe we have decided to use decimals).  
+
+Yes — that is a third concept, and we should name it separately so it does not get tangled with measurement type or unit.
+
+Use this distinction:
+
+Concept	Meaning	Example
+Measurement Type	what is being measured	Slope, Width, Count, Area
+Measurement Unit	unit displayed with the measured value	%, IN, FT, LFT, SQFT, EA
+Value Data Type	how the entered value is stored/validated	decimal, integer, text, boolean
+For your current direction:
+
+Value Data Type = decimal
+for most measured quantities, even when the unit is EA.
+
+So the cleanup fields should probably include:
+
+Finding:
+- fldMeasurementType
+- fldUnitType
+- fldValueType / fldDataType / similar if it exists
+But before adding/standardizing that field, have Cursor inspect what already exists.
+
+Use this prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to build a temporary Library Completeness cleanup table, but first we need to confirm terminology and current field usage.
+
+Business definitions:
+
+1. Measurement Type
+   - Meaning: what is being measured
+   - Examples: Slope, Width, Height, Count, Area
+   - Current observed field on findings: fldMeasurementType
+
+2. Measurement Unit
+   - Meaning: unit displayed with measured value
+   - Examples: %, IN, FT, LFT, SQFT, EA
+   - Current observed field on findings: fldUnitType
+
+3. Value Data Type
+   - Meaning: how the measured value is entered/stored/validated
+   - Examples: decimal, integer, text, boolean
+   - Current business decision: decimal is acceptable for most numeric measurements, including EA/LFT/FT/IN
+
+4. Recommendation Cost Fields
+   - fldUnit = unit cost
+   - fldUOM = cost unit, e.g. EA/LF/SF/LS
+
+Inspect the codebase for:
+- fldMeasurementType
+- fldUnitType
+- fldMeasurementUnit
+- any value/data type fields on findings or projectData
+- MEASUREMENT_UNITS
+- COST_UNIT_TYPES
+- where findings are edited/saved
+- where recommendations are edited/saved
+- where projectData hydrates measurement and cost fields
+
+Report:
+1. Existing fields and meanings.
+2. Whether a Value Data Type field already exists.
+3. Whether we should add a Value Data Type field now or defer.
+4. Exact cleanup table fields for findings.
+5. Exact cleanup table fields for recommendations.
+6. Recommended temporary UI location.
+7. Recommended validation rules after cleanup.
+8. Files likely affected.
+
+Do not edit files.
+Do not write Firestore data.
+Do not implement yet.
+My likely recommendation: defer Value Data Type unless the code already supports it, and for now standardize all numeric measurement entry as decimal.
+
+
+
+Pasted markdown(29).md
+File
+
+Yes — this helped a lot, and now we can lock this down cleanly so it never confuses you (or future you) again.
+
+You’ve actually got three distinct layers, and they’re currently just poorly named.
+
+🔥 The Clean Mental Model (this is the key)
+1. Findings = Measurement (the problem)
+From your screenshot:
+
+fldMeasurementType: "Percentage"
+fldUnitType: "%"
+So:
+Field	TRUE meaning
+fldMeasurementType	WHAT is being measured
+fldUnitType	HOW it is measured (unit)
+2. Recommendations = Cost (the solution)
+From your screenshot:
+
+fldUOM: "EA"
+fldUnit: 3000
+So:
+Field	TRUE meaning
+fldUnit	Unit Cost ($ per unit)
+fldUOM	Cost Unit (EA, LF, SF, etc.)
+🧠 The Source of Your Confusion
+You were calling this:
+
+fldMeasurementType = UOM
+But in reality:
+
+fldMeasurementType = Measurement Category (Slope, Width, Area)
+fldUnitType        = Measurement Unit (% , IN, FT)
+✅ FINAL DEFINITIONS (lock these in)
+Findings (Measurement)
+Concept	Field	Example
+Measurement Type	fldMeasurementType	Slope
+Measurement Unit	fldUnitType	%
+Recommendations (Cost)
+Concept	Field	Example
+Unit Cost	fldUnit	3000
+Cost Unit	fldUOM	EA
+Project Data (Execution Layer)
+Concept	Field
+Measured Value	fldMeasurement
+Measurement Unit	fldMeasurementUnit
+Quantity	fldQuantity
+Unit Cost	fldUnitCost
+Cost Unit	fldUnitType
+⚠️ Note:
+
+ProjectData.fldUnitType = COST UNIT (not measurement unit)
+This is one of the biggest naming traps in your system.
+
+💥 Critical Insight (you were very close)
+You said:
+
+"we store values as decimals"
+
+That’s correct — and that is a fourth concept:
+
+3. Value Data Type
+How the number is stored/validated
+Examples:
+
+decimal
+integer
+text
+boolean
+🧠 How it fits together
+Example:
+
+Finding:
+Cross slope exceeds 2%
+
+fldMeasurementType = Slope
+fldUnitType        = %
+
+Data Entry:
+fldMeasurement     = 2.5
+fldMeasurementUnit = %
+
+Recommendation:
+Install compliant ramp
+
+fldUnit            = 3000
+fldUOM             = EA
+
+Data Entry:
+fldQuantity        = 1
+fldUnitCost        = 3000
+fldUnitType        = EA
+Total = 3000
+⚠️ What we should NOT do
+Do NOT collapse these concepts into one field like:
+
+UOM
+That’s what caused the confusion.
+
+✅ What you should do NOW (for cleanup)
+Findings must have:
+fldMeasurementType   (Slope, Width, Area, Count, etc.)
+fldUnitType          (%, IN, FT, EA, etc.)
+Recommendations must have:
+fldUnit   (cost)
+fldUOM    (cost unit)
+🧠 About your decimal decision
+You said:
+
+“we use decimals even for EA, FT, IN”
+
+That’s actually the right call.
+
+So:
+
+Value Data Type = decimal (default)
+👉 No need to over-engineer this right now.
+
+🚀 Now the Cursor Prompt (what you asked for)
+Here is your exact prompt to build the cleanup tool safely:
+
+🔧 Cursor Prompt
+We need to build a temporary "Library Completeness" admin table to clean up missing measurement and cost fields.
+
+DO NOT refactor unrelated code.
+DO NOT change existing behavior outside this feature.
+
+GOAL:
+Identify and allow editing of incomplete records in:
+- findings
+- recommendations
+
+-----------------------------------
+BUSINESS DEFINITIONS
+
+Findings (Measurement Layer):
+- fldMeasurementType = what is being measured (Slope, Width, Area, Count)
+- fldUnitType = measurement unit (% , IN, FT, etc.)
+
+Recommendations (Cost Layer):
+- fldUnit = unit cost
+- fldUOM = cost unit (EA, LF, SF, LS)
+
+-----------------------------------
+TASK 1 — Build Data Queries
+
+Findings missing data:
+- fldMeasurementType is null/undefined/empty
+OR
+- fldUnitType is null/undefined/empty
+
+Recommendations missing data:
+- fldUnit is null/undefined
+OR
+- fldUOM is null/undefined/empty
+
+-----------------------------------
+TASK 2 — Build Temporary UI Table
+
+Create an admin-only panel (can be in LibraryManager or new component):
+
+Columns:
+
+For Findings:
+- Category (resolved from items/categories)
+- Finding Short Text
+- fldMeasurementType (editable text or select)
+- fldUnitType (editable select using MEASUREMENT_UNITS)
+- Save button
+
+For Recommendations:
+- Recommendation Short Text
+- fldUnit (editable number input)
+- fldUOM (editable select using COST_UNIT_TYPES)
+- Save button
+
+-----------------------------------
+TASK 3 — Save Behavior
+
+On save:
+- Update Firestore document directly
+- Only update edited fields
+- Do not overwrite other data
+
+-----------------------------------
+TASK 4 — Validation (UI level only for now)
+
+Findings:
+- fldMeasurementType required
+- fldUnitType required
+
+Recommendations:
+- fldUnit required (number)
+- fldUOM required
+
+-----------------------------------
+TASK 5 — Scope Constraints
+
+- No schema changes
+- No renaming fields
+- No migration scripts
+- No changes to projectData
+- This is a temporary admin cleanup tool
+
+-----------------------------------
+OUTPUT
+
+- New component or panel rendering incomplete records
+- Inline editing capability
+- Save updates to Firestore
+- Clean, minimal UI
+
+Do not implement validation globally yet.
+Do not remove existing functionality.
+👍 Final takeaway
+You now have a clear separation of concepts:
+
+Measurement (findings)
+Cost (recommendations)
+Execution (projectData)
+Storage type (decimal)
+That clarity is what will keep this system scalable.
+
+If you want next, we can:
+
+👉 clean up the naming inconsistencies across collections
+👉 or design a future migration to make this perfectly consistent
+
+Both are now much easier 👍
+
+
+### Task result (npm run lint)
+
+The earlier run **failed with exit_code=2**. It reported:
+
+1. **LibraryCompletenessPanel.tsx** — TS2554: Expected 1-2 arguments, but got 3 on masterRecommendations.save(..., false). That was **fixed** by calling **firestoreService.save('recommendations', data, id, false)** instead (the wrapper only accepts (data, id)).
+
+2. **Still failing today (unchanged, unrelated to Library Completeness):**
+   - src/components/GlossaryView.tsx(47,5) — unknown[] vs string[]
+   - src/components/ReportPreview.tsx(235,285) — Facility has no id
+
+A **fresh npm run lint** no longer reports **LibraryCompletenessPanel**; only the three errors above remain.
+
+### Follow-up
+
+No further code changes were required for the completeness work. Fixing **GlossaryView** / **ReportPreview** would clear CI/lint but is **outside** the Library Completeness scope unless you want that done next.
+
+Good. That means the Library Completeness work is clean and the remaining lint failures are pre-existing / unrelated.
+
+Do not bundle unrelated lint fixes into that commit unless you want a separate cleanup commit.
+
+Recommended next step:
+
+git status
+If the completeness files look right, commit them separately:
+
+git add .
+git commit -m "Add temporary library completeness panel for measurement and cost cleanup"
+git push origin data-entry-flow-refactor
+Then handle the two unrelated lint issues in a separate commit:
+
+Fix existing lint errors in GlossaryView and ReportPreview
+Keeping those separate will make the PR much easier to review.
+
+
+PS C:\dev\fredasoft> git status
+On branch data-entry-flow-refactor 
+Your branch is up to date with 'origin/data-entry-flow-refactor'.     
+
+Changes not staged for commit:     
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   docs/ARCHITECTURE_DESIGN.md
+        modified:   src/components/LibraryManager.tsx
+        modified:   src/types/index.ts
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)      
+        src/components/LibraryCompletenessPanel.tsx
+
+no changes added to commit (use "git add" and/or "git commit -a")     
+PS C:\dev\fredasoft> 
+
+This is in good shape — just be intentional about what goes into this commit.
+
+🔍 What you currently have
+✅ Relevant to this feature
+src/components/LibraryCompletenessPanel.tsx (new)
+
+src/components/LibraryManager.tsx (integration)
+
+src/types/index.ts (likely type additions)
+
+⚠️ Potentially unrelated (but still fine if intentional)
+docs/ARCHITECTURE_DESIGN.md
+
+🧭 Recommended commit strategy
+Option A (cleaner, preferred)
+Commit 1 — Feature (Library Completeness)
+git add src/components/LibraryCompletenessPanel.tsx
+git add src/components/LibraryManager.tsx
+git add src/types/index.ts
+
+git commit -m "Add library completeness panel for measurement and cost cleanup"
+git push origin data-entry-flow-refactor
+Commit 2 — Architecture doc update
+git add docs/ARCHITECTURE_DESIGN.md
+
+git commit -m "Update architecture design to reflect measurement and cost model decisions"
+git push origin data-entry-flow-refactor
+👉 This keeps:
+
+code changes separate from documentation
+
+PR review much easier
+
+Option B (acceptable but less clean)
+If you prefer speed:
+
+git add .
+git commit -m "Add library completeness panel and update architecture documentation"
+git push origin data-entry-flow-refactor
+👍 My recommendation
+Go with Option A — you’ve been doing good disciplined work, don’t lose that now.
+
+🚨 Before committing (quick sanity check)
+Open the app and confirm:
+
+Completeness panel loads
+
+Missing findings show correctly
+
+Missing recommendations show correctly
+
+Edits save successfully
+
+No console errors
+
+🟢 After this commit
+Next logical steps (in order):
+
+✅ Use panel → clean data
+
+🔒 Add validation (prevent future bad data)
+
+🧹 Remove temporary panel
+
+🔧 Fix lint issues (separate commit)
+
+If you want, next I can help you:
+
+👉 add the validation rules cleanly (without breaking existing flows)
+👉 or fix the GlossaryView / ReportPreview lint issues cleanly
+
+
+PS C:\dev\fredasoft> git add src/components/LibraryCompletenessPanel.tsx
+>> git add src/components/LibraryManager.tsx
+>> git add src/types/index.ts      
+>>
+>> git commit -m "Add library completeness panel for measurement and cost cleanup"
+>> git push origin data-entry-flow-refactor
+        -refactor;2a63bcc9-f3f1-44fwarning: in the working copy of 'src/components/LibraryCompletenessPanel.tsx', LF will be replaced by CRLF the next time Git touches it     
+warning: in the working copy of 'src/components/LibraryManager.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/types/index.ts', LF will be replaced by CRLF the next time Git touches it
+[data-entry-flow-refactor c112088] 
+Add library completeness panel for 
+measurement and cost cleanup       
+ 3 files changed, 417 insertions(+), 39 deletions(-)
+ create mode 100644 src/components/LibraryCompletenessPanel.tsx       
+Enumerating objects: 14, done.
+Counting objects: 100% (14/14), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (7/7), done.
+Writing objects: 100% (8/8), 4.07 KiB | 1.36 MiB/s, done.
+Total 8 (delta 5), reused 0 (delta 
+0), pack-reused 0 (from 0)
+remote: Resolving deltas:   0% (0/5remote: Resolving deltas:  40% (2/5remote: Resolving deltas:  60% (3/5remote: Resolving deltas:  80% (4/5remote: Resolving deltas: 100% (5/5remote: Resolving deltas: 100% (5/5), completed with 5 local objects. 
+To https://github.com/kenotten/FREDAsoft.git
+   a8b79b2..c112088  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> git add docs/ARCHITECTURE_DESIGN.md
+>>
+>> git commit -m "Update architecture design to reflect measurement and cost model decisions"
+>> git push origin data-entry-flow-refactor
+warning: in the working copy of 'docs/ARCHITECTURE_DESIGN.md', LF will be replaced by CRLF the next time 
+Git touches it
+[data-entry-flow-refactor 467b108] 
+Update architecture design to reflect measurement and cost model decisions
+ 1 file changed, 278 insertions(+), 422 deletions(-)
+Enumerating objects: 7, done.
+Counting objects: 100% (7/7), done.Delta compression using up to 8 threads
+Compressing objects: 100% (4/4), done.
+Writing objects: 100% (4/4), 3.33 KiB | 1.67 MiB/s, done.
+Total 4 (delta 2), reused 0 (delta 
+0), pack-reused 0 (from 0)
+remote: Resolving deltas:   0% (0/2remote: Resolving deltas:  50% (1/2remote: Resolving deltas: 100% (2/2remote: Resolving deltas: 100% (2/2), completed with 2 local objects. 
+To https://github.com/kenotten/FREDAsoft.git
+   c112088..467b108  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> 
+
+Perfect execution 👍 — that’s exactly how you want to manage commits.
+
+✅ What you did right
+Separated feature from documentation ✔
+
+Clean commit messages ✔
+
+No unrelated lint fixes mixed in ✔
+
+Branch stays organized ✔
+
+That’s professional-grade repo hygiene.
+
+⚠️ About the LF → CRLF warnings
+You’re seeing:
+
+LF will be replaced by CRLF
+This is not an error — just Git telling you Windows line endings are being applied.
+
+You can ignore it safely for now.
+If you ever want to clean it up:
+
+Create a .gitattributes file at the root:
+
+* text=auto
+Or more explicitly:
+
+*.ts text eol=lf
+*.tsx text eol=lf
+*.md text eol=lf
+But again — not urgent.
+
+🚀 Where you are now
+You’ve successfully:
+
+Built the Library Completeness Panel
+
+Locked the architecture direction
+
+Cleaned up commit structure
+
+👉 You’re now at a data quality enforcement milestone
+
+🎯 Next step (recommended)
+1. Use the panel and fix your data
+Go through and populate:
+
+Findings
+fldMeasurementType
+
+fldUnitType
+
+Recommendations
+fldUnit
+
+fldUOM
+
+2. THEN we do the real fix
+Add save validation so this never happens again.
+
+⚡ Suggested next task (when ready)
+When you say “go”, I’ll give you a tight prompt to:
+
+Prevent saving:
+- findings without measurement type or unit
+- recommendations without unit cost or cost unit
+This is the step that turns your cleanup into a permanent system improvement.
+
+🧠 Big picture
+What you just did is important:
+
+You didn't build around bad data
+You fixed the source of truth
+That’s the difference between:
+
+a system that slowly degrades ❌
+
+a system that gets stronger over time ✅
+
+When you're ready:
+
+👉 “let’s add validation”
+or
+👉 “let’s clean the data first”
+
+and we’ll move to the next step.
+
+
+Where do I enter fldMeasurementType and fldUnitType for the finding
+
+Short answer: you currently can’t — not from that screen.
+
+What you’re looking at (Glossary Explorer) only lets you edit:
+
+glossary-level text (finding/recommendation)
+
+recommendation cost fields (UOM + cost)
+
+It does not expose the underlying master findings fields, which is where:
+
+fldMeasurementType
+fldUnitType
+live.
+
+🧭 Where those fields actually live
+From your Firestore screenshot:
+
+findings collection → document → fields:
+- fldMeasurementType
+- fldUnitType
+So they belong to the master Finding, not the glossary row.
+
+🧠 Why you don’t see them here
+Your architecture (which is correct) is:
+
+Library (findings/recommendations) → Glossary → Data Entry
+Glossary copies text + metadata
+
+But it doesn’t expose all master fields for editing
+
+👉 That’s why you can’t edit measurement fields here.
+
+✅ Where you SHOULD be editing them (right now)
+You have 2 options:
+
+Option 1 (what we just built — recommended)
+👉 Use the Library Completeness Panel
+
+That’s exactly why we built it.
+
+There you should see:
+
+Findings missing fldMeasurementType
+
+Findings missing fldUnitType
+
+And you can edit them directly.
+
+Option 2 (fallback)
+👉 Edit directly in Firestore
+
+But only if:
+
+small number of records
+
+you’re careful
+
+🚨 Important: Don’t add these to Glossary Explorer
+It might feel tempting to add fields here, but don’t.
+
+Because:
+
+Glossary = contextual copy
+Findings = source of truth
+If you edit measurement fields at the glossary level, you’ll:
+
+create inconsistency
+
+break inheritance model
+
+confuse data entry behavior
+
+🧠 What SHOULD happen long-term (not now)
+Eventually:
+
+Library Manager (or Finding Editor modal)
+→ should allow editing:
+   - Measurement Type
+   - Measurement Unit
+But for now:
+
+Library Completeness Panel = correct place
+👍 Bottom line
+You’re not missing it — it’s not there.
+
+👉 Go to:
+
+Library Completeness Panel
+That is the correct UI for:
+
+fldMeasurementType
+fldUnitType
+If you don’t see those fields in the panel, tell me — that means we need a small tweak to the component.
+
+
+OK, where is the Library Completeness Panel
+
+Fair question — because right now it’s not a separate tab, it’s something you wired into an existing screen.
+
+Based on how we structured the work, it should be in:
+
+Library Manager
+🔍 Where to look
+Go to the left nav:
+
+Managers → Library Manager
+That’s where the panel should be rendered.
+
+🧠 What it probably looks like
+Depending on how it was added, it will be one of these:
+
+1. A section inside Library Manager
+Something like:
+
+Library Completeness
+--------------------
+Findings Missing Measurement Fields
+Recommendations Missing Cost Fields
+2. A toggle / button
+Look for something like:
+
+Show Incomplete Records
+Cleanup Mode
+Library Completeness
+3. Possibly always visible at top or bottom
+If it was just dropped in, it may appear as a table under existing content.
+
+🚨 If you DON'T see it
+Then one of these happened:
+
+❌ It was added but not rendered
+Meaning:
+
+Component exists (LibraryCompletenessPanel.tsx)
+
+But not actually mounted in the UI
+
+🛠 Quick check (fastest way)
+Open this file:
+
+src/components/LibraryManager.tsx
+Search for:
+
+LibraryCompletenessPanel
+You should see something like:
+<LibraryCompletenessPanel />
+❌ If you do NOT see that
+Then the panel exists but is not being shown.
+
+🧩 Fix (very simple)
+Add this inside LibraryManager.tsx render:
+
+import LibraryCompletenessPanel from './LibraryCompletenessPanel';
+
+// inside return()
+<LibraryCompletenessPanel />
+Place it somewhere obvious, like:
+
+<div className="space-y-6">
+  <LibraryCompletenessPanel />
+  {/* existing content */}
+</div>
+👍 Recommendation (UX improvement)
+Once confirmed working, we can make it cleaner:
+
+Add a toggle:
+
+[ Cleanup Mode ]
+Or a tab:
+
+Library | Completeness
+But for now, just get it visible.
+
+🎯 Next step
+Check:
+
+Library Manager → do you see the panel?
+If not:
+
+👉 tell me what you see in that screen
+or
+👉 paste your LibraryManager.tsx
+
+and I’ll point exactly where to wire it in 👍
+
+
+I found the panel and entered measurement types and measurement units.  There is still a lot of clean up, and the libraries don't show all the fields.  For example, if I'm looking at a finding, only the short and long text are shown.  It would be helpful to have the other fields exposed also so that they can be edited too.
+
+Yes — that’s the next logical improvement.
+
+Right now the Library Completeness Panel helps you fix missing fields, but the normal Library Manager still does not expose the full finding/recommendation metadata. That means you can clean gaps, but you can’t comfortably maintain the library going forward.
+
+I’d handle this in two steps:
+
+Step 1 — Expand Library Manager fields
+For Findings, expose/edit:
+
+Finding Short
+Finding Long
+Measurement Type
+Measurement Unit
+Standards
+Suggested Recommendations
+Sort Order
+For Recommendations, expose/edit:
+
+Recommendation Short
+Recommendation Long
+Unit Cost
+Cost Unit
+Standards
+Sort Order
+Step 2 — Keep Completeness Panel temporary
+Use it only for cleanup. Once Library Manager exposes all required fields and validation is added, the temporary completeness panel can eventually go away.
+
+Use this Cursor prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+The Library Completeness Panel works, but the normal Library Manager does not expose enough fields for ongoing maintenance.
+
+Inspect:
+- src/components/LibraryManager.tsx
+- src/components/LibraryCompletenessPanel.tsx
+- src/types/index.ts
+- constants for MEASUREMENT_UNITS and COST_UNIT_TYPES
+- any existing standards picker used for findings/recommendations
+
+Goal:
+Determine the safest way to expand Library Manager so users can edit all important library fields.
+
+For Findings, we need editable:
+- fldFindShort
+- fldFindLong
+- fldMeasurementType
+- fldUnitType
+- fldStandards
+- fldSuggestedRecs
+- fldOrder
+
+For Recommendations, we need editable:
+- fldRecShort
+- fldRecLong
+- fldUnit
+- fldUOM
+- fldStandards
+- fldOrder
+
+Report:
+1. Current Library Manager edit UI.
+2. Which of these fields are already editable.
+3. Which are missing.
+4. Whether standards/suggested recommendations pickers already exist and can be reused.
+5. Minimal implementation plan.
+6. Risks.
+7. Files likely affected.
+
+Do not edit files.
+After that analysis, we can add fields cleanly without turning Library Manager into a giant confusing table.
+
+
+
+Pasted markdown(30).md
+File
+
+This is a really good observation — and you’re exactly right to push on this now.
+
+What you’re running into is this:
+
+You can clean data… but you can’t maintain it easily
+That’s a problem long-term.
+
+🧠 What your system is doing right now (based on your code)
+From your analysis:
+
+Library Manager edits:
+
+✅ Short text
+
+✅ Long text
+
+✅ Order
+
+✅ Recommendation cost (unit + UOM)
+
+Missing from Library Manager:
+
+❌ Measurement Type (fldMeasurementType)
+
+❌ Measurement Unit (fldUnitType)
+
+❌ Standards (fldStandards)
+
+❌ Suggested Recommendations (fldSuggestedRecs)
+
+✔ That matches exactly what you’re experiencing.
+
+
+
+⚠️ The real issue (this is important)
+Right now you have:
+
+Completeness Panel = can edit critical fields
+Library Manager   = cannot edit those same fields
+That creates:
+
+Two sources of editing ❌
+
+Confusion ❌
+
+Long-term maintenance friction ❌
+
+✅ Correct direction (don’t overcomplicate this)
+You do NOT need a whole new system.
+
+You just need to upgrade Library Manager slightly.
+
+🎯 What Library Manager SHOULD become
+For Findings, each row should include:
+
+[Short]
+[Long]
+
+Measurement Type   ← NEW
+Measurement Unit   ← NEW
+
+Standards          ← FUTURE
+Suggested Recs     ← FUTURE
+
+Order
+For Recommendations:
+
+[Short]
+[Long]
+
+Unit Cost
+Cost Unit
+
+Standards          ← FUTURE
+
+Order
+💡 Important design decision (keep it simple)
+Do NOT try to:
+
+replicate GlossaryBuilder drag/drop ❌
+
+build a complex standards UI yet ❌
+
+Start with:
+
+simple inputs + dropdowns
+🛠 Minimal change (what you should do next)
+Add 2 fields to Findings in Library Manager:
+1. Measurement Type
+<Input
+  value={getValue(finding, 'fldMeasurementType')}
+  onChange={(e) => handleEdit(finding.id, 'fldMeasurementType', e.target.value)}
+  placeholder="Slope, Width, Area..."
+/>
+2. Measurement Unit
+Use your existing constant:
+
+import { MEASUREMENT_UNITS } from '../lib/utils';
+<Select
+  value={getValue(finding, 'fldUnitType') || ''}
+  onChange={(e) => handleEdit(finding.id, 'fldUnitType', e.target.value)}
+>
+  <option value="">Select unit</option>
+  {MEASUREMENT_UNITS.map(u => (
+    <option key={u.value} value={u.value}>
+      {u.label}
+    </option>
+  ))}
+</Select>
+🧠 Why this is the right move
+This gives you:
+
+ONE place to manage library data
+instead of:
+
+Temporary panel for editing
++
+Limited manager UI
+🔥 What NOT to do (important)
+Do NOT:
+
+Move these fields into Glossary ❌
+
+Allow editing at Data Entry ❌
+
+Keep Completeness Panel as permanent solution ❌
+
+🧭 What happens next
+After you add these fields:
+
+Phase 1 (now)
+Use Completeness Panel → finish cleanup
+
+Phase 2
+Add fields to Library Manager (this step)
+
+Phase 3
+Add validation:
+
+Cannot save finding without:
+- Measurement Type
+- Measurement Unit
+Phase 4
+Remove Completeness Panel
+
+👍 Bottom line
+You were right to question this.
+
+The fix is not complex:
+
+Expose 2 missing fields in Library Manager
+That turns your system from:
+
+cleanup tool dependent
+into:
+
+self-maintaining
+🚀 If you want
+I can give you a surgical Cursor prompt that:
+
+adds ONLY those two fields
+
+does NOT break existing layout
+
+plugs into your existing handleEdit + batch save system
+
+Just say:
+
+👉 “give me the implementation prompt”
+
+
+give me this implementation prompt
+
+Use this:
+
+Apply a focused Library Manager enhancement only.
+
+File:
+src/components/LibraryManager.tsx
+
+Goal:
+Expose finding measurement metadata in the normal Library Manager so findings can be maintained after the temporary Library Completeness cleanup is finished.
+
+Context:
+The Library Completeness Panel currently allows editing:
+- fldMeasurementType
+- fldUnitType
+
+But the normal Library Manager findings UI only exposes short/long/order fields.
+
+Business definitions:
+- fldMeasurementType = what is being measured, e.g. Slope, Width, Height, Area, Count
+- fldUnitType = measurement unit, e.g. %, IN, FT, LF, SF
+
+Changes:
+
+1. In the Findings row/detail editing UI, add editable fields for:
+   - fldMeasurementType
+   - fldUnitType
+
+2. Use the existing Library Manager edit flow:
+   - getValue(...)
+   - handleEdit(...)
+   - existing Save batch behavior
+
+3. fldMeasurementType:
+   - render as a text input for now
+   - label: Measurement Type
+   - placeholder: Slope, Width, Height, Area, Count
+
+4. fldUnitType:
+   - render as a select/dropdown
+   - label: Measurement Unit
+   - use MEASUREMENT_UNITS from src/lib/utils.ts
+   - include a blank option like “Select unit”
+
+5. Do not add standards editing yet.
+6. Do not add suggested recommendations editing yet.
+7. Do not change recommendations UI except if needed for layout consistency.
+8. Do not change Firestore save behavior.
+9. Do not modify LibraryCompletenessPanel.
+10. Do not touch ProjectDataEntry or GlossaryBuilder.
+
+After changes:
+Report exact diff.
+After Cursor reports the diff, test one finding in Library Manager: edit Measurement Type, edit Measurement Unit, save, refresh, and confirm Firestore updated.
+
+
+### Summary
+
+In **Findings** rows, under the long-description textarea, a two-column block was added for **Measurement Type** (text + placeholder) and **Measurement Unit** (<select> with “Select unit” + MEASUREMENT_UNITS). Both use **getValue** / **handleEdit**, so they follow the existing **edits** + batch **Save** path. Recommendations UI is unchanged.
+
+---
+
+### Exact diff
+
+diff
+diff --git a/src/components/LibraryManager.tsx b/src/components/LibraryManager.tsx
+index 1a0910d..16b6232 100644
+--- a/src/components/LibraryManager.tsx
++++ b/src/components/LibraryManager.tsx
+@@ -21,7 +21,7 @@ import {
+   MoreVertical
+ } from 'lucide-react';
+ import { Button, Card, Select } from './ui/core';
+-import { cn, sortEntities } from '../lib/utils';
++import { cn, sortEntities, MEASUREMENT_UNITS } from '../lib/utils';
+ import { doc, writeBatch } from 'firebase/firestore';
+ import { db } from '../firebase';
+ import { toast } from 'sonner';
+@@ -469,6 +469,35 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
+                 target.style.height = 'auto';
+                 target.style.height = Math.min(300, Math.max(60, target.scrollHeight)) + 'px';
+               }}
+             />
++            {isFinding && (
++              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 border-t border-zinc-100/80">
++                <div className="flex flex-col gap-1">
++                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Measurement Type</label>
++                  <input
++                    type="text"
++                    value={getValue(record, 'fldMeasurementType') ?? ''}
++                    onChange={(e) => handleEdit(record.id, 'fldMeasurementType', e.target.value)}
++                    placeholder="Slope, Width, Height, Area, Count"
++                    className="w-full bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
++                  />
++                </div>
++                <div className="flex flex-col gap-1">
++                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Measurement Unit</label>
++                  <select
++                    value={getValue(record, 'fldUnitType') ?? ''}
++                    onChange={(e) => handleEdit(record.id, 'fldUnitType', e.target.value)}
++                    className="w-full bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
++                  >
++                    <option value="">Select unit</option>
++                    {MEASUREMENT_UNITS.map((u) => (
++                      <option key={u} value={u}>
++                        {u}
++                      </option>
++                    ))}
++                  </select>
++                </div>
++              </div>
++            )}
+             {isRec && (
+               <div className="grid grid-cols-2 gap-4 pt-1">
+                 <div className="flex items-center gap-2">
+
+
+**File touched:** src/components/LibraryManager.tsx only. Lint is clean.
+
+Looks good. This is exactly the narrow enhancement we wanted.
+
+It adds:
+
+fldMeasurementType
+
+fldUnitType
+
+to the normal Library Manager finding editor, using the existing edit/save flow.
+
+Test one finding:
+
+Change Measurement Type
+
+Change Measurement Unit
+
+Save
+
+Refresh
+
+Confirm values persist
+
+Then commit:
+
+git add src/components/LibraryManager.tsx
+git commit -m "Expose finding measurement fields in Library Manager"
+git push origin data-entry-flow-refactor
+
+Let's ask Cursor if the Measurement Type field is displayed in any tab or report page.  I don't see it.
+
+Use this Cursor prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to determine whether the finding field fldMeasurementType is displayed anywhere in the app or reports.
+
+Business definition:
+- fldMeasurementType = what is being measured, e.g. Slope, Width, Height, Area, Count
+- fldUnitType = measurement unit, e.g. %, IN, FT, LF, SF
+- ProjectData currently displays fldMeasurementUnit as the measurement unit
+
+Inspect the codebase for:
+- fldMeasurementType
+- fldUnitType
+- fldMeasurementUnit
+- Measurement Type labels
+- Measurement Unit labels
+- ReportPreview measurement rendering
+- ProjectDataEntry measurement rendering
+- GlossaryExplorer / LibraryManager / GlossaryBuilder display
+
+Report:
+1. Every location where fldMeasurementType is referenced.
+2. Whether it is displayed to users anywhere.
+3. Whether it is copied from Finding to ProjectData.
+4. Whether reports include it.
+5. Recommended places to display it, if any.
+6. Whether ProjectData needs its own snapshot field for measurement type.
+7. Files likely affected.
+
+Do not edit files.
+Do not implement changes.
+My expectation: it is probably editable now in Library Manager / Completeness Panel, but not copied into projectData or rendered in reports yet.
+
+
+
+Pasted markdown(31).md
+File
+
+This was a really good question—and the answer confirms something important about your current system.
+
+🔍 What Cursor found (in plain English)
+Right now:
+
+✅ fldMeasurementType exists and is editable in:
+Library Completeness Panel
+
+Library Manager
+
+❌ BUT it is NOT used anywhere else
+Not shown in Data Entry
+
+Not copied into Project Data
+
+Not shown in reports
+
+👉 It’s essentially stored but not consumed
+
+
+
+🧠 What this means (important insight)
+You currently have:
+
+Measurement Value + Unit → used everywhere
+Measurement Type → stored, but invisible
+Example today:
+
+Measurement: 2.5 %
+But not:
+
+Measurement: 2.5 %
+Type: Slope
+⚠️ Why this matters
+Without Measurement Type, the number can be ambiguous:
+
+Value	Unit	Missing Context
+2.5	%	slope? cross slope? grade?
+36	IN	width? height? clearance?
+12	EA	count of what?
+So the system is:
+
+numerically correct
+but semantically incomplete
+✅ Recommended direction (keep this simple)
+You do NOT need to overhaul anything.
+
+Just surface the field where it matters.
+
+🎯 Where it should be displayed
+1. Data Entry (most important)
+Add a read-only line:
+
+Measurement Type: Slope
+Measurement Unit: %
+This gives the inspector context while entering data.
+
+2. Report (optional but valuable)
+In Report Preview:
+
+Measurement:
+Slope
+2.5 %
+or:
+
+Slope: 2.5 %
+3. Glossary Builder (optional later)
+Right now it only exposes unit (fldUnitType).
+
+Eventually, it should also expose:
+
+Measurement Type
+But not urgent.
+
+🧩 Do we need it on ProjectData?
+Cursor asked the right question.
+
+Option A (current system)
+Do NOT store it
+→ derive from Finding
+✔ simpler
+❌ changes if library changes
+
+Option B (snapshot)
+Store fldMeasurementType on ProjectData
+✔ frozen, report-safe
+✔ audit-friendly
+❌ slight duplication
+
+👍 My recommendation
+Given your architecture:
+
+Library → Glossary → ProjectData (snapshot model)
+👉 You SHOULD eventually store it on ProjectData.
+
+But not yet.
+
+🚀 Next step (recommended)
+Let’s do this in order:
+
+Step 1 (now)
+Add display in Data Entry
+
+Step 2
+Add display in Report
+
+Step 3 (later)
+Decide if you want to snapshot it into ProjectData
+
+🧠 Bottom line
+You didn’t make a mistake—you just haven’t surfaced the field yet.
+
+Right now:
+
+You captured the meaning
+but you're not showing it
+👍 If you want
+I can give you:
+
+👉 a tight Cursor prompt to add it to Data Entry (read-only, clean UI)
+👉 then one for Report Preview
+
+Just tell me:
+
+“add it to data entry” or
+“add it to report”
+
+
+add it to data entry
+
+Use this Cursor prompt:
+
+Apply a focused enhancement to display Measurement Type in Data Entry.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+Display the finding’s measurement type (fldMeasurementType) as a read-only field in the Data Entry UI, alongside Measurement Unit.
+
+Context:
+- Findings contain:
+  - fldMeasurementType (e.g. Slope, Width, Area)
+  - fldUnitType (measurement unit, already copied into fldMeasurementUnit)
+- ProjectDataEntry currently sets:
+  - fldMeasurementUnit from find.fldUnitType
+- Measurement Type is NOT currently displayed anywhere outside Library tools.
+
+Requirements:
+
+1. When a finding is selected (where you already resolve `find`), also read:
+   - find.fldMeasurementType
+
+2. Add a new read-only display field in the Measurement section:
+   - Label: "Measurement Type"
+   - Value: find.fldMeasurementType || '(Not set)'
+   - Styling should match existing read-only fields like Measurement Unit
+
+3. Placement:
+   - In the same section where Measurement Unit is displayed
+   - Ideally above Measurement Unit, so order is:
+     - Measurement Type
+     - Measurement Unit
+     - Measurement Value
+
+4. Behavior:
+   - Do NOT store this in local state
+   - Do NOT write to projectData
+   - Always derive from the currently selected finding
+
+5. Edge cases:
+   - If no finding is selected → show blank or "(Not set)"
+   - If fldMeasurementType is missing → show "(Not set)"
+
+6. Do NOT:
+   - Modify Firestore schema
+   - Add new fields to projectData
+   - Change save logic
+   - Refactor unrelated UI
+
+7. Keep implementation minimal and consistent with existing code patterns.
+
+After changes:
+Report exact diff.
+
+
+Pasted markdown(32).md
+File
+
+Perfect — this confirms exactly what we expected, and now your change is very well targeted.
+
+👉 Right now:
+
+fldMeasurementType exists ✅
+
+It’s editable in Library tools ✅
+
+It is not shown in Data Entry ❌
+
+
+
+🧭 What you just asked for (and why it matters)
+You’re adding it to Data Entry, which is the correct first place because:
+
+Inspector needs to understand WHAT they are measuring
+Not just:
+
+Value + Unit
+🧠 Implementation sanity check (before you run it)
+When Cursor finishes, verify this visually:
+
+In Data Entry you should now see:
+Measurement Type: Slope
+Measurement Unit: %
+Measurement: [ input ]
+⚠️ One subtle thing to watch for (important)
+From the analysis:
+
+ProjectDataEntry already resolves:
+find.fldUnitType → fldMeasurementUnit
+But:
+
+find.fldMeasurementType is NOT used anywhere yet
+So your change must:
+
+Read directly from the resolved `find` object
+NOT from projectData
+🔍 After Cursor runs — verify these 4 things
+1. Field shows up
+When selecting a finding:
+
+Measurement Type appears
+2. Correct value
+Change a finding in Library Manager:
+
+Measurement Type = Width
+Reload → Data Entry reflects it.
+
+3. Edge case
+If missing:
+
+(Not set)
+appears cleanly.
+
+4. No side effects
+No save errors
+
+No console warnings
+
+Measurement input still works
+
+🧠 Important architectural note
+You are now doing this:
+
+Deriving Measurement Type from Finding (not storing it)
+Which is:
+
+✔ simple
+✔ correct for now
+
+Later you may decide to snapshot it — but not yet.
+
+🚀 Next likely step (after this)
+Once you confirm it works:
+
+👉 Add to Report Preview
+
+That’s where it becomes externally visible and valuable.
+
+👍 Bottom line
+You’re doing exactly the right thing:
+
+You captured semantic meaning → now you're surfacing it
+That’s how systems mature.
+
+When you're ready:
+
+👉 “add it to report”
+
+and I’ll give you the next surgical prompt 👍
+
+
+Unfortunately, I see the Unit Cost type now, but not the measurement type.  I think Cursor got confused between the two.
+
+Yes — that sounds like Cursor likely displayed the cost unit field:
+
+ProjectData.fldUnitType = cost unit
+instead of the finding measurement type:
+
+Finding.fldMeasurementType = what is measured
+Use this correction prompt:
+
+Apply a focused correction in ProjectDataEntry only.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Problem:
+The UI is showing the Unit Cost Type / cost unit, but we need to show the selected finding’s Measurement Type.
+
+Important field distinction:
+- Finding.fldMeasurementType = what is being measured, e.g. Slope, Width, Height, Area, Count
+- Finding.fldUnitType = measurement unit, e.g. %, IN, FT
+- ProjectData.fldUnitType = cost unit, e.g. EA, LF, SF, LS
+- ProjectData.fldMeasurementUnit = measurement unit copied from Finding.fldUnitType
+
+Goal:
+Display Finding.fldMeasurementType as a read-only field near the existing Measurement Unit field.
+
+Requirements:
+1. Locate where ProjectDataEntry resolves the selected finding object.
+   It should already do something like:
+   const find = findings.find(...)
+
+2. Derive a display-only value from the selected finding:
+   const selectedFindingMeasurementType = find?.fldMeasurementType || ''
+
+3. Render a read-only display field labeled:
+   Measurement Type
+
+4. Value should be:
+   selectedFindingMeasurementType || '(Not set)'
+
+5. Place it beside or above:
+   Measurement Unit
+
+6. Do NOT use:
+   fldUnitType from projectData
+   fldUnitCost
+   recommendation fields
+   cost unit fields
+
+7. Do NOT write fldMeasurementType to projectData.
+8. Do NOT change save logic.
+9. Do NOT change cost/unit-cost UI.
+10. Do NOT modify other files.
+
+After changes:
+Report exact diff.
+The fix is: derive from the selected Finding object, not from any ProjectData cost field.
+
+
+Here’s the status and the **exact diff** you asked for.
+
+### Done
+
+- **selectedFinding** — useMemo matches selections.findId to findings using the same id normalization (fldFindID / id, lowercased/trimmed).
+- **selectedFindingMeasurementType** — selectedFinding?.fldMeasurementType || ''.
+- **UI** — Read-only **Measurement Type** block (same visual pattern as Measurement Unit), value selectedFindingMeasurementType || '(Not set)', placed between **Measurement** and **Measurement Unit** in a 3-column grid on md+.
+- **Not touched:** save logic, projectData writes, cost/unit-cost UI, other files.
+
+Linter: **no issues** on ProjectDataEntry.tsx.
+
+### Exact diff (src/components/ProjectDataEntry.tsx)
+
+diff
+diff --git a/src/components/ProjectDataEntry.tsx b/src/components/ProjectDataEntry.tsx
+index 008b888..d7a3aa8 100644
+--- a/src/components/ProjectDataEntry.tsx
++++ b/src/components/ProjectDataEntry.tsx
+@@ -792,6 +792,16 @@ export default function ProjectDataEntry({
+     [findings, selectedItem]
+   );
+ 
++  const selectedFinding = useMemo(() => {
++    const id = (selections.findId || '').toLowerCase().trim();
++    if (!id) return undefined;
++    return (findings || []).find(
++      (f) => (f.fldFindID || f.id || '').toLowerCase().trim() === id
++    );
++  }, [findings, selections.findId]);
++
++  const selectedFindingMeasurementType = selectedFinding?.fldMeasurementType || '';
++
+   return (
+     <div className="flex flex-col h-full bg-transparent overflow-hidden">
+       <div className="flex-1 overflow-y-auto w-full bg-transparent">
+@@ -956,8 +966,8 @@ export default function ProjectDataEntry({
+                 />
+               </div>
+               
+-              {/* Finding Footer Row: Measurement and Measurement Unit */}
+-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-zinc-100">
++              {/* Finding Footer Row: Measurement, Measurement Type (from library finding), Measurement Unit */}
++              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-zinc-100">
+                 <Input 
+                   label="Measurement"
+                   value={fldMeasurement}
+@@ -965,6 +975,12 @@ export default function ProjectDataEntry({
+                   className={focusClasses}
+                   placeholder="Actual recorded value"
+                 />
++                <div className="space-y-1.5">
++                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Type</label>
++                  <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
++                    {selectedFindingMeasurementType || '(Not set)'}
++                  </div>
++                </div>
+                 <div className="space-y-1.5">
+                   <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Unit</label>
+                   <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
+
+This looks correct now.
+
+The important part is that it uses:
+
+selectedFinding?.fldMeasurementType
+and not:
+
+ProjectData.fldUnitType
+So you’re now displaying the true library finding measurement type, while leaving cost unit fields alone.
+
+Test quickly:
+
+Pick a finding with fldMeasurementType = Percentage.
+
+Confirm Data Entry shows:
+
+Measurement Type: Percentage
+
+Measurement Unit: %
+
+Pick one without fldMeasurementType.
+
+Confirm it shows (Not set).
+
+Then commit:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Display finding measurement type in Data Entry"
+git push origin data-entry-flow-refactor
+
+I created a category called "Bathing Rooms"  It shows in the list of categories now and is present in the database.  In the data explorer, it show up uncategorized.  Can we find out why?
+
+Thought for 4s
+Yes. This almost always means the record’s category reference ID does not match any category ID the Data Explorer can resolve.
+
+Use this Cursor prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+Problem:
+A category named "Bathing Rooms" exists in Firestore and appears in the category list, but records for it appear under "Uncategorized" in Data Explorer.
+
+Inspect:
+- src/components/DataExplorer.tsx
+- category grouping logic
+- projectData hydration
+- glossary/fldData resolution
+- categories/items/findings relationship
+- how category ids are matched
+- how newly created categories are saved
+- any normalization of IDs, fldCatID, id, fldData, categoryId
+
+Report:
+1. Where Data Explorer determines a record’s category.
+2. What field it uses to group under a category.
+3. Why a valid category could still appear as Uncategorized.
+4. Whether this is likely:
+   - missing fldData
+   - stale glossary reference
+   - category id mismatch
+   - category name mismatch
+   - newly created category not linked to item/glossary
+5. What Firestore fields to inspect on:
+   - the Bathing Rooms category document
+   - the related item document
+   - the glossary record
+   - the projectData record
+6. Minimal safe fix.
+7. Whether existing records need repair.
+
+Do not edit files.
+Do not modify Firestore.
+My suspicion: the category exists, but the item/glossary/projectData record is not actually linked to that category ID. Data Explorer probably groups from projectData.fldData → glossary → item → category. If one link in that chain is missing or still points to an old/missing category, it falls into Uncategorized.
+
+
+
+Pasted markdown(33).md
+File
+
+This is a really good find — and the analysis you ran basically nailed the root cause.
+
+Let me translate it into plain English so you can act on it quickly.
+
+🧠 What’s actually happening
+The Data Explorer does NOT use your category directly.
+
+Instead it does this:
+
+projectData → fldData → glossary → fldCat → category
+So:
+
+👉 The category you created (“Bathing Rooms”) is fine
+👉 But your records are not actually linked to it
+
+🚨 Why it shows as “Uncategorized”
+This line is the key:
+
+const catId = glos?.fldCat || 'uncategorized';
+So if ANY of these are true:
+
+1. No glossary match
+projectData.fldData is empty OR wrong
+2. Glossary exists but:
+glossary.fldCat is empty OR wrong
+3. Category ID mismatch
+glossary.fldCat ≠ categories.fldCategoryID
+👉 Then it becomes:
+
+Uncategorized
+🔍 Most likely cause in your case
+Based on your workflow, this is almost certainly it:
+
+You created a new category
+BUT existing glossary records were never updated to use that category ID
+OR
+
+projectData records are pointing to glossary rows that don’t belong to Bathing Rooms
+🧪 Quick way to confirm (do this)
+Pick ONE record that is showing as Uncategorized.
+
+Then check in Firestore:
+
+Step 1 — ProjectData
+Find the record and look at:
+
+fldData
+👉 Copy that value
+
+Step 2 — Glossary
+Find glossary where:
+
+fldGlosId == fldData
+(or doc id)
+
+Then check:
+
+fldCat
+Step 3 — Categories
+Find your “Bathing Rooms” category:
+
+fldCategoryID
+Compare:
+glossary.fldCat === categories.fldCategoryID ?
+💥 You will likely find one of these
+Case A (most common)
+glossary.fldCat is empty
+Case B
+glossary.fldCat = OLD category ID
+Case C
+projectData.fldData doesn’t match any glossary row
+🛠 How to fix (clean + correct)
+Fix Option 1 (best)
+Update glossary records:
+
+Set:
+fldCat = Bathing Rooms fldCategoryID
+👉 This fixes ALL linked records automatically
+
+Fix Option 2 (if broken linkage)
+Update projectData:
+
+fldData → correct glossary row
+Fix Option 3 (if glossary missing)
+Create proper glossary rows that:
+
+- point to Bathing Rooms
+- connect item + finding + recommendation
+⚠️ Important insight (this is key to your system)
+This explains something subtle but critical:
+
+Category list ≠ Data Explorer grouping
+Explorer only trusts:
+
+glossary relationships
+NOT:
+
+projectData.fldCategory
+item.fldCatID
+🧭 Why this matters long-term
+You now understand:
+
+Glossary = the backbone of categorization
+If glossary is wrong → everything downstream looks wrong.
+
+👍 My recommendation
+Don’t “patch” this at the projectData level.
+
+👉 Fix it at the glossary level
+
+That keeps your system clean and consistent.
+
+🚀 If you want next step
+I can give you:
+
+👉 a safe batch strategy to fix all affected glossary rows
+👉 or a temporary audit tool to find all mismatches
+
+Just say:
+
+“help me fix all of them”
+
+
+fldData is null
+
+That explains it.
+
+If projectData.fldData is null, Data Explorer has no glossary link, so it cannot resolve:
+
+category → item → finding → recommendation
+and it falls into:
+
+Uncategorized
+What fldData should contain
+fldData should point to the selected glossary row:
+
+projectData.fldData = glossary.fldGlosId
+or possibly the glossary document id, since the code checks both.
+
+Why this matters
+Even if the record visually has finding/recommendation text, without fldData the app cannot know which glossary hierarchy it belongs to.
+
+Fix path
+For each affected project data record, set:
+
+fldData = <correct glossary fldGlosId>
+That glossary row must itself have:
+
+fldCat = Bathing Rooms category id
+fldItem = correct item id
+fldFind = correct finding id
+fldRec = correct recommendation id
+Next safe step
+Have Cursor analyze why fldData is being saved as null:
+
+ANALYSIS ONLY. Do not edit files.
+
+Problem:
+Some projectData records are being saved with fldData null, causing Data Explorer to group them as Uncategorized.
+
+Inspect:
+- src/components/ProjectDataEntry.tsx
+- save handler for projectData
+- selections.glosId
+- how glossary selection is made
+- how fldData is assigned on create/update
+- edit existing record hydration
+- any fallback logic using activeRecord?.fldData
+
+Report:
+1. Where fldData is assigned during save.
+2. Why it can become null/empty.
+3. Whether this happens only for existing records or also new records.
+4. Whether selection state loses glosId.
+5. Minimal safe fix to prevent future null fldData.
+6. Safe repair strategy for existing records.
+
+Do not edit files.
+Do not write Firestore data.
+For existing records, we should repair fldData; for future records, we need to prevent saving without it.
+
+
+Uploaded image
+Uploaded image
+Uploaded image
+Uploaded image
+Uploaded image
+Uploaded image
+Uploaded image
+
+Pasted markdown(34).md
+File
+Before I return Cursor's results, here are my observations of the firebase:
+
+from the Categories collection, the document shows this fldCategoryID   "6bd153b2-5ac6-4274-8830-4d01b991e928" for "Bathing Rooms"
+
+In the items collection, there are two items, both of which have the item name "Turning Space":
+fldCatID            "6bd153b2-5ac6-4274-8830-4d01b991e928"
+fldItemID           "730f6086-5866-4f0e-8f56-343464acac56"
+
+From the findings collection, there is the finding "Insufficient Turning Space" with fldItem "730f6086-5866-4f0e-8f56-343464acac56"
+
+I created two recommendations and neither have a finding ID or any other ID besides the recID
+
+And here is cursor's response:
+
+Thought for 4s
+Yes — your Firestore observations and Cursor’s analysis fit together.
+
+What happened
+Your category/item/finding chain is valid:
+
+Bathing Rooms
+→ Turning Space
+→ Insufficient Turning Space
+But the projectData record has:
+
+fldData: ""
+or null/blank.
+
+That means the saved project record is not linked to any glossary row, so Data Explorer cannot resolve its category and puts it under Uncategorized.
+
+Why it likely happened
+Cursor found the bug:
+
+fldData = selections.glosId || activeRecord?.fldData || ""
+But selections.glosId is only set when the recommendation dropdown successfully finds a matching glossary row. That lookup can fail, especially if the glossary row uses fldRecID instead of fldRec, or if the path was never fully resolved before save. 
+
+
+One more important point
+Recommendations do not need a finding ID. The relationship is:
+
+finding.fldSuggestedRecs → recommendation IDs
+and the glossary row ties everything together:
+
+glossary.fldCat
+glossary.fldItem
+glossary.fldFind
+glossary.fldRec
+So the missing piece is probably the glossary row, not the recommendation itself.
+
+What to do next
+Use this implementation prompt:
+
+Apply a focused fix in ProjectDataEntry only.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Problem:
+Some projectData records are saved with fldData empty/null, causing Data Explorer to show them as Uncategorized.
+
+Root cause:
+Save currently relies on selections.glosId, but glosId is only set in hydrateRecommendationSelection and can be empty/stale. The app should resolve the glossary row at save time from the selected category/item/finding/recommendation path.
+
+Requirements:
+
+1. Add a helper function inside ProjectDataEntry:
+   resolveGlossaryForSelection()
+
+It should find a glossary row where:
+- g.fldCat matches selections.categoryId
+- g.fldItem matches selections.itemId
+- g.fldFind matches selections.findId
+- recommendation matches selections.recId using:
+  (g.fldRec || g.fldRecID)
+
+All comparisons should be trimmed and lowercased.
+
+2. In handleSave, before building the payload:
+   const resolvedGlossary = resolveGlossaryForSelection();
+
+3. Set fldData using this priority:
+   resolvedGlossary?.fldGlosId
+   resolvedGlossary?.id
+   selections.glosId
+   activeRecord?.fldData
+   ""
+
+4. If category/item/finding/recommendation are selected but no glossary row resolves:
+   block save with a clear toast error:
+   "Unable to save: selected finding/recommendation is not linked to a glossary record."
+
+5. Update hydrateRecommendationSelection to use the same matching logic, including fldRecID fallback.
+
+6. When hydrating an existing activeRecord and a glossary row is resolved from activeRecord.fldData, also set:
+   glosId: glos?.fldGlosId || glos?.id || ''
+
+7. Do not modify Firestore data directly.
+8. Do not change Data Explorer.
+9. Do not change glossary schema.
+10. Do not touch other files.
+
+After changes:
+Report exact diff.
+After that fix, new records should save with valid fldData.
+
+Existing records with blank fldData will still need repair, but if you reopen one, reselect the correct recommendation, and save, the new save logic should populate it.
+
+
+Summary of what changed:
+
+### Behavior
+- **resolveGlossaryForSelection(recIdOverride?)** — Resolves a glossary row using trimmed/lowercased fldCat, fldItem, fldFind, and recommendation via g.fldRec || g.fldRecID. The optional recIdOverride is used from **hydrateRecommendationSelection(recId)** so matching uses the new recommendation before selections updates.
+- **handleSave** — Calls resolveGlossaryForSelection(), blocks save with your toast when all four ids are set but nothing resolves, and sets **fldData** with the requested priority into **fldDataResolved**.
+- **hydrateRecommendationSelection** — Uses **resolveGlossaryForSelection(recId)** instead of duplicating the old fldRec-only match.
+- **Active-record hydration** — Sets **glosId** from the glossary row found via **fldData**, and **recId** from **glos.fldRec || glos.fldRecID** when present.
+
+### Exact diff (src/components/ProjectDataEntry.tsx)
+
+diff
+diff --git a/src/components/ProjectDataEntry.tsx b/src/components/ProjectDataEntry.tsx
+index d7a3aa8..28027f8 100644
+--- a/src/components/ProjectDataEntry.tsx
++++ b/src/components/ProjectDataEntry.tsx
+@@ -202,6 +202,24 @@ export default function ProjectDataEntry({
+     }
+   }, [project?.fldProjID, activeRecord, onReset]);
+ 
++  /** Resolves glossary row from category → item → finding → recommendation path (fldRec or fldRecID). */
++  const resolveGlossaryForSelection = (recIdOverride?: string) => {
++    const cat = (selections.categoryId || '').trim().toLowerCase();
++    const item = (selections.itemId || '').trim().toLowerCase();
++    const find = (selections.findId || '').trim().toLowerCase();
++    const rec = ((recIdOverride !== undefined ? recIdOverride : selections.recId) || '').trim().toLowerCase();
++    if (!cat || !item || !find || !rec) return undefined;
++    return (glossary || []).find((g: any) => {
++      const gRec = String(g.fldRec || g.fldRecID || '').trim().toLowerCase();
++      return (
++        String(g.fldCat || '').trim().toLowerCase() === cat &&
++        String(g.fldItem || '').trim().toLowerCase() === item &&
++        String(g.fldFind || '').trim().toLowerCase() === find &&
++        gRec === rec
++      );
++    });
++  };
++
+   // 124 CONSOLIDATED HYDRATION
+   const hydrateRecommendationSelection = (recId: string, forceHydrateCosts = false) => {
+     if (!recId) return;
+@@ -217,13 +235,8 @@ export default function ProjectDataEntry({
+     setFldRecLong(rec.fldRecLong || '');
+     setFldStandards(safeArray(rec.fldStandards));
+ 
+-    // 2. Glossary Context Lookup (Full path)
+-    const glos = (glossary || []).find(g => 
+-      (g.fldCat || "").toLowerCase().trim() === (selections.categoryId || "").toLowerCase().trim() &&
+-      (g.fldItem || "").toLowerCase().trim() === (selections.itemId || "").toLowerCase().trim() &&
+-      (g.fldFind || "").toLowerCase().trim() === (selections.findId || "").toLowerCase().trim() &&
+-      (g.fldRec || "").toLowerCase().trim() === (recId || "").toLowerCase().trim()
+-    );
++    // 2. Glossary Context Lookup (Full path; fldRecID matches resolveGlossaryForSelection / save)
++    const glos = resolveGlossaryForSelection(recId);
+ 
+     // 3. Fiscal Hydration Logic
+     // Only hydrate costs if:
+@@ -371,7 +384,8 @@ export default function ProjectDataEntry.tsx
+         categoryId: glos?.fldCat || selections.categoryId || '',
+         itemId: glos?.fldItem || selections.itemId || '',
+         findId: glos?.fldFind || selections.findId || '',
+-        recId: glos?.fldRec || selections.recId || ''
++        recId: glos?.fldRec || glos?.fldRecID || selections.recId || '',
++        glosId: glos?.fldGlosId || glos?.id || ''
+       };
+ 
+       onSelectionChange(newSelections);
+@@ -414,13 +428,32 @@ export default function ProjectDataEntry.tsx
+     
+     // Ensure we have a valid ID before saving
+     const finalizedId = editingRecordId || uuidv4();
++
++    const resolvedGlossary = resolveGlossaryForSelection();
++    const hasFullPath = !!(
++      (selections.categoryId || '').trim() &&
++      (selections.itemId || '').trim() &&
++      (selections.findId || '').trim() &&
++      (selections.recId || '').trim()
++    );
++    if (hasFullPath && !resolvedGlossary) {
++      toast.error('Unable to save: selected finding/recommendation is not linked to a glossary record.');
++      return;
++    }
++
++    const fldDataResolved =
++      resolvedGlossary?.fldGlosId ||
++      resolvedGlossary?.id ||
++      selections.glosId ||
++      activeRecord?.fldData ||
++    '';
+     
+     try {
+       await onSave({
+         fldPDataID: finalizedId,
+         fldPDataProject: selections.projectId,
+         fldFacility: facility?.fldFacID || activeRecord?.fldFacility,
+-        fldData: selections.glosId || activeRecord?.fldData || "",
++        fldData: fldDataResolved,
+         fldFindShort,
+         fldFindLong,
+
+
+Lint passes on this file.
+
+Good fix. This addresses the actual cause instead of patching Data Explorer.
+
+The important wins are:
+
+Save no longer depends only on selections.glosId
+
+It resolves glossary at save time from the full path
+
+It supports both fldRec and fldRecID
+
+It blocks bad saves instead of silently creating uncategorized records
+
+Existing record hydration now restores glosId
+
+Two things to test:
+
+Create a new Bathing Rooms record and save it. Confirm projectData.fldData is populated.
+
+Reopen an existing uncategorized Bathing Rooms record, reselect the recommendation if needed, save, and confirm it moves out of Uncategorized.
+
+Then commit:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Resolve glossary link when saving project data"
+git push origin data-entry-flow-refactor
+
+When trying to create a new record, this toast: Unable to save: selected finding/recommendation is not linked to a glossary record.
+
+When trying to edit existing record, the Update button is grayed out and doesn't save
+
+Thought for 7s
+That means the new guard is working, but it exposed the real issue:
+
+Category / Item / Finding / Recommendation exist
+BUT the matching glossary row does not exist
+Data Explorer needs:
+
+projectData.fldData → glossary.fldGlosId
+So we need either:
+
+A. create the missing glossary row
+or adjust Data Entry so it can create/link one safely.
+
+Use this Cursor prompt next:
+
+ANALYSIS ONLY. Do not edit files.
+
+Problem after adding fldData save guard:
+
+1. Creating a new project data record now shows:
+"Unable to save: selected finding/recommendation is not linked to a glossary record."
+
+2. Editing an existing record shows the Update button grayed out and does not save.
+
+We need to determine whether:
+- the selected Category / Item / Finding / Recommendation path lacks a glossary row
+- Data Entry should create a glossary row when one is missing
+- the Update button disabled state is tied to isDirty / validation / glosId / activeRecord hydration
+
+Inspect:
+- src/components/ProjectDataEntry.tsx
+- how Save / Update button disabled state is calculated
+- selections.isDirty behavior
+- resolveGlossaryForSelection
+- hydrateRecommendationSelection
+- glossary creation paths in GlossaryBuilder
+- how glossary rows are shaped: fldGlosId, fldCat, fldItem, fldFind, fldRec or fldRecID
+
+Report:
+1. Why the new record cannot resolve a glossary row.
+2. Whether a matching glossary row actually must exist for every Cat/Item/Find/Rec combination.
+3. Whether ProjectDataEntry currently has any ability to create a missing glossary row.
+4. Why the Update button is disabled on existing records.
+5. Minimal safe fix.
+6. Whether the fix should:
+   - require creating glossary rows first,
+   - auto-create missing glossary rows,
+   - or allow save with fallback category fields.
+7. Exact files likely affected.
+
+Do not edit files.
+Do not modify Firestore.
+My current recommendation: do not allow projectData without fldData. Either create the missing glossary row in Glossary Builder first, or add a controlled “Create missing glossary link” path. The gray Update button is likely a separate UI state issue caused by hydration not marking the record dirty.
+
+
+
+Pasted markdown(35).md
+File
+
+This is actually a great outcome—you’ve uncovered a real architectural truth in your system, not just a bug.
+
+Let’s simplify what’s going on and what you should do next.
+
+🧠 Root Problem (in plain English)
+You now have:
+
+Valid Category → Item → Finding → Recommendation
+BUT
+No Glossary row tying them together
+So your system is saying:
+
+"I don’t know how these relate in a reusable, structured way"
+And it’s correct.
+
+🔥 Why everything broke after your fix
+Your new logic enforces this (correctly):
+
+projectData MUST point to a glossary row
+So now:
+
+❌ New record fails
+Because:
+
+No glossary row exists → cannot resolve fldData → blocked
+❌ Update button disabled
+Because:
+
+You changed selection (category/item/etc)
+BUT isFormDirty does NOT track those changes
+→ system thinks nothing changed
+🎯 Two Separate Issues
+1. Missing glossary rows (data problem)
+You created:
+
+Bathing Rooms → Turning Space → Insufficient Turning Space
+But you did NOT create:
+
+glossary row:
+fldCat
+fldItem
+fldFind
+fldRec
+fldGlosId
+👉 That’s why save fails.
+
+2. Update button logic (UI problem)
+Your Save button uses:
+
+disabled={!isFormDirty}
+But isFormDirty ignores:
+
+categoryId
+itemId
+findId
+recId
+glosId
+So:
+
+User changes selection → system thinks nothing changed
+→ Update disabled
+🧭 What you should do (clean, correct approach)
+Step 1 — FIX YOUR DATA (immediate)
+Go to Glossary Builder and create the missing row:
+
+Category: Bathing Rooms
+Item: Turning Space
+Finding: Insufficient Turning Space
+Recommendation: (your selected rec)
+Once that exists:
+
+👉 Your new save logic will work perfectly
+
+Step 2 — FIX UPDATE BUTTON (small code fix)
+Use this Cursor prompt:
+
+Modify ProjectDataEntry.tsx to include selection path changes in dirty detection.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Problem:
+Update button is disabled because isFormDirty ignores selection changes.
+
+Goal:
+Make Update enabled when category/item/finding/recommendation changes.
+
+Requirements:
+
+1. Capture initial selection state when activeRecord loads:
+   const initialSelectionRef = useRef({
+     categoryId,
+     itemId,
+     findId,
+     recId,
+     glosId
+   });
+
+2. Update this ref when activeRecord changes.
+
+3. Extend isFormDirty logic to include:
+
+   selections.categoryId !== initialSelectionRef.current.categoryId ||
+   selections.itemId !== initialSelectionRef.current.itemId ||
+   selections.findId !== initialSelectionRef.current.findId ||
+   selections.recId !== initialSelectionRef.current.recId
+
+4. Keep all existing dirty checks.
+
+5. Do NOT change save logic.
+6. Do NOT affect draft autosave.
+7. Do NOT modify other files.
+
+After changes:
+Report exact diff.
+🧠 Important Architectural Insight (this is big)
+You’ve now confirmed your system works like this:
+
+Library (categories/items/findings/recs)
+≠
+Glossary (approved combinations)
+👉 The glossary is NOT optional
+👉 It is the canonical mapping layer
+
+⚠️ What NOT to do
+Do NOT:
+
+❌ Allow saving without glossary (breaks Data Explorer)
+❌ Patch projectData with category directly
+❌ Bypass fldData requirement
+That would undo your system integrity.
+
+🚀 Best practice going forward
+Your workflow becomes:
+
+1. Build library (findings/recs)
+2. Build glossary (valid combinations)
+3. Use Data Entry
+👍 Bottom line
+You didn’t break anything — you tightened the system.
+
+Now you just need:
+
+Missing glossary rows created ✅
+
+Dirty state updated for selections ✅
+
+If you want next step:
+
+👉 I can help you add a "Create Glossary Entry" button directly in Data Entry so users don’t get stuck like this again.
+
+
+
+Pasted markdown(36).md
+File
+
+This is a solid implementation—you’ve fixed the dirty-state problem correctly, and your diff looks clean.
+
+Let me break down where you are now and what still needs to happen.
+
+✅ What you fixed (and it’s correct)
+1. Update button issue — FIXED
+You now detect changes in:
+
+categoryId
+itemId
+findId
+recId
+via initialSelectionRef
+
+👉 This is exactly what was missing
+👉 Update button should now enable when path changes
+
+2. Glossary resolution — CORRECT
+Your helper:
+
+resolveGlossaryForSelection()
+✔ Handles fldRec || fldRecID
+✔ Normalizes values
+✔ Used in both:
+
+save
+
+hydration
+
+That’s the right architecture.
+
+3. Save guard — WORKING AS DESIGNED
+This is important:
+
+"Unable to save: selected finding/recommendation is not linked to a glossary record."
+👉 This is NOT a bug
+👉 This is your system enforcing integrity
+
+⚠️ Why you’re still blocked
+Because this is true:
+
+You built Library data
+BUT did NOT build Glossary data
+🧠 Critical realization (this is the key insight)
+You now have:
+
+categories ✔
+items ✔
+findings ✔
+recommendations ✔
+BUT:
+
+glossary ❌ (missing for this combination)
+🔥 This is the missing piece
+You need a glossary row like:
+
+{
+  "fldGlosId": "...",
+  "fldCat": "6bd153b2-5ac6-4274-8830-4d01b991e928",
+  "fldItem": "730f6086-5866-4f0e-8f56-343464acac56",
+  "fldFind": "daf82249-e7ca-4515-9e61-fd0799db681e",
+  "fldRec": "e4907077-e574-4b5a-ae24-17c5431d73d4"
+}
+Without that:
+
+resolveGlossaryForSelection() → undefined
+→ save blocked
+🛠 What you should do RIGHT NOW
+Option 1 (fastest)
+Go to:
+
+👉 Glossary Builder
+
+Create:
+
+Category: Bathing Rooms
+Item: Turning Space
+Finding: Insufficient Turning Space
+Recommendation: (pick one of your recs)
+Save it.
+
+Then retry Data Entry
+Now:
+
+resolveGlossaryForSelection() → SUCCESS
+fldData populated → record saves
+Data Explorer → correct category
+🧭 Why this is actually GOOD
+You’ve now enforced:
+
+Project data MUST map to a known glossary structure
+Which gives you:
+
+✔ consistent reporting
+✔ reusable logic
+✔ clean Data Explorer grouping
+✔ no “ghost” data
+
+⚠️ One UX problem remains (important)
+Right now the user experience is:
+
+User selects everything → clicks Save → gets blocked
+But:
+
+User has no idea WHY glossary is missing
+🚀 Recommended next improvement (high value)
+Add a helper path in Data Entry:
+
+"Create Glossary Entry for this selection"
+So instead of blocking:
+
+❌ Unable to save
+You give:
+
+👉 Create Glossary Link
+👍 Bottom line
+You did NOT break anything.
+
+You:
+
+✔ Fixed dirty state
+✔ Fixed glossary resolution
+✔ Enforced correct architecture
+Now you just need to:
+
+👉 Populate glossary rows
+If you want next step, say:
+
+👉 “add create glossary button”
+
+and I’ll give you a clean, production-ready implementation prompt.
+
+
+Uploaded image
+Uploaded image
+It is not true that I did not build glossary data.  The glossaries were the FIRST thing I built.
+
+Stopped thinking
+Quick answer
+
+It is not true that I did not build glossary data.  The glossaries were the FIRST thing I built.
+
+Thought for 4s
+You’re right — I overstated that. You did build glossary data, and your screenshots clearly show valid Glossary Explorer rows for:
+
+Bathing Rooms → Turning Space → Insufficient Turning Space → Another toilet room provided
+Bathing Rooms → Turning Space → Insufficient Turning Space → Demo and reconstruct
+So the issue is not “no glossary data exists.”
+
+The more accurate diagnosis is:
+
+The specific projectData record is not linked to the existing glossary row.
+That is different.
+
+Your screenshots show the glossary row has a valid GLOS id, CAT, ITEM, FIND, and REC. But your projectData record had:
+
+fldData: ""
+So Data Explorer cannot connect that saved record back to the glossary row, even though the glossary row exists.
+
+The real issue is likely one of these:
+
+Data Entry did not set selections.glosId when you saved the record.
+
+The glossary match failed at save time because the selected recommendation ID did not match the glossary row’s fldRec / fldRecID.
+
+**The
+
+
+Can we ask Cursor why data explorer cannot connect a saved record back to a glossary row?
+
+Yes. Use this Cursor prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+Problem:
+Glossary data DOES exist. In Glossary Explorer there are valid rows for:
+
+Bathing Rooms → Turning Space → Insufficient Turning Space → Another toilet room provided
+Bathing Rooms → Turning Space → Insufficient Turning Space → Demo and reconstruct
+
+However, projectData records saved from Data Entry still have fldData empty/null, and Data Explorer shows them under Uncategorized.
+
+We need to determine why Data Entry / Data Explorer cannot connect the saved projectData record back to the existing glossary row.
+
+Inspect:
+- src/components/ProjectDataEntry.tsx
+- src/components/DataExplorer.tsx
+- src/components/GlossaryExplorer.tsx
+- glossary row shape and ID fields
+- selections state
+- recommendation selection flow
+- activeGlossaryEntry logic
+- resolveGlossaryForSelection logic
+- handleSave payload
+- onSave path in App/firestore service if needed
+
+Known facts:
+- Glossary rows exist.
+- Glossary rows show GLOS, CAT, ITEM, FIND, REC ids in Glossary Explorer.
+- ProjectData record has fldData empty/null.
+- Data Explorer categorizes by projectData.fldData → glossary.fldGlosId/id → glossary.fldCat.
+- The bug is not simply “missing glossary data.”
+
+Questions to answer:
+1. In Data Entry, what exact values are in selections.categoryId, selections.itemId, selections.findId, selections.recId, and selections.glosId at save time?
+2. Does selections.recId match the glossary row’s REC id?
+3. Does resolveGlossaryForSelection compare against the same fields that Glossary Explorer displays as GLOS / CAT / ITEM / FIND / REC?
+4. Is Glossary Explorer displaying rec id from fldRec, fldRecID, or another field?
+5. Is Data Entry using recommendation document id, fldRecID, or something else for selections.recId?
+6. Is there a mismatch between recommendation.id and recommendation.fldRecID?
+7. Is the glossary prop passed into ProjectDataEntry the same glossary data shown in Glossary Explorer, or is it filtered/limited?
+8. Is activeGlossaryEntry resolving successfully while resolveGlossaryForSelection fails?
+9. Why can the UI show the correct category/item/finding/recommendation, but still fail to populate fldData?
+10. What is the minimal safe fix to ensure fldData is populated from the existing glossary row?
+
+Do not edit files.
+Do not modify Firestore.
+Do not suggest deleting or recreating glossary data unless the analysis proves it is corrupted.
+Report exact code locations and the likely mismatch.
+This should force Cursor to compare which IDs each screen is actually using, instead of assuming the glossary row is missing.
+
+
+
+Pasted markdown(37).md
+File
+
+Thought for 4s
+Yes — this finally explains the contradiction.
+
+You were right: the glossary rows exist. The problem is that Glossary Explorer is showing an enriched/resolved version of the glossary row, while Data Entry is trying to match only the raw stored fields.
+
+So this can happen:
+
+Glossary Explorer looks correct
+BUT
+ProjectDataEntry.resolveGlossaryForSelection() cannot match it
+because the Explorer fills in missing/alternate IDs from related library data before displaying the row. 
+
+
+There is also a second concrete bug: the recommendation dropdown uses:
+
+r.fldRecID || r.id
+but hydrateRecommendationSelection looks up recommendations using:
+
+r.id || r.fldRecID
+If both exist and differ, the selected recommendation value may not be found, which means recId / glosId never gets set. 
+
+
+The fix should be code-side, not data deletion
+Use this Cursor prompt:
+
+Apply a focused ProjectDataEntry fix only.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Problem:
+Glossary rows exist and appear correctly in Glossary Explorer, but Data Entry cannot always resolve them and projectData.fldData can remain empty.
+
+Root causes from analysis:
+1. Recommendation Select values use r.fldRecID || r.id.
+2. hydrateRecommendationSelection looks up recommendation using r.id || r.fldRecID.
+3. This mismatch can cause hydrateRecommendationSelection to return early and never set recId/glosId.
+4. Glossary Explorer displays enriched glossary rows, but ProjectDataEntry matches only raw g.fldCat/g.fldItem/g.fldFind/g.fldRec/g.fldRecID.
+
+Goal:
+Make ProjectDataEntry resolve glossary rows using consistent ID matching.
+
+Requirements:
+
+1. Add a small helper:
+   normalizeId(value): string
+   - String(value || '').trim().toLowerCase()
+
+2. Add helper:
+   recommendationMatches(rec, targetId)
+   Return true if targetId matches either:
+   - rec.fldRecID
+   - rec.id
+
+3. Update hydrateRecommendationSelection(recId):
+   - Find master recommendation using recommendationMatches(r, recId)
+   - Do not use r.id || r.fldRecID precedence.
+
+4. Add helper:
+   glossaryRecommendationMatches(g, recId)
+   Return true if recId matches either:
+   - g.fldRec
+   - g.fldRecID
+
+5. Update resolveGlossaryForSelection(recIdOverride?):
+   - Use normalizeId for all comparisons.
+   - For cat/item/find, compare against raw:
+     g.fldCat, g.fldItem, g.fldFind
+   - For rec, use glossaryRecommendationMatches(g, rec)
+   - Do not rely on field precedence like g.fldRec || g.fldRecID.
+
+6. If there is already an activeGlossaryEntry matcher, update it to use the same helpers so matching behavior is consistent.
+
+7. Do not change save payload shape.
+8. Do not change DataExplorer.
+9. Do not change GlossaryExplorer.
+10. Do not modify Firestore data.
+11. Do not auto-create glossary rows.
+
+After changes:
+Report exact diff.
+This is the right next fix because it addresses the actual mismatch instead of assuming the glossary data is missing.
+
+
+Summary of what changed:
+
+### Implemented
+- **normalizeId**, **recommendationMatches**, **glossaryRecommendationMatches** at module scope (after Modal, before ProjectDataEntry).
+- **resolveGlossaryForSelection**: normalizeId on cat/item/find; **glossaryRecommendationMatches(g, recRaw)** for rec (no g.fldRec || g.fldRecID single string).
+- **hydrateRecommendationSelection**: master row via **recommendationMatches(r, recId)** (matches **fldRecID or id**).
+- **activeGlossaryEntry**: **normalizeId** everywhere; **fldData** branch matches **fldGlosId or id** separately (no id || fldGlosId); path branch uses **glossaryRecommendationMatches**.
+
+Save payload / onSave / DataExplorer / GlossaryExplorer unchanged. No Firestore writes added.
+
+Lint: **clean** on ProjectDataEntry.tsx.
+
+---
+
+### Exact diff **for this change** (helpers + matchers only)
+
+If your repo already had other local edits, git diff HEAD will be larger. The **hunks introduced by this task** are:
+
+diff
+diff --git a/src/components/ProjectDataEntry.tsx b/src/components/ProjectDataEntry.tsx
+--- a/src/components/ProjectDataEntry.tsx
++++ b/src/components/ProjectDataEntry.tsx
+@@ -63,6 +63,22 @@ function Modal({ title, children, onClose }: any) {
+   );
+ }
+ 
++function normalizeId(value: any): string {
++  return String(value || '').trim().toLowerCase();
++}
++
++function recommendationMatches(rec: any, targetId: string): boolean {
++  const t = normalizeId(targetId);
++  if (!t) return false;
++  return normalizeId(rec?.fldRecID) === t || normalizeId(rec?.id) === t;
++}
++
++function glossaryRecommendationMatches(g: any, recId: string): boolean {
++  const t = normalizeId(recId);
++  if (!t) return false;
++  return normalizeId(g?.fldRec) === t || normalizeId(g?.fldRecID) === t;
++}
++
+ export default function ProjectDataEntry({
+
+
+diff
+@@ - ... resolveGlossaryForSelection ...
+-  const resolveGlossaryForSelection = (recIdOverride?: string) => {
+-    const cat = (selections.categoryId || '').trim().toLowerCase();
+-    ...
+-    return (glossary || []).find((g: any) => {
+-      const gRec = String(g.fldRec || g.fldRecID || '').trim().toLowerCase();
+-      return (
+-        String(g.fldCat || '').trim().toLowerCase() === cat &&
+-        ...
+-        gRec === rec
+-      );
+-    });
+-  };
++  const resolveGlossaryForSelection = (recIdOverride?: string) => {
++    const cat = normalizeId(selections.categoryId);
++    const item = normalizeId(selections.itemId);
++    const find = normalizeId(selections.findId);
++    const recRaw = recIdOverride !== undefined ? recIdOverride : selections.recId;
++    const rec = normalizeId(recRaw);
++    if (!cat || !item || !find || !rec) return undefined;
++    return (glossary || []).find((g: any) =>
++      normalizeId(g.fldCat) === cat &&
++      normalizeId(g.fldItem) === item &&
++      normalizeId(g.fldFind) === find &&
++      glossaryRecommendationMatches(g, recRaw)
++    );
++  };
+
+
+diff
+@@ - hydrateRecommendationSelection ...
+-    const rec = (masterRecommendations || []).find(r => 
+-      (r.id || r.fldRecID || "").toLowerCase().trim() === (recId || "").toLowerCase().trim()
+-    );
++    const rec = (masterRecommendations || []).find(r => recommendationMatches(r, recId));
+
+
+diff
+@@ - activeGlossaryEntry ...
+-    const targetGlosId = (activeRecord?.fldData || "").trim().toLowerCase();
+-    return (glossary || []).find(g => 
+-      (g.id || g.fldGlosId || "").trim().toLowerCase() === targetGlosId || 
+-      (String(g.fldCat || "").trim().toLowerCase() === String(selections.categoryId || "").trim().toLowerCase() && 
+-       ...
+-       (g.fldRec || g.fldRecID || "").trim().toLowerCase() === (selections.recId || "").trim().toLowerCase())
+-    );
++    const targetGlosId = normalizeId(activeRecord?.fldData);
++    return (glossary || []).find((g: any) =>
++      (targetGlosId &&
++        (normalizeId(g.fldGlosId) === targetGlosId || normalizeId(g.id) === targetGlosId)) ||
++      (normalizeId(g.fldCat) === normalizeId(selections.categoryId) &&
++        normalizeId(g.fldItem) === normalizeId(selections.itemId) &&
++        normalizeId(g.fldFind) === normalizeId(selections.findId) &&
++        glossaryRecommendationMatches(g, selections.recId))
++    );
+
+
+---
+
+### Full git diff from this workspace
+
+Your current **git diff -- src/components/ProjectDataEntry.tsx** also includes **other** uncommitted work on the same file (e.g. initialSelectionRef, save guard, hydration glosId). To see **only** the commit you’re about to make, stage or split hunks as needed. The machine output from the last run started at index d7a3aa8 and listed **all** of those changes together.
+
+**Note:** Raw glossary rows that still have **empty fldCat / fldItem / fldFind** will **not** match—Glossary Explorer can still show a path via **enriched** display; fixing that would be a separate enhancement (you asked not to auto-create glossary rows).
+
+Good. This is the right correction.
+
+You fixed the concrete ID mismatch without changing data shape or auto-creating anything.
+
+What this should improve
+This should fix cases where:
+
+recommendation.fldRecID !== recommendation.id
+and the dropdown was using one while hydration/matching was using the other.
+
+It should also make glossary matching more reliable because it now compares both possible glossary recommendation fields:
+
+g.fldRec
+g.fldRecID
+instead of choosing one with precedence.
+
+Important remaining caveat
+Cursor’s note is important:
+
+Raw glossary rows that still have empty fldCat / fldItem / fldFind will not match.
+
+That means if Glossary Explorer is only visually enriching a row, but the stored glossary document itself is missing those raw fields, Data Entry still cannot resolve it. That would be a data repair or a separate code enhancement.
+
+Test now
+Try the same Bathing Rooms flow again:
+
+Open Data Entry.
+
+Select:
+
+Bathing Rooms
+
+Turning Space
+
+Insufficient Turning Space
+
+Another toilet room provided
+
+Save.
+
+Check Firestore:
+
+projectData.fldData should now be populated.
+
+Check Data Explorer:
+
+it should appear under Bathing Rooms, not Uncategorized.
+
+If it still fails, inspect that exact glossary document and confirm these raw fields exist:
+
+fldGlosId
+fldCat
+fldItem
+fldFind
+fldRec or fldRecID
+If any of fldCat, fldItem, or fldFind are blank, the issue is no longer the recommendation ID mismatch — it is incomplete raw glossary linkage.
+
+If the test passes, commit the whole ProjectDataEntry batch together:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Improve project data glossary resolution and selection dirty state"
+git push origin data-entry-flow-refactor
+
+You said: 4. Check Firestore:
+projectData.fldData should now be populated.
+
+It is already populated
+
+Good — then that changes the diagnosis.
+
+If projectData.fldData is already populated, the problem is not Data Entry failing to save fldData.
+
+Now the failure is likely in Data Explorer resolving that populated fldData back to a glossary row.
+
+The chain is:
+
+projectData.fldData
+→ match glossary.fldGlosId or glossary document id
+→ read glossary.fldCat
+→ match categories.fldCategoryID
+→ display category name
+So now inspect these exact values.
+
+Check this one record
+1. On the projectData record
+Copy:
+
+fldData
+2. In glossary collection
+Find a glossary row where either:
+
+fldGlosId == projectData.fldData
+or the Firestore document id equals projectData.fldData.
+
+If no row matches, Data Explorer cannot resolve it.
+
+3. On the matching glossary row
+Check:
+
+fldCat
+It must equal:
+
+6bd153b2-5ac6-4274-8830-4d01b991e928
+for Bathing Rooms.
+
+4. In categories
+Confirm the category document has:
+
+fldCategoryID = 6bd153b2-5ac6-4274-8830-4d01b991e928
+fldCategoryName = Bathing Rooms
+Most likely issue now
+One of these is true:
+
+projectData.fldData points to a glossary row, but that glossary row has blank/wrong fldCat
+or:
+
+projectData.fldData contains a glossary id that Data Explorer does not match because of fldGlosId vs document id mismatch
+or:
+
+Data Explorer gets a filtered/stale glossary array that does not include the row
+Use this targeted Cursor prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+Correction:
+projectData.fldData is already populated, but Data Explorer still shows the record under Uncategorized.
+
+We need to determine why Data Explorer cannot resolve populated fldData into the correct category.
+
+Inspect:
+- src/components/DataExplorer.tsx
+- how getGlossaryContext matches fldData to glossary rows
+- whether it checks fldGlosId, id, or both
+- whether it normalizes strings consistently
+- how glossary rows are filtered before reaching DataExplorer
+- how category header is resolved from glos.fldCat
+- whether DataExplorer uses raw glossary.fldCat instead of enriched/fallback values
+- whether GlossaryExplorer enriches missing fldCat/fldItem/fldFind but DataExplorer does not
+
+Known facts:
+- projectData.fldData is populated.
+- Bathing Rooms category exists with fldCategoryID:
+  6bd153b2-5ac6-4274-8830-4d01b991e928
+- Glossary Explorer displays the expected glossary rows under Bathing Rooms.
+- Data Explorer still displays the projectData record as Uncategorized.
+
+Questions:
+1. Does getGlossaryContext find a matching glossary row for the populated fldData?
+2. If it finds a glossary row, what field does it use for category?
+3. Does that glossary row have raw fldCat populated?
+4. Does Data Explorer enrich glossary rows the way Glossary Explorer does?
+5. Is Data Explorer category lookup strict on categories.fldCategoryID?
+6. Could the matching glossary row have fldCat blank/wrong while Glossary Explorer displays Bathing Rooms via enrichment?
+7. Minimal safe fix:
+   - repair glossary.fldCat data,
+   - or make Data Explorer use the same enriched glossary resolution as Glossary Explorer?
+
+Do not edit files.
+Do not modify Firestore.
+Report exact code locations and recommended fix.
+At this point, I suspect Data Explorer is using raw glossary data while Glossary Explorer is showing enriched glossary data. So the row looks correct in Glossary Explorer, but the raw glossary.fldCat may not be correct.
+
+
+
+Pasted markdown(38).md
+File
+
+Thought for a few seconds
+Now we have the real answer.
+
+fldData being populated is only step one. Data Explorer then does:
+
+projectData.fldData
+→ glossary.fldGlosId / glossary.id
+→ glossary.fldCat
+→ categories.fldCategoryID
+The weak link is likely:
+
+raw glossary.fldCat
+Glossary Explorer can show “Bathing Rooms” because it enriches glossary rows using fallback logic:
+
+g.fldCat || category.fldCategoryID || category.id
+But Data Explorer does not enrich. It uses raw:
+
+glos.fldCat || "uncategorized"
+So the glossary can look correct in Glossary Explorer while Data Explorer still sees:
+
+glossary.fldCat = blank / wrong / stale
+and puts the record under Uncategorized. 
+
+
+What to check in Firestore
+Open the exact glossary document referenced by:
+
+projectData.fldData
+Then inspect:
+
+fldGlosId
+fldCat
+fldItem
+fldFind
+fldRec / fldRecID
+For Bathing Rooms, fldCat must exactly be:
+
+6bd153b2-5ac6-4274-8830-4d01b991e928
+If fldCat is blank or different, that is the reason.
+
+Best fix
+I would fix the data, not Data Explorer, unless this is widespread.
+
+Set the raw glossary row fields correctly:
+
+fldCat  = Bathing Rooms fldCategoryID
+fldItem = Turning Space fldItemID
+fldFind = Insufficient Turning Space fldFindID
+fldRec  = selected recommendation fldRecID
+That keeps Data Explorer, reports, filters, and CSV honest.
+
+If this is widespread
+Then the better follow-up is a temporary glossary integrity/audit tool that finds glossary rows where:
+
+fldCat is blank
+fldItem is blank
+fldFind is blank
+fldRec/fldRecID is blank
+or where the IDs do not resolve.
+
+I would not make Data Explorer silently enrich these yet, because that can hide broken glossary records. Data Explorer should reveal data integrity problems, not mask them.
+
+
+
+That glossary row looks structurally correct.
+
+For this row:
+
+fldGlosId: e37811c1-ea90-4b1b-879e-51e35b1f95c7
+fldCat:    6bd153b2-5ac6-4274-8830-4d01b991e928
+fldItem:   730f6086-5866-4f0e-8f56-343464acac56
+fldFind:   daf82249-e7ca-4515-9e61-fd0799db681e
+fldRec:    a40e3d17-0c34-48fd-a907-9ddb2652717c
+So if the projectData.fldData value is exactly:
+
+e37811c1-ea90-4b1b-879e-51e35b1f95c7
+then Data Explorer should resolve it to:
+
+Bathing Rooms
+because fldCat matches the Bathing Rooms fldCategoryID.
+
+That means one of these is now most likely:
+
+The projectData record you’re seeing under Uncategorized does not actually have this fldData.
+
+It points to a different glossary row than this one.
+
+Data Explorer’s in-memory glossary data is stale and needs refresh/reload.
+
+There are duplicate or near-duplicate glossary rows, and fldData points to one with missing/wrong fields.
+
+The record under Uncategorized is an older projectData record, not the one linked to this glossary row.
+
+Next check the exact projectData record that appears under Uncategorized and compare:
+
+projectData.fldData
+to this:
+
+e37811c1-ea90-4b1b-879e-51e35b1f95c7
+If they differ, that’s the issue.
+
+If they match exactly, then refresh the app. If it still appears Uncategorized, use this prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+We verified a glossary row exists with:
+fldGlosId = e37811c1-ea90-4b1b-879e-51e35b1f95c7
+fldCat = 6bd153b2-5ac6-4274-8830-4d01b991e928
+fldItem = 730f6086-5866-4f0e-8f56-343464acac56
+fldFind = daf82249-e7ca-4515-9e61-fd0799db681e
+fldRec = a40e3d17-0c34-48fd-a907-9ddb2652717c
+
+Bathing Rooms category exists with:
+fldCategoryID = 6bd153b2-5ac6-4274-8830-4d01b991e928
+
+If a projectData record has fldData exactly equal to:
+e37811c1-ea90-4b1b-879e-51e35b1f95c7
+
+then DataExplorer should categorize it under Bathing Rooms.
+
+Inspect DataExplorer and parent data loading for why this may still show as Uncategorized:
+1. Is the projectData record in DataExplorer the same record we inspected?
+2. Is DataExplorer receiving the glossary row with that fldGlosId in props?
+3. Is the glossary row filtered out, stale, soft-deleted, or missing from the in-memory glossary array?
+4. Are categories passed to DataExplorer missing the Bathing Rooms category?
+5. Does getGlossaryContext fail because d.fldData is not a string or contains unexpected characters?
+6. Does groupedData run before glossary/categories are loaded and not recompute?
+7. Add temporary console diagnostics suggestion only, do not edit:
+   - record id
+   - record.fldData
+   - matched glossary row
+   - matched glossary.fldCat
+   - matched category
+
+Do not edit files.
+Do not modify Firestore.
+Report likely cause and exact code locations.
+But based on the screenshot: this specific glossary row is not the problem. The next thing to verify is whether the specific project data record’s fldData points to this exact fldGlosId.
+
+
+The "uncategorized" problem with the existing record was resolved.  I think we were trying to figure out if the current flow was causing the problem.  Here's what I plan to do:
+
+I'm going to create a new glossary record.  Then I'm going to create a new data record from that glossary record and see if it stays categorized.  That's the process I took originally that led to the discovery that data records weren't showing up categorized.
+
+Let me do that and see if we've fixed the root cause of the problem or not.  Let me know if we need Cursor to listen to what's happening in case we need to diagnose,
+
+That is the right test.
+
+You do not need Cursor watching yet. First do a clean manual test so we know whether the normal workflow is fixed.
+
+Use this checklist:
+
+Test flow
+Create a new glossary record.
+
+Confirm it appears in Glossary Explorer.
+
+Expand it and note the displayed IDs:
+
+GLOS
+
+CAT
+
+ITEM
+
+FIND
+
+REC
+
+Go to Project Data Entry.
+
+Select that exact category/item/finding/recommendation path.
+
+Save a new data record.
+
+Check Firestore on the new projectData record:
+
+fldData should equal the glossary row’s GLOS value.
+
+Go to Data Explorer.
+
+Confirm the record appears under the correct category.
+
+If it fails
+Then yes, use Cursor with a focused diagnostic prompt.
+
+Also capture these values before asking Cursor:
+
+Glossary Explorer:
+GLOS:
+CAT:
+ITEM:
+FIND:
+REC:
+
+ProjectData Firestore:
+fldPDataID:
+fldData:
+fldFindShort:
+fldRecShort:
+If fldData is populated but uncategorized, the issue is Data Explorer resolution.
+
+If fldData is blank, the issue is Data Entry save resolution.
+
+If the save is blocked by the toast, the issue is glossary matching at save time.
+
+So run the test first. That will tell us exactly where the remaining problem is.
+
+
+Everything worked up to saving the data record where I received this toast: "Unable to save: selected finding/recommendation is not linked to a glossary record."
+
+A glossary record does not appear to have been created.
+
+Here are the field ID's.  The finding and recommendation libraries saved each respective record created by the glossary builder:
+
+Category 5a651d0a-f9e8-4fa6-91bd-a31dede9edec
+Item 179beecc-6d40-4c14-bbb7-9381e9a850a3
+Finding 5719a953-0d2e-43bb-94c2-f301dff193d6
+Recommendation f3cb49e4-2d86-441f-9431-efec4ae9e6dd
+
+I cannot find it in the firebase
+
+Thought for 5s
+That narrows it down very clearly.
+
+Your category, item, finding, and recommendation library records were created, but the glossary linking record was not created.
+
+That explains the toast perfectly:
+
+Unable to save: selected finding/recommendation is not linked to a glossary record.
+Because Data Entry needs this missing record:
+
+glossary
+  fldGlosId: <new uuid>
+  fldCat: 5a651d0a-f9e8-4fa6-91bd-a31dede9edec
+  fldItem: 179beecc-6d40-4c14-bbb7-9381e9a850a3
+  fldFind: 5719a953-0d2e-43bb-94c2-f301dff193d6
+  fldRec: f3cb49e4-2d86-441f-9431-efec4ae9e6dd
+But Glossary Builder only appears to have created the underlying library records, not the glossary row itself.
+
+Use this Cursor prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+Problem:
+When creating a new glossary record in Glossary Builder, the category/item/finding/recommendation library records are created successfully, but no document appears in the Firestore glossary collection.
+
+Then, when creating a project data record using that new path, Data Entry shows:
+"Unable to save: selected finding/recommendation is not linked to a glossary record."
+
+Known IDs from the test:
+Category: 5a651d0a-f9e8-4fa6-91bd-a31dede9edec
+Item: 179beecc-6d40-4c14-bbb7-9381e9a850a3
+Finding: 5719a953-0d2e-43bb-94c2-f301dff193d6
+Recommendation: f3cb49e4-2d86-441f-9431-efec4ae9e6dd
+
+Expected glossary document:
+- fldGlosId: new UUID
+- fldCat: category id above
+- fldItem: item id above
+- fldFind: finding id above
+- fldRec or fldRecID: recommendation id above
+- copied finding/recommendation text and cost fields as appropriate
+
+Inspect:
+- src/components/GlossaryBuilder.tsx
+- any saveNewGlossaryRecord / handleAddNew / create glossary flow
+- firestoreService.glossary.save or equivalent
+- whether the glossary save is conditional
+- whether the UI is creating library records only but not the glossary row
+- whether glossary row creation fails silently
+- whether validation prevents glossary save after creating library records
+- whether IDs used for created library records are available before glossary save
+- whether the glossary save writes to a different collection/name
+- whether the glossary write is asynchronous and not awaited
+
+Questions:
+1. Which function is supposed to create the glossary document?
+2. Is it being called in this flow?
+3. If not, why not?
+4. If it is called, what payload is being sent?
+5. Does the payload include fldCat, fldItem, fldFind, fldRec/fldRecID, and fldGlosId?
+6. Is there an error catch that hides the failure?
+7. Is the glossary save skipped when creating new category/item/finding/recommendation records in the same operation?
+8. Minimal safe fix to ensure a glossary row is created whenever Glossary Builder creates a complete Cat → Item → Finding → Recommendation combination.
+
+Do not edit files.
+Do not modify Firestore.
+Report exact code locations and recommended fix.
+My current read: the root cause is in Glossary Builder, not Data Entry.
+
+Data Entry is now doing the right thing by refusing to save a project record that cannot point to a glossary row. The bug is that Glossary Builder let you create the library components without completing the glossary link.
+
+
+
+Pasted markdown(39).md
+File
+
+Thought for 4s
+That explains the workflow issue.
+
+There is not a Firestore write failure. You created the library pieces, but not the glossary link row.
+
+Cursor found that Glossary Builder has two separate concepts:
+
+Library records:
+categories / items / findings / recommendations
+
+Glossary row:
+glossary document that links category + item + finding + recommendation
+The step-by-step modals create only the library records. They do not create a glossary document. The glossary document is only created by SAVE RECORD / handleAddNew, or by the specific glossary_record modal flow. 
+
+
+What this means for your test
+After you create:
+
+Category
+Item
+Finding
+Recommendation
+you still need to click:
+
+SAVE RECORD
+in Glossary Builder with all four selected.
+
+That should create the missing glossary row:
+
+fldGlosId
+fldCat
+fldItem
+fldFind
+fldRec
+Then Data Entry should save without the toast.
+
+Bigger UX issue
+The workflow is confusing because a user naturally assumes:
+
+“I created the category/item/finding/recommendation, so I created the glossary record.”
+
+But technically, they only created the library components.
+
+I recommend we improve the UI so after the recommendation is created, Glossary Builder either:
+
+clearly prompts: “Now click SAVE RECORD to link this glossary entry”, or
+
+automatically creates the glossary link once all four pieces exist, with duplicate protection.
+
+Given your architecture, I prefer option 2 eventually, but the safest immediate fix is a prompt/banner explaining the final step.
+
+
+Since the glossary builder is the primary vehicle for creating library records (that needs to change eventually, too), let's go with option 1 right now (which will allow the creation of multiple finding and recommendation library records without necessarily creating a glossary record) for now, but eventually yes, given the architecture and the fact that creating findings and recommendations will eventually happen primarily in the library, we should move to option 2.  In the meantime I will manually save the glossary record.
+
+That’s the right call for now.
+
+Current workflow to follow
+In Glossary Builder:
+
+Create the category/item/finding/recommendation library records as needed.
+
+Select the intended full path:
+
+Category → Item → Finding → Recommendation
+Click:
+
+SAVE RECORD
+That final step creates the actual glossary link row that Data Entry needs.
+
+Why Option 1 makes sense now
+It preserves the ability to create multiple candidate findings/recommendations without automatically linking every combination into the glossary.
+
+That is useful while Glossary Builder is still doing double duty as:
+
+library creation tool + glossary linking tool
+Future architecture direction
+Eventually, we should separate the responsibilities:
+
+Library Manager
+  → create/edit findings and recommendations
+
+Glossary Builder
+  → assemble approved combinations into glossary records
+Then Option 2 becomes safer:
+
+When a valid full path is intentionally assembled, create or update the glossary link automatically, with duplicate protection.
+For now, manually saving the glossary record is the correct workflow.
+
+
+Manually saved glossary record and everything works now as it should.  Data record created!
+
+Excellent — that confirms the root cause and the fix path.
+
+What we learned:
+
+Creating category/item/finding/recommendation = library records only
+Clicking SAVE RECORD = creates the glossary link row
+Data Entry requires the glossary link row via fldData
+Data Explorer categorizes correctly once fldData resolves to that glossary row
+So the current workflow is valid, just not obvious enough.
+
+Next small UI improvement should be a helper message in Glossary Builder, something like:
+
+After creating or selecting Category, Item, Finding, and Recommendation, click SAVE RECORD to create the glossary link used by Data Entry.
+That will prevent this confusion until we later separate Library Manager from Glossary Builder.
+
+
+Question: how is the glossary ID tied to the data record?
+
+The glossary ID is tied to the data record through this field on the project data record:
+
+projectData.fldData
+That field stores the glossary record ID, usually:
+
+glossary.fldGlosId
+So the relationship is:
+
+projectData.fldData
+   ↓
+glossary.fldGlosId
+   ↓
+glossary row
+   ↓
+fldCat / fldItem / fldFind / fldRec
+Example:
+
+projectData.fldData = e37811c1-ea90-4b1b-879e-51e35b1f95c7
+matches:
+
+glossary.fldGlosId = e37811c1-ea90-4b1b-879e-51e35b1f95c7
+Once that match is made, the app can resolve:
+
+Category → Item → Finding → Recommendation
+using the glossary row’s fields:
+
+fldCat
+fldItem
+fldFind
+fldRec
+That is why, when fldData was empty, Data Explorer showed the record as Uncategorized. There was no glossary ID for it to follow.
+
+In short:
+
+fldData is the pointer from a data record back to its glossary record.
+
+Makes sense now!  Thank you.  OK, unless there was a task or subtask we skipped, or something significant we left undone, I'm going to keep working with the app and trying to uncover issues.  Thank you for your help.
+
+You’re in a good place to keep testing.
+
+Nothing major is skipped from the current thread. The main known follow-ups are:
+
+Glossary Builder UX helper
+Add a message reminding users that after creating/selecting category → item → finding → recommendation, they must click SAVE RECORD to create the glossary link.
+
+Finish library cleanup
+Continue using the Library Completeness Panel to populate missing:
+
+fldMeasurementType
+
+fldUnitType
+
+recommendation fldUnit
+
+recommendation fldUOM
+
+Future validation
+After cleanup, add save validation so incomplete findings/recommendations cannot be created again.
+
+Report display
+Measurement Type is now in Data Entry; later decide whether to show it in reports.
+
+Temporary panel removal
+Once cleanup + validation are done, remove the temporary Library Completeness Panel.
+
+For now, keep using the app and logging issues exactly the way you’ve been doing. You’re finding the right kinds of problems.
+
+
+Here's one thing that's concerning to me, or at least I don't understand. The problem of late happened because I didn't save the glossary record, but I used the glossary builder to create the new finding and recommendations library records. However, when I went to the data entry tab, I was able to select those same findings and recommendations that I had just created, even though they weren't part of a glossary. How can that be? 
+
+Thought for 4s
+Yes — that is a very reasonable concern.
+
+What happened is:
+
+Data Entry lets you select from library records.
+But saving a categorized data record requires a glossary link row.
+Those are two different things.
+
+Why you could select them
+The Data Entry dropdowns are populated from the library collections:
+
+categories
+items
+findings
+recommendations
+So once you created the new finding and recommendations in Glossary Builder, they existed as library records and became available for selection.
+
+But that does not mean this combination existed as a glossary entry:
+
+Category → Item → Finding → Recommendation
+That specific link only exists after the glossary row is saved. Cursor’s analysis found that the per-entity creation functions create only the library docs; the actual glossary document is created only by the SAVE RECORD flow or the dedicated glossary-record flow. 
+
+
+Why that matters
+The Data Entry screen could show:
+
+Bathing Rooms
+Turning Space
+Insufficient Turning Space
+Demo and reconstruct
+because all four library records existed.
+
+But when you clicked save, the app needed:
+
+projectData.fldData = glossary.fldGlosId
+and there was no glossary row yet to point to. That is why the save guard blocked it.
+
+The real UX problem
+The app currently allows users to assemble a library path that looks valid, even if it is not yet an approved glossary combination.
+
+That is confusing.
+
+A better future behavior would be one of these:
+
+Option A — Filter Data Entry by glossary only
+Data Entry should only show finding/recommendation combinations that already exist in the selected glossary.
+
+This is strict and clean:
+
+If it is not in the glossary, it cannot be selected in Data Entry.
+Option B — Allow library selection but clearly mark it unlinked
+The UI could allow selection but show:
+
+This combination is not linked to a glossary record.
+Create glossary link first.
+Option C — Create glossary link from Data Entry
+If the user assembles a valid combination, offer:
+
+Create Glossary Link
+That is useful, but it blurs Data Entry and glossary management.
+
+My recommendation
+Long term, Data Entry should be glossary-driven, not raw-library-driven.
+
+That means:
+
+Glossary = approved usable combinations
+Library = source material
+Data Entry = uses glossary entries
+So yes, your concern is valid. The app should not make a not-yet-glossary-linked combination feel fully available in Data Entry.
+
+For now, the guard protected you from saving bad data. But the UI should eventually prevent or clearly label those unlinked choices before the user reaches Save.
+
+
+I would like to institute option A now
+
+Thought for 5s
+Yes — Option A is the right architectural move:
+
+Data Entry should only allow selections that exist in the glossary.
+That means the Data Entry tab should no longer let users assemble arbitrary library combinations from category/item/finding/recommendation records unless a matching glossary row exists.
+
+Use this analysis prompt first, because this touches cascading dropdown behavior:
+
+ANALYSIS ONLY. Do not edit files.
+
+We want to make Project Data Entry glossary-driven.
+
+Current problem:
+Data Entry allows users to select category/item/finding/recommendation combinations from library records even when no glossary row exists for that combination. Save then fails because projectData.fldData cannot be resolved.
+
+New desired behavior:
+Data Entry should only expose combinations that already exist as glossary records.
+
+Architecture rule:
+- Library = source material
+- Glossary = approved usable combinations
+- Data Entry = uses glossary entries only
+
+Inspect:
+- src/components/ProjectDataEntry.tsx
+- how category options are currently built
+- how item options are currently built
+- how finding options are currently built
+- how recommendation options are currently built
+- activeGlossaryEntry logic
+- resolveGlossaryForSelection
+- glossary prop shape
+- whether glossary rows may be soft-deleted
+- whether glossary rows can contain fldRec or fldRecID
+- whether the UI currently has “search all master recommendations” behavior that bypasses glossary
+
+Report:
+1. Current source for each dropdown:
+   - Category
+   - Item
+   - Finding
+   - Recommendation
+2. Which dropdowns currently use raw library collections instead of glossary rows.
+3. Exact filtering strategy to make each dropdown glossary-driven.
+4. How to preserve labels:
+   - category name from categories
+   - item name from items
+   - finding text from findings
+   - recommendation text from recommendations
+5. How to handle duplicate glossary rows.
+6. How to handle missing/broken glossary rows.
+7. Whether to remove or disable “search all master recommendations” in Data Entry.
+8. Minimal safe implementation plan.
+9. Files likely affected.
+
+Do not edit files.
+Do not modify Firestore.
+My expected direction after analysis:
+
+Category dropdown = categories that appear in glossary.fldCat
+Item dropdown = items that appear in glossary rows for selected category
+Finding dropdown = findings that appear in glossary rows for selected category + item
+Recommendation dropdown = recommendations that appear in glossary rows for selected category + item + finding
+And yes: any “Search all master recommendations” behavior should probably be removed or disabled in Data Entry, because it bypasses the glossary contract.
+
+
+
+Pasted markdown(40).md
+File
+
+Thought for a couple of seconds
+Yes — this confirms Option A is implementable cleanly.
+
+Right now Data Entry is still partly library-driven:
+
+Category = library categories
+Item = library items
+Finding = library findings
+Recommendation = glossary + suggested recs + search-all master recs
+That is why you were able to select library records that had no glossary link. 
+
+
+Recommended implementation
+Make the dropdowns derive from glossary rows first, then use library records only for labels.
+
+So:
+
+Category dropdown
+= categories that appear in glossary.fldCat
+
+Item dropdown
+= items that appear in glossary rows for selected category
+
+Finding dropdown
+= findings that appear in glossary rows for selected category + item
+
+Recommendation dropdown
+= recommendations that appear in glossary rows for selected category + item + finding
+This means Data Entry can only select approved glossary combinations.
+
+Use this implementation prompt:
+
+Apply a focused ProjectDataEntry change only.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+Make Data Entry glossary-driven so users can only select Category → Item → Finding → Recommendation combinations that already exist as glossary records.
+
+Architecture rule:
+- Library = source material
+- Glossary = approved usable combinations
+- Data Entry = uses glossary entries only
+
+Requirements:
+
+1. Build an active glossary row set inside ProjectDataEntry:
+   - start from glossary prop
+   - exclude rows where fldDeleted or fldIsDeleted is true
+   - require non-empty fldCat, fldItem, fldFind, and either fldRec or fldRecID
+
+2. Category options:
+   - only categories whose fldCategoryID appears in active glossary rows as fldCat
+   - preserve current label/sort behavior
+
+3. Item options:
+   - only items whose fldItemID appears in active glossary rows matching selected category
+   - preserve current label/sort behavior
+
+4. Finding options:
+   - only findings whose fldFindID or id appears in active glossary rows matching selected category + selected item
+   - preserve current label/sort behavior
+
+5. Recommendation options:
+   - only recommendations tied to glossary rows matching selected category + selected item + selected finding
+   - match recommendations by either fldRecID or id
+   - use the existing recommendationMatches/glossaryRecommendationMatches helpers if present
+   - remove/disable the “search all master recommendations” behavior for Data Entry
+   - remove non-glossary fallback tiers from recommendationOptions:
+     - finding.fldSuggestedRecs fallback
+     - broad item glossary fallback
+
+6. When a recommendation is selected:
+   - resolve the matching glossary row
+   - set selections.recId
+   - set selections.glosId to glossary.fldGlosId || glossary.id
+   - hydrate recommendation text/costs as before
+
+7. Save behavior:
+   - leave existing save guard in place
+   - after this change, completing the dropdown path should always resolve a glossary row
+
+8. Empty states:
+   - If no glossary-approved categories exist, show a helpful empty message if feasible:
+     “No glossary records are available. Create glossary records in Glossary Builder first.”
+   - If a selected category/item/finding has no next-level options, existing dropdown empty behavior is acceptable.
+
+9. Do not:
+   - modify Firestore data
+   - auto-create glossary records
+   - modify DataExplorer
+   - modify GlossaryBuilder
+   - modify library records
+   - change save payload shape
+
+After changes:
+Report exact diff.
+This is the right architectural correction. It prevents the user from assembling a path that looks valid but is not actually a glossary-approved record.
+
+
+### What changed (glossary-driven Data Entry)
+
+1. **activeGlossaryRows** — filters **glossary** for non-deleted rows with non-empty **fldCat**, **fldItem**, **fldFind**, and at least one of **fldRec / fldRecID** (normalizeId).
+
+2. **approvedCategoryIds** — unique **fldCat** from that set → **sortedCategories** only includes **mergedCategories** entries whose **fldCategoryID/fldCatID** is in that set; still **sortEntities(..., 'fldCategoryName')**.
+
+3. **sortedItems / sortedFindings** — items/findings limited by **fldItem/fldFind** appearing on **activeGlossaryRows** for the selected category (and item for findings).
+
+4. **rowsForPath** — glossary rows for current Cat + Item + Finding.
+
+5. **recommendationOptions** — one option per glossary row (deduped by **fldGlosId/id**): **value** = **g.fldGlosId || g.id**, **label** from **masterRecommendations** via **recommendationMatches**. No suggested-rec tiers, no item-wide fallback, **isSearchingAll removed**.
+
+6. **applyGlossaryRecommendationRow** — replaces **hydrateRecommendationSelection**; hydrates from the chosen glossary row, sets **recId** = **rec.fldRecID || rec.id**, **glosId** = **g.fldGlosId || g.id**.
+
+7. **resolveGlossaryForSelection** / **activeGlossaryEntry** — resolve against **activeGlossaryRows** only.
+
+8. **Recommendation <Select>** — **recommendationSelectValue** ( **glosId** or infer from **recId** ), **onChange** resolves row by **glosId** and calls **applyGlossaryRecommendationRow(gRow, true)**.
+
+9. **Cascades** — **glosId** cleared when category/item/finding changes.
+
+10. **Banner** — if workspace is complete but **activeGlossaryRows.length === 0**, shows the requested message.
+
+11. **Existing save guard** — unchanged ( **fldDataResolved** / toast still apply).
+
+Lint: **clean** on ProjectDataEntry.tsx.
+
+---
+
+### Exact diff
+
+Output was truncated in the tool; run locally for the full patch:
+
+bash
+git diff -- src/components/ProjectDataEntry.tsx
+
+
+Representative hunks:
+
+- Remove **isSearchingAll** state and **“SEARCH ALL MASTER”** UI.
+- Add **activeGlossaryRows**, **approvedCategoryIds**, **rowsForPath**, **recommendationSelectValue**.
+- Replace tiered **recommendationOptions** with glossary-row-backed options ( **value** = glossary doc key).
+- Replace **hydrateRecommendationSelection** with **applyGlossaryRecommendationRow**.
+- **resolveGlossaryForSelection** uses **activeGlossaryRows**.
+- **sortedCategories / sortedItems / sortedFindings** filtered by approved glossary ids.
+- Finding **onChange** clears **recId** + **glosId**.
+- Amber empty-state when **hasRequiredContext && activeGlossaryRows.length === 0**.
+
+If your repo baseline differs from HEAD, line numbers in **git diff** will vary slightly; only **ProjectDataEntry.tsx** was modified.
+
+This is a strong implementation and matches Option A.
+
+The big architectural win is this:
+
+Data Entry can no longer assemble arbitrary library records.
+It can only select glossary-approved combinations.
+That should prevent the exact failure you hit earlier.
+
+What to test now
+1. Existing glossary path
+Use a known good glossary row:
+
+Bathing Rooms → Turning Space → Insufficient Turning Space → Recommendation
+Confirm:
+
+Category appears
+
+Item appears only after category
+
+Finding appears only after item
+
+Recommendation appears only after finding
+
+Save succeeds
+
+projectData.fldData equals the selected glossary fldGlosId
+
+Data Explorer categorizes correctly
+
+2. Library-only records
+Create or identify a finding/recommendation that exists in the library but has not been saved as a glossary record.
+
+Confirm:
+
+It does not appear in Data Entry
+
+It appears only after you create/save the glossary record
+
+3. No search-all bypass
+Confirm there is no longer a way to select a master recommendation that is not tied to the selected glossary path.
+
+4. Edit existing record
+Open an existing record and confirm:
+
+Its path hydrates correctly
+
+Update button enables when path/text/cost/etc. changes
+
+Save keeps fldData intact or updates it to the selected glossary row
+
+If those pass, commit:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Make Project Data Entry use glossary-approved selections"
+git push origin data-entry-flow-refactor
+This is an important integrity improvement.
+
+
+Before I do that, I want to maybe change my mind a little bit. When the user is in the data entry and they have a unique situation where they may not necessarily want to add their record to the glossary, but they do want to maybe write a freehand recommendation or both a freehand finding and a freehand recommendation, they should be able to have that ability. In some cases, very one-off type cases, they might want to use a recommendation from the library that isn't part of a glossary, just because it's non-standard, and save it as a data record but not incorporated into the library. How do we give them that ability, and yet, if it's something they actually want to add to the library, we require that to go through the normal glossary builder process, so it would perhaps send them to that glossary builder tab to save it as a glossary item.
+
+The other thought I had was that I don't know that I would want every user to be able to create new glossary records. Create new unique data records, yes. Only allow admins to actually add to glossaries, or at least approve the additions to a glossary. What are your thoughts? 
+
+Before I do that, I want to maybe change my mind a little bit. When the user is in the data entry and they have a unique situation where they may not necessarily want to add their record to the glossary, but they do want to maybe write a freehand recommendation or both a freehand finding and a freehand recommendation, they should be able to have that ability. In some cases, very one-off type cases, they might want to use a recommendation from the library that isn't part of a glossary, just because it's non-standard, and save it as a data record but not incorporated into the library. How do we give them that ability, and yet, if it's something they actually want to add to the library, we require that to go through the normal glossary builder process, so it would perhaps send them to that glossary builder tab to save it as a glossary item.
+
+The other thought I had was that I don't know that I would want every user to be able to create new glossary records. Create new unique data records, yes. Only allow admins to actually add to glossaries, or at least approve the additions to a glossary. What are your thoughts? 
+
+Thought for a couple of seconds
+Yes — this is the right time to refine the rule.
+
+I would not make Data Entry 100% glossary-only with no escape hatch. Real inspections need a way to document one-off conditions.
+
+The better rule is:
+
+Data Entry should default to glossary-approved records,
+but allow controlled custom project-only records.
+Recommended model
+Use two modes in Data Entry:
+
+1. Glossary Record
+2. Custom Record
+1. Glossary Record mode
+This is the normal/default path.
+
+The user selects:
+
+Category → Item → Finding → Recommendation
+from existing glossary-approved combinations.
+
+The saved data record includes:
+
+fldData = glossary.fldGlosId
+recordSource = "glossary"
+This gives you clean categorization, reporting, and reusable structure.
+
+2. Custom Record mode
+This is the one-off path.
+
+The user can write:
+
+custom finding text
+custom recommendation text
+custom standards
+custom cost fields
+custom measurement fields
+The saved data record should not pretend to be a glossary-linked record.
+
+So instead of forcing fldData, it should store something like:
+
+fldData = ""
+recordSource = "custom"
+customCategoryId
+customItemId
+or, better:
+
+fldData = null
+fldDataSource = "custom"
+fldCat
+fldItem
+The important distinction is:
+
+This record belongs to this project only.
+It is not part of the glossary/library.
+How Data Explorer should handle custom records
+Data Explorer should not dump custom records into Uncategorized if they have a selected category/item.
+
+For custom records, it should group by the saved category/item fields directly:
+
+if fldData resolves to glossary:
+  use glossary category
+else if recordSource === "custom":
+  use projectData.fldCat / fldItem or similar
+else:
+  Uncategorized
+That lets a one-off Bathing Rooms record still appear under Bathing Rooms even without a glossary link.
+
+Admin control
+I strongly agree with you:
+
+All users may create custom project records.
+Only admins should create or approve reusable glossary/library content.
+That is a very clean permission boundary.
+
+Regular user can:
+Create project-specific custom finding/recommendation
+Edit that project record
+Use existing approved glossary records
+Admin can:
+Create/edit library records
+Create/edit glossary records
+Promote custom records into glossary/library
+Approve suggested additions
+Best future workflow
+If a user creates a good custom record, offer:
+
+Request Add to Glossary
+That creates a pending request, not a glossary record.
+
+Example:
+
+customGlossaryRequests
+  projectDataId
+  proposedCategoryId
+  proposedItemId
+  findingText
+  recommendationText
+  standards
+  submittedBy
+  status: "pending"
+Then an admin can review it and either:
+
+Approve → create library/glossary record
+Reject → leave project record custom only
+What I would do right now
+Do not fully commit the strict glossary-only change until you decide this.
+
+I would modify the design to:
+
+Data Entry default = glossary-approved selections
+Custom Mode = project-only freehand record
+And the UI should make the difference obvious:
+
+[Use Glossary Record] [Create Custom Record]
+For now, keep “Use Glossary Record” as the default.
+
+Practical implementation phases
+Phase 1 — Immediate
+Keep glossary-driven dropdowns, but add a Custom Record toggle.
+
+When custom mode is on:
+
+allow free text fields
+
+allow category/item selection for grouping
+
+do not require fldData
+
+save recordSource: "custom" or similar
+
+Data Explorer groups by saved category/item fields
+
+Phase 2 — Admin workflow
+Add:
+
+Request Add to Glossary
+for custom records.
+
+Phase 3 — Promotion
+Admin can promote a custom record into:
+
+library finding/recommendation
+glossary link row
+My recommendation
+Yes: back off from absolute Option A.
+
+Use this principle instead:
+
+Approved reusable records come from Glossary.
+One-off project records may be custom.
+Only admins can turn custom work into reusable library/glossary content.
+That gives you flexibility without corrupting the library.
+
+
+Let's implement Phase 1 immediately.  Also, we need to make sure the custom data record (not created using the glossary) shows correctly in the data explorer and reports. 
+
+Thought for a few seconds
+Yes. Phase 1 should be implemented carefully because it touches Data Entry, Data Explorer, and Reports. I would have Cursor analyze first before applying changes.
+
+Use this prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to implement Phase 1 for custom project-only data records.
+
+Current architecture:
+- Normal Data Entry should use glossary-approved combinations.
+- projectData.fldData points to glossary.fldGlosId for glossary-linked records.
+- Data Explorer currently categorizes records through:
+  projectData.fldData → glossary → fldCat
+- Reports likely render finding/recommendation text directly from projectData fields.
+
+New requirement:
+Allow users to create project-specific custom records that are NOT linked to a glossary and are NOT added to the library/glossary.
+
+Business rules:
+1. Default mode: Use Glossary Record
+   - user selects approved glossary combination
+   - save requires fldData
+   - record should behave as current glossary-linked records
+
+2. Custom Record mode:
+   - user may enter freehand finding text and recommendation text
+   - user may select category/item for grouping
+   - user may optionally use a library recommendation or type custom recommendation text
+   - record is project-only
+   - does NOT create library records
+   - does NOT create glossary records
+   - does NOT require fldData
+   - should save a clear source marker, e.g. recordSource: "custom" or fldRecordSource: "custom"
+   - should preserve category/item directly on the projectData record for Data Explorer grouping
+   - should show correctly in Data Explorer
+   - should show correctly in reports
+
+Inspect:
+- src/components/ProjectDataEntry.tsx
+- src/components/DataExplorer.tsx
+- src/components/ReportPreview.tsx
+- src/types/index.ts
+- projectData save payload shape
+- how category/item/finding/recommendation text is saved
+- how Data Explorer groups and labels records
+- how reports display finding/recommendation text, measurements, costs, and standards
+- existing category/item fields available on projectData, if any
+- whether projectData already has fields like fldCat, fldItem, fldCategory, fldItemID, recordSource, etc.
+
+Report:
+1. Current projectData fields saved from Data Entry.
+2. Which fields can be reused for custom category/item grouping.
+3. Whether we need new fields:
+   - fldRecordSource or recordSource
+   - fldCat
+   - fldItem
+   - custom flags
+4. Recommended exact projectData fields for custom records.
+5. How Data Entry UI should switch between:
+   - Glossary Record mode
+   - Custom Record mode
+6. What validation should apply in Custom mode.
+7. How Data Explorer should group custom records.
+8. How ReportPreview should render custom records.
+9. How to prevent custom records from being mistaken for glossary/library records.
+10. Minimal safe implementation plan.
+11. Files likely affected.
+
+Do not edit files.
+Do not modify Firestore.
+Do not implement yet.
+The target design I’d expect after analysis is:
+
+Glossary mode:
+  fldRecordSource = "glossary"
+  fldData = glossary.fldGlosId
+
+Custom mode:
+  fldRecordSource = "custom"
+  fldData = ""
+  fldCat = selected category id
+  fldItem = selected item id
+  fldFindShort / fldFindLong = freehand text
+  fldRecShort / fldRecLong = freehand or selected library rec text
+For Data Explorer, the fallback should become:
+
+if fldData resolves to glossary:
+  group by glossary.fldCat
+else if fldRecordSource === "custom":
+  group by projectData.fldCat
+else:
+  Uncategorized
+For reports, it should mostly already work if reports use the saved projectData text fields. The key is making sure custom records save complete text, standards, measurement, quantity, and cost fields directly on the record.
+
+
+
+Pasted markdown(41).md
+File
+
+Thought for a few seconds
+This analysis is solid. Phase 1 should be implemented, but not as a tiny one-file tweak. It needs a coordinated change across:
+
+ProjectDataEntry
+DataExplorer
+ReportPreview
+types
+because custom records must be saveable, categorizable, and reportable. The analysis confirms that reports already use the saved project text, so the main reporting risk is category/item headers and sorting. 
+
+
+Recommended Phase 1 design
+For glossary records:
+
+fldRecordSource: "glossary"
+fldData: "<glossary fldGlosId>"
+For custom records:
+
+fldRecordSource: "custom"
+fldData: ""
+fldPDataCategoryID: "<category fldCategoryID>"
+fldPDataItemID: "<item fldItemID>"
+fldFindShort: "<custom or copied text>"
+fldFindLong: "<custom or copied text>"
+fldRecShort: "<custom or copied text>"
+fldRecLong: "<custom or copied text>"
+Optional but useful:
+
+fldPDataMasterRecID: "<recommendation id if copied from library>"
+Use this implementation prompt
+Apply Phase 1 custom project-only data records.
+
+Goal:
+Allow Data Entry to support two modes:
+1. Glossary Record mode
+2. Custom Record mode
+
+Architecture:
+- Glossary mode uses approved glossary combinations and saves fldData.
+- Custom mode creates a project-only record, does not create library records, does not create glossary records, and does not require fldData.
+- Custom records must still group correctly in Data Explorer and display correctly in reports.
+
+Files likely affected:
+- src/components/ProjectDataEntry.tsx
+- src/components/DataExplorer.tsx
+- src/components/ReportPreview.tsx
+- src/types/index.ts
+- optionally a small shared helper module if useful
+
+Requirements:
+
+1. Update ProjectData type
+Add optional fields:
+- fldRecordSource?: "glossary" | "custom"
+- fldPDataCategoryID?: string
+- fldPDataItemID?: string
+- fldPDataMasterRecID?: string
+
+Do not remove existing fields.
+
+2. ProjectDataEntry UI
+Add a clear mode switch near the top of the form:
+- Use Glossary Record
+- Create Custom Record
+
+Default:
+- existing/new records default to Glossary Record unless activeRecord.fldRecordSource === "custom"
+- existing custom records reopen in Custom Record mode
+
+3. Glossary mode behavior
+Keep the current glossary-driven dropdown behavior.
+Keep the existing fldData resolution and save guard.
+On save, include:
+- fldRecordSource: "glossary"
+- fldData: resolved glossary id
+Do not change save payload shape otherwise.
+
+4. Custom mode behavior
+Allow users to:
+- select Category from normal categories
+- select Item filtered by selected category
+- type custom finding short/long
+- type custom recommendation short/long
+- optionally select/copy a recommendation from masterRecommendations if simple to do without disrupting layout
+- edit measurement/cost fields as current UI allows
+
+Custom mode save:
+- do not require resolveGlossaryForSelection
+- do not require selections.glosId
+- set fldData: ""
+- set fldRecordSource: "custom"
+- set fldPDataCategoryID: selected category id
+- set fldPDataItemID: selected item id
+- if a master recommendation was copied, optionally set fldPDataMasterRecID
+- never create glossary records
+- never create library records
+
+5. Custom mode validation
+Require:
+- project context and inspector as today
+- location as today
+- category id
+- item id
+- finding short or finding long
+- recommendation short or recommendation long
+
+Do not require glossary/finding/recommendation ids in custom mode.
+
+6. DataExplorer
+Update grouping/category resolution:
+- If fldData resolves to glossary, use current glossary category/item/finding logic.
+- Else if fldRecordSource === "custom", use:
+  - fldPDataCategoryID for category grouping
+  - fldPDataItemID for item labeling/grouping where needed
+- Else fall back to Uncategorized.
+
+Update category filters, grouping, sort, item labels, and CSV export to use this same resolved record context.
+
+Do not make custom records appear as glossary records.
+
+7. ReportPreview
+Update category/item resolution and sorting:
+- glossary records use glossary context as today
+- custom records use fldPDataCategoryID and fldPDataItemID
+- finding/recommendation body text should continue to use projectData fields
+- standards/addendum should continue to use record-level fldStandards when no glossary exists
+
+8. Cloning / duplicate record behavior
+If DataExplorer or ProjectDataEntry clones/duplicates records, preserve:
+- fldRecordSource
+- fldPDataCategoryID
+- fldPDataItemID
+- fldPDataMasterRecID
+For custom records, keep fldData empty.
+
+9. UX
+Show a small “Custom Record” badge or helper text in custom mode:
+“This record is project-specific and will not be added to the glossary or library.”
+
+10. Constraints
+- Do not modify Firestore rules
+- Do not auto-create glossary records
+- Do not change GlossaryBuilder
+- Do not change LibraryManager
+- Do not migrate existing data
+- Do not delete existing fields
+- Keep changes focused and minimal
+
+After changes:
+- Report exact diff
+- Report lint results
+- Explain how custom records are saved, grouped, and rendered in reports
+I would not commit the strict glossary-only ProjectDataEntry change yet if it prevents this Phase 1 from being integrated cleanly. Let Cursor build this on top of the current work if possible, then test both flows side-by-side.
+
+
+### ✅ Phase 1 implemented
+
+#### Lint results
+- **No linter errors** in: src/components/ProjectDataEntry.tsx, src/components/DataExplorer.tsx, src/components/ReportPreview.tsx, src/types/index.ts.
+
+---
+
+### How custom records are saved
+- **Glossary Record mode (default)**:
+  - Behaves as before (glossary-driven dropdowns + existing save guard).
+  - Saves:
+    - fldRecordSource: "glossary"
+    - fldData: <resolved glossary id>
+- **Custom Record mode**:
+  - Does **not** require glossary resolution / glosId.
+  - Requires: **category + item + (finding short/long) + (recommendation short/long)** (plus existing project/inspector/location rules).
+  - Saves:
+    - fldRecordSource: "custom"
+    - fldData: ""
+    - fldPDataCategoryID: selections.categoryId
+    - fldPDataItemID: selections.itemId
+    - fldPDataMasterRecID only if user copied from master recommendations (optional)
+
+No library records or glossary records are created.
+
+---
+
+### How custom records are grouped in Data Explorer
+DataExplorer.tsx now resolves a per-record context:
+- If fldData resolves to a glossary row → **use glossary** fldCat/fldItem/fldFind (existing behavior).
+- Else if fldRecordSource === "custom" → **use**:
+  - category grouping: fldPDataCategoryID
+  - item labeling: fldPDataItemID
+- Else → fall back to **Uncategorized**.
+
+CSV export uses the same resolved context (Category/Item now fill for custom records too).
+
+Cloning preserves:
+- fldRecordSource, fldPDataCategoryID, fldPDataItemID, fldPDataMasterRecID
+- and forces **custom clones** to keep fldData: "".
+
+---
+
+### How custom records render in reports
+ReportPreview.tsx now resolves headers/sorting like this:
+- Glossary records: unchanged (category/item from glossary).
+- Custom records: category/item from fldPDataCategoryID / fldPDataItemID.
+- Finding/recommendation body text remains sourced from projectData.fldFindLong / projectData.fldRecLong (so custom text renders correctly).
+- Standards/addendum stays record-driven when no glossary exists.
+
+---
+
+### Files changed
+- src/types/index.ts
+- src/components/ProjectDataEntry.tsx
+- src/components/DataExplorer.tsx
+- src/components/ReportPreview.tsx
+
+(LibraryManager.tsx was reverted to comply with constraints.)
+
+---
+
+### Exact diff
+Run this to see the **exact patch**:
+
+bash
+git diff -- src/types/index.ts src/components/ProjectDataEntry.tsx src/components/DataExplorer.tsx src/components/ReportPreview.tsx
+
+
+If you want, I can also provide the diff split per-file in-chat (it’s sizable).
+
+Excellent. This is the right balance:
+
+Default = glossary-approved data
+Exception = project-only custom data
+Reusable content = still controlled through glossary/library workflow
+Before committing, test four paths:
+
+1. Glossary record save
+Create a normal glossary-linked data record and confirm Firestore has:
+
+fldRecordSource: "glossary"
+fldData: <glossary id>
+and it appears correctly in Data Explorer/report.
+
+2. Custom record save
+Create a custom record and confirm Firestore has:
+
+fldRecordSource: "custom"
+fldData: ""
+fldPDataCategoryID: <category id>
+fldPDataItemID: <item id>
+and it appears under the selected category/item in Data Explorer.
+
+3. Report preview
+Confirm both glossary and custom records show the correct category/item headers and finding/recommendation text.
+
+4. Existing records
+Open an older glossary-linked record and confirm it still renders/saves correctly even if fldRecordSource is missing.
+
+Then commit:
+
+git add src/types/index.ts src/components/ProjectDataEntry.tsx src/components/DataExplorer.tsx src/components/ReportPreview.tsx
+git commit -m "Support custom project-only data records"
+git push origin data-entry-flow-refactor
+This is a major architecture improvement.
+
+
+Since I'm going to have to shut down my machine for a minute, how can I save the current code base (just as a precaution)?
+
+Do a quick safety commit on your current branch.
+
+From C:\dev\fredasoft:
+
+git status
+Then stage the current Phase 1 files:
+
+git add src/types/index.ts
+git add src/components/ProjectDataEntry.tsx
+git add src/components/DataExplorer.tsx
+git add src/components/ReportPreview.tsx
+Commit them:
+
+git commit -m "WIP support custom project-only data records"
+Push the branch:
+
+git push origin data-entry-flow-refactor
+Then confirm:
+
+git status
+You want to see:
+
+nothing to commit, working tree clean
+If there are other unrelated modified files, do not git add .; only add the four files above.
+
+
+PS C:\dev\fredasoft> git status    
+On branch data-entry-flow-refactor
+Your branch is ahead of 'origin/data-entry-flow-refactor' by 1 commit.  (use "git push" to publish your local commits)
+
+Changes not staged for commit:     
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory        modified:   src/components/DataExplorer.tsx
+        modified:   src/components/ProjectDataEntry.tsx
+        modified:   src/components/ReportPreview.tsx
+        modified:   src/types/index.ts
+
+no changes added to commit (use "git add" and/or "git commit -a")     
+PS C:\dev\fredasoft> git add src/types/index.ts
+>> git add src/components/ProjectDa>> git add src/components/DataExplorer.tsx
+>> git add src/components/ReportPreview.tsx
+warning: in the working copy of 'src/types/index.ts', LF will be replaes it
+warning: in the working copy of 'src/components/ProjectDataEntry.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/DataExplorer.tsx', LF 
+will be replaced by CRLF the next time Git touches it
+PS C:\dev\fredasoft> git commit -m 
+"WIP support custom project-only data records"
+[data-entry-flow-refactor d18f2ae] 
+WIP support custom project-only data records
+ 4 files changed, 516 insertions(+), 207 deletions(-)
+PS C:\dev\fredasoft> git push origin data-entry-flow-refactor
+Enumerating objects: 22, done.
+Counting objects: 100% (22/22), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (13/13), 
+done.
+Writing objects: 100% (14/14), 7.35 KiB | 752.00 KiB/s, done.
+Total 14 (delta 11), reused 0 (delta 0), pack-reused 0 (from 0)       
+remote: Resolving deltas:   0% (0/1remote: Resolving deltas:  18% (2/1remote: Resolving deltas:  27% (3/1remote: Resolving deltas:  36% (4/1remote: Resolving deltas:  45% (5/1remote: Resolving deltas:  54% (6/1remote: Resolving deltas:  63% (7/1remote: Resolving deltas:  72% (8/1remote: Resolving deltas:  81% (9/1remote: Resolving deltas:  90% (10/remote: Resolving deltas: 100% (11/remote: Resolving deltas: 100% (11/11), completed with 7 local objects.
+To https://github.com/kenotten/FREDAsoft.git
+   467b108..d18f2ae  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> git status    
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.     
+
+nothing to commit, working tree clean
+PS C:\dev\fredasoft> 
+
+Perfect — your work is safely committed and pushed.
+
+You’re in the ideal shutdown state:
+
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'
+nothing to commit, working tree clean
+The latest safety commit is:
+
+d18f2ae WIP support custom project-only data records
+You can shut down without losing anything.
+
+
+Thank you.
+
+You’re welcome. Safe to shut down — everything important is pushed.
+
+
+OK, back up.  What are our next steps?
+
+Thought for 6s
+Welcome back. You are safely on branch:
+
+data-entry-flow-refactor
+Latest pushed safety commit:
+
+d18f2ae WIP support custom project-only data records
+Recommended next steps
+1. Pull / confirm clean state
+git status
+git pull origin data-entry-flow-refactor
+You should still see a clean working tree.
+
+2. Test the new Phase 1 custom-record flow
+Test both modes before doing more code.
+
+A. Glossary Record mode
+Create a normal record from an existing glossary path.
+
+Confirm in Firestore:
+
+fldRecordSource: "glossary"
+fldData: <glossary id>
+Then confirm:
+
+Data Explorer categorizes it correctly
+
+Report Preview shows it correctly
+
+B. Custom Record mode
+Create a custom project-only record.
+
+Confirm in Firestore:
+
+fldRecordSource: "custom"
+fldData: ""
+fldPDataCategoryID: <category id>
+fldPDataItemID: <item id>
+Then confirm:
+
+Data Explorer groups it under the selected category
+
+Report Preview shows the selected category/item
+
+Finding/recommendation text renders correctly
+
+It does not create library or glossary records
+
+3. If testing passes, rename the WIP commit
+Since this is now likely more than a WIP, amend the commit message:
+
+git commit --amend -m "Support custom project-only data records"
+git push --force-with-lease origin data-entry-flow-refactor
+Only do this if nobody else is working from that branch. If unsure, leave the WIP commit name alone.
+
+4. Add a Glossary Builder helper message
+This is the next small UX fix.
+
+Add a note like:
+
+After creating or selecting Category, Item, Finding, and Recommendation, click SAVE RECORD to create the glossary link used by Data Entry.
+That prevents the exact confusion we uncovered.
+
+5. Continue library cleanup
+Use the Library Completeness Panel and Library Manager to finish populating:
+
+Findings:
+- fldMeasurementType
+- fldUnitType
+
+Recommendations:
+- fldUnit
+- fldUOM
+6. Later, add validation
+After cleanup is complete, add validation so incomplete library records cannot be saved again.
+
+Do not do validation before the data is cleaned, or you may block yourself during cleanup.
+
+Best immediate action
+Start with testing the two data-entry modes. That will tell us whether the Phase 1 implementation is solid before we build on it.
+
+
+Uploaded image
+Uploaded image
+Uploaded image
+B. Custom Record mode
+I created a custom project-only record.
+Confirm in Firestore:
+
+fldRecordSource: "glossary"  <--This is a problem
+fldData: ""   
+fldPDataCategoryID: <category id>
+fldPDataItemID: <item id>
+
+Then confirm:
+
+Data Explorer groups it under the selected category - it does not (shows "uncategoriezed")
+Report Preview shows the selected category/item   - it does not
+Finding/recommendation text renders correctly   - they do
+It does not create library or glossary records    - it does not create library or glossary records
+
+Thought for 5s
+That test result is very useful. The failure is now specific:
+
+Custom mode UI was selected,
+but save payload still wrote:
+
+fldRecordSource: "glossary"
+fldData: ""
+That combination is internally inconsistent.
+
+It should have saved:
+
+fldRecordSource: "custom"
+fldData: ""
+fldPDataCategoryID: <category id>
+fldPDataItemID: <item id>
+Because fldRecordSource is wrong, Data Explorer and Report Preview treat it like a glossary record with no valid fldData, so they fall back to Uncategorized / N/A instead of using the custom category/item fields. That matches the Phase 1 design: custom grouping only kicks in when fldRecordSource === "custom".
+
+Use this Cursor prompt:
+
+Apply a focused bug fix for Custom Record mode.
+
+Files likely affected:
+- src/components/ProjectDataEntry.tsx
+- possibly src/components/DataExplorer.tsx
+- possibly src/components/ReportPreview.tsx
+
+Problem:
+A record created in Custom Record mode saved with:
+
+fldRecordSource: "glossary"
+fldData: ""
+
+That is incorrect. It should save:
+
+fldRecordSource: "custom"
+fldData: ""
+fldPDataCategoryID: selections.categoryId
+fldPDataItemID: selections.itemId
+
+Because the record is saved as "glossary" with empty fldData, Data Explorer and Report Preview treat it as a glossary-linked record, fail to resolve fldData, and display Uncategorized / N/A.
+
+Requirements:
+
+1. Inspect ProjectDataEntry custom/glossary mode state.
+   Determine what state variable controls the mode.
+
+2. In handleSave, ensure the save payload branches explicitly:
+   - If custom mode:
+     - fldRecordSource: "custom"
+     - fldData: ""
+     - fldPDataCategoryID: selections.categoryId
+     - fldPDataItemID: selections.itemId
+     - do NOT run or require resolveGlossaryForSelection
+     - do NOT write glosId
+   - If glossary mode:
+     - fldRecordSource: "glossary"
+     - fldData: resolved glossary id
+     - keep existing glossary save guard
+
+3. Ensure custom mode validation uses category/item from selections but does not require:
+   - selections.findId
+   - selections.recId
+   - selections.glosId
+   - resolveGlossaryForSelection
+
+4. Ensure the mode toggle actually updates the state that handleSave uses.
+   If the UI uses one variable and handleSave uses another, unify them.
+
+5. When loading an existing record:
+   - if activeRecord.fldRecordSource === "custom", open Custom Record mode
+   - otherwise open Glossary Record mode
+
+6. Confirm DataExplorer uses fldRecordSource === "custom" to use:
+   - fldPDataCategoryID
+   - fldPDataItemID
+
+7. Confirm ReportPreview uses fldRecordSource === "custom" to use:
+   - fldPDataCategoryID
+   - fldPDataItemID
+
+8. Do not modify Firestore data directly.
+9. Do not create glossary/library records.
+10. Keep changes focused.
+
+After changes:
+- Report exact diff
+- Report lint results
+- Explain why the previous custom save wrote fldRecordSource: "glossary"
+After Cursor fixes it, create one more custom record and check Firestore first. The key pass/fail is:
+
+fldRecordSource: "custom"
+fldData: ""
+fldPDataCategoryID: populated
+fldPDataItemID: populated
+Once that is correct, Data Explorer and Report Preview should have the information they need to categorize and label it.
+
+
+### Fix applied (ProjectDataEntry.tsx)
+
+**Cause:** recordMode is React state (useState<'glossary' | 'custom'>('glossary')). A useEffect synced mode from activeRecord, but when **activeRecord was null** (new custom row), it always ran the **else** branch and called **setRecordMode('glossary')**. That ran **right after** the user clicked **Create Custom Record**, so by save time recordMode was **glossary** → payload got **fldRecordSource: 'glossary'** and **fldData: ''** (no glossary resolution).
+
+**Fix:** Only sync mode **when activeRecord exists**. If there is no saved row being edited, **do not change** recordMode, so the toggle stays **custom** until the user switches or loads a record.
+
+---
+
+### Lint
+
+- **ProjectDataEntry.tsx:** no linter issues reported.
+
+---
+
+### Exact diff
+
+diff
+diff --git a/src/components/ProjectDataEntry.tsx b/src/components/ProjectDataEntry.tsx
+index 83b14bb..9f0bc20 100644
+--- a/src/components/ProjectDataEntry.tsx
++++ b/src/components/ProjectDataEntry.tsx
+@@ -260,11 +260,13 @@ export default function ProjectDataEntry({
+     }
+   }, [project?.fldProjID, activeRecord, onReset]);
+ 
+-  // Mode selection: default to glossary; reopen explicit custom records in custom mode
++  // Mode selection: only derive from an existing saved record. When activeRecord is null (new entry),
++  // do NOT reset recordMode — otherwise choosing "Custom Record" was immediately overwritten to glossary.
+   useEffect(() => {
+-    if (activeRecord?.fldRecordSource === 'custom') {
++    if (!activeRecord) return;
++    if (activeRecord.fldRecordSource === 'custom') {
+       setRecordMode('custom');
+-      setCustomMasterRecId(activeRecord?.fldPDataMasterRecID || '');
++      setCustomMasterRecId(activeRecord.fldPDataMasterRecID || '');
+     } else {
+       setRecordMode('glossary');
+       setCustomMasterRecId('');
+@@ -518,6 +520,7 @@ export default function ProjectDataEntry({
+     // Ensure we have a valid ID before saving
+     const finalizedId = editingRecordId || uuidv4();
+ 
++    // Must match the UI mode toggle (recordMode). Do not infer from activeRecord here — new custom rows have no activeRecord.
+     const isCustomMode = recordMode === 'custom';
+ 
+     if (isCustomMode) {
+
+
+---
+
+### Why the bad save happened before
+
+1. User chose **Custom Record** → setRecordMode('custom').
+2. **activeRecord was still null** (new record).
+3. The sync **useEffect** treated “not fldRecordSource === 'custom'” as **glossary** and ran **setRecordMode('glossary')**.
+4. **handleSave** used recordMode === 'custom' → **false** → **fldRecordSource: 'glossary'**, **fldData** stayed empty, glossary branch didn’t resolve → **fldData: ''**.
+
+---
+
+### Data Explorer / Report Preview
+
+No code changes: they already branch on **fldRecordSource === 'custom'** and **fldPDataCategoryID / fldPDataItemID**. Wrong **fldRecordSource** was what broke grouping; fixing the mode reset fixes the saved document shape.
+
+---
+
+### Files touched
+
+- src/components/ProjectDataEntry.tsx only (focused bug fix).
+
+Great — that diagnosis makes sense, and the fix is exactly the right scope.
+
+The previous bad record saved as:
+
+fldRecordSource: "glossary"
+fldData: ""
+because the mode state was being reset after you selected Custom Record. Now that the effect no longer resets recordMode for new records, the custom save should produce the intended shape.
+
+Test again with a brand-new custom record and verify Firestore:
+
+fldRecordSource: "custom"
+fldData: ""
+fldPDataCategoryID: <category id>
+fldPDataItemID: <item id>
+Then verify:
+
+Data Explorer groups it under the selected category.
+
+Report Preview shows the selected category/item.
+
+No glossary/library records are created.
+
+If that passes, commit the focused fix:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Preserve custom record mode for new project data"
+git push origin data-entry-flow-refactor
+For the earlier bad test record, either delete it or edit its fldRecordSource to custom and ensure fldPDataCategoryID / fldPDataItemID are present.
+
+
+Also, when opening the record in data entry (to edit it), the item field is not hydrated
+
+Thought for 4s
+That means the bug is not fully fixed yet.
+
+The new custom record still saved as:
+
+fldRecordSource: "glossary"
+fldData: ""
+So either:
+
+recordMode is still "glossary" at save time
+or the save payload is not actually using recordMode correctly.
+
+The item hydration issue is probably related: when editing a custom record, Data Entry is likely still trying to hydrate from fldData → glossary, but custom records need to hydrate from:
+
+fldPDataCategoryID
+fldPDataItemID
+Use this Cursor prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+The attempted fix did not fully work.
+
+Problem 1:
+A newly created Custom Record still saved with:
+- fldRecordSource: "glossary"
+- fldData: ""
+
+Expected:
+- fldRecordSource: "custom"
+- fldData: ""
+- fldPDataCategoryID populated
+- fldPDataItemID populated
+
+Problem 2:
+When opening that record in Data Entry to edit it, the Item field is not hydrated.
+
+Known Firestore result:
+- fldRecordSource is still "glossary"
+- fldData is ""
+- custom finding/recommendation text saved
+- location/quantity/measurement saved
+
+Inspect ProjectDataEntry.tsx carefully for:
+1. The recordMode state variable.
+2. The mode toggle click handlers.
+3. Any useEffect that sets recordMode.
+4. handleSave and the exact payload branch.
+5. Whether handleSave reads stale recordMode due to closure/state timing.
+6. Whether the custom mode toggle updates recordMode before save.
+7. Whether there are two mode variables or derived mode logic.
+8. Whether fldRecordSource is hardcoded to "glossary" elsewhere in the save payload.
+9. Whether activeRecord hydration for custom records reads:
+   - activeRecord.fldPDataCategoryID
+   - activeRecord.fldPDataItemID
+   instead of relying on fldData/glossary.
+10. Whether custom records are missing fldPDataCategoryID / fldPDataItemID because save never enters custom branch.
+
+Report:
+A. Why the new custom record still saved as glossary.
+B. Exact line where fldRecordSource is assigned.
+C. Whether recordMode is correctly updated by the UI.
+D. Whether handleSave sees the latest recordMode value.
+E. Why item is not hydrated when editing a custom record.
+F. Minimal safe fix.
+
+Do not edit files.
+Do not modify Firestore.
+My suspicion is one of these:
+
+The mode toggle UI looks like it switches, but does not actually set recordMode.
+
+handleSave has a hardcoded fldRecordSource: 'glossary' later in the payload that overrides the custom branch.
+
+The save payload spreads a shared object after setting custom fields, overwriting fldRecordSource.
+
+The useEffect fix only handled one reset path, but another effect still resets mode to glossary.
+
+Custom mode state is not included in the right callback/dependency path, so save sees stale mode.
+
+For the edit hydration bug, the fix should be:
+
+if (activeRecord.fldRecordSource === 'custom') {
+  selections.categoryId = activeRecord.fldPDataCategoryID || ''
+  selections.itemId = activeRecord.fldPDataItemID || ''
+  selections.findId = ''
+  selections.recId = ''
+  selections.glosId = ''
+}
+But first have Cursor confirm the exact current code path.
+
+
+
+Pasted markdown(42).md
+File
+
+Thought for a few seconds
+This explains it: the custom save logic itself is mostly correct, but recordMode is local component state, and it can reset to "glossary" when the Data Entry component remounts or gets reset. When recordMode === "glossary" at save time, the payload writes fldRecordSource: "glossary" and does not include the custom category/item fields. That is why your custom record saved incorrectly again. 
+
+
+The clean fix is to make the mode part of the parent selection state, not just local state.
+
+Recommended fix
+Move the record mode into selections, for example:
+
+selections.recordMode
+or:
+
+selections.dataEntryMode
+Then the toggle updates parent state:
+
+onSelectionChange({
+  ...selections,
+  recordMode: 'custom',
+  isDirty: true
+});
+And handleSave uses that value:
+
+const isCustomMode = selections.recordMode === 'custom';
+That way, mode survives normal rerenders and tab/component remounts better than local-only useState.
+
+Also add a defensive fallback
+For editing older or bad custom records, use this heuristic:
+
+const isCustomRecord =
+  activeRecord?.fldRecordSource === 'custom' ||
+  (!activeRecord?.fldData && !!activeRecord?.fldPDataCategoryID && !!activeRecord?.fldPDataItemID);
+That lets Data Entry hydrate category/item from:
+
+fldPDataCategoryID
+fldPDataItemID
+even if a previous custom save accidentally wrote fldRecordSource: "glossary".
+
+Cursor implementation prompt
+Apply a focused fix for Custom Record mode persistence and hydration.
+
+Files likely affected:
+- src/components/ProjectDataEntry.tsx
+- possibly src/types/index.ts if Selection type/interface exists there
+
+Problem:
+Custom Record mode is stored only in local ProjectDataEntry state:
+recordMode = useState<'glossary' | 'custom'>('glossary')
+
+When ProjectDataEntry remounts or resets, recordMode returns to "glossary". Then a custom save writes:
+fldRecordSource: "glossary"
+fldData: ""
+and omits fldPDataCategoryID / fldPDataItemID.
+
+Goal:
+Make Data Entry mode persistent in selection state so handleSave always uses the actual selected mode.
+
+Requirements:
+
+1. Add a selection-level mode field:
+   - selections.recordMode or selections.dataEntryMode
+   - values: "glossary" | "custom"
+
+2. Initialize mode:
+   - default to "glossary" when no selection mode exists
+   - when editing activeRecord:
+     - if activeRecord.fldRecordSource === "custom", set selection mode to "custom"
+     - otherwise set selection mode to "glossary"
+
+3. Update the mode toggle buttons:
+   - "Use Glossary Record" sets selection mode to "glossary"
+   - "Create Custom Record" sets selection mode to "custom"
+   - do not rely on local recordMode alone
+
+4. In handleSave:
+   - derive isCustomMode from the selection-level mode
+   - if custom:
+     - fldRecordSource: "custom"
+     - fldData: ""
+     - fldPDataCategoryID: selections.categoryId
+     - fldPDataItemID: selections.itemId
+   - if glossary:
+     - fldRecordSource: "glossary"
+     - fldData: resolved glossary id
+
+5. Remove local recordMode state if no longer needed, or keep it only as derived UI state from selections, but there must be one source of truth.
+
+6. Add defensive hydration:
+   Treat a record as custom when either:
+   - activeRecord.fldRecordSource === "custom"
+   OR
+   - activeRecord.fldData is blank AND activeRecord.fldPDataCategoryID and activeRecord.fldPDataItemID exist
+
+7. For custom record hydration:
+   - set categoryId from activeRecord.fldPDataCategoryID
+   - set itemId from activeRecord.fldPDataItemID
+   - clear findId, recId, glosId
+
+8. Do not modify Firestore data directly.
+9. Do not create glossary/library records.
+10. Keep DataExplorer and ReportPreview unchanged unless the analysis reveals they still depend on local mode state.
+
+After changes:
+- Report exact diff
+- Report lint results
+- Explain how the fix prevents remount/reset from changing custom saves back to glossary
+After this fix, test without leaving the Data Entry tab first. Then test again after switching tabs and returning. The saved custom record should still show:
+
+fldRecordSource: "custom"
+fldData: ""
+fldPDataCategoryID: populated
+fldPDataItemID: populated
+
+### What changed
+
+- **Single source of truth:** selections.dataEntryMode ('glossary' | 'custom') on App state, not useState inside ProjectDataEntry.
+- **UI:** Mode buttons call onSelectionChange({ ...selections, dataEntryMode: '...' }). Display uses a derived dataEntryMode (defaults to glossary when unset).
+- **handleSave:** isCustomMode = selections.dataEntryMode === 'custom' — same state the toggles update.
+- **Hydration:** Custom if fldRecordSource === 'custom' **or** (fldData blank **and** both fldPDataCategoryID & fldPDataItemID set). Sets dataEntryMode + category/item + clears find/rec/glos; restores optional master rec id for custom.
+- **App:** Initial (and logout) selections include dataEntryMode: 'glossary'.
+
+### Lint
+
+- **ProjectDataEntry.tsx**, **App.tsx**, **types/index.ts:** no linter issues.
+
+### Exact diff
+
+Full patch:
+
+diff
+diff --git a/src/App.tsx b/src/App.tsx
+index f363abd..24a1a3a 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -295,7 +295,7 @@ export default function App() {
+ 
+   const [selections, setSelections] = useState<any>(() => {
+     const saved = localStorage.getItem('fredasoft_selections');
+-    const initial = { clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null };
++    const initial = { clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null, dataEntryMode: 'glossary' as const };
+     if (saved) try { return { ...initial, ...JSON.parse(saved), isDirty: false, editingRecordId: null }; } catch (e) { return initial; }
+     return initial;
+   });
+@@ -483,7 +483,7 @@ export default function App() {
+   const handleLogout = () => {
+     signOut(auth);
+     setIsRestored(false);
+-    setSelections({ clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null });
++    setSelections({ clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null, dataEntryMode: 'glossary' });
+   };
+
+
+(plus the full ProjectDataEntry.tsx and types/index.ts hunks from the same git diff run — the tool output has the complete ProjectDataEntry and types changes.)
+
+Re-run locally:
+
+git diff -- src/components/ProjectDataEntry.tsx src/App.tsx src/types/index.ts
+
+### Why this fixes remount / reset
+
+ProjectDataEntry is **unmounted** when you leave the Data tab; its **local** recordMode was lost, so the next save used the default glossary path. **dataEntryMode lives in App’s selections**, which stays mounted while you switch tabs, so **Custom** stays selected until you change it or load a record that hydration forces to glossary/custom. **handleSave reads selections.dataEntryMode**, so it matches what you last stored in parent state, not a remounted child default.
+
+### Types note
+
+dataEntryMode was added under UserPreference.dataEntrySelections for typing/documentation; runtime **selections** in App is the flat object that now includes **dataEntryMode** (same field name).
+
+### DataExplorer / ReportPreview
+
+**Unchanged**, per your scope.
+
+This is the right fix. Moving the mode into parent selections solves the reset/remount problem cleanly.
+
+Before committing, test this exact sequence:
+
+Go to Data Entry.
+
+Switch to Create Custom Record.
+
+Switch to another tab, then return to Data Entry.
+
+Confirm Create Custom Record is still selected.
+
+Save a new custom record.
+
+Confirm Firestore shows:
+
+fldRecordSource: "custom"
+fldData: ""
+fldPDataCategoryID: <category id>
+fldPDataItemID: <item id>
+Then confirm:
+
+Data Explorer groups it under the selected category.
+
+Report Preview shows the selected category/item.
+
+Editing the custom record hydrates the category and item.
+
+If that passes, commit:
+
+git add src/App.tsx src/components/ProjectDataEntry.tsx src/types/index.ts
+git commit -m "Persist custom data entry mode in selections"
+git push origin data-entry-flow-refactor
+If DataExplorer.tsx and ReportPreview.tsx still have uncommitted Phase 1 changes from the earlier WIP commit, check first:
+
+git status
+Only add files that are currently modified.
+
+
+PS C:\dev\fredasoft> git add src/App.tsx src/components/ProjectDataEntry.tsx src/types/index.ts
+>> git commit -m "Persist custom data entry mode in selections"       
+>> git push origin data-entry-flow-refactor
+warning: in the working copy of 'src/App.tsx', LF will be replaced by 
+CRLF the next time Git touches it  
+warning: in the working copy of 'src/components/ProjectDataEntry.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/types/index.ts', LF will be replaced by CRLF the next time Git touches it
+[data-entry-flow-refactor c8d9bdb] 
+Persist custom data entry mode in selections
+ 3 files changed, 44 insertions(+), 32 deletions(-)
+Enumerating objects: 15, done.
+Counting objects: 100% (15/15), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (7/7), done.
+Writing objects: 100% (8/8), 1.36 KiB | 348.00 KiB/s, done.
+Total 8 (delta 6), reused 0 (delta 
+0), pack-reused 0 (from 0)
+remote: Resolving deltas:   0% (0/6remote: Resolving deltas:  16% (1/6remote: Resolving deltas:  33% (2/6remote: Resolving deltas:  50% (3/6remote: Resolving deltas:  66% (4/6remote: Resolving deltas:  83% (5/6remote: Resolving deltas: 100% (6/6remote: Resolving deltas: 100% (6/6), completed with 6 local objects. 
+To https://github.com/kenotten/FREDAsoft.git
+   d18f2ae..c8d9bdb  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> 
+
+PS C:\dev\fredasoft> git status    
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.     
+
+nothing to commit, working tree clean
+PS C:\dev\fredasoft> 
+
+Perfect — you’re clean and pushed.
+
+Current state:
+
+Branch: data-entry-flow-refactor
+Latest commit: c8d9bdb Persist custom data entry mode in selections
+Working tree: clean
+Remote: up to date
+Next step is testing only:
+
+Create a new Custom Record.
+
+Confirm Firestore saves:
+
+fldRecordSource: "custom"
+
+fldData: ""
+
+fldPDataCategoryID
+
+fldPDataItemID
+
+Confirm it appears correctly in:
+
+Data Explorer
+
+Report Preview
+
+Edit mode hydration
+
+If those pass, this Phase 1 custom-record feature is in good shape.
+
+
+OK, we're in good shape.  Is there a phase 2?
+
+Yes. Phase 2 would be the governance layer around custom records.
+
+Phase 1 gave you:
+
+Glossary records = approved reusable content
+Custom records = project-only one-offs
+Phase 2 should answer:
+
+How does a good custom record become reusable?
+Who can approve it?
+How do we prevent regular users from changing the official library/glossary?
+Recommended Phase 2
+1. Add “Request Add to Glossary”
+For custom records, add an action:
+
+Request Add to Glossary
+That should not create a library or glossary record immediately.
+
+It should create a pending request, something like:
+
+glossaryRequests
+  sourceProjectDataId
+  proposedCategoryId
+  proposedItemId
+  proposedFindingShort
+  proposedFindingLong
+  proposedRecommendationShort
+  proposedRecommendationLong
+  proposedStandards
+  proposedMeasurementUnit
+  proposedCost
+  submittedBy
+  submittedAt
+  status: pending
+2. Admin review queue
+Admins see a queue:
+
+Pending Glossary Requests
+They can:
+
+Approve
+Reject
+Edit Before Approving
+Mark as Duplicate
+Approval can then create/update:
+
+finding library record
+recommendation library record
+glossary link row
+3. Permission boundary
+Regular users:
+
+Create custom project data records
+Request glossary addition
+Admins:
+
+Create/edit library records
+Create/edit glossary records
+Approve requests
+4. Optional promotion workflow
+When approving, admin chooses:
+
+Use existing category/item/finding/recommendation
+Create new finding
+Create new recommendation
+Create new glossary row
+This prevents duplicate library bloat.
+
+Phase 2A vs 2B
+I’d split it:
+
+Phase 2A — Request system only
+Build the button and pending request collection.
+
+No approval automation yet.
+
+Phase 2B — Admin approval/promotion
+Build the admin review interface that promotes requests into library/glossary records.
+
+Before Phase 2
+I’d finish testing Phase 1 and then add one small UX improvement:
+
+Custom Record mode helper:
+“This record is project-specific and will not be added to the library or glossary.”
+And in Glossary Builder:
+
+After creating/selecting Category, Item, Finding, and Recommendation, click SAVE RECORD to create the glossary link used by Data Entry.
+Those two messages will prevent most workflow confusion before building the approval system.
+
+
+Let's add this to the architecture_design.md and do it down the road
+
+Thought for 4s
+Yes — let’s document Phase 2 as a future governance / promotion workflow, not something to implement now.
+
+Add this section to docs/ARCHITECTURE_DESIGN.md, probably after the Custom Project Records section or near Library / Glossary Governance.
+
+---
+
+## Future Phase 2: Custom Record Promotion and Glossary Governance
+
+Phase 1 allows users to create **project-only custom data records** that are not linked to the glossary or library.
+
+Phase 2 will define how high-quality custom records can be reviewed and promoted into reusable library/glossary content.
+
+### Core Principle
+
+Custom project records are allowed for one-off field conditions, but they do not automatically become part of the reusable library or glossary.
+
+```text
+Custom Project Record ≠ Library Record
+Custom Project Record ≠ Glossary Record
+Promotion into the library/glossary must be intentional and controlled.
+
+User Permissions
+Regular users may:
+
+Create custom project-only data records
+
+Edit custom records within the project
+
+Request that a custom record be considered for the glossary/library
+
+Regular users should not automatically create or modify official reusable glossary or library records unless they have appropriate permissions.
+
+Admins may:
+
+Create and edit library records
+
+Create and edit glossary records
+
+Review proposed glossary additions
+
+Approve, reject, or modify custom-record promotion requests
+
+Request Add to Glossary
+A future workflow should allow a user to submit a custom data record for review.
+
+Example action:
+
+Request Add to Glossary
+This action should create a pending request, not a glossary record.
+
+Possible collection:
+
+glossaryRequests
+Possible fields:
+
+sourceProjectDataId
+sourceProjectId
+sourceFacilityId
+proposedCategoryId
+proposedItemId
+proposedFindingShort
+proposedFindingLong
+proposedRecommendationShort
+proposedRecommendationLong
+proposedMeasurementType
+proposedMeasurementUnit
+proposedUnitCost
+proposedCostUnit
+proposedStandards
+submittedBy
+submittedAt
+status
+reviewedBy
+reviewedAt
+reviewNotes
+Suggested statuses:
+
+pending
+approved
+rejected
+duplicate
+needs_revision
+Admin Review Workflow
+Admins should eventually have a review queue for pending glossary requests.
+
+Admin actions may include:
+
+Approve as new glossary entry
+
+Reject request
+
+Mark as duplicate
+
+Edit before approving
+
+Link to an existing finding
+
+Link to an existing recommendation
+
+Create new finding and/or recommendation records
+
+Create final glossary link row
+
+Approval may create or update:
+
+findings
+recommendations
+glossary
+depending on whether reusable library records already exist.
+
+Promotion Rules
+Promotion should avoid creating duplicate or low-quality library records.
+
+Before approval, the admin should be able to compare the requested custom record against existing:
+
+Categories
+
+Items
+
+Findings
+
+Recommendations
+
+Glossary rows
+
+Standards associations
+
+The admin should decide whether to:
+
+Use existing library records
+Create new library records
+Create only a new glossary link
+Reject as project-specific only
+Design Goal
+The purpose of Phase 2 is to preserve flexibility without weakening library quality.
+
+Users can document unusual field conditions.
+Admins control what becomes reusable content.
+Glossaries remain curated and intentional.
+Implementation Timing
+This is a future phase and should not block the current Phase 1 custom-record workflow.
+
+Phase 1 provides:
+
+Glossary Record mode
+Custom Record mode
+Project-only custom data records
+Phase 2 will add:
+
+Request Add to Glossary
+Admin review queue
+Promotion into library/glossary
+Approval governance
+
+Then commit it separately:
+
+```powershell
+git add docs/ARCHITECTURE_DESIGN.md
+git commit -m "Document future custom record promotion workflow"
+git push origin data-entry-flow-refactor
+
+Is there anything else we need to do before moving on?
+
+Nothing blocking. You’re in a solid stopping point.
+
+Before moving on, I’d do only these quick checks:
+
+Confirm clean repo
+
+git status
+Commit the architecture note if you added it
+
+git add docs/ARCHITECTURE_DESIGN.md
+git commit -m "Document future custom record promotion workflow"
+git push origin data-entry-flow-refactor
+Run one final smoke test
+
+Glossary record mode saves with fldRecordSource: "glossary" and populated fldData
+
+Custom record mode saves with fldRecordSource: "custom" and blank fldData
+
+Custom record appears correctly in Data Explorer and Report Preview
+
+Editing a custom record hydrates category/item correctly
+
+Optional UX notes for later
+
+Add helper text in Data Entry custom mode explaining it is project-only.
+
+Add helper text in Glossary Builder reminding users to click SAVE RECORD after creating/selecting category → item → finding → recommendation.
+
+After that, you can move on.
+
+
+PS C:\dev\fredasoft> git status    
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.     
+
+Changes not staged for commit:     
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   docs/ARCHITECTURE_DESIGN.md
+
+no changes added to commit (use "git add" and/or "git commit -a")     
+PS C:\dev\fredasoft> 
+
+
+
+                                   
+
+
+You only have the architecture doc change pending. Commit and push it:
+
+git add docs/ARCHITECTURE_DESIGN.md
+git commit -m "Document future custom record promotion workflow"
+git push origin data-entry-flow-refactor
+Then confirm:
+
+git status
+You want:
+
+nothing to commit, working tree clean
+
+PS C:\dev\fredasoft> git status    
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.     
+
+Changes not staged for commit:     
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   docs/ARCHITECTURE_DESIGN.md
+
+no changes added to commit (use "git add" and/or "git commit -a")     
+PS C:\dev\fredasoft> git add docs/ARCHITECTURE_DESIGN.md
+>> git commit -m "Document future custom record promotion workflow"   
+>> git push origin data-entry-flow-refactor
+warning: in the working copy of 'docs/ARCHITECTURE_DESIGN.md', LF will be replaced by CRLF the next time 
+Git touches it
+[data-entry-flow-refactor a4a0228] 
+Document future custom record promotion workflow
+ 1 file changed, 98 insertions(+), 
+1 deletion(-)
+Enumerating objects: 7, done.
+Counting objects: 100% (7/7), done.eads
+Compressing objects: 100% (4/4), done.
+Writing objects: 100% (4/4), 1.34 KiB | 98.00 KiB/s, done.
+Total 4 (delta 3), reused 0 (delta 
+0), pack-reused 0 (from 0)
+remote: Resolving deltas:   0% (0/3remote: Resolving deltas:  33% (1/3remote: Resolving deltas:  66% (2/3remote: Resolving deltas: 100% (3/3remote: Resolving deltas: 100% (3/3), completed with 3 local objects. 
+To https://github.com/kenotten/FREDAsoft.git
+   c8d9bdb..a4a0228  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> git status    
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.     
+
+nothing to commit, working tree clean
+PS C:\dev\fredasoft>
+
+Perfect. You’re fully clean and pushed.
+
+Current stopping point:
+
+Branch: data-entry-flow-refactor
+Latest commit: a4a0228 Document future custom record promotion workflow
+Working tree: clean
+Remote: up to date
+You’re good to move on.
+
+
+I want to ask about custom records.
+
+If I toggle "create custom record" in the data entry tab, I am presented with the short and long finding fields (but not the pulldown field with a list of findings associated with the selected item); however, there is a pulldown for recommendations which confuses me, as both the findings and recommendations are children of the items collection.  
+
+Is this by design or an oversight?
+
+Thought for a few seconds
+It is probably partly by design, partly unfinished UX.
+
+The intended Phase 1 custom-record idea was:
+
+Custom Record = project-only record
+not tied to glossary
+not added to library
+So for findings, hiding the glossary/library finding dropdown makes sense because you are writing a one-off finding.
+
+But your concern is valid: if findings are freehand, but recommendations still show a dropdown, the UI feels inconsistent unless the recommendation dropdown is clearly labeled as optional “copy from library.”
+
+Best interpretation
+The recommendation dropdown should not mean:
+
+Choose an approved glossary recommendation
+In Custom Record mode, it should mean:
+
+Optional: copy recommendation text/cost from the recommendation library
+That is useful because users may often write a one-off finding but reuse a standard repair recommendation.
+
+Example:
+
+Custom finding:
+"The shower seat location creates an unusual obstruction condition..."
+
+Copied recommendation:
+"Relocate obstruction to provide required clearance."
+So, allowing a library recommendation in custom mode is reasonable.
+
+But the current UI should be clearer
+Right now, if it just says Recommendation and looks like the normal glossary dropdown, that is confusing.
+
+I would change the custom-mode UI to make the distinction obvious:
+
+Finding section
+Custom Finding
+[Short finding text]
+[Long finding text]
+No finding dropdown.
+
+Recommendation section
+Either:
+
+Custom Recommendation
+[Short recommendation text]
+[Long recommendation text]
+and optionally:
+
+Copy from Recommendation Library
+[dropdown]
+The dropdown should be visually secondary and clearly say Copy from library, not imply it is linked to a glossary.
+
+Should there also be a finding library dropdown?
+Possibly, but I would not add it immediately.
+
+There are three possible custom modes:
+
+Option 1 — Fully freehand custom
+User types both finding and recommendation.
+
+Cleanest conceptually.
+
+Option 2 — Freehand finding + optional library recommendation
+This is what you seem to have now.
+
+Useful and probably intentional, but needs clearer labeling.
+
+Option 3 — Optional library finding + optional library recommendation
+More flexible, but it begins to blur the distinction between “custom project-only record” and “library-driven record.”
+
+My recommendation:
+
+Keep custom finding freehand.
+Allow optional "Copy recommendation from library."
+Make the label explicit.
+Why recommendations are different
+Findings define the observed condition. In a custom one-off scenario, that condition is likely what is unusual.
+
+Recommendations are often reusable remedies, so it makes sense to copy one without adding the entire record to the glossary.
+
+What I’d ask Cursor
+ANALYSIS ONLY. Do not edit files.
+
+In ProjectDataEntry custom record mode, the UI shows freehand finding fields but still shows a recommendation dropdown.
+
+We need to determine whether that dropdown is:
+- a glossary recommendation selector,
+- a master recommendation library copy selector,
+- or leftover from glossary mode.
+
+Inspect src/components/ProjectDataEntry.tsx.
+
+Report:
+1. In custom mode, what data source powers the recommendation dropdown?
+2. Does selecting it copy text/cost from masterRecommendations?
+3. Does it set fldData, glosId, recId, or any glossary linkage?
+4. Does it save fldPDataMasterRecID?
+5. Is the dropdown label misleading?
+6. Recommended minimal UX changes to clarify:
+   - Custom Finding fields
+   - Optional Copy Recommendation from Library
+7. Whether a similar optional "Copy Finding from Library" control should be deferred.
+
+Do not edit files.
+My current answer: the concept is acceptable, but the label/placement is confusing and should be cleaned up.
+
+
+
+Pasted markdown(43).md
+File
+
+Thought for a few seconds
+That answers it clearly: the recommendation dropdown in Custom Record mode is intentional, but the UI hierarchy is confusing.
+
+It is not a glossary recommendation selector. It is powered by the full masterRecommendations library and only copies the recommendation text into the custom record. It does not set fldData, glosId, recId, or create any glossary linkage. If selected, it saves only a trace field, fldPDataMasterRecID, while the record remains custom. 
+
+
+So the model is:
+
+Custom finding = freehand project-only text
+Custom recommendation = freehand project-only text
+Optional dropdown = copy text from recommendation library
+That is a good design, but the screen needs to say that more clearly.
+
+Recommended small UX fix
+Change the custom-mode labels to make the distinction obvious:
+
+Custom Finding (project-only)
+Then in the recommendation section:
+
+Custom Recommendation
+And above the dropdown:
+
+Optional: Copy recommendation text from library
+With helper text:
+
+Copies text only. Does not link this record to the glossary or add it to the library.
+I would not add “Copy Finding from Library” yet. That can wait, because findings bring measurement type/unit baggage and could blur the custom/glossary distinction more than recommendations do.
+
+Use this prompt if you want the quick UI cleanup:
+
+Apply a focused UI copy/label cleanup only.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+Clarify Custom Record mode so users understand that the recommendation dropdown is optional text-copy only, not a glossary selector.
+
+Requirements:
+1. In Custom Record mode, add or adjust labels so the finding section reads:
+   "Custom Finding (project-only)"
+
+2. In Custom Record mode, label the recommendation text section:
+   "Custom Recommendation"
+
+3. Rename the optional master recommendation dropdown label to:
+   "Optional: Copy recommendation text from library"
+
+4. Add helper text near that dropdown:
+   "Copies text only. Does not link this record to the glossary or add it to the library."
+
+5. Do not change behavior.
+6. Do not change save logic.
+7. Do not add a finding-library copy dropdown.
+8. Do not modify Firestore or data model.
+
+After changes:
+Report exact diff and lint results.
+This keeps the current functionality but makes the intent much clearer.
+
+
+I'm going to push back just a little.  The findings and recommendations are both children of the item selected, and both have measurement or unit types.  If the recommendations library (through the dropdown) is used simply to populate the text of the recommendations field, yet does not connect to a glossary, I think we should be able to do the same with findings. Either we do this with both or we do neither, otherwise its too confusing regardless of the label.
+
+If the user wishes to freehand a finding or a recommendation, they can; or, they can use the text of an existing finding or recommendation as a template for something new.
+
+This is happening in the data collection, so it will not affect glossaries.  Later, when we develop the ability to save a new data record as a glossary, we can deal with the problem of duplicate short findings and short recommendations.
+
+What do you think.
+
+I agree with your pushback.
+
+For Custom Record mode, the cleanest mental model is:
+
+Custom record = project-only record
+Library finding/recommendation = optional text/template source
+Glossary = not involved
+So yes — if we allow optional recommendation copy, we should also allow optional finding copy. Otherwise the UI feels arbitrary.
+
+Revised design
+In Custom Record mode:
+
+Custom Finding
+User can either:
+
+type freehand finding text
+or:
+
+copy finding text from the selected item’s finding library
+Copying should populate:
+
+fldFindShort
+fldFindLong
+and probably also, if available:
+
+fldMeasurementType
+fldMeasurementUnit
+But because projectData currently stores fldMeasurementUnit and not necessarily fldMeasurementType, I would keep the first version conservative:
+
+copy finding short/long text
+copy measurement unit if currently supported
+Do not set:
+
+fldData
+glosId
+findId as glossary linkage
+Optionally save a trace field later:
+
+fldPDataMasterFindID
+or better:
+
+fldPDataLibraryFindID
+Custom Recommendation
+Same pattern:
+
+type freehand recommendation
+or:
+
+copy recommendation text from recommendation library
+Copying populates:
+
+fldRecShort
+fldRecLong
+and optionally cost fields if desired.
+
+Again, no glossary linkage.
+
+Important rule
+Both copy actions should be described as:
+
+Copy from library as template
+not:
+
+Select finding / select recommendation
+Because the saved result is still:
+
+fldRecordSource: "custom"
+fldData: ""
+Should copied values include measurement/cost defaults?
+I would say yes, but carefully.
+
+Finding copy should copy:
+fldFindShort
+fldFindLong
+fldMeasurementUnit from finding.fldUnitType
+Possibly display:
+
+Measurement Type from finding.fldMeasurementType
+But since ProjectData may not yet snapshot fldMeasurementType, don’t overbuild unless it is already easy.
+
+Recommendation copy should copy:
+fldRecShort
+fldRecLong
+fldUnitCost from recommendation.fldUnit
+fldUnitType from recommendation.fldUOM
+That makes the custom record useful immediately.
+
+The user can still edit the copied values afterward.
+
+So the Custom Record UI becomes
+Custom Finding
+[Optional: Copy finding text from library]
+[Finding short]
+[Finding long]
+[Measurement]
+
+Custom Recommendation
+[Optional: Copy recommendation text/cost from library]
+[Recommendation short]
+[Recommendation long]
+[Quantity / Unit Cost / Cost Unit]
+Why this is better
+It gives users three legitimate choices:
+
+1. Use approved glossary record
+2. Create fully freehand custom record
+3. Create custom record using library text as a starting template
+That is coherent.
+
+My recommendation
+Yes, implement symmetry:
+
+Custom mode should optionally copy from finding library and recommendation library.
+But make both copy controls clearly template-based and keep the saved record custom/project-only.
+
+Use this Cursor analysis prompt first:
+
+ANALYSIS ONLY. Do not edit files.
+
+We want Custom Record mode in ProjectDataEntry to support optional template-copy from BOTH the finding library and recommendation library.
+
+Current custom mode:
+- Finding is freehand only.
+- Recommendation has an optional “Copy from Master Recommendation” dropdown.
+- Copying recommendation text does not create glossary linkage.
+
+New desired behavior:
+- Custom Finding should also have an optional “Copy finding text from library” dropdown.
+- It should use findings associated with the selected item.
+- Selecting a finding should copy text into fldFindShort/fldFindLong.
+- If safe and already supported, it may also copy measurement unit from finding.fldUnitType into fldMeasurementUnit.
+- It should not set fldData, glosId, or create glossary/library records.
+- It should optionally store a trace field like fldPDataMasterFindID or fldPDataLibraryFindID if consistent with fldPDataMasterRecID.
+
+Also review recommendation copy:
+- Should it copy cost fields fldUnit/fldUOM into projectData fldUnitCost/fldUnitType?
+- Does it currently copy text only?
+- Should the label be changed to “Copy recommendation template from library”?
+
+Questions:
+1. What fields are currently available on Finding and Recommendation for template copy?
+2. How custom mode currently renders finding/recommendation fields.
+3. Where to place an optional finding copy dropdown.
+4. Whether copying finding should update measurement unit/type fields.
+5. Whether copying recommendation should update unit cost/cost unit fields.
+6. Recommended trace field names for copied library finding/recommendation IDs.
+7. Minimal safe implementation plan.
+8. Files likely affected.
+
+Do not edit files.
+Do not modify Firestore.
+Do not implement yet.
+My expected implementation after analysis: add a Copy finding template from library dropdown filtered by selected item, copy short/long + measurement unit, and save optional fldPDataMasterFindID.
+
+
+I would ask one more thing: that, if the user chooses to use the libraries as a template, organize the drop down like this: list findings that are already associated with the item first, then those associated with the category (but not the item), then all others (order each group by fldorder).   Do this with the recommendations drop-down also.
+
+Yes — that is a very good refinement.
+
+For Custom Record mode, the copy-from-library dropdowns should behave like a smart template picker, not a flat global list.
+
+Recommended grouping
+For both Findings and Recommendations, organize options in this order:
+
+1. Associated with selected Item
+2. Associated with selected Category, but not selected Item
+3. All others
+Within each group:
+
+sort by fldOrder
+then fallback to short text
+Why this makes sense
+This gives the user the most likely templates first while preserving flexibility.
+
+Example:
+
+Custom Finding Template
+  Turning Space
+    Insufficient Turning Space
+    Obstructed Turning Space
+
+  Bathing Rooms
+    Lavatory clear floor space
+    Shower clearance
+
+  Other Findings
+    Door clear width
+    Accessible route slope
+Same idea for recommendations.
+
+Important implementation distinction
+Findings are easier
+Findings already have:
+
+finding.fldItem
+So we can group them by:
+
+item match → category match through item.fldCatID → all others
+Recommendations are trickier
+Recommendations may not directly store item/category.
+
+So for recommendations, use relationship paths:
+
+Item-associated recommendations
+
+recs suggested by findings under selected item, via finding.fldSuggestedRecs
+
+and/or recs appearing in glossary rows for selected item
+
+Category-associated recommendations
+
+recs suggested by findings under items in selected category
+
+and/or recs appearing in glossary rows for selected category
+
+All others
+
+remaining master recommendations
+
+That gives the correct practical behavior without needing recommendations to be direct children of item in Firestore.
+
+Updated Cursor analysis prompt
+Use this instead of the prior one:
+
+ANALYSIS ONLY. Do not edit files.
+
+We want Custom Record mode in ProjectDataEntry to support optional template-copy from BOTH the finding library and recommendation library.
+
+Custom Record mode rules:
+- Saved record remains project-only.
+- No glossary row is created.
+- No library record is created.
+- fldData remains empty.
+- fldRecordSource remains "custom".
+- Template copy only copies values into the projectData fields.
+
+Desired UI:
+1. Custom Finding section:
+   - optional dropdown labeled "Copy finding template from library"
+   - user may also type/edit freehand text
+
+2. Custom Recommendation section:
+   - optional dropdown labeled "Copy recommendation template from library"
+   - user may also type/edit freehand text
+
+Dropdown organization for BOTH:
+- Group 1: records associated with selected Item
+- Group 2: records associated with selected Category but not selected Item
+- Group 3: all other records
+- Sort each group by fldOrder, then short text
+
+Finding grouping logic:
+- Item-associated findings:
+  findings where finding.fldItem matches selected item
+- Category-associated findings:
+  findings whose item belongs to selected category, excluding selected item
+- All others:
+  remaining findings
+
+Recommendation grouping logic:
+Recommendations may not directly store item/category. Determine the safest grouping strategy using:
+- finding.fldSuggestedRecs
+- glossary rows
+- selected item
+- selected category
+- masterRecommendations
+
+Suggested logic:
+- Item-associated recommendations:
+  recommendations suggested by findings under selected item
+  OR recommendations used in glossary rows for selected item
+- Category-associated recommendations:
+  recommendations suggested by findings under other items in selected category
+  OR recommendations used in glossary rows for selected category
+  excluding item-associated recommendations
+- All others:
+  remaining master recommendations
+
+Copy behavior:
+Finding template copy should populate:
+- fldFindShort
+- fldFindLong
+- if safe, fldMeasurementUnit from finding.fldUnitType
+- if safe, measurement type display/source if already supported
+
+Recommendation template copy should populate:
+- fldRecShort
+- fldRecLong
+- consider copying fldUnit into fldUnitCost
+- consider copying fldUOM into fldUnitType
+
+Trace fields:
+- Consider fldPDataMasterFindID or fldPDataLibraryFindID for copied finding template.
+- Existing fldPDataMasterRecID is used for recommendation template.
+
+Questions:
+1. What fields exist on Finding for item/category/order/text/measurement?
+2. What fields exist on Recommendation for order/text/unit cost/cost unit?
+3. How to compute grouped finding template options.
+4. How to compute grouped recommendation template options.
+5. Whether the existing Select component supports option groups.
+6. If not, recommended minimal UI pattern.
+7. Whether copying finding should save a trace field.
+8. Whether copying recommendation should copy cost fields.
+9. Minimal safe implementation plan.
+10. Files likely affected.
+
+Do not edit files.
+Do not modify Firestore.
+Do not implement yet.
+My recommended outcome
+Implement grouped template copy dropdowns in custom mode, but keep the save behavior simple:
+
+Custom mode remains custom.
+Template source is only remembered for traceability.
+Copied text/cost/measurement becomes editable project data.
+This will make custom records much more useful without compromising glossary governance.
+
+
+
+Pasted markdown(44).md
+File
+
+Thought for a few seconds
+I agree with your revised direction. Cursor’s analysis supports it: a custom record can safely use finding and recommendation library records as templates, without linking the project data record to the glossary or creating library/glossary records. The current Select can also support grouped dropdowns using <optgroup> children, so this is feasible without rebuilding the UI component. 
+
+
+Recommended implementation
+In Custom Record mode:
+
+Custom Finding
+Optional: Copy finding template from library
+- Group 1: Findings for selected item
+- Group 2: Findings for selected category, other items
+- Group 3: All other findings
+
+Custom Recommendation
+Optional: Copy recommendation template from library
+- Group 1: Recommendations associated with selected item
+- Group 2: Recommendations associated with selected category, other items
+- Group 3: All other recommendations
+Each group sorts by:
+
+fldOrder, then short text
+Copying a finding should populate:
+
+fldFindShort
+fldFindLong
+fldMeasurementUnit from finding.fldUnitType, if present
+Copying a recommendation should populate:
+
+fldRecShort
+fldRecLong
+fldUnitCost from recommendation.fldUnit
+fldUnitType from recommendation.fldUOM
+The record still saves as:
+
+fldRecordSource: "custom"
+fldData: ""
+Optional trace fields:
+
+fldPDataMasterFindID
+fldPDataMasterRecID
+Use this implementation prompt
+Apply a focused Custom Record template-copy enhancement.
+
+Files likely affected:
+- src/components/ProjectDataEntry.tsx
+- src/types/index.ts
+- possibly src/components/DataExplorer.tsx only if clone logic needs to preserve the new trace field
+
+Goal:
+In Custom Record mode, allow users to optionally copy BOTH finding and recommendation templates from the library, while keeping the saved record project-only and not glossary-linked.
+
+Architecture:
+- Custom records remain custom.
+- No glossary record is created.
+- No library record is created.
+- fldData remains empty.
+- fldRecordSource remains "custom".
+- Library templates only copy values into projectData fields.
+
+Requirements:
+
+1. Add optional ProjectData trace field:
+   - fldPDataMasterFindID?: string
+Keep existing fldPDataMasterRecID.
+
+2. In ProjectDataEntry custom mode, add a dropdown labeled:
+   "Optional: Copy finding template from library"
+
+3. Finding template dropdown source:
+   Use findings grouped into:
+   - Group 1: Findings associated with selected Item
+   - Group 2: Findings associated with selected Category but not selected Item
+   - Group 3: All other findings
+
+Grouping details:
+- Finding item association:
+  finding.fldItem matches selections.itemId
+- Finding category association:
+  derive category through items:
+  item.fldItemID === finding.fldItem
+  then item.fldCatID === selections.categoryId
+- Exclude selected-item findings from category group.
+- Exclude groups 1 and 2 from all-others group.
+- Sort each group by fldOrder, then fldFindShort.
+
+4. Finding template copy behavior:
+   When user selects a finding template:
+   - set fldFindShort from finding.fldFindShort
+   - set fldFindLong from finding.fldFindLong
+   - set fldMeasurementUnit from finding.fldUnitType if present
+   - set customMasterFindId / trace value
+   - do NOT set selections.findId
+   - do NOT set glosId
+   - do NOT set fldData
+   - do NOT create glossary/library records
+
+5. In ProjectDataEntry custom mode, rename/adjust the recommendation copy dropdown label to:
+   "Optional: Copy recommendation template from library"
+
+6. Recommendation template dropdown source:
+   Use masterRecommendations grouped into:
+   - Group 1: Recommendations associated with selected Item
+   - Group 2: Recommendations associated with selected Category but not selected Item
+   - Group 3: All other recommendations
+
+Recommendation grouping strategy:
+- Build item-associated rec IDs from:
+  a. findings under selected item via finding.fldSuggestedRecs
+  b. glossary rows with fldItem matching selected item via fldRec or fldRecID
+- Build category-associated rec IDs from:
+  a. findings under other items in selected category via finding.fldSuggestedRecs
+  b. glossary rows with fldCat matching selected category and fldItem not matching selected item
+- Item group wins over category group.
+- All others = remaining masterRecommendations.
+- Sort each group by fldOrder, then fldRecShort.
+- Match recommendation identity using either fldRecID or id.
+
+7. Recommendation template copy behavior:
+   When user selects a recommendation template:
+   - set fldRecShort from rec.fldRecShort
+   - set fldRecLong from rec.fldRecLong
+   - set fldUnitCost from rec.fldUnit if present
+   - set fldUnitType from rec.fldUOM if present
+   - keep customMasterRecId / fldPDataMasterRecID
+   - do NOT set selections.recId
+   - do NOT set glosId
+   - do NOT set fldData
+   - do NOT create glossary/library records
+
+8. Use grouped dropdown UI.
+Preferred:
+- Use native <optgroup> via Select children if compatible.
+- Keep placeholder option.
+- Do not modify Select component unless absolutely necessary.
+
+9. Save behavior:
+In custom mode, save:
+- fldRecordSource: "custom"
+- fldData: ""
+- fldPDataCategoryID
+- fldPDataItemID
+- fldPDataMasterFindID if selected
+- fldPDataMasterRecID if selected
+
+10. Editing existing custom records:
+- If trace fields exist, hydrate the template dropdown selections.
+- Do not overwrite existing custom text unless the user picks a new template.
+
+11. Clone behavior:
+If DataExplorer clone logic already preserves fldPDataMasterRecID, also preserve fldPDataMasterFindID.
+If clone logic does not touch trace fields, make the minimal safe update.
+
+12. Constraints:
+- Do not modify GlossaryBuilder
+- Do not create or modify glossary records
+- Do not create or modify library records
+- Do not change glossary-mode behavior
+- Do not modify Firestore rules
+- Keep this focused on Custom Record mode
+
+After changes:
+- Report exact diff
+- Report lint results
+- Explain how each dropdown is grouped
+- Explain what fields are copied
+- Explain what is saved on custom projectData
+This keeps the rule clean:
+
+Use Glossary Record = official approved path
+Create Custom Record = project-only, optionally seeded from library templates
+
+### Lint
+- **ProjectDataEntry.tsx**, **types/index.ts**, **DataExplorer.tsx**: no linter issues.
+
+### Exact diff
+The full patch is in your repo as:
+
+git diff -- src/components/ProjectDataEntry.tsx src/types/index.ts src/components/DataExplorer.tsx
+
+(Console output matches the hunks above: new fldPDataMasterFindID on ProjectData, clone preservation, grouped template Selects + useMemo grouping in ProjectDataEntry.)
+
+---
+
+### How each dropdown is grouped
+
+**Finding template (custom only)** — from non-deleted findings:
+
+1. **Selected item** — finding.fldItem matches selections.itemId.
+2. **Other items in category** — finding’s item has item.fldCatID === selections.categoryId and finding.fldItem ≠ selected item.
+3. **Other findings** — everything not in 1 or 2.
+
+If category or item is missing, **groups 1–2 are empty** and **group 3** is all active findings (still sorted).
+
+Within each group: **fldOrder (default 999), then fldFindShort**.
+
+**Recommendation template (custom only)** — from non-deleted masterRecommendations, with ID sets built from:
+
+- **Item tier:** fldSuggestedRecs on findings whose fldItem is the selected item, plus fldRec / fldRecID on glossary rows whose fldItem is the selected item.
+- **Category tier:** same for findings on **other** items in the category, plus glossary rows with fldCat = selected category and fldItem ≠ selected item.
+
+**Item wins:** normalized rec keys in the item tier are removed from the category tier before assignment.
+
+Each master row is placed in **group 1** if its fldRecID/id matches an item-tier key, else **group 2** if it matches a category-only key, else **group 3**. Sorted by **fldOrder**, then **fldRecShort**.
+
+---
+
+### What gets copied on template pick
+
+**Finding**
+- fldFindShort, fldFindLong
+- fldMeasurementUnit from finding.fldUnitType when present  
+- customMasterFindId (trace) — **does not** set findId, glosId, or fldData
+
+**Recommendation**
+- fldRecShort, fldRecLong
+- fldUnitCost ← rec.fldUnit
+- fldUnitType ← rec.fldUOM (fallback 'Decimal')
+- If fldUOM === 'LS', **fldQTY → 1** (aligned with lump-sum behavior elsewhere)
+- customMasterRecId (trace) — **does not** set recId, glosId, or fldData
+
+---
+
+### What is saved on custom projectData
+
+Unchanged custom contract, plus optional traces:
+
+- fldRecordSource: "custom"
+- fldData: ""
+- fldPDataCategoryID, fldPDataItemID
+- **fldPDataMasterFindID** if a finding template is selected
+- **fldPDataMasterRecID** if a recommendation template is selected  
+- Plus existing fields (text, costs, location, etc.)
+
+**Clone:** DataExplorer batch clone now copies **fldPDataMasterFindID** like **fldPDataMasterRecID**.
+
+---
+
+### UI implementation
+- Native **<optgroup>** is passed as **Select children** with **options={[]}** so the built-in placeholder option stays; **Select was not modified**.
+
+This sounds exactly right. The custom-record model is now coherent:
+
+Custom record = project-only
+Template dropdowns = optional library seed text/defaults
+Glossary linkage = not involved
+Before committing, test these four cases:
+
+Freehand custom
+
+Do not choose either template.
+
+Save.
+
+Confirm fldRecordSource: "custom", fldData: "", no template trace IDs.
+
+Finding template only
+
+Choose a finding template.
+
+Confirm finding text and measurement unit copy.
+
+Save.
+
+Confirm fldPDataMasterFindID is saved.
+
+Recommendation template only
+
+Choose a recommendation template.
+
+Confirm recommendation text, unit cost, and cost unit copy.
+
+Save.
+
+Confirm fldPDataMasterRecID is saved.
+
+Both templates
+
+Confirm both copied values remain editable before save.
+
+Confirm Data Explorer and Report Preview still show the custom category/item correctly.
+
+Then commit:
+
+git add src/components/ProjectDataEntry.tsx src/types/index.ts src/components/DataExplorer.tsx
+git commit -m "Add custom record library template copy options"
+git push origin data-entry-flow-refactor
+This is a good improvement. It keeps custom records flexible without weakening glossary governance.
+
+
+I love it, but one request: can the third section in the list in the drop down (all other findings/recommendations be organized accordion style by category
+
+Thought for a few seconds
+Yes — that’s a good refinement.
+
+For the first two groups, the current structure is fine:
+
+1. Selected Item
+2. Other Items in Selected Category
+But the third group:
+
+3. Other Findings / Other Recommendations
+could get huge, so organizing it by category is much better.
+
+One limitation: native HTML <select> supports <optgroup>, but it does not support true accordion expand/collapse behavior inside the dropdown. So we have two realistic choices:
+
+Best immediate version
+Use nested-looking optgroups:
+
+Selected Item
+  Finding A
+  Finding B
+
+Other Items in This Category
+  Finding C
+  Finding D
+
+Other Categories — Doors
+  Finding E
+  Finding F
+
+Other Categories — Routes
+  Finding G
+  Finding H
+
+Other Categories — Toilet Rooms
+  Finding I
+That is not a true accordion, but it organizes the long “all others” section by category without replacing the select component.
+
+True accordion version
+Replace the dropdown with a custom popover picker:
+
+Search...
+▾ Selected Item
+▾ Other Items in Category
+▸ Doors
+▸ Routes
+▸ Toilet Rooms
+That would be nicer, but it is a bigger UI component change.
+
+My recommendation
+Do the optgroup-by-category version now, and defer true accordion picker until later.
+
+Use this Cursor prompt:
+
+Apply a focused UI organization enhancement for Custom Record template dropdowns.
+
+Files likely affected:
+- src/components/ProjectDataEntry.tsx
+
+Goal:
+In Custom Record mode, the finding and recommendation template dropdowns already have grouped options:
+1. Selected item
+2. Other items in selected category
+3. All other findings/recommendations
+
+Refine the third group only:
+Instead of one large “Other findings” / “Other recommendations” group, organize those remaining options by category.
+
+Important:
+Native <select> does not support true accordion behavior. Use additional <optgroup> sections by category for now. Do not replace the Select component with a custom popover/accordion.
+
+Requirements:
+
+1. Finding template dropdown
+Keep existing groups:
+- Selected item
+- Other items in selected category
+
+Replace:
+- Other findings
+
+with category-based optgroups for remaining findings:
+- Other Categories — <Category Name>
+
+Grouping logic:
+- For each remaining finding, derive its category through:
+  finding.fldItem -> item.fldItemID -> item.fldCatID -> category.fldCategoryID
+- Group remaining findings by category.
+- If category cannot be resolved, group under:
+  Other Categories — Uncategorized
+- Sort category groups by category name.
+- Sort findings inside each group by fldOrder, then fldFindShort.
+- Do not change copy behavior.
+
+2. Recommendation template dropdown
+Keep existing groups:
+- Selected item
+- Other items in selected category
+
+Replace:
+- Other recommendations
+
+with category-based optgroups for remaining recommendations:
+- Other Categories — <Category Name>
+
+Recommendation grouping logic:
+- For each remaining master recommendation, determine associated categories using existing relationship signals where possible:
+  a. findings whose fldSuggestedRecs includes the recommendation id
+  b. glossary rows whose fldRec or fldRecID matches the recommendation id
+  c. recommendation.fldItem if present, resolved through items
+- If one or more categories are associated, assign to the best category group.
+- If multiple categories are associated, use the first category alphabetically for this UI grouping.
+- If no category can be resolved, group under:
+  Other Categories — Uncategorized
+- Sort category groups by category name.
+- Sort recommendations inside each group by fldOrder, then fldRecShort.
+- Do not change copy behavior.
+
+3. Do not modify:
+- save logic
+- projectData schema
+- glossary behavior
+- library records
+- Select component
+
+4. Keep this focused on Custom Record mode dropdown organization only.
+
+After changes:
+- Report exact diff
+- Report lint results
+- Explain how “all other” templates are grouped by category
+If later the lists are still unwieldy, the next step would be a searchable accordion popover, but I would not jump to that yet.
+
+
+Implemented. I kept this focused to src/components/ProjectDataEntry.tsx and only changed custom-mode dropdown organization logic (no Select component changes, no save-path rewiring for this task).
+
+## Lint results
+- src/components/ProjectDataEntry.tsx: **no linter errors**
+
+## Exact diff
+Run to view full exact patch:
+- git diff -- src/components/ProjectDataEntry.tsx
+
+Key changes made in that diff:
+
+- Added category label lookup map from mergedCategories
+- Reworked customFindingGroups:
+  - keeps g1 (selected item), g2 (other items in selected category)
+  - replaces flat g3 with g3ByCategory
+- Reworked customRecGroups:
+  - keeps g1, g2
+  - replaces flat g3 with g3ByCategory
+  - resolves recommendation category using:
+    - findings fldSuggestedRecs
+    - glossary rows (fldRec/fldRecID)
+    - recommendation fldItem -> item -> category
+  - if multiple categories, chooses first by alphabetical category name
+  - uncategorized fallback when no category signal exists
+- Updated custom-mode <Select> rendering:
+  - finding “other” group now renders multiple <optgroup label="Other Categories — <Category Name>">
+  - recommendation “other” group now renders multiple <optgroup label="Other Categories — <Category Name>">
+
+## How “all other” templates are now grouped by category
+
+### Finding templates (custom mode)
+- Group 1: **Selected item**
+- Group 2: **Other items in category**
+- Remaining findings are grouped by derived category:
+  - finding.fldItem -> item.fldItemID -> item.fldCatID -> category name
+  - unresolved goes to Other Categories — Uncategorized
+- Category groups sorted by category name; findings inside each group sorted by fldOrder, then fldFindShort.
+
+### Recommendation templates (custom mode)
+- Group 1: **Selected item**
+- Group 2: **Other items in category**
+- Remaining recommendations grouped by best category signal:
+  - findings suggesting that rec (fldSuggestedRecs)
+  - glossary rows using that rec (fldRec / fldRecID)
+  - recommendation.fldItem mapped through items
+- If multiple categories match, first category alphabetically is used.
+- No category match -> Other Categories — Uncategorized.
+- Category groups sorted by category name; recommendations inside each group sorted by fldOrder, then fldRecShort.
+
+Great — that is the right level of refinement without overbuilding a custom picker.
+
+Now the custom template workflow is much clearer:
+
+Selected item
+Other items in category
+Other categories — grouped by category
+Before committing, do one quick UI check in Custom Record mode:
+
+Select a category and item.
+
+Open Copy finding template from library.
+
+Confirm the third section is split into category groups.
+
+Open Copy recommendation template from library.
+
+Confirm the same category grouping.
+
+Pick one from an “Other Categories” group and confirm it still copies text/defaults correctly.
+
+Then commit:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Group custom record template options by category"
+git push origin data-entry-flow-refactor
+After that, the custom-record workflow is in a strong place.
+
+
+This is exactly what I wanted.  Please just change one thing: in the lists, instead of prefacing each category with "Other Categories - XXX", just list the Category name
+
+Use this quick Cursor prompt:
+
+Apply a focused label-only change.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+In Custom Record mode template dropdowns, remove the "Other Categories — " prefix from category optgroup labels.
+
+Current behavior:
+- Other Categories — Doors
+- Other Categories — Toilet Rooms
+- Other Categories — Uncategorized
+
+Desired behavior:
+- Doors
+- Toilet Rooms
+- Uncategorized
+
+Requirements:
+1. Update both custom finding template dropdown optgroup labels.
+2. Update both custom recommendation template dropdown optgroup labels.
+3. Do not change grouping logic.
+4. Do not change sorting.
+5. Do not change copy behavior.
+6. Do not change save behavior.
+7. Do not modify any other files.
+
+After changes:
+- Report exact diff
+- Report lint result for ProjectDataEntry.tsx
+After it passes:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Simplify custom template category group labels"
+git push origin data-entry-flow-refactor
+
+Applied in src/components/ProjectDataEntry.tsx only.
+
+### Exact diff for this label-only change
+diff
+-<optgroup key={`cf-g3-cat-${gIdx}-${group.label}`} label={`Other Categories — ${group.label}`}>
++<optgroup key={`cf-g3-cat-${gIdx}-${group.label}`} label={group.label}>
+
+-<optgroup key={`cr-g3-cat-${gIdx}-${group.label}`} label={`Other Categories — ${group.label}`}>
++<optgroup key={`cr-g3-cat-${gIdx}-${group.label}`} label={group.label}>
+
+
+### Lint result
+- src/components/ProjectDataEntry.tsx: **no linter errors**.
+
+Note: your repo currently has other uncommitted edits in this file from prior tasks; the two lines above are the only changes made for this specific request.
+
+Perfect. That label change is exactly what you wanted and it keeps the grouping clean.
+
+Since ProjectDataEntry.tsx has prior uncommitted edits too, commit all intended custom-template work together:
+
+git add src/components/ProjectDataEntry.tsx src/types/index.ts src/components/DataExplorer.tsx
+git commit -m "Add grouped custom record template copy options"
+git push origin data-entry-flow-refactor
+Before committing, run:
+
+git status
+If only those intended files are modified, you’re good.
+
+
+PS C:\dev\fredasoft> git status    
+On branch data-entry-flow-refactor 
+Your branch is up to date with 'origin/data-entry-flow-refactor'.     
+
+nothing to commit, working tree clean
+PS C:\dev\fredasoft> git add src/components/ProjectDataEntry.tsx src/types/index.ts src/components/DataExplorer.tsx
+>> git commit -m "Add grouped custom record template copy options"    
+>> git push origin data-entry-flow-refactor
+;Cwarning: in the working copy of 'sr
+c/components/DataExplorer.tsx', LF 
+will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/ProjectDataEntry.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/types/index.ts', LF will be replaced by CRLF the next time Git touches it
+[data-entry-flow-refactor 3d29575] 
+Add grouped custom record template 
+copy options
+ 3 files changed, 299 insertions(+), 21 deletions(-)
+Enumerating objects: 15, done.
+Counting objects: 100% (15/15), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (7/7), doWriting objects: 100% (8/8), 3.70 KiB | 757.00 KiB/s, done.
+Total 8 (delta 6), reused 0 (delta 
+0), pack-reused 0 (from 0)
+remote: Resolving deltas:   0% (0/6remote: Resolving deltas:  16% (1/6remote: Resolving deltas:  33% (2/6remote: Resolving deltas:  50% (3/6remote: Resolving deltas:  66% (4/6remote: Resolving deltas:  83% (5/6remote: Resolving deltas: 100% (6/6remote: Resolving deltas: 100% (6/6), completed with 6 local objects. 
+To https://github.com/kenotten/FREDAsoft.git
+   a4a0228..3d29575  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> git status    
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.     
+
+nothing to commit, working tree clean
+PS C:\dev\fredasoft>
+
+Excellent — committed, pushed, and clean.
+
+Current state:
+
+Branch: data-entry-flow-refactor
+Latest commit: 3d29575 Add grouped custom record template copy options
+Working tree: clean
+Remote: up to date
+You’re safe to keep testing from here.
+
+
+There is currently no way to add a citation to a data record.  This is important, especially for custom records.  How can we implement this?  It could use the same method and similar ui as the glossary builder
+
+Thought for 30s
+Yes — and you’re right that this is especially important for custom records, because they do not inherit citations from a glossary row.
+
+The clean model should be:
+
+Glossary record:
+  inherits/defaults standards from glossary + record-level overrides
+
+Custom record:
+  uses only record-level standards selected on the data record
+The good news is the data model already appears ready for this because projectData has:
+
+fldStandards: string[]
+So we likely do not need a new Firestore field. We need a UI for editing that array in Data Entry.
+
+Recommended UX
+In Project Data Entry, add a section:
+
+Citations / Standards
+[Add Citation]
+When clicked, open a picker similar to Glossary Builder:
+
+Search standards...
+Filter by source: TAS / UFAS / ADA / All
+Filter by type: Standard / Advisory / Exception / Figure / Table
+Selected citations display as chips/cards:
+
+TAS 4.1.2  [remove]
+UFAS 4.2.3 [remove]
+For glossary mode, the section should show:
+
+Inherited from glossary:
+- TAS ...
+- UFAS ...
+
+Additional citations for this record:
+- ...
+But for Phase 1, I would keep it simpler:
+
+Record Citations
+and save everything into projectData.fldStandards.
+
+The report already has the right architecture if it uses record-level fldStandards, so custom records should then cite correctly.
+
+Important rule
+Adding citations to a data record should not update:
+
+glossary
+findings
+recommendations
+standards
+It only updates:
+
+projectData.fldStandards
+Use this analysis prompt first so we reuse existing UI patterns instead of inventing a new picker:
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to add the ability to attach citations/standards directly to a project data record in Project Data Entry.
+
+Business need:
+- Custom records do not inherit glossary citations.
+- Users must be able to add citations directly to a data record.
+- Glossary-linked records may also need additional record-specific citations.
+- This should not update glossary/library records.
+
+Current known field:
+- projectData.fldStandards appears to exist and should store an array of standard IDs.
+
+Inspect:
+- src/components/ProjectDataEntry.tsx
+- src/components/GlossaryBuilder.tsx
+- src/components/ReportPreview.tsx
+- src/types/index.ts
+- standards picker / standards drag-drop logic in GlossaryBuilder
+- how fldStandards is saved on projectData
+- how reports use record.fldStandards and glossary.fldStandards
+- how standards are displayed in report addendum
+- whether ProjectDataEntry currently receives standards as a prop
+
+Questions:
+1. Does ProjectDataEntry already have access to standards?
+2. Does ProjectDataEntry already save fldStandards?
+3. Is there any UI currently exposing fldStandards in Data Entry?
+4. How does GlossaryBuilder add/remove standards from findings/recommendations/glossary rows?
+5. Can any existing picker/chip UI be reused safely?
+6. How does ReportPreview consume record-level fldStandards?
+7. What is the minimal safe UI to add record-level citations?
+8. Should glossary-linked records show inherited citations separately from record-level citations?
+9. What files are likely affected?
+
+Constraints:
+- Do not modify Firestore data.
+- Do not modify standards records.
+- Do not modify glossary/library records.
+- Do not create new standards.
+- Only edit projectData.fldStandards when saving a data record.
+- Keep implementation focused.
+
+Report exact code locations and recommended implementation plan.
+My likely implementation recommendation
+After analysis, I’d implement:
+
+In ProjectDataEntry.tsx
+Add a Record Citations card:
+
+Record Citations
+[Search standards]
+[Add]
+Selected:
+- TAS 4.1.2 [remove]
+- UFAS 4.3 [remove]
+Save behavior
+Use existing:
+
+fldStandards: safeArray(fldStandards)
+Display behavior
+Selected citation labels should use:
+
+standard.fldStandardType + " " + standard.citation_num
+or whatever the current standards fields are:
+
+TAS 4.1.2
+UFAS 4.2.3
+For custom records
+This becomes the primary citation source.
+
+For glossary records
+This becomes record-specific citation override/addition.
+
+Long term, we can split display into:
+
+Inherited Citations
+Additional Record Citations
+but I would not overbuild that yet.
+
+
+I think I agree but will need to see it in action to know for sure.  For glossary based data records, the standards citations are inherited from the glossary, but the user should have the ability to remove and add citations to customize that data record; for custom citations it is a bit simpler: the user is simply adding the citations they feel are applicable.  Are we in agreement with this?
+
+Yes — we are in agreement.
+
+The clean rule is:
+
+Glossary-based record:
+  starts with inherited glossary citations
+  user may add/remove citations for that specific data record
+
+Custom record:
+  starts with no inherited glossary citations
+  user adds applicable citations directly
+Key implementation detail
+For glossary-based records, we should treat the data record as a snapshot/override once edited.
+
+So when a glossary record is selected, the data record should initially receive:
+
+projectData.fldStandards = glossary.fldStandards
+Then the user edits that record-level array:
+
+add TAS 4.1.2
+remove UFAS 4.3
+Those changes affect only:
+
+projectData.fldStandards
+They do not update the glossary.
+
+That aligns with the architecture:
+
+Library → Glossary → Data Record
+The data record inherits defaults, but then becomes independently editable.
+
+Why this is better than separate add/remove lists
+We could technically store:
+
+inheritedStandards
+removedStandards
+additionalStandards
+but that is more complex than we need right now.
+
+Simpler and better for Phase 1:
+
+fldStandards = final citations for this specific data record
+Meaning:
+
+Report uses projectData.fldStandards as the data-record citation set.
+UX language
+For glossary records, the UI can say:
+
+Record Citations
+Initially copied from glossary. Changes apply only to this data record.
+For custom records:
+
+Record Citations
+Add citations applicable to this custom record.
+Important save behavior
+When creating a new glossary-based data record:
+
+copy glossary.fldStandards → projectData.fldStandards
+When editing an existing data record:
+
+do not re-copy glossary.fldStandards automatically
+Otherwise, edits/removals could be overwritten.
+
+So:
+
+create = inherit citations
+edit = preserve record citations
+That is the distinction that matters.
+
+
+I would like to continue being able to both drag and drop citations, but also to click the "+" button in the citation list to add it.  Keep in mind that we are talking about data records right now.  Glossary Builder is different, and eventually when we can associate citations directly in the finding / recommendation libraries it will be different too in this sense:  eventually, when we can edit library records directly, we will associate citations directly with a finding record and/or a recommendation record.  When creating glossary records, those records inherit the citations associated with their underlying finding/recommendation which can be selectively removed from that glossary record, and additional citations can also be added to that glossary record.  Do we see this the same way, Archie?
+
+Thought for 7s
+Yes — I see it the same way.
+
+The pattern should be consistent across all layers:
+
+Library → Glossary → Data Record
+Each layer inherits from the layer above, then becomes independently editable.
+
+Citation inheritance model
+1. Library layer — future
+Eventually:
+
+Finding library record
+  fldStandards: [...]
+
+Recommendation library record
+  fldStandards: [...]
+These are the default citation associations for reusable library content.
+
+2. Glossary layer
+When creating a glossary record:
+
+Glossary record inherits citations from:
+- selected finding
+- selected recommendation
+Then the glossary editor can:
+
+remove inherited citations
+add additional citations
+Final result is stored on:
+
+glossary.fldStandards
+That glossary citation set becomes the default for project data records created from it.
+
+3. Data record layer — now
+When creating a data record from a glossary record:
+
+projectData.fldStandards = glossary.fldStandards
+Then the user can:
+
+remove citations
+add citations
+Those changes affect only:
+
+that individual projectData record
+For custom records:
+
+projectData.fldStandards starts empty
+or with whatever the user manually adds.
+
+UI agreement
+Yes, users should be able to add citations both ways:
+
+1. Drag and drop citation onto the data record
+2. Click "+" in the citation list
+That is exactly the behavior I would preserve.
+
+For Project Data Entry, the citation UI should be record-level only:
+
+Record Citations
+and the help text should clarify:
+
+For glossary records:
+
+Initially copied from the glossary. Changes apply only to this data record.
+For custom records:
+
+Add citations applicable to this custom project-only record.
+Important implementation rule
+Do not make Data Entry update the glossary or library.
+
+Even if the user removes a citation from a glossary-based data record, that only means:
+
+this record does not use that citation
+It does not mean:
+
+the glossary citation should be removed
+So the full future model is
+Finding / Recommendation Library Citations
+        ↓ copied into
+Glossary Citations
+        ↓ copied into
+Project Data Record Citations
+At each layer:
+
+copied defaults become editable snapshots
+That keeps the system flexible while preserving traceability and preventing accidental global changes.
+
+
+Yes, we completely agree.  How do we implement this.  Let's talk with Cursor and get this going - analyze first them implement in stages
+
+Thought for 6s
+Yes. Let’s do this in stages and start with analysis only, because we need to understand what citation UI already exists in GlossaryBuilder and how much can be reused safely in ProjectDataEntry.
+
+Use this Cursor prompt first:
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to implement record-level citation management in Project Data Entry.
+
+Architecture agreement:
+
+1. Future library layer:
+   - Finding records may have fldStandards.
+   - Recommendation records may have fldStandards.
+   - These are reusable default citation associations.
+
+2. Glossary layer:
+   - Glossary records inherit citations from the selected finding/recommendation library records.
+   - Glossary users may remove inherited citations or add more.
+   - Final glossary citation set is stored on glossary.fldStandards.
+
+3. Project data record layer:
+   - Data records inherit citations from the glossary record at creation time.
+   - Data record users may remove inherited citations or add more.
+   - Final project-specific citation set is stored on projectData.fldStandards.
+   - Custom records start with no inherited glossary citations unless user adds citations manually.
+   - Data Entry citation changes must never update glossary/library records.
+
+Important UI requirement:
+In Project Data Entry, users should be able to add citations both ways:
+- drag and drop citation(s), similar to Glossary Builder
+- click a "+" button in the citation/standards list to add it
+
+Scope right now:
+- Data records only.
+- Do not implement library-level citation editing yet.
+- Do not change Glossary Builder behavior unless needed for reference or reusable helper extraction.
+- Do not update Firestore data directly.
+
+Inspect:
+- src/components/ProjectDataEntry.tsx
+- src/components/GlossaryBuilder.tsx
+- src/components/ReportPreview.tsx
+- src/components/DataExplorer.tsx
+- src/types/index.ts
+- any existing standards/citation search, drag/drop, staged standards, or plus-button logic
+- how projectData.fldStandards is currently initialized, edited, saved, and reported
+- how glossary.fldStandards is used when creating project data records
+- whether standards are passed into ProjectDataEntry as a prop
+
+Questions to answer:
+
+1. Does ProjectDataEntry currently receive the standards list?
+2. Does ProjectDataEntry currently have any UI for projectData.fldStandards?
+3. Where is projectData.fldStandards initialized when creating a data record from a glossary?
+4. Does glossary mode currently copy glossary.fldStandards into projectData.fldStandards at creation?
+5. When editing an existing record, is projectData.fldStandards preserved?
+6. How does ReportPreview combine record-level standards and glossary standards today?
+7. Does ReportPreview need to change so projectData.fldStandards is treated as the final record citation set?
+8. What citation UI exists in GlossaryBuilder?
+   - search/filter
+   - drag source
+   - drop target
+   - selected citation chips/cards
+   - plus button
+   - remove button
+9. Can any citation picker UI be safely reused or extracted?
+10. If reuse is risky, what is the minimal ProjectDataEntry-only citation UI?
+11. What drag/drop approach is currently used in GlossaryBuilder?
+12. What fields identify a standard/citation?
+   - id
+   - fldStandardType
+   - fldStandardVersion
+   - citation_num
+   - relation_type
+   - content_text
+13. What label should be displayed for each selected citation?
+   Example desired format:
+   TAS 4.1.2
+   UFAS 7.1.1
+14. How should the standards list be filtered/searched in Data Entry?
+15. How should add/remove work?
+16. How should drag/drop work?
+17. What exact files are likely affected?
+18. Recommended staged implementation plan.
+
+Constraints:
+- Do not edit files.
+- Do not modify Firestore data.
+- Do not create new standards.
+- Do not update glossary records.
+- Do not update finding/recommendation library records.
+- Data Entry should only edit projectData.fldStandards.
+- Existing reports should continue to work.
+- Keep changes incremental and testable.
+
+Report exact code locations and a staged implementation plan.
+What I expect the stages to look like:
+
+Stage 1 — Confirm inheritance/save/report behavior
+Stage 2 — Add basic Record Citations UI with plus/remove
+Stage 3 — Add drag/drop support
+Stage 4 — Refine inherited-copy behavior for new glossary records
+Stage 5 — Optional shared citation picker extraction
+The first implementation should probably be ProjectDataEntry only, unless Cursor finds a clean reusable citation picker already isolated.
+
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to implement record-level citation management in Project Data Entry.
+
+Architecture agreement:
+
+1. Future library layer:
+   - Finding records may have fldStandards.
+   - Recommendation records may have fldStandards.
+   - These are reusable default citation associations.
+
+2. Glossary layer:
+   - Glossary records inherit citations from the selected finding/recommendation library records.
+   - Glossary users may remove inherited citations or add more.
+   - Final glossary citation set is stored on glossary.fldStandards.
+
+3. Project data record layer:
+   - Data records inherit citations from the glossary record at creation time.
+   - Data record users may remove inherited citations or add more.
+   - Final project-specific citation set is stored on projectData.fldStandards.
+   - Custom records start with no inherited glossary citations unless user adds citations manually.
+   - Data Entry citation changes must never update glossary/library records.
+
+Important UI requirement:
+In Project Data Entry, users should be able to add citations both ways:
+- drag and drop citation(s), similar to Glossary Builder
+- click a "+" button in the citation/standards list to add it
+
+Scope right now:
+- Data records only.
+- Do not implement library-level citation editing yet.
+- Do not change Glossary Builder behavior unless needed for reference or reusable helper extraction.
+- Do not update Firestore data directly.
+
+Inspect:
+- src/components/ProjectDataEntry.tsx
+- src/components/GlossaryBuilder.tsx
+- src/components/ReportPreview.tsx
+- src/components/DataExplorer.tsx
+- src/types/index.ts
+- any existing standards/citation search, drag/drop, staged standards, or plus-button logic
+- how projectData.fldStandards is currently initialized, edited, saved, and reported
+- how glossary.fldStandards is used when creating project data records
+- whether standards are passed into ProjectDataEntry as a prop
+
+Questions to answer:
+
+1. Does ProjectDataEntry currently receive the standards list?
+2. Does ProjectDataEntry currently have any UI for projectData.fldStandards?
+3. Where is projectData.fldStandards initialized when creating a data record from a glossary?
+4. Does glossary mode currently copy glossary.fldStandards into projectData.fldStandards at creation?
+5. When editing an existing record, is projectData.fldStandards preserved?
+6. How does ReportPreview combine record-level standards and glossary standards today?
+7. Does ReportPreview need to change so projectData.fldStandards is treated as the final record citation set?
+8. What citation UI exists in GlossaryBuilder?
+   - search/filter
+   - drag source
+   - drop target
+   - selected citation chips/cards
+   - plus button
+   - remove button
+9. Can any citation picker UI be safely reused or extracted?
+10. If reuse is risky, what is the minimal ProjectDataEntry-only citation UI?
+11. What drag/drop approach is currently used in GlossaryBuilder?
+12. What fields identify a standard/citation?
+   - id
+   - fldStandardType
+   - fldStandardVersion
+   - citation_num
+   - relation_type
+   - content_text
+13. What label should be displayed for each selected citation?
+   Example desired format:
+   TAS 4.1.2
+   UFAS 7.1.1
+14. How should the standards list be filtered/searched in Data Entry?
+15. How should add/remove work?
+16. How should drag/drop work?
+17. What exact files are likely affected?
+18. Recommended staged implementation plan.
+
+Constraints:
+- Do not edit files.
+- Do not modify Firestore data.
+- Do not create new standards.
+- Do not update glossary records.
+- Do not update finding/recommendation library records.
+- Data Entry should only edit projectData.fldStandards.
+- Existing reports should continue to work.
+- Keep changes incremental and testable.
+
+Report exact code locations and a staged implementation plan.
+
+Thought for 5s
+Yes — that is the right analysis prompt to give Cursor.
+
+One small thing I’d add before you run it: ask Cursor to explicitly check whether new glossary-based records currently inherit citations at all, because that is the key behavior we need to verify before adding the UI.
+
+Add this line under the “Questions to answer” section:
+
+19. If a new glossary-based data record is created, does fldStandards get initialized from activeGlossaryEntry.fldStandards, glossary.fldStandards, finding.fldStandards, recommendation.fldStandards, or nothing?
+And under constraints add:
+
+- Do not change inheritance behavior yet; only report what currently happens.
+So yes, run the analysis prompt, with that extra question added. Once Cursor reports back, we can decide the first implementation stage.
+
+
+
+Pasted markdown(45).md
+File
+
+
+Current behavior for a **new glossary-based data record** is:
+
+- fldStandards does **not** initialize from activeGlossaryEntry.fldStandards / glossary.fldStandards.
+- It does **not** initialize from finding standards.
+- It **does** get set from the selected glossary recommendation’s matched master recommendation: setFldStandards(safeArray(rec.fldStandards)) inside applyGlossaryRecommendationRow(...).
+- It can also remain empty if no recommendation is selected/hydrated.
+
+So for your options, today it is effectively:
+
+- activeGlossaryEntry.fldStandards: **no**
+- glossary.fldStandards: **no**
+- finding.fldStandards: **no**
+- recommendation.fldStandards: **yes** (from the matched master recommendation record used in applyGlossaryRecommendationRow)
+- nothing: **initially yes, until recommendation hydration happens**
+
+Thought for 4s
+Yes — this analysis gives us a clear path.
+
+The key findings are:
+
+ProjectDataEntry already receives standards
+ProjectDataEntry already saves projectData.fldStandards
+There is already some citation UI, but it is limited/restricted
+Reports currently union record.fldStandards + glossary.fldStandards
+Most importantly, today new glossary-based data records do not initialize from glossary.fldStandards. They currently pick up standards from the selected master recommendation during hydration, which is not the architecture we just agreed on. 
+
+
+Correct target behavior
+Glossary-based data records
+On create:
+
+projectData.fldStandards = glossary.fldStandards
+Then the user may:
+
+add citations
+remove citations
+Those changes affect only the data record.
+
+Custom data records
+On create:
+
+projectData.fldStandards = []
+Then the user adds whatever citations apply.
+
+Reports
+Eventually:
+
+record.fldStandards = final citation set for that record
+So Report Preview should stop automatically unioning glossary citations at report time, except maybe as a fallback for legacy records.
+
+Recommended staged implementation
+I agree with Cursor’s staging, but I would slightly reorder it:
+
+Stage 1 — Record citation editor UI in Data Entry
+Add/upgrade the Data Entry citation UI so users can:
+
+click + to add citation
+drag citation into selected list
+remove selected citations
+This should only update local fldStandards and save to projectData.fldStandards.
+
+No glossary/library writes.
+
+Stage 2 — Correct inheritance on create
+When creating a new glossary-based record:
+
+copy activeGlossaryEntry.fldStandards into fldStandards
+But when editing an existing record:
+
+preserve activeRecord.fldStandards
+Custom records start empty.
+
+Stage 3 — Report policy alignment
+Change Report Preview so:
+
+record.fldStandards is authoritative
+Potential temporary fallback:
+
+if record.fldStandards is empty/missing and record is legacy glossary record:
+  use glossary.fldStandards
+Stage 4 — Polish
+Add labels/helper text:
+
+For glossary records:
+
+Initially copied from glossary. Changes apply only to this data record.
+For custom records:
+
+Add citations applicable to this custom project-only record.
+My recommendation for the next Cursor prompt
+Start with Stage 1 only, because that is the safest UI-first step and does not alter report logic yet.
+
+Use this:
+
+Implement Stage 1 only: record-level citation editor UI in Project Data Entry.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+Allow users to manage projectData.fldStandards directly in Data Entry.
+
+Requirements:
+1. Do not change ReportPreview yet.
+2. Do not change inheritance behavior yet.
+3. Do not modify glossary/library records.
+4. Do not create standards.
+5. Only update local fldStandards state and save it through the existing projectData save payload.
+
+UI requirements:
+1. Add/upgrade a "Record Citations" section in Data Entry.
+2. Show selected citations from fldStandards.
+3. Selected citation label format:
+   - `${fldStandardType} ${citation_num}`
+   - fallback to citation_num or id if missing
+4. Allow removing selected citations.
+5. Show searchable citation list.
+6. Search fields:
+   - citation_num
+   - citation_name
+   - content_text
+   - fldStandardType
+   - fldStandardVersion
+7. Each available citation row should have a "+" button to add it.
+8. Each available citation row should be draggable.
+9. Selected citation area should accept drag/drop using standardId in dataTransfer, same pattern as GlossaryBuilder.
+10. Dedupe standards when adding.
+11. Mark form dirty when add/remove/drop happens.
+
+Behavior:
+- Adding/removing citations changes only fldStandards local state.
+- Saving writes existing `fldStandards: safeArray(fldStandards)` as it already does.
+- Custom and glossary records both use the same Record Citations UI.
+- No inherited/final distinction yet; that comes in Stage 2.
+
+After changes:
+- Report exact diff.
+- Report lint results.
+- Explain click-add, drag-add, remove, and save behavior.
+Once Stage 1 works, then we handle inheritance and report policy.
+
+
+Implement Stage 1 only: record-level citation editor UI in Project Data Entry.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+Allow users to manage projectData.fldStandards directly in Data Entry.
+
+Requirements:
+1. Do not change ReportPreview yet.
+2. Do not change inheritance behavior yet.
+3. Do not modify glossary/library records.
+4. Do not create standards.
+5. Only update local fldStandards state and save it through the existing projectData save payload.
+
+UI requirements:
+1. Add/upgrade a "Record Citations" section in Data Entry.
+2. Show selected citations from fldStandards.
+3. Selected citation label format:
+   - ${fldStandardType} ${citation_num}
+   - fallback to citation_num or id if missing
+4. Allow removing selected citations.
+5. Show searchable citation list.
+6. Search fields:
+   - citation_num
+   - citation_name
+   - content_text
+   - fldStandardType
+   - fldStandardVersion
+7. Each available citation row should have a "+" button to add it.
+8. Each available citation row should be draggable.
+9. Selected citation area should accept drag/drop using standardId in dataTransfer, same pattern as GlossaryBuilder.
+10. Dedupe standards when adding.
+11. Mark form dirty when add/remove/drop happens.
+
+Behavior:
+- Adding/removing citations changes only fldStandards local state.
+- Saving writes existing fldStandards: safeArray(fldStandards) as it already does.
+- Custom and glossary records both use the same Record Citations UI.
+- No inherited/final distinction yet; that comes in Stage 2.
+
+After changes:
+- Report exact diff.
+- Report lint results.
+- Explain click-add, drag-add, remove, and save behavior.
+
+Thought for 6s
+Yes — that is the correct Stage 1 implementation prompt.
+
+Send that to Cursor as-is.
+
+After Cursor finishes, the key things to verify are:
+
+Selected citations display
+
+Existing fldStandards should appear in the Record Citations section.
+
+Click + add
+
+Clicking + on a citation adds it to fldStandards.
+
+Clicking the same citation again should not duplicate it.
+
+Drag/drop add
+
+Drag a citation row into the selected citation/drop area.
+
+It should add the citation once.
+
+Remove
+
+Removing a selected citation should update local state and enable save.
+
+Save
+
+Save the data record.
+
+Confirm Firestore projectData.fldStandards contains the selected standard IDs.
+
+Reload/edit
+
+Reopen the data record.
+
+Confirm the same selected citations hydrate back into the UI.
+
+No side effects
+
+Confirm no glossary, finding, recommendation, or standards records were modified.
+
+Once Cursor reports back, paste the summary/diff here and we’ll review before committing.
+
+
+**Task result:** Record Citations (Stage 1) in ProjectDataEntry.tsx is done: full active-standards picker, search, + add, drag/drop onto the selected area, remove, dedupe, and dirty flagging; saves still go through fldStandards: safeArray(fldStandards).
+
+**Typecheck:** npm run lint exited with **code 2** because of **existing** TypeScript issues elsewhere (GlossaryView.tsx — unknown[] vs string[]; ReportPreview.tsx — Facility missing id). Those are unrelated to the citation UI change.
+
+**Follow-up (optional):** Fix those three errors if you want a clean tsc run; I can patch them in a follow-up if you want.
+
+Great. Stage 1 is implemented, and the lint failure is still the known unrelated baseline issue.
+
+Before committing, test the citation UI quickly:
+
+Open a data record.
+
+Add a citation with the + button.
+
+Drag another citation into the selected area.
+
+Remove one selected citation.
+
+Save.
+
+Confirm Firestore shows the expected IDs in:
+
+projectData.fldStandards
+Reopen the record and confirm the citations hydrate correctly.
+
+If that works, commit just this file:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Add record-level citation editor in Data Entry"
+git push origin data-entry-flow-refactor
+Then we can move to Stage 2:
+
+Initialize new glossary-based data records from glossary.fldStandards,
+while preserving record-level edits on existing records.
+
+NO, this is not going to work.  The citations panel does not provide the flexibility or search features of the Standards Library panel in the Glossary Builder.  I need that panel here in the Data Entry tab also, not the current card.
+
+Thought for a few seconds
+Understood — then we should stop Stage 1 as implemented and change direction.
+
+You do not want a simplified Record Citations card. You want the same Standards Library / Standards Browser panel experience used in Glossary Builder, available inside Data Entry, with:
+
+search
+filters
+browse behavior
+plus button
+drag/drop
+full citation context
+That makes sense. The citation picker needs to be powerful because the standards list is large and users need to find exact citations quickly.
+
+Recommended correction
+We should ask Cursor to analyze how the Glossary Builder standards panel is composed, then reuse or extract it for Data Entry rather than maintaining a weaker duplicate UI.
+
+Use this prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+The Stage 1 Record Citations card added to ProjectDataEntry is not sufficient.
+
+We need the Data Entry tab to use the same Standards Library / Standards Browser panel experience that exists in Glossary Builder, including search/filter/browse behavior, plus-button add, and drag/drop support.
+
+Goal:
+Replace or refactor the simplified Data Entry citation picker so Data Entry can use the same Standards Library panel UI/pattern as Glossary Builder.
+
+Important:
+- This is for projectData.fldStandards only.
+- Data Entry citation changes must never update glossary/library records.
+- Data Entry should add/remove citation IDs from local fldStandards and save them to projectData.fldStandards only.
+
+Inspect:
+- src/components/GlossaryBuilder.tsx
+- src/components/GlossaryView.tsx
+- src/components/StandardsBrowser.tsx
+- src/components/ProjectDataEntry.tsx
+- any standards search/filter components
+- how the Glossary Builder standards panel is rendered
+- how plus-button add works
+- how drag/drop works
+- what props StandardsBrowser requires
+- whether StandardsBrowser can be reused directly in ProjectDataEntry
+- whether the Stage 1 simplified citation card should be removed or replaced
+
+Questions:
+1. What exact component renders the Standards Library panel in Glossary Builder?
+2. Is StandardsBrowser already reusable enough to mount inside ProjectDataEntry?
+3. What props does StandardsBrowser need?
+4. Does StandardsBrowser include search/filter internally, or are search/filter state controlled by GlossaryBuilder/GlossaryView?
+5. How does the plus button communicate the selected standard?
+6. How does drag/drop identify a standard?
+7. What target/drop-zone code needs to exist in ProjectDataEntry to receive dragged standards?
+8. What selected-citation display UI should Data Entry use?
+9. Can Data Entry reuse the existing selected standards chip/list pattern?
+10. What parts of the simplified Stage 1 citation card should be removed?
+11. Minimal safe implementation plan.
+12. Files likely affected.
+
+Constraints:
+- Do not edit files.
+- Do not modify Firestore data.
+- Do not change GlossaryBuilder behavior.
+- Do not change StandardsBrowser unless absolutely necessary.
+- Do not change ReportPreview yet.
+- Do not change inheritance behavior yet.
+- Only projectData.fldStandards should be edited from Data Entry.
+- Keep this as a replacement of the citation UI, not a new data model.
+
+Report exact code locations and recommended patch plan.
+Expected implementation direction
+Most likely, the fix should be:
+
+ProjectDataEntry
+  uses StandardsBrowser
+  onSelect={(standard) => add to fldStandards}
+  selected/drop zone removes from fldStandards
+And the simplified Stage 1 picker should be removed.
+
+Do not commit the current Stage 1 UI yet
+Since you already know it is not acceptable, don’t commit it. Let Cursor either revise it in place or revert that portion while keeping any useful helper functions if needed.
+
+The target is:
+
+Data Entry gets the real Standards Library panel.
+Selected citations remain record-level only.
+
+
+Pasted markdown(46).md
+File
+
+Thought for 5s
+Good — this confirms the clean path.
+
+We should replace the simplified available-citations card in Data Entry with the existing StandardsBrowser, while keeping the selected record-citations/drop-zone area that writes to projectData.fldStandards.
+
+That gives you:
+
+StandardsBrowser = full search/filter/browse/+/drag source
+ProjectDataEntry selected list = record-level citation target
+StandardsBrowser is already reusable: it owns its own search/filter UI, its + button calls onSelect(standard), and its drag payload includes standardId. 
+
+
+Use this implementation prompt:
+
+Apply a focused replacement of the simplified Data Entry citation picker.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+Use the same StandardsBrowser panel experience from Glossary Builder inside Project Data Entry for record-level citations.
+
+Context:
+The Stage 1 simplified citation picker is not sufficient. StandardsBrowser already provides the needed search/filter/browse UI, plus-button selection, and draggable standard rows.
+
+Requirements:
+
+1. Import StandardsBrowser:
+   import { StandardsBrowser } from './StandardsBrowser';
+
+2. Keep the existing selected Record Citations area/drop-zone:
+   - selected citations from fldStandards
+   - remove buttons
+   - drag/drop target using standardId
+   - save behavior remains fldStandards: safeArray(fldStandards)
+
+3. Add handler:
+   handleAddRecordCitation(standard)
+   - add standard.id to fldStandards if not already present
+   - dedupe
+   - setIsDirty(true)
+
+4. Replace the simplified “available citations” list/search UI with:
+   <StandardsBrowser
+     standards={standards}
+     onSelect={handleAddRecordCitation}
+     className="..."
+   />
+
+5. Remove simplified picker-only state/helpers if now unused:
+   - standardSearch
+   - activeStandardsCatalog
+   - standardMatchesRecordCitationSearch
+   - recordCitationsSearchResults
+   - any custom available-citation row rendering
+
+6. Do not change:
+   - ReportPreview
+   - DataExplorer
+   - GlossaryBuilder
+   - GlossaryView
+   - StandardsBrowser, unless absolutely required
+   - save payload
+   - inheritance behavior
+   - Firestore data
+
+7. Data Entry citation changes must still only update local fldStandards and save to projectData.fldStandards.
+
+8. Preserve drag/drop:
+   - StandardsBrowser rows set dataTransfer standardId
+   - ProjectDataEntry selected citation area receives standardId and adds to fldStandards
+
+After changes:
+- Report exact diff
+- Report lint result for ProjectDataEntry.tsx
+- Explain click-add, drag-add, remove, and save behavior
+Do not commit the simplified picker version as-is. This replaces it with the real Standards Library panel while preserving record-level-only behavior.
+
+
+Implemented the focused replacement in src/components/ProjectDataEntry.tsx to use StandardsBrowser for the available citations experience while keeping record-level fldStandards management local.
+
+### Exact diff (this file)
+
+- Added import:
+  - import { StandardsBrowser } from './StandardsBrowser';
+- Removed simplified picker-only pieces:
+  - removed Search icon usage/import for citation search box
+  - removed standardSearch state
+  - removed standardMatchesRecordCitationSearch(...)
+  - removed activeStandardsCatalog memo
+  - removed recordCitationsSearchResults memo
+  - removed custom “Available citations” searchable row renderer
+- Kept selected citation area/drop-zone and local-state behavior:
+  - kept addRecordCitation(standardId) (dedupe + setIsDirty(true))
+  - kept removeRecordCitation(standardId)
+  - kept handleRecordCitationsDragOver / handleRecordCitationsDrop (standardId)
+  - kept selected citation list rendering from fldStandards with remove buttons
+- Added browser-select handler:
+  - handleAddRecordCitation(standard) → adds standard.id via addRecordCitation(...)
+- Replaced available section UI with:
+  - <StandardsBrowser standards={standards} onSelect={handleAddRecordCitation} className="h-[28rem]" />
+
+### Lint result for ProjectDataEntry.tsx
+
+- ReadLints reports: **No linter errors found** for src/components/ProjectDataEntry.tsx.
+
+### Behavior after change
+
+- **Click-add:** Plus button inside StandardsBrowser calls onSelect(standard), which runs handleAddRecordCitation, dedupes by id, updates local fldStandards, and marks dirty.
+- **Drag-add:** StandardsBrowser rows still set dataTransfer.setData('standardId', s.id); dropping onto the selected citations area in Data Entry reads standardId and adds it to local fldStandards.
+- **Remove:** Remove button in selected citations list deletes that id from local fldStandards and marks dirty.
+- **Save:** Unchanged payload behavior; save continues writing fldStandards: safeArray(fldStandards) to projectData only. No glossary/library writes were introduced.
+
+Great — that is the correction we wanted.
+
+Now Data Entry has:
+
+StandardsBrowser = full search/filter/browse source
+Record Citations = projectData.fldStandards target
+That keeps the UX consistent with Glossary Builder while preserving the data boundary:
+
+Data Entry edits only projectData.fldStandards
+Before committing, test quickly:
+
+Open a data record.
+
+Use the StandardsBrowser search/filter to find a citation.
+
+Click + to add it.
+
+Drag another citation into the selected Record Citations area.
+
+Remove one citation.
+
+Save.
+
+Confirm Firestore projectData.fldStandards contains the final selected citation IDs.
+
+Reopen the record and confirm the selected citations hydrate.
+
+Then commit:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Use Standards Browser for record-level citations"
+git push origin data-entry-flow-refactor
+After that, the next stage is citation inheritance:
+
+New glossary record data entry:
+  copy glossary.fldStandards → projectData.fldStandards
+
+Existing data record:
+  preserve projectData.fldStandards
+
+All the tests work except one cannot drag and drop successfully because of the layout.  The drag and drop feature likely works, but since the Standards Library is located below the Record Citations card, and it is impossible to scroll the page while dragging, one cannot drag the citation to the target.  
+
+Option A: For consistency, it would be better to have the layout of the Standards Library to the right (in a column to the right) in similar layout as the Glossary Builder tab.  If that is possible, it is preferred. 
+
+Option B: If it is not possible, we should disable the drag and drop feature on THIS TAB ONLY" since it isn't productive anyway.  We will just use the "+" button.   
+
+For consistency, I would like to see Option A implemented.  Can we make sure this can be done, and if so, implement it
+
+Thought for a few seconds
+Yes — Option A is the right choice.
+
+The current layout makes drag/drop technically present but practically unusable. Putting Record Citations and Standards Library side-by-side mirrors Glossary Builder and makes drag/drop meaningful.
+
+Use this Cursor prompt:
+
+ANALYSIS + IMPLEMENTATION if feasible. Keep changes focused.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Problem:
+The Record Citations target and StandardsBrowser source are currently stacked vertically. Drag/drop is impractical because the Standards Library is below the Record Citations card and the page cannot be scrolled while dragging.
+
+Preferred solution:
+Implement Option A: place the Record Citations selected/drop target and the StandardsBrowser in a side-by-side layout, similar to the Glossary Builder tab.
+
+Fallback:
+If side-by-side layout is not feasible without a larger refactor, do not force it. Instead report why and recommend disabling drag/drop on this tab only.
+
+Requirements for Option A:
+
+1. Keep the current record-level citation behavior:
+   - selected citations are from fldStandards
+   - click + in StandardsBrowser adds to fldStandards
+   - drag/drop from StandardsBrowser adds to fldStandards
+   - remove button removes from fldStandards
+   - save still writes fldStandards: safeArray(fldStandards)
+   - no glossary/library writes
+
+2. Change layout only:
+   - Record Citations selected/drop area should appear in a left/main column.
+   - StandardsBrowser should appear in a right column.
+   - Use a responsive layout:
+     - desktop/tablet wide: two columns
+     - narrow/mobile: stacked layout is acceptable
+   - Keep both areas visible enough that drag/drop is practical on desktop.
+
+3. Suggested layout:
+   - Wrap the citations section content in:
+     grid grid-cols-1 xl:grid-cols-12 gap-4
+   - Record Citations target:
+     xl:col-span-5 or xl:col-span-6
+   - StandardsBrowser:
+     xl:col-span-7 or xl:col-span-6
+   - StandardsBrowser height should be constrained but usable, e.g. h-[32rem] or max-h with overflow.
+
+4. Preserve existing styling as much as possible.
+5. Do not change StandardsBrowser.
+6. Do not change GlossaryBuilder.
+7. Do not change ReportPreview.
+8. Do not change DataExplorer.
+9. Do not change save/inheritance behavior.
+10. Do not disable drag/drop if Option A works.
+
+After changes:
+- Report exact diff
+- Report lint result for ProjectDataEntry.tsx
+- Explain the new layout and whether drag/drop is now practical
+After Cursor applies it, test on your normal desktop viewport:
+
+Confirm Record Citations is visible beside Standards Library.
+
+Drag a citation from the Standards Library to the Record Citations area.
+
+Confirm it adds once.
+
+Confirm + still works.
+
+Save and reopen the record.
+
+
+Implemented **Option A** in src/components/ProjectDataEntry.tsx: the Record Citations area and Standards Library are now side-by-side on wide screens, with stacked fallback on narrow screens.
+
+### What changed (focused)
+
+- Updated only the Record Citations card layout:
+  - Added responsive grid container:
+    - grid grid-cols-1 xl:grid-cols-12 gap-4 items-start
+  - Left column (xl:col-span-5):
+    - Selected citations drop target (fldStandards-backed list + remove buttons)
+    - Larger drop area (min-h-[22rem]) and scrollable selected list (max-h-[20rem])
+  - Right column (xl:col-span-7):
+    - StandardsBrowser panel with constrained usable height (h-[32rem])
+- Kept existing behavior intact:
+  - plus-click from StandardsBrowser adds to local fldStandards
+  - drag/drop from StandardsBrowser to selected target still uses standardId
+  - remove button removes from local fldStandards
+  - save behavior unchanged (fldStandards: safeArray(fldStandards))
+  - no glossary/library writes introduced
+
+### Exact diff
+
+git diff src/components/ProjectDataEntry.tsx shows the full file diff.  
+For this specific request, the key hunk is the Record Citations card block around the section now starting with:
+
+- grid grid-cols-1 xl:grid-cols-12 gap-4 items-start
+- left Selected citations panel
+- right Standards Library with StandardsBrowser className="h-[32rem]"
+
+### Lint result (ProjectDataEntry.tsx)
+
+- ReadLints: **No linter errors found** for src/components/ProjectDataEntry.tsx.
+
+### Drag/drop practicality
+
+Yes—on desktop/wide (xl) screens, drag/drop is now practical because:
+- source (StandardsBrowser) and target (selected citations drop zone) are visible at the same time in adjacent columns,
+- both have sufficient fixed height to avoid needing to scroll while dragging.
+
+On narrow screens, layout still stacks (as intended), preserving responsive behavior.
+
+Excellent — that addresses the usability issue without weakening the feature.
+
+Now test just this flow:
+
+Open a data record.
+
+Confirm Record Citations and Standards Library appear side-by-side on your normal screen.
+
+Drag a citation into the selected citations area.
+
+Click + on another citation.
+
+Remove one citation.
+
+Save and reopen.
+
+If that works, commit:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Improve record citation layout for drag and drop"
+git push origin data-entry-flow-refactor
+After that, we can move to Stage 2: citation inheritance from glossary records into new data records.
+
+
+PS C:\dev\fredasoft> git status    
+On branch data-entry-flow-refactor 
+Your branch is up to date with 'origin/data-entry-flow-refactor'.     
+
+nothing to commit, working tree clean
+PS C:\dev\fredasoft> git add src/components/ProjectDataEntry.tsx      
+>> git commit -m "Improve record citation layout for drag and drop"   
+>> git push origin data-entry-flow-refactor
+warning: in the working copy of 'src/components/ProjectDataEntry.tsx', LF will be replaced by CRLF the next time Git touches it
+[data-entry-flow-refactor 1803762] 
+Improve record citation layout for 
+drag and drop
+ 1 file changed, 112 insertions(+), 102 deletions(-)
+Enumerating objects: 9, done.
+Counting objects: 100% (9/9), done.Delta compression using up to 8 threads
+Compressing objects: 100% (5/5), done.
+Writing objects: 100% (5/5), 2.05 KiB | 701.00 KiB/s, done.
+Total 5 (delta 4), reused 0 (delta 
+0), pack-reused 0 (from 0)
+remote: Resolving deltas:   0% (0/4remote: Resolving deltas:  25% (1/4remote: Resolving deltas:  50% (2/4remote: Resolving deltas:  75% (3/4remote: Resolving deltas: 100% (4/4remote: Resolving deltas: 100% (4/4), completed with 4 local objects. 
+To https://github.com/kenotten/FREDAsoft.git
+   3d29575..1803762  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> 
+
+Committed and pushed successfully.
+
+Current state:
+
+Branch: data-entry-flow-refactor
+Latest commit: 1803762 Improve record citation layout for drag and drop
+Remote: up to date
+Next logical step is Stage 2 citation inheritance:
+
+New glossary-based data record:
+  initialize fldStandards from glossary.fldStandards
+
+Existing data record:
+  preserve projectData.fldStandards
+
+Custom data record:
+  start with empty fldStandards unless user adds citations
+
+Let's do it
+
+Thought for a few seconds
+Use this Cursor prompt:
+
+Implement Stage 2: citation inheritance for new glossary-based project data records.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+When creating a NEW glossary-based data record, initialize projectData.fldStandards from the selected glossary record’s fldStandards. After that, the record-level citations are editable and saved on projectData.fldStandards.
+
+Architecture:
+- Glossary citations are defaults.
+- Data record citations are the final editable snapshot for that specific record.
+- Data Entry must not update glossary/library records.
+
+Current behavior:
+- New glossary-based records do not initialize from glossary.fldStandards.
+- Some standards may be coming from selected master recommendation hydration.
+- Existing records preserve activeRecord.fldStandards.
+- Custom records should start empty unless the user adds citations.
+
+Desired behavior:
+
+1. Glossary mode, new record:
+   - When a glossary recommendation row is selected and resolved, initialize fldStandards from:
+     active/resolved glossary row.fldStandards
+   - Do this only if creating a new record, not editing an existing one.
+   - This should happen once as inheritance/defaulting.
+   - User may then add/remove citations in Record Citations before saving.
+
+2. Glossary mode, existing record:
+   - Preserve activeRecord.fldStandards.
+   - Do not overwrite with glossary.fldStandards during hydration or recommendation rehydration unless the user intentionally changes to a different glossary row.
+   - If user changes to a different glossary row while editing, it is acceptable to reset citations from the newly selected glossary row only if that is already how other inherited fields behave; otherwise report and choose the safer behavior: preserve record citations.
+
+3. Custom mode, new record:
+   - Start with fldStandards = [].
+   - Do not inherit from glossary, finding, or recommendation.
+   - User adds citations manually.
+
+4. Custom mode, existing record:
+   - Preserve activeRecord.fldStandards.
+
+5. Recommendation template copy in custom mode:
+   - Do not copy recommendation.fldStandards yet.
+   - Only record citations UI controls fldStandards in custom mode.
+
+6. Remove or adjust any current behavior that sets fldStandards from master recommendation in glossary mode if it conflicts with glossary.fldStandards inheritance.
+   - Specifically inspect applyGlossaryRecommendationRow or similar hydration code.
+   - Preferred: glossary row fldStandards wins for glossary-linked data records.
+
+7. Save behavior:
+   - Leave save payload as:
+     fldStandards: safeArray(fldStandards)
+   - Do not change Firestore schema.
+
+8. Do not modify:
+   - ReportPreview yet
+   - DataExplorer
+   - GlossaryBuilder
+   - StandardsBrowser
+   - Firestore data
+   - glossary/library records
+
+9. Add clear comments where inheritance occurs:
+   - “New glossary record: inherit citation snapshot from glossary row”
+   - “Existing records preserve projectData.fldStandards”
+
+After changes:
+- Report exact diff.
+- Report lint result for ProjectDataEntry.tsx.
+- Explain:
+  a. how new glossary records inherit citations,
+  b. how existing records preserve citations,
+  c. how custom records remain empty/manual.
+After Cursor finishes, test this:
+
+Pick a glossary row that has fldStandards.
+
+Create a new glossary-based data record.
+
+Before saving, confirm those citations appear in Record Citations.
+
+Remove one citation and add another.
+
+Save.
+
+Confirm Firestore projectData.fldStandards equals the edited final set.
+
+Reopen the record and confirm the edited set is preserved, not overwritten from the glossary.
+
+
+not sure what "warming up" means, but the page has been stuck there for some time.  What do I do?
+
+Thought for 4s
+“Warming up” is Cursor’s agent getting stuck before completing or presenting the patch. Since it already shows “Edit attempted”, there may be partial changes in your working tree.
+
+Do this:
+
+1. Cancel the stuck agent
+Click Cancel in the Cursor agent panel.
+
+Do not click random accept/reject yet until you inspect the files.
+
+2. Check what changed
+In PowerShell:
+
+git status
+git diff -- src/components/ProjectDataEntry.tsx
+If the diff looks reasonable and only touches the citation inheritance logic, you can keep it.
+
+3. If it looks messy or partial, restore the file
+Because your branch was clean before this, you can safely undo the attempted Cursor edit with:
+
+git restore src/components/ProjectDataEntry.tsx
+Then confirm:
+
+git status
+4. Restart Cursor if needed
+If Cursor stays weird after canceling, close/reopen Cursor. Your code is safe because your last good commit was pushed.
+
+5. Retry with a smaller prompt
+The previous prompt may have been a little broad. After restoring or confirming the file, retry with this narrower prompt:
+
+Apply a focused ProjectDataEntry citation inheritance fix only.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+When selecting a glossary recommendation row for a NEW glossary-based data record, initialize fldStandards from that glossary row’s fldStandards.
+
+Rules:
+1. New glossary record:
+   - setFldStandards(safeArray(gRow.fldStandards))
+   - do this in applyGlossaryRecommendationRow or the equivalent function where gRow is available.
+
+2. Existing activeRecord:
+   - preserve activeRecord.fldStandards
+   - do not overwrite citations from glossary row.
+
+3. Custom mode:
+   - keep fldStandards empty unless user adds citations manually.
+   - recommendation/finding template copy should not copy standards.
+
+4. Remove/replace any current code that initializes fldStandards from master recommendation during glossary selection.
+   - glossary row standards should win.
+
+5. Do not change:
+   - ReportPreview
+   - DataExplorer
+   - GlossaryBuilder
+   - StandardsBrowser
+   - save payload
+   - Firestore schema
+
+After changes:
+- Report exact diff
+- Report lint result for ProjectDataEntry.tsx
+Given your screenshot, the partial edit may already be close, but inspect with git diff first.
+
+
+>> git diff -- src/components/ProjectDataEntry.tsx
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.     
+
+Changes not staged for commit:     
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   src/components/ProjectDataEntry.tsx
+
+no changes added to commit (use "git add" and/or "git commit -a")     
+warning: in the working copy of 'src/components/ProjectDataEntry.tsx', LF will be replaced by CRLF the next time Git touches it
+diff --git a/src/components/ProjectDataEntry.tsx b/src/components/ProjectDataEntry.tsx
+index feae0ef..3e0946a 100644      
+--- a/src/components/ProjectDataEntry.tsx
++++ b/src/components/ProjectDataEntry.tsx
+@@ -276,13 +276,23 @@ export default function ProjectDataEntry({      
+     }
+   }, [project?.fldProjID, activeRecord, onReset]);
+
+-  // Switching to custom mode shou:
+
+Thought for 7s
+You have a partial Cursor edit in ProjectDataEntry.tsx. Don’t commit yet.
+
+Run this first so we can see the full patch:
+
+git diff -- src/components/ProjectDataEntry.tsx
+If the output is too long or weirdly truncated, run:
+
+git diff --stat
+git diff --unified=80 -- src/components/ProjectDataEntry.tsx
+What I want to verify is whether Cursor only changed the citation inheritance logic, or whether it left a malformed/partial edit.
+
+From the small snippet you showed, it looks like Cursor was editing the right area:
+
+-  // Switching to custom mode shou...
+but I need to see the rest before saying “keep it.”
+
+If you want the safest path
+Since your repo was clean before this, you can discard Cursor’s partial edit:
+
+git restore src/components/ProjectDataEntry.tsx
+git status
+Then retry with the smaller prompt I gave.
+
+If you want to inspect first
+Paste the full diff here, especially the hunks around:
+
+applyGlossaryRecommendationRow
+setFldStandards
+activeRecord hydration
+custom mode useEffect
+Do not commit until we confirm the edit is complete.
+
+
+PS C:\dev\fredasoft> git diff -- src/components/ProjectDataEntry.tsx
+warning: in the working copy of 'src/components/ProjectDataEntry.tsx', LF will be replaced by CRLF the next time Git touches it
+diff --git a/src/components/ProjectDataEntry.tsx b/src/components/ProjectDataEntry.tsx
+index feae0ef..3e0946a 100644
+--- a/src/components/ProjectDataEntry.tsx
++++ b/src/components/ProjectDataEntry.tsx
+@@ -276,13 +276,23 @@ export default function ProjectDataEntry({
+     }
+   }, [project?.fldProjID, activeRecord, onReset]); 
+
+-  // Switching to custom mode should clear glossary-only selection state
++  // Switching to custom mode should clear glossary-only selection state.
++  // New custom records should start with empty record-level citations.
+PS C:\dev\fredasoft> 
+
+Thought for 4s
+That diff only shows a comment change, not the actual Stage 2 citation inheritance implementation.
+
+So the Cursor attempt did not complete the meaningful change. I would discard this partial edit and retry cleanly.
+
+Run:
+
+git restore src/components/ProjectDataEntry.tsx
+git status
+You should get back to:
+
+nothing to commit, working tree clean
+Then retry Cursor with the narrower prompt:
+
+Apply a focused ProjectDataEntry citation inheritance fix only.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+When selecting a glossary recommendation row for a NEW glossary-based data record, initialize fldStandards from that glossary row’s fldStandards.
+
+Rules:
+1. New glossary record:
+   - setFldStandards(safeArray(gRow.fldStandards))
+   - do this in applyGlossaryRecommendationRow or the equivalent function where gRow is available.
+
+2. Existing activeRecord:
+   - preserve activeRecord.fldStandards
+   - do not overwrite citations from glossary row.
+
+3. Custom mode:
+   - keep fldStandards empty unless user adds citations manually.
+   - recommendation/finding template copy should not copy standards.
+
+4. Remove/replace any current code that initializes fldStandards from master recommendation during glossary selection.
+   - glossary row standards should win.
+
+5. Do not change:
+   - ReportPreview
+   - DataExplorer
+   - GlossaryBuilder
+   - StandardsBrowser
+   - save payload
+   - Firestore schema
+
+After changes:
+- Report exact diff
+- Report lint result for ProjectDataEntry.tsx
+The exact thing we want to see in the next diff is a real change around applyGlossaryRecommendationRow, especially replacing recommendation-based standards hydration with glossary-row-based standards hydration for new records only.
+
+
+PS C:\dev\fredasoft> git restore src/components/ProjectDataEntry.tsx
+>> git status
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.
+
+nothing to commit, working tree clean
+PS C:\dev\fredasoft>
+
+
+I've give Cursor the new revised narrower prompt
+
+Good. You’re back to a clean baseline, so any new diff from Cursor will be easier to evaluate.
+
+When Cursor finishes, check:
+
+git diff -- src/components/ProjectDataEntry.tsx
+The diff should include real logic around applyGlossaryRecommendationRow or wherever the glossary row is selected.
+
+What we want to see conceptually is:
+
+if (!activeRecord) {
+  setFldStandards(safeArray(gRow.fldStandards));
+}
+and we do not want it setting standards from:
+
+rec.fldStandards
+for glossary-based data record creation.
+
+Paste Cursor’s summary or diff when it’s done, and we’ll review before committing.
+
+
+Here’s what was implemented.
+
+### Changes (focused)
+
+1. **applyGlossaryRecommendationRow**  
+   - Removed setFldStandards(safeArray(rec.fldStandards)).  
+   - For **new glossary** rows only:  
+     if (dataEntryMode === 'glossary' && !activeRecord) setFldStandards(safeArray(gRow.fldStandards))  
+   - With **activeRecord**: does **not** change fldStandards here (still loaded from activeRecord in the hydration effect).
+
+2. **Custom mode useEffect**  
+   - **Existing record** (activeRecord): only clears findId / recId / glosId when present; **does not** clear fldStandards.  
+   - **New record**, switching from a glossary path (hadGlossaryLinks): clears selection and **setFldStandards([])** so glossary-inherited citations are dropped.  
+   - New custom with no glossary links: leaves fldStandards alone (stays [] unless the user adds citations).
+
+3. **Comment** next to hydration setFldStandards for existing records.
+
+Finding dropdown in glossary mode still does setFldStandards([]) on finding change; choosing a recommendation again re-applies **gRow.fldStandards** for a new record.
+
+### Exact diff
+
+See git diff src/components/ProjectDataEntry.tsx (output above): updates only in the custom-mode effect, applyGlossaryRecommendationRow, and the hydration comment.
+
+### Lint
+
+**ReadLints for ProjectDataEntry.tsx:** no issues reported.
+
+### Behavior summary
+
+| Scenario | fldStandards |
+|----------|----------------|
+| New glossary, pick recommendation | From **gRow.fldStandards** |
+| Edit existing glossary-linked row | From **activeRecord.fldStandards** (unchanged by row re-apply) |
+| New custom after glossary path | Cleared when glossary links are cleared |
+| Custom templates | Still no fldStandards copy (only applyGlossaryRecommendationRow used master rec before; that path is removed for standards) |
+
+That implementation matches the intended Stage 2 behavior.
+
+The important correction is this:
+
+New glossary-based data record
+→ fldStandards initializes from glossary row fldStandards
+→ user can then add/remove record-level citations
+and not from the master recommendation’s fldStandards.
+
+The table Cursor provided is exactly what we want:
+
+New glossary, pick recommendation     → gRow.fldStandards
+Existing glossary-linked row          → activeRecord.fldStandards
+New custom after glossary path         → cleared
+Custom templates                       → no citation copy
+Test this before committing:
+
+Choose a glossary record that has fldStandards.
+
+Create a new glossary-based data record.
+
+Confirm Record Citations auto-populates from the glossary row.
+
+Remove one citation and add another.
+
+Save.
+
+Confirm Firestore projectData.fldStandards equals your edited final set.
+
+Reopen the record and confirm it preserves the edited set.
+
+Switch to Custom Record and confirm citations start empty unless manually added.
+
+If that passes:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Inherit glossary citations for new data records"
+git push origin data-entry-flow-refactor
+
+PS C:\dev\fredasoft> git add src/components/ProjectDataEntry.tsx
+>> git commit -m "Inherit glossary citations for new data records"
+>> git push origin data-entry-flow-refactor
+[data-entry-flow-refactor bd6c8f7] Inherit glossary 
+citations for new data records
+ 1 file changed, 37 insertions(+), 5 deletions(-)   
+Enumerating objects: 9, done.
+Counting objects: 100% (9/9), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (5/5), done.
+Writing objects: 100% (5/5), 915 bytes | 457.00 KiB/s, done.
+Total 5 (delta 4), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (4/4), completed with 4 local objects.
+To https://github.com/kenotten/FREDAsoft.git
+   1803762..bd6c8f7  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> 
+
+Nice — committed and pushed successfully.
+
+Current latest commit:
+
+bd6c8f7 Inherit glossary citations for new data records
+This completes the main record-level citation flow:
+
+Glossary record → inherits glossary citations into projectData.fldStandards
+Data record → user can add/remove citations
+Custom record → user manually adds citations
+Reports → next thing to verify/align
+Next likely stage is ReportPreview policy alignment: make sure reports treat projectData.fldStandards as the final citation set, with glossary citations used only as a legacy fallback if needed.
+
+
+Let's go.  I think the reports look close already so it shouldn't be much to complete this last phase
+
+Thought for 4s
+Use this Cursor prompt:
+
+Implement final citation reporting alignment.
+
+File:
+src/components/ReportPreview.tsx
+
+Goal:
+Treat projectData.fldStandards as the final record-level citation set for reports.
+
+Architecture:
+- Glossary citations are inherited into projectData.fldStandards when a new glossary-based data record is created.
+- Data Entry users may add/remove citations for that specific record.
+- Therefore, projectData.fldStandards is the authoritative final citation set for that record.
+- Custom records also use projectData.fldStandards directly.
+
+Current concern:
+ReportPreview currently unions:
+- record.fldStandards
+- glossary.fldStandards
+
+That can re-add citations the user removed from the data record, which violates the record-level override model.
+
+Desired behavior:
+
+1. For each data record:
+   - Use record.fldStandards as the final citation set when it exists.
+
+2. Legacy fallback:
+   - If record.fldStandards is missing/undefined/null AND the record is glossary-linked, then fallback to glos.fldStandards.
+   - This is only for older records created before citation inheritance existed.
+   - Be careful: an intentionally empty array [] should mean “no citations,” not “fallback to glossary.”
+
+3. Do not union record and glossary citations anymore.
+
+4. Apply this policy consistently anywhere ReportPreview computes citations:
+   - documentation card citation display
+   - referenced addendum entries
+   - grouped citations
+   - any standard/citation collection used for report output
+
+5. Custom records:
+   - Use record.fldStandards.
+   - Do not look for glossary citations when fldData is empty.
+
+6. Add a small helper if useful, such as:
+   getRecordStandardIds(record, glos)
+   Rules:
+   - if Array.isArray(record.fldStandards): return normalized record.fldStandards
+   - else return normalized glos?.fldStandards
+   This preserves intentional empty arrays.
+
+7. Do not modify:
+   - ProjectDataEntry
+   - DataExplorer
+   - GlossaryBuilder
+   - Firestore data
+   - data model
+
+After changes:
+- Report exact diff.
+- Report lint result for ReportPreview.tsx.
+- Explain how legacy fallback works.
+The key thing to verify in Cursor’s diff is that it removes this kind of logic:
+
+const mergedIds = [...new Set([...recordIds, ...glosIds])];
+and replaces it with record-first logic:
+
+const ids = Array.isArray(record.fldStandards)
+  ? normalizeStandardIds(record.fldStandards)
+  : normalizeStandardIds(glos?.fldStandards);
+After Cursor finishes, test one record where you intentionally remove an inherited citation. The report should not re-add it from the glossary.
+
+
+Summary of what was implemented:
+
+### Changes (src/components/ReportPreview.tsx)
+
+1. **getRecordStandardIds(record, glos)** (after normalizeStandardIds)
+   - **Array.isArray(record.fldStandards)** → normalizeStandardIds(raw) so **[] stays “no citations”** and does **not** fall back to glossary.
+   - **Plain object** (e.g. Firestore map) → normalized list of values (treated as the record’s own snapshot).
+   - **Otherwise** (undefined / null / string-only path not used here): **legacy fallback** only if **(record.fldData || '').trim() !== '' and glos is defined** → normalizeStandardIds(glos.fldStandards).
+   - **Custom / unlinked**: empty fldData → **no** glossary fallback (even if glos were wrong); result is [] when fldStandards is absent.
+
+2. **buildReferencedAddendumEntries**  
+   Replaced recordIds ∪ glosIds with **getRecordStandardIds(d, glos)** so the addendum uses the same policy.
+
+3. **DocumentationCard refs useMemo**  
+   Same: **getRecordStandardIds(record, glos)** instead of merging.
+
+There were no other fldStandards merges in this file.
+
+### Exact diff
+
+See git diff src/components/ReportPreview.tsx (output above).
+
+### Lint
+
+**ReadLints for ReportPreview.tsx:** no issues.
+
+### Legacy fallback behavior
+
+- **New / current rows** usually have **fldStandards as an array** (possibly []). That array is **final** for the report.
+- **Older glossary-linked rows** may have **no fldStandards field** (or null / undefined). If **fldData points at a glossary row** and **glos resolves**, citations come from **glos.fldStandards** so pre-inheritance data still shows.
+- **[] on the record** is **not** treated as “missing”; **no** glossary merge, so removals stay removed in the report.
+
+That implementation sounds correct.
+
+The key policy is now in place:
+
+record.fldStandards exists as array → report uses it as final
+record.fldStandards = [] → report shows no citations
+record.fldStandards missing on old glossary-linked record → fallback to glossary.fldStandards
+custom/unlinked record → no glossary fallback
+That solves the main issue: a citation removed at the data-record level will not be reintroduced by the report.
+
+Test one removed-citation case, then commit:
+
+git add src/components/ReportPreview.tsx
+git commit -m "Use record-level citations as final report references"
+git push origin data-entry-flow-refactor
+After that, the citation workflow is coherent end-to-end:
+
+Glossary citations → copied into new data record
+Data record citations → editable final snapshot
+Report → uses the data record’s final snapshot
+
+thank you.  Successfully done!
+
+PS C:\dev\fredasoft> git add src/components/ReportPreview.tsx
+>> git commit -m "Use record-level citations as final report references"
+>> git push origin data-entry-flow-refactor
+[data-entry-flow-refactor 76e0fed] Use record-level 
+citations as final report references
+ 1 file changed, 32 insertions(+), 10 deletions(-)  
+Enumerating objects: 9, done.
+Counting objects: 100% (9/9), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (5/5), done.
+Writing objects: 100% (5/5), 1.04 KiB | 530.00 KiB/s, done.
+Total 5 (delta 4), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (4/4), completed with 4 local objects.
+To https://github.com/kenotten/FREDAsoft.git        
+   bd6c8f7..76e0fed  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> 
+
+Excellent — committed and pushed.
+
+Latest state:
+
+Branch: data-entry-flow-refactor
+Latest commit: 76e0fed Use record-level citations as final report references
+Remote: up to date
+This completes the citation workflow:
+
+Glossary citations
+→ inherited into new data records
+→ editable at the data-record level
+→ reports use the final record-level citation set
+That is a solid architectural milestone.
+
+
+I have a flow question.  Let's say I've created a glossary record, and later go to the finding record for that glossary and add a citation to the finding record in the library (or replace a citation with a different citation).  I'm assuming the glossary doesn't automatically update, correct?  What would be a logical flow to give that option (for glossaries to update, even on a case-by-case basis?
+
+Thought for a few seconds
+Correct — under the snapshot model we’ve been defining, the glossary should not automatically update when a library finding/recommendation citation changes.
+
+That is intentional.
+
+The inheritance chain should behave like this:
+
+Finding / Recommendation Library
+        ↓ copied into
+Glossary Record
+        ↓ copied into
+Project Data Record
+But after the copy happens, each layer becomes its own editable snapshot.
+
+So if later you update:
+
+finding.fldStandards
+that should not silently change:
+
+glossary.fldStandards
+and it definitely should not silently change:
+
+projectData.fldStandards
+Otherwise old glossaries and old reports could change underneath you.
+
+Logical future flow: “Review Citation Updates”
+The cleanest option is an explicit sync/review workflow.
+
+For a glossary record, the app could detect:
+
+Library citations differ from glossary citations
+Then show a prompt or status:
+
+Library citations have changed since this glossary record was created.
+Review updates?
+When clicked, the user/admin sees a comparison:
+
+Current Glossary Citations
+- TAS 302.1
+- TAS 403.5.1
+
+Current Library Defaults
+- TAS 302.1
+- TAS 403.5.2
+Then actions:
+
+Add new library citation
+Remove obsolete glossary citation
+Replace citation
+Ignore / keep glossary as-is
+Apply all
+Important: this should be case-by-case
+I would not have a global automatic update that changes every glossary using that finding.
+
+Better options:
+
+Option A — Per glossary record
+In Glossary Builder:
+
+Review Library Citation Updates
+This compares the selected finding/recommendation library citations against the current glossary citations.
+
+Option B — Admin audit panel
+A future admin tool:
+
+Glossary Citation Drift Audit
+It lists glossary records where:
+
+glossary.fldStandards differs from finding/recommendation library defaults
+Then admin can review and apply updates selectively.
+
+Option C — Bulk update with preview
+Later, maybe:
+
+Apply updated library citations to selected glossary records
+But only after preview and backup protection.
+
+We need metadata to do this well
+Eventually, when a glossary inherits citations from library records, we may want to store trace metadata like:
+
+fldInheritedFindingStandardsSnapshot
+fldInheritedRecommendationStandardsSnapshot
+fldCitationLastSyncedAt
+fldCitationSourceVersion
+But that may be more than you need right now.
+
+A simpler first version is just compare live values:
+
+current finding.fldStandards + recommendation.fldStandards
+vs
+glossary.fldStandards
+That is enough to tell the user, “these differ.”
+
+Recommended rule
+Library changes do not automatically mutate glossaries.
+Glossaries may be manually refreshed from library defaults.
+Data records do not automatically mutate from glossary changes.
+That keeps every layer safe.
+
+Best UX language
+For glossary records:
+
+Citations copied from library defaults can be reviewed and updated, but changes are not automatic.
+For data records:
+
+Citations copied from the glossary are specific to this data record. Later glossary changes do not automatically update saved data records.
+My recommendation
+Future implementation should be:
+
+Glossary Builder → Citation Sync / Review button
+Not automatic.
+
+Clicking it should show:
+
+Library defaults
+Current glossary citations
+Differences
+Apply selected changes
+Then the glossary is updated only when the user intentionally applies the changes.
+
+
+OK, good stuff.  Let's not implement anything yet regarding this.  Let's pull what you just told me including the options in a memo I can add to the architecuture_design.md
+
+Here’s a paste-ready memo for docs/ARCHITECTURE_DESIGN.md.
+
+---
+
+## Future Memo: Citation Inheritance, Drift, and Refresh Workflow
+
+The citation model follows the broader snapshot inheritance architecture:
+
+```text
+Library → Glossary → Project Data Record
+Citations may eventually exist at all three layers:
+
+Finding / Recommendation Library Citations
+        ↓ copied into
+Glossary Citations
+        ↓ copied into
+Project Data Record Citations
+Each layer inherits defaults from the layer above, but once copied, the citation set becomes an editable snapshot for that layer.
+
+Core Rule
+Changes to citations at an upstream layer should not automatically mutate downstream records.
+
+For example, if a citation is later added to or changed on a library finding record:
+
+finding.fldStandards
+that should not automatically update:
+
+glossary.fldStandards
+and should not automatically update:
+
+projectData.fldStandards
+This protects historical work, avoids unexpected report changes, and preserves the principle that each layer is independently reviewable.
+
+Current Direction
+The intended long-term behavior is:
+
+Library citation changes do not automatically mutate glossaries.
+Glossaries may be manually refreshed from library defaults.
+Project data records do not automatically mutate from glossary changes.
+A glossary record may inherit citations from its underlying finding/recommendation library records when it is created, but later changes to those library records require explicit review before being applied to the glossary.
+
+Likewise, a project data record may inherit citations from the glossary when it is created, but later changes to the glossary do not automatically update the already-saved project data record.
+
+Why Automatic Sync Is Risky
+Automatic downstream updates could unintentionally alter:
+
+Existing glossary records
+
+Previously completed project data
+
+Report citations
+
+Historical audit trails
+
+Cost/recommendation documentation associated with a completed inspection or review
+
+For example, if a finding library citation is corrected from one standard section to another, that may be appropriate for future glossaries, but not necessarily for every existing glossary or every completed project record.
+
+Preferred Future Flow: Explicit Citation Review
+A future workflow should allow users/admins to compare current library citation defaults against the citations currently stored on a glossary record.
+
+Possible UI action:
+
+Review Library Citation Updates
+This action would compare:
+
+Current Library Defaults
+vs.
+Current Glossary Citations
+Example:
+
+Current Glossary Citations
+- TAS 302.1
+- TAS 403.5.1
+
+Current Library Defaults
+- TAS 302.1
+- TAS 403.5.2
+The user/admin could then decide whether to:
+
+Add a newly inherited citation
+
+Remove an outdated citation
+
+Replace a citation
+
+Keep the glossary as-is
+
+Apply all suggested changes
+
+Ignore the difference for this glossary record
+
+Option A: Per-Glossary Review
+Add a review action directly in Glossary Builder.
+
+Example:
+
+Review Library Citation Updates
+This would evaluate only the currently selected glossary record.
+
+Benefits:
+
+Simple mental model
+
+Lower risk
+
+Good for case-by-case review
+
+Avoids accidental bulk changes
+
+This is likely the best first implementation.
+
+Option B: Admin Citation Drift Audit
+Create a future admin/audit panel that identifies glossary records whose citations differ from their underlying library defaults.
+
+Example:
+
+Glossary Citation Drift Audit
+The audit could list:
+
+Glossary record
+
+Associated category/item/finding/recommendation
+
+Current glossary citations
+
+Current library default citations
+
+Added/removed/different citation IDs
+
+Suggested action
+
+Benefits:
+
+Better for larger cleanup efforts
+
+Helps identify outdated glossary records
+
+Allows admins to review multiple records efficiently
+
+This should still require explicit approval before changes are applied.
+
+Option C: Bulk Refresh With Preview
+A future advanced admin workflow could allow selected glossary records to be refreshed from library defaults in bulk.
+
+This should only be allowed with:
+
+Clear preview
+
+Selective approval
+
+Backup protection
+
+Duplicate detection
+
+Ability to skip records
+
+Confirmation before write
+
+Bulk refresh should never be silent or automatic.
+
+Possible Metadata for Future Sync
+To support better review workflows, future records may store citation inheritance metadata such as:
+
+fldInheritedFindingStandardsSnapshot
+fldInheritedRecommendationStandardsSnapshot
+fldCitationLastSyncedAt
+fldCitationSourceVersion
+These fields are not required immediately, but may help distinguish:
+
+Citations originally inherited from the library
+
+Citations added directly to the glossary
+
+Citations removed intentionally at the glossary level
+
+Citations that differ because the library changed later
+
+A simpler first implementation can compare live library citation values against current glossary citation values without additional metadata.
+
+Project Data Records
+Project data records should remain even more protected than glossary records.
+
+Once a data record has inherited citations from the glossary, its citations are stored in:
+
+projectData.fldStandards
+That field represents the final citation set for that specific record.
+
+Later changes to either:
+
+glossary.fldStandards
+or:
+
+finding/recommendation.fldStandards
+should not automatically update saved project data records.
+
+If project-level citation refresh is ever needed, it should be treated as a separate explicit workflow with strong safeguards.
+
+Design Principle
+Defaults may flow downward.
+Edits do not automatically propagate downward.
+Refreshes must be explicit, reviewable, and reversible.
+This preserves flexibility while protecting historical accuracy and user trust.
+
+Users can update reusable defaults.
+Admins can review drift.
+Glossaries can be refreshed intentionally.
+Project data remains stable unless directly edited.
+
+OK, I would like to do some UI clean up.  First thing:
+
+in the data entry tab, I would like to remove the words "Recording Inspection Findings" from below the title block "Data Entry" in the top card.  
+
+Use this Cursor prompt:
+
+Apply a focused UI text cleanup only.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+In the Data Entry tab top card/header, remove the subtitle text:
+"Recording Inspection Findings"
+
+Requirements:
+1. Remove only the visible text "Recording Inspection Findings" below the "Data Entry" title.
+2. Do not remove the "Data Entry" title.
+3. Do not alter layout more than necessary.
+4. Do not change behavior, state, save logic, or styling elsewhere.
+5. Do not modify any other files.
+
+After changes:
+- Report exact diff.
+- Report lint result for ProjectDataEntry.tsx.
+After Cursor applies it:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Remove Data Entry header subtitle"
+git push origin data-entry-flow-refactor
+
+### Change
+Removed the subtitle <p>Recording Inspection Findings</p> under the **Data Entry** <h2> in the top card. Title and surrounding layout are unchanged.
+
+### Exact diff
+diff
+diff --git a/src/components/ProjectDataEntry.tsx b/src/components/ProjectDataEntry.tsx
+index 7b8bcfc..244b03e 100644
+--- a/src/components/ProjectDataEntry.tsx
++++ b/src/components/ProjectDataEntry.tsx
+@@ -1234,7 +1234,6 @@ export default function ProjectDataEntry({
+                 </div>
+                 <div>
+                   <h2 className="text-lg font-bold text-zinc-900 leading-tight">Data Entry</h2>
+-                  <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">Recording Inspection Findings</p>
+                 </div>
+               </div>
+
+
+### Lint
+**ProjectDataEntry.tsx:** no linter issues reported.
+
+Looks good — that’s exactly the small UI cleanup you wanted.
+
+Commit it when ready:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Remove Data Entry header subtitle"
+git push origin data-entry-flow-refactor
+
+Make the bgcolor of the 5 cards a light blue
+
+Use this Cursor prompt:
+
+Apply a focused UI color cleanup only.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+In the Data Entry tab, change the background color of the five top/context cards to light blue.
+
+Requirements:
+1. Identify the five cards in the Data Entry tab currently used as the top/context cards.
+2. Change their background color to a light blue Tailwind class, preferably:
+   bg-blue-50
+3. Keep borders/text/layout unchanged unless needed for contrast.
+4. Do not change behavior, state, save logic, or data flow.
+5. Do not modify other files.
+
+After changes:
+- Report exact diff.
+- Report lint result for ProjectDataEntry.tsx.
+After Cursor applies it, inspect the screen. If the blue feels too strong, use bg-sky-50 instead.
+
+
+### Identified “five” cards
+There are **five** <Card> usages in ProjectDataEntry.tsx:
+
+1. **Sticky header — context** (Mode, Category, Item, Location) — line ~1272  
+2. **Finding** — line ~1399  
+3. **Recommendation** — line ~1522  
+4. **Record Citations** — line ~1661  
+5. **Images** — line ~1732  
+
+Each now uses a light blue surface. Because Card in ui/card.tsx always adds bg-white, the prop uses **!bg-blue-50** so the blue background reliably overrides the default white (same token as bg-blue-50, with important for cascade).
+
+### Exact diff (this file)
+Your git diff may also include the earlier subtitle removal; the **color** hunk is:
+
+diff
+-            <Card className="p-6 border-zinc-200 shadow-sm bg-white">
++            <Card className="p-6 border-zinc-200 shadow-sm !bg-blue-50">
+...
+-          <Card className="p-6 space-y-6 border-zinc-200 shadow-sm">
++          <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
+
+(Applied to all five Card instances: context, Finding, Recommendation, Record Citations, Images.)
+
+### Lint
+**ProjectDataEntry.tsx:** no linter issues reported.
+
+**Note:** The title row above the context card is still a plain div with bg-white (not a <Card>). Only the five <Card> sections were updated per your scope.
+
+That sounds correctly scoped.
+
+Since the subtitle removal and the blue-card change are both small UI changes in the same file, you can commit them together:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Clean up Data Entry card styling"
+git push origin data-entry-flow-refactor
+After you visually check it, if bg-blue-50 feels too blue across all five sections, switch to:
+
+!bg-sky-50
+or the subtler:
+
+!bg-blue-50/60
+
+PS C:\dev\fredasoft> git add src/components/ProjectDataEntry.tsx
+>> git commit -m "Clean up Data Entry card styling" 
+>> git push origin data-entry-flow-refactor
+[data-entry-flow-refactor 658728b] Clean up Data Entry card styling
+ 1 file changed, 5 insertions(+), 6 deletions(-)    
+Enumerating objects: 9, done.
+Counting objects: 100% (9/9), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (5/5), done.
+Writing objects: 100% (5/5), 559 bytes | 559.00 KiB/s, done.
+Total 5 (delta 4), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (4/4), completed with 4 local objects.
+To https://github.com/kenotten/FREDAsoft.git
+   76e0fed..658728b  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> 
+
+Committed and pushed.
+
+Current latest commit:
+
+658728b Clean up Data Entry card styling
+You’re good to continue with the next UI cleanup.
+
+
+I would like to make the card in the top header section (the one with the mode toggle and the category, item, and location fields) a bit darker blue, but with same opacity (just for contrast).  Also, I would like the finding dropdown and recommendation dropdown to have a bgcolor of yellow, and the active field to have a green bgcolor.
+
+Thought for a couple of seconds
+Use this Cursor prompt:
+
+Apply a focused Data Entry UI color cleanup only.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Goal:
+Adjust Data Entry field/card colors for clearer visual hierarchy.
+
+Changes requested:
+
+1. Top context card
+The top header/context Card — the one containing:
+- mode toggle
+- Category
+- Item
+- Location
+
+currently uses light blue. Make this card a slightly darker blue than the other cards while keeping the same general opacity/softness.
+
+Preferred Tailwind class:
+- replace `!bg-blue-50` with `!bg-blue-100`
+
+Only apply this to the top context card, not all cards.
+
+2. Finding dropdown
+In the Finding card, make the finding dropdown/select background yellow.
+
+Preferred Tailwind class:
+- `bg-yellow-50`
+or if the existing component background overrides it:
+- `!bg-yellow-50`
+
+This applies to the finding dropdown/select field only, not the whole Finding card.
+
+3. Recommendation dropdown
+In the Recommendation card, make the recommendation dropdown/select background yellow.
+
+Preferred Tailwind class:
+- `bg-yellow-50`
+or if needed:
+- `!bg-yellow-50`
+
+This applies to the recommendation dropdown/select field only, not the whole Recommendation card.
+
+4. Active field
+Make the currently active/primary editable field use a green background.
+
+Interpret “active field” as the primary currently editable input/textarea styling used through the existing `focusClasses` or equivalent shared class.
+
+Preferred Tailwind class:
+- `focus:bg-green-50`
+
+If there is already a shared focus/active class, update that class rather than individually editing every input.
+
+Do not make all fields permanently green; the intent is green when active/focused.
+
+Constraints:
+- Do not change behavior.
+- Do not change state, save logic, validation, or data flow.
+- Do not modify other files.
+- Keep the change limited to styling/className updates.
+
+After changes:
+- Report exact diff.
+- Report lint result for ProjectDataEntry.tsx.
+After Cursor applies it, visually check whether the yellow is too strong. If it is, use bg-yellow-50/70 or bg-amber-50 instead.
+
+
+### Summary
+
+1. **Top context card** (Mode + Category + Item + Location): !bg-blue-50 → **!bg-blue-100**. Other section cards stay **!bg-blue-50**.
+
+2. **Finding dropdowns** (glossary Finding <Select> and custom “Copy finding template” <Select>): **selectClassName={cn('!bg-yellow-50', focusClasses)}** so the control surface is yellow and still overrides Select’s default bg-white.
+
+3. **Recommendation dropdowns** (glossary recommendation <Select> and custom “Copy recommendation template” <Select>): same **cn('!bg-yellow-50', focusClasses)**.
+
+4. **Focused / active fields**: shared **focusClasses** now uses **focus:bg-green-50** instead of focus:bg-yellow-50 (amber border + ring unchanged). Inputs/textareas/selects that use focusClasses get green only while focused, not a permanent green fill.
+
+### Exact diff
+
+diff
+-  const focusClasses = "focus:border-amber-500 focus:bg-yellow-50 focus:ring-amber-500/10";
++  const focusClasses = "focus:border-amber-500 focus:bg-green-50 focus:ring-amber-500/10";
+...
+-            <Card className="p-6 border-zinc-200 shadow-sm !bg-blue-50">
++            <Card className="p-6 border-zinc-200 shadow-sm !bg-blue-100">
+...
+-                selectClassName={focusClasses}
++                selectClassName={cn('!bg-yellow-50', focusClasses)}
+
+(Those selectClassName updates appear on the four Finding/Recommendation <Select> instances listed above.)
+
+### Lint
+
+**ProjectDataEntry.tsx:** no linter issues reported.
+
+Looks good. This is a clean styling-only change.
+
+Do a quick visual check:
+
+Top context card is slightly darker blue.
+
+Finding and recommendation dropdowns are yellow.
+
+Focused editable fields turn green while active.
+
+No fields are permanently green unless intentionally focused.
+
+Then commit:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Refine Data Entry field color cues"
+git push origin data-entry-flow-refactor
+
+the bgcolor of the finding detailed description and the recommendation detailed description fields needs to be consistent with other fields (but not with the dropdowns)
+
+Use this focused Cursor prompt:
+
+Apply a focused Data Entry styling fix only.
+
+File:
+src/components/ProjectDataEntry.tsx
+
+Problem:
+The Finding detailed description textarea and Recommendation detailed description textarea have a background color that is inconsistent with the other normal editable fields.
+
+Goal:
+Make these two detailed description fields match the normal editable field styling, but do not make them yellow like the Finding/Recommendation dropdowns.
+
+Requirements:
+1. Identify the textarea/input for:
+   - Finding detailed description / long finding text
+   - Recommendation detailed description / long recommendation text
+
+2. Remove any permanent yellow background class from these detailed description fields if present.
+
+3. Make their default background match the other normal editable fields.
+   Use the same base classes used by comparable text inputs/textareas in this form.
+
+4. Keep focus behavior consistent with other active fields:
+   - focused/active state may use the shared focusClasses
+   - do not remove focus:bg-green-50 if that is now the shared active field behavior
+
+5. Do not change:
+   - Finding dropdown yellow background
+   - Recommendation dropdown yellow background
+   - save logic
+   - state
+   - validation
+   - any other files
+
+After changes:
+- Report exact diff.
+- Report lint result for ProjectDataEntry.tsx.
+This should leave the dropdowns yellow, while the long description fields behave like normal editable fields.
+
+
+everything looks great.  Let's commit
+
+Great. Commit the current ProjectDataEntry.tsx styling changes:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Refine Data Entry field color cues"
+git push origin data-entry-flow-refactor
+Then confirm:
+
+git status
+You want:
+
+nothing to commit, working tree clean
+
+PS C:\dev\fredasoft> git add src/components/ProjectDataEntry.tsx
+>> git commit -m "Clean up Data Entry card styling" 
+>> git push origin data-entry-flow-refactor
+[data-entry-flow-refactor 658728b] Clean up Data Entry card styling
+ 1 file changed, 5 insertions(+), 6 deletions(-)    
+Enumerating objects: 9, done.
+Counting objects: 100% (9/9), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (5/5), done.
+Writing objects: 100% (5/5), 559 bytes | 559.00 KiB/s, done.
+Total 5 (delta 4), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (4/4), completed with 4 local objects.
+To https://github.com/kenotten/FREDAsoft.git
+   76e0fed..658728b  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> 
+
+Thought for a couple of seconds
+It looks like that was the earlier commit/output for:
+
+658728b Clean up Data Entry card styling
+Before doing anything else, check whether the latest color cue changes are actually committed:
+
+git status
+If it says nothing to commit, you’re clean.
+
+If src/components/ProjectDataEntry.tsx is still modified, commit the latest styling changes with:
+
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Refine Data Entry field color cues"
+git push origin data-entry-flow-refactor
+Then confirm:
+
+git status
+
+PS C:\dev\fredasoft> git status
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   docs/ARCHITECTURE_DESIGN.md     
+        modified:   src/components/ProjectDataEntry.tsx
+
+no changes added to commit (use "git add" and/or "git commit -a")
+PS C:\dev\fredasoft> 
+
+You have two modified files now:
+
+docs/ARCHITECTURE_DESIGN.md
+src/components/ProjectDataEntry.tsx
+Since these are unrelated, commit them separately.
+
+1. Commit the Data Entry styling cleanup
+git add src/components/ProjectDataEntry.tsx
+git commit -m "Refine Data Entry field color cues"
+git push origin data-entry-flow-refactor
+2. Then commit the architecture doc update
+git add docs/ARCHITECTURE_DESIGN.md
+git commit -m "Document citation inheritance refresh workflow"
+git push origin data-entry-flow-refactor
+3. Confirm clean
+git status
+You want:
+
+nothing to commit, working tree clean
+
+what's going on with the cursor chat.  That last message repeats over and over
+
+Thought for 5s
+Cursor’s agent is stuck in a loop. It looks like it keeps trying to run/inspect the same git status task for ProjectDataEntry.tsx even though you already committed and pushed the styling change.
+
+The important thing: your terminal shows the Data Entry styling commit succeeded and pushed:
+
+c56252e Refine Data Entry field color cues
+So the code work itself is probably fine.
+
+Do this:
+
+In the Cursor chat/agent panel, click Stop or Cancel.
+
+Do not keep accepting/running its repeated action.
+
+In PowerShell, run:
+
+git status
+You’ll probably still see only:
+
+modified: docs/ARCHITECTURE_DESIGN.md
+If so, commit the doc separately:
+
+git add docs/ARCHITECTURE_DESIGN.md
+git commit -m "Document citation inheritance refresh workflow"
+git push origin data-entry-flow-refactor
+Then confirm:
+
+git status
+If Cursor keeps looping after you stop it, close that agent tab or restart Cursor. Your repo is safe as long as git status and your commits look right.
+
+
+PS C:\dev\fredasoft> git status
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   docs/ARCHITECTURE_DESIGN.md     
+
+no changes added to commit (use "git add" and/or "git commit -a")
+PS C:\dev\fredasoft>
+
+Good — only the architecture doc is pending.
+
+Commit that separately:
+
+git add docs/ARCHITECTURE_DESIGN.md
+git commit -m "Document citation inheritance refresh workflow"
+git push origin data-entry-flow-refactor
+Then confirm clean:
+
+git status
+You should see:
+
+nothing to commit, working tree clean
+And yes, stop/cancel the stuck Cursor agent if it’s still repeating.
+
+
+Yes, we're good
+
+Great. You’re in a clean stopping point.
+
+Current important commits from this stretch include:
+
+c56252e Refine Data Entry field color cues
+and the architecture doc update should be committed separately if you ran it.
+
+We’ve now completed:
+
+Custom data records
+Grouped template copy options
+Record-level citation editor using Standards Browser
+Citation inheritance into new data records
+Reports using record-level citations as final references
+Data Entry UI cleanup
+Good place to keep testing and uncover the next issue.
+
+
+If on the data entry tab a glossary finding does not include the measurement type or measurement unit, it is not editable (by design).  We are aiming for statistical consistency which will be compromised if data types are not all the same.
+
+However, when a type or unit is not specified, what would be the process for fixing this?  Obviously, the underlying glossary (and most likely the underlying finding in the library) are missing these values.  Fixing them after the fact won't filter up to the data records.  Suggestions? 
+
+Thought for 24s
+Yes — your instinct is right. Because Data Entry keeps measurement fields read-only for statistical consistency, the fix should happen upstream, not directly on the data record.
+
+The current architecture supports that idea: fldMeasurementType is maintained in library/admin tooling, while projectData currently stores the measured value and fldMeasurementUnit, not a full measurement-type snapshot. The app has also treated Finding.fldUnitType as the finding’s measurement unit, copied into ProjectData.fldMeasurementUnit; reports currently show value + unit, not the semantic measurement type. 
+
+
+Recommended process
+1. Fix the library finding first
+The source of truth should be the Finding library record.
+
+For the underlying finding, populate:
+
+finding.fldMeasurementType
+finding.fldUnitType
+Example:
+
+fldMeasurementType: Slope
+fldUnitType: %
+or:
+
+fldMeasurementType: Width
+fldUnitType: IN
+This should be done in Library Manager / Library Completeness tooling, not in Data Entry. That matches our earlier direction: the completeness panel and Library Manager are where these fields belong, while Data Entry should not allow direct editing of them. 
+
+
+2. Update or refresh the glossary record
+If the glossary record is based on that finding, the glossary should be checked next.
+
+For measurement metadata, I would treat the glossary as an inherited snapshot, just like citations:
+
+Finding library measurement metadata
+        ↓ copied into
+Glossary record / glossary context
+        ↓ copied into
+Project data record
+However, if the glossary does not currently store these measurement fields, then the refresh may simply mean: Data Entry resolves the selected finding and now sees the corrected library values. If the glossary eventually snapshots measurement type/unit, then we need an explicit “refresh from library” workflow, not automatic updates.
+
+3. Existing project data records need an explicit repair/update step
+You are correct that fixing the library after the fact should not silently mutate existing data records. But unlike citations, measurement unit affects the interpretation of numeric data and costs, so we need a deliberate repair flow.
+
+For existing project data records that were created while the unit/type was missing, I’d use this rule:
+
+Do not auto-update silently.
+Offer an explicit repair action.
+A safe repair process would be:
+
+Find records where:
+- fldMeasurement is present
+- fldMeasurementUnit is blank
+- linked finding now has fldUnitType populated
+Then show an admin review list:
+
+Project / Facility / Location
+Finding
+Current Measurement Value
+Current Measurement Unit: blank
+Library Measurement Type: Slope
+Library Measurement Unit: %
+[Apply unit to this record]
+The user/admin can apply the update record-by-record or in a selected batch.
+
+Why I would not auto-update all existing records
+Because this can change the meaning of old data.
+
+Example:
+
+fldMeasurement: 2.5
+old fldMeasurementUnit: blank
+new finding.fldUnitType: %
+That probably means slope, but if the wrong finding metadata was entered, you could accidentally make old records look valid or invalid in a report. This is especially important because reports currently use fldMeasurementUnit for measurement display, and there has historically been a naming collision with projectData.fldUnitType, which is a cost unit, not a measurement unit. 
+
+
+Best practical workflow
+I’d implement this in three stages.
+
+Stage 1 — Prevent future bad records
+When selecting a glossary finding in Data Entry:
+
+If fldMeasurementType or fldUnitType is missing, show a warning.
+
+Keep the measurement value field disabled/read-only as it is now.
+
+Message:
+
+This finding is missing measurement metadata. Update the Finding Library before recording a measurement.
+Possibly include a link/button:
+
+Open Finding in Library Manager
+This prevents new statistically inconsistent data.
+
+Stage 2 — Add an admin repair panel
+Create a “Measurement Metadata Repair” panel, probably in Library Manager or an Admin/Data Quality area.
+
+It should identify:
+
+Findings missing:
+- fldMeasurementType
+- fldUnitType
+
+Project data records missing:
+- fldMeasurementUnit
+where linked finding now has fldUnitType
+Actions:
+
+Update selected project data records from current library finding metadata
+Skip / leave unchanged
+This should update only:
+
+projectData.fldMeasurementUnit
+and, if we decide to snapshot it:
+
+projectData.fldMeasurementType
+Stage 3 — Decide whether to snapshot fldMeasurementType
+Right now, fldMeasurementType is not stored on ProjectData; it is library-side metadata. The earlier analysis suggested that adding it to project data is only necessary if you want a frozen inspection-row snapshot or reports that do not need to resolve back to the finding. 
+
+
+Given your snapshot architecture, I think we are getting close to needing:
+
+projectData.fldMeasurementType
+projectData.fldMeasurementUnit
+Then reports and historical records stay stable even if the library changes later.
+
+But I would do that deliberately, not as a quick patch.
+
+My recommendation
+Use this policy:
+
+Library findings are the source of truth.
+Data Entry does not allow measurement metadata edits.
+Missing metadata blocks or warns against measurement entry.
+Existing project records are repaired only through an explicit admin review/update action.
+In plain English:
+
+Fix the finding in the library.
+
+Fix or refresh the glossary if needed.
+
+For existing project data, run a deliberate repair/update action.
+
+Do not silently cascade changes.
+
+That preserves your statistical consistency goal without unexpectedly rewriting historical inspection data.
+
+
+Those fields are populated in the glossary, but they are not exposed in the library tab when findings are selected.  We need to add them there, for sure, but still address the original question.
+
+Thought for 4s
+Yes — agreed. There are two separate issues:
+
+1. Library Manager needs to expose the fields
+If findings already have these fields in Firestore:
+
+fldMeasurementType
+fldUnitType
+then Library Manager should display and edit them when a Finding is selected.
+
+That is the correct upstream place to fix them.
+
+So we should add those fields to the Finding edit UI in Library Manager:
+
+Measurement Type
+Measurement Unit
+Where:
+
+fldMeasurementType = semantic type
+examples: Slope, Width, Height, Count, Area, Clearance
+
+fldUnitType = measurement unit
+examples: %, IN, FT, LFT, SQFT, EA
+And to avoid continued confusion, the labels should probably be explicit:
+
+Measurement Type
+Measurement Unit
+not just “UOM.”
+
+2. Original issue: fixing existing data records
+Even if the library/glossary is fixed, existing data records may already have blank:
+
+projectData.fldMeasurementUnit
+Those records will not automatically update — and I agree they should not silently auto-update.
+
+The process should be explicit:
+
+Fix source metadata upstream → review affected project records → apply update deliberately
+Recommended workflow
+Step A — Fix the library finding
+In Library Manager, expose and edit:
+
+finding.fldMeasurementType
+finding.fldUnitType
+This ensures future glossary records and data records can inherit correctly.
+
+Step B — Confirm glossary records
+If the glossary already has these fields populated, good.
+
+If not, later we may need a glossary refresh tool:
+
+Refresh measurement metadata from library finding
+but that should also be explicit, not automatic.
+
+Step C — Repair existing project data records
+Create an admin/data-quality tool that finds records where:
+
+projectData.fldMeasurementUnit is blank
+and the linked glossary/finding now has a valid measurement unit.
+
+Then show a review table:
+
+Record | Finding | Measurement Value | Current Unit | Proposed Unit | Proposed Type
+With actions:
+
+Apply to selected records
+Skip
+This should probably update:
+
+projectData.fldMeasurementUnit
+And if we decide to snapshot type too:
+
+projectData.fldMeasurementType
+Important architecture decision
+I think we should strongly consider adding this to project data:
+
+projectData.fldMeasurementType
+Right now we are treating fldMeasurementUnit as a snapshot on the data record, but fldMeasurementType is still mostly derived from the finding. That is inconsistent with the snapshot model we just used for citations.
+
+A more consistent data-record snapshot would be:
+
+projectData.fldMeasurementType
+projectData.fldMeasurementUnit
+projectData.fldMeasurement
+Example:
+
+fldMeasurementType: "Slope"
+fldMeasurementUnit: "%"
+fldMeasurement: 2.5
+That makes the data record self-contained for reporting and analysis.
+
+My recommended policy
+Finding library = source/default measurement metadata
+Glossary = inherited/editable measurement metadata
+Project data record = final measurement metadata snapshot
+So:
+
+Library change does not silently update glossary
+Glossary change does not silently update data records
+Repair/refresh must be explicit
+Immediate implementation order
+I would do this in this order:
+
+Expose fldMeasurementType and fldUnitType in Library Manager for Findings.
+
+Confirm Data Entry pulls measurement metadata from the glossary/finding path correctly.
+
+Add projectData.fldMeasurementType as a saved snapshot field.
+
+Create a repair/audit tool for records with missing measurement metadata.
+
+For the next Cursor step, I’d start with the Library Manager UI exposure only. Then we can address data-record snapshot/repair after confirming the fields are easy to maintain upstream.
+
+
+Let's prompt Cursor to do item 1 - expose fldMeasurementType and fldUnitType in Library Manager for Findings
+
+Use this Cursor prompt:
+
+Apply a focused Library Manager enhancement only.
+
+File:
+src/components/LibraryManager.tsx
+
+Goal:
+Expose finding measurement metadata in Library Manager when editing Finding records.
+
+Business definitions:
+- fldMeasurementType = what is being measured
+  Examples: Slope, Width, Height, Count, Area, Clearance
+- fldUnitType = measurement unit
+  Examples: %, IN, FT, LFT, SQFT, EA
+
+Requirements:
+
+1. In the Library Manager Finding edit UI, add editable fields for:
+   - fldMeasurementType
+   - fldUnitType
+
+2. Only show these fields for Finding records.
+   Do not show them for Recommendations unless already intentionally supported elsewhere.
+
+3. Use the existing Library Manager edit flow:
+   - getValue(...)
+   - handleEdit(...)
+   - existing save/batch behavior
+
+4. Measurement Type:
+   - render as a text input
+   - label: Measurement Type
+   - placeholder: Slope, Width, Height, Count, Area, Clearance
+
+5. Measurement Unit:
+   - render as a select/dropdown if MEASUREMENT_UNITS is available in the project
+   - otherwise use a text input
+   - label: Measurement Unit
+   - include a blank option like “Select unit” if using a select
+
+6. Do not change:
+   - Firestore collection names
+   - save behavior
+   - recommendations UI
+   - glossary behavior
+   - project data behavior
+   - validation rules yet
+
+7. Keep the change minimal and consistent with existing Library Manager styling.
+
+After changes:
+- Report exact diff.
+- Report lint result for LibraryManager.tsx.
+After Cursor reports back, test one finding: edit Measurement Type + Measurement Unit, save, refresh, and confirm Firestore updated.
+
+
+Here’s the status of the Library Manager enhancement.
+
+## Exact diff (src/components/LibraryManager.tsx)
+
+diff
+diff --git a/src/components/LibraryManager.tsx b/src/components/LibraryManager.tsx
+index 1a0910d..fdd5367 100644
+--- a/src/components/LibraryManager.tsx
++++ b/src/components/LibraryManager.tsx
+@@ -21,7 +21,7 @@ import {
+   MoreVertical
+ } from 'lucide-react';
+ import { Button, Card, Select } from './ui/core';
+-import { cn, sortEntities } from '../lib/utils';
++import { cn, sortEntities, MEASUREMENT_UNITS } from '../lib/utils';
+ import { doc, writeBatch } from 'firebase/firestore';
+ import { db } from '../firebase';
+ import { toast } from 'sonner';
+@@ -393,6 +393,11 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
+ 
+     const isOverLimit = isFindingOrRec && charCount > 120;
+ 
++    const findingUnitVal = isFinding ? String(getValue(record, 'fldUnitType') ?? '').trim() : '';
++    const findingUnitInList =
++      findingUnitVal !== '' &&
++      MEASUREMENT_UNITS.includes(findingUnitVal as (typeof MEASUREMENT_UNITS)[number]);
++
+     return (
+       <div key={record.id} className="flex flex-col gap-1.5 p-3 hover:bg-zinc-50 transition-all group border-b border-zinc-100 last:border-0">
+         <div className="flex items-center gap-3">
+@@ -469,6 +474,38 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
+                 target.style.height = Math.min(300, Math.max(60, target.scrollHeight)) + 'px';
+               }}
+             />
++            {isFinding && (
++              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
++                <div className="flex flex-col gap-1">
++                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Measurement Type</label>
++                  <input
++                    type="text"
++                    value={getValue(record, 'fldMeasurementType') ?? ''}
++                    onChange={(e) => handleEdit(record.id, 'fldMeasurementType', e.target.value)}
++                    placeholder="Slope, Width, Height, Count, Area, Clearance"
++                    className="w-full bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
++                  />
++                </div>
++                <div className="flex flex-col gap-1">
++                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Measurement Unit</label>
++                  <select
++                    value={findingUnitVal}
++                    onChange={(e) => handleEdit(record.id, 'fldUnitType', e.target.value)}
++                    className="w-full bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
++                  >
++                    <option value="">Select unit</option>
++                    {MEASUREMENT_UNITS.map((u) => (
++                      <option key={u} value={u}>
++                        {u}
++                      </option>
++                    ))}
++                    {findingUnitVal !== '' && !findingUnitInList && (
++                      <option value={findingUnitVal}>{findingUnitVal}</option>
++                    )}
++                  </select>
++                </div>
++              </div>
++            )}
+             {isRec && (
+               <div className="grid grid-cols-2 gap-4 pt-1">
+                 <div className="flex flex-items-center gap-2">
+
+
+*(Note: In the last hunk the diff snippet shows flex items-center in the real file; if your local file differs only by that line, it’s unrelated to this change.)*
+
+## Lint (LibraryManager.tsx)
+
+**No issues** — read_lints reports no diagnostics for src/components/LibraryManager.tsx.
+
+## Behavior recap
+
+- **Findings only:** fldMeasurementType and fldUnitType render under the long-description area when isFinding is true; recommendations block is unchanged.
+- **Flow:** Uses getValue / handleEdit like the rest of the editor; batch save is unchanged.
+- **Unit field:** Dropdown backed by MEASUREMENT_UNITS from ../lib/utils, with a blank “Select unit” option; if the stored unit isn’t in the list, an extra option keeps the value visible and selectable.
+
+Looks good. This addresses the immediate upstream maintenance gap.
+
+Before committing, test one Finding in Library Manager:
+
+Enter Measurement Type.
+
+Select Measurement Unit.
+
+Save.
+
+Refresh.
+
+Confirm the values persist in Firestore:
+
+fldMeasurementType
+fldUnitType
+Then commit:
+
+git add src/components/LibraryManager.tsx
+git commit -m "Expose finding measurement fields in Library Manager"
+git push origin data-entry-flow-refactor
+After that, the next architecture decision is whether to add a project-data snapshot field:
+
+projectData.fldMeasurementType
+That would make each data record self-contained for future reporting/statistical analysis.
+
+
+Add projectData.fldMeasurementType as a saved snapshot field.
+
+Thought for a couple of seconds
+Use this Cursor prompt:
+
+Apply a focused projectData measurement snapshot enhancement.
+
+Goal:
+Save projectData.fldMeasurementType as a snapshot field on project data records.
+
+Files likely affected:
+- src/components/ProjectDataEntry.tsx
+- src/types/index.ts
+- possibly src/components/ReportPreview.tsx only if measurement type display already exists or needs a harmless fallback
+- possibly src/components/DataExplorer.tsx only if it displays measurement metadata
+
+Business definitions:
+- fldMeasurementType = what is being measured
+  Examples: Slope, Width, Height, Count, Area, Clearance
+- fldMeasurementUnit = unit used for the entered measurement value
+  Examples: %, IN, FT, LFT, SQFT, EA
+
+Architecture:
+- Library Finding stores default metadata:
+  - finding.fldMeasurementType
+  - finding.fldUnitType
+- Data Entry should snapshot the final metadata onto the project data record:
+  - projectData.fldMeasurementType
+  - projectData.fldMeasurementUnit
+- Data Entry should not allow direct editing of these fields.
+- This protects reports/statistics from later library/glossary changes.
+
+Requirements:
+
+1. Update ProjectData type
+Add optional:
+- fldMeasurementType?: string
+
+Do not remove or rename fldMeasurementUnit.
+
+2. Glossary Record mode — new records
+When a glossary finding is selected/resolved, snapshot measurement metadata from the selected Finding/library source:
+- fldMeasurementType = selectedFinding.fldMeasurementType || ''
+- fldMeasurementUnit = selectedFinding.fldUnitType || existing behavior
+
+If ProjectDataEntry already derives selectedFindingMeasurementType, reuse that logic.
+
+3. Glossary Record mode — existing records
+When editing an existing record:
+- hydrate fldMeasurementType from activeRecord.fldMeasurementType if present
+- do not overwrite it automatically from the current library finding
+- preserve saved projectData snapshot
+
+4. Custom Record mode — new records
+If the user copies a finding template from the library:
+- set fldMeasurementType from finding.fldMeasurementType if present
+- set fldMeasurementUnit from finding.fldUnitType if present
+
+If the user does not copy a finding template:
+- fldMeasurementType may remain blank
+- fldMeasurementUnit behaves as currently implemented
+
+5. Custom Record mode — existing records
+Hydrate fldMeasurementType from activeRecord.fldMeasurementType if present.
+Do not auto-overwrite unless the user selects a new finding template.
+
+6. Save payload
+Include:
+- fldMeasurementType
+
+alongside existing:
+- fldMeasurement
+- fldMeasurementUnit
+
+7. UI
+If Measurement Type is currently displayed as read-only from selectedFinding, adjust it to display the snapshot value when available:
+- activeRecord/edit mode: activeRecord.fldMeasurementType
+- new glossary record: selected finding measurement type
+- custom copied template: copied finding measurement type
+- fallback: "(Not set)"
+
+Do not make Measurement Type editable in Data Entry.
+
+8. Do not:
+- modify Firestore data directly
+- modify glossary records
+- modify finding/recommendation library records
+- change validation rules yet
+- change cost unit fields
+- rename fldUnitType or fldMeasurementUnit
+- change unrelated UI
+
+After changes:
+- Report exact diff
+- Report lint results
+- Explain:
+  a. how glossary records snapshot measurement type,
+  b. how custom records snapshot measurement type,
+  c. how existing records preserve the saved snapshot.
+This is the right next step. It makes each data record self-contained:
+
+fldMeasurementType: "Slope"
+fldMeasurementUnit: "%"
+fldMeasurement: 2.5
+and prevents later library edits from changing the meaning of historical measurements.
+
+
+## Task result
+
+The **projectData measurement snapshot** work is done: ProjectData now includes optional fldMeasurementType, Data Entry snapshots it (with the glossary/custom rules we discussed), saves it on the payload, and shows it read-only via displayMeasurementTypeReadonly. docs/ARCHITECTURE_DESIGN.md has the matching **DECIDED** note.
+
+**Lint:** Cursor reported **no issues** on the files we changed. **npm run lint (tsc --noEmit) still exits with code 2** because of existing type errors in GlossaryView.tsx and ReportPreview.tsx, not because of this feature.
+
+## Follow-up (optional)
+
+If you want a clean CI lint run, the next step is to fix those two tsc errors (or narrow the lint scope). I can patch them in a separate pass if you want.
+
+Good — that completes the measurement snapshot piece.
+
+Now the data record can stand on its own:
+
+fldMeasurementType
+fldMeasurementUnit
+fldMeasurement
+That is the right structure for reporting and future statistics.
+
+Before committing, check the exact modified files:
+
+git status
+Most likely you’ll want to commit these together if the doc note is part of the same decision:
+
+git add src/components/ProjectDataEntry.tsx src/types/index.ts docs/ARCHITECTURE_DESIGN.md
+git commit -m "Snapshot measurement type on project data records"
+git push origin data-entry-flow-refactor
+Then confirm:
+
+git status
+I would leave the unrelated GlossaryView.tsx and ReportPreview.tsx type errors for a separate cleanup commit.
+
+
+Was there a next phase or step?
+
+Thought for a few seconds
+Yes. The next logical phase is measurement metadata repair / refresh, now that projectData.fldMeasurementType exists.
+
+You’ve completed the structural part:
+
+Library Finding:
+  fldMeasurementType
+  fldUnitType
+
+Project Data:
+  fldMeasurementType
+  fldMeasurementUnit
+  fldMeasurement
+Next phase: repair existing records
+The remaining issue is historical records that were created before the snapshot field existed, or before the library/glossary metadata was complete.
+
+The next tool/process should identify records where:
+
+projectData.fldMeasurementType is blank/missing
+OR
+projectData.fldMeasurementUnit is blank/missing
+Then compare against the linked glossary/finding metadata and offer an explicit repair:
+
+Current record:
+  Measurement Type: blank
+  Measurement Unit: blank
+
+Suggested from linked finding/glossary:
+  Measurement Type: Slope
+  Measurement Unit: %
+Then the admin can apply the repair selectively.
+
+I would do this in stages
+Stage 1 — Audit only
+Build a read-only report/table showing affected records.
+
+No writes yet.
+
+Stage 2 — Selective repair
+Allow applying the suggested metadata to selected project data records.
+
+Stage 3 — Prevent future incomplete records
+Once library/glossary cleanup is done, add validation so findings/glossary records cannot be saved without measurement metadata where required.
+
+Also pending
+If you haven’t committed the measurement snapshot work yet, do that first:
+
+git status
+git add src/components/ProjectDataEntry.tsx src/types/index.ts docs/ARCHITECTURE_DESIGN.md
+git commit -m "Snapshot measurement type on project data records"
+git push origin data-entry-flow-refactor
+After that, the next build task should be the measurement metadata audit panel.
+
+
+Sorry, 
+
+PS C:\dev\fredasoft> git add src/components/ProjectDataEntry.tsx src/types/index.ts docs/ARCHITECTURE_DESIGN.md
+>> git commit -m "Snapshot measurement type on project data records"
+>> git push origin data-entry-flow-refactor
+warning: in the working copy of 'docs/ARCHITECTURE_DESIGN.md', LF will be replaced by CRLF the next time Git touches it
+, LF will be replaced by CRLF the next time Git touches it
+[data-entry-flow-refactor da4c27a] Snapshot measurement type on project data records
+ 3 files changed, 81 insertions(+), 15 deletions(-) 
+Enumerating objects: 17, done.
+Counting objects: 100% (17/17), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (8/8), done.
+Writing objects: 100% (9/9), 2.01 KiB | 343.00 KiB/sTotal 9 (delta 7), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (7/7), completed with 7 local objects.
+To https://github.com/kenotten/FREDAsoft.git        
+   f1bcc52..da4c27a  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> git status
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.
+
+nothing to commit, working tree clean
+PS C:\dev\fredasoft> git status
+>> git add src/components/ProjectDataEntry.tsx src/types/index.ts docs/ARCHITECTURE_DESIGN.md
+>> git commit -m "Snapshot measurement type on project data records"
+>> git push origin data-entry-flow-refactor
+On branch data-entry-flow-refactor         dac4ca
+Your branch is up to date with 'origin/data-entry-flow-refactor'.
+
+nothing to commit, working tree clean
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.
+
+nothing to commit, working tree clean
+Everything up-to-date
+PS C:\dev\fredasoft> 
+
+No problem — you’re fully committed, pushed, and clean.
+
+Latest relevant commit:
+
+da4c27a Snapshot measurement type on project data records
+Current state:
+
+Branch: data-entry-flow-refactor
+Remote: up to date
+Working tree: clean
+The second commit attempt did nothing because there was nothing left to commit. That’s fine.
+
+Next phase, when you’re ready, is the measurement metadata audit/repair workflow for older records that may be missing fldMeasurementType or fldMeasurementUnit.
+
+
+OK, proceed
+
+Thought for a couple of seconds
+Let’s start with Stage 1: audit only. No writes yet.
+
+Use this Cursor prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to design a Measurement Metadata Audit / Repair workflow for existing projectData records.
+
+Context:
+We recently added projectData.fldMeasurementType as a saved snapshot field.
+
+Current model:
+- Finding library records may contain:
+  - fldMeasurementType
+  - fldUnitType
+- Glossary / selected finding path may provide measurement metadata.
+- Project data records now should contain:
+  - fldMeasurementType
+  - fldMeasurementUnit
+  - fldMeasurement
+
+Problem:
+Older projectData records may be missing:
+- fldMeasurementType
+- fldMeasurementUnit
+
+We need an audit panel that identifies affected records and proposes safe repairs, but Stage 1 should be read-only.
+
+Goal for Stage 1:
+Build or plan a read-only audit view that identifies existing projectData records with missing measurement metadata and shows suggested values from the linked glossary/finding path.
+
+Inspect:
+- src/components/ProjectDataEntry.tsx
+- src/components/DataExplorer.tsx
+- src/components/LibraryCompletenessPanel.tsx
+- src/components/LibraryManager.tsx
+- src/types/index.ts
+- services/firestoreService.ts
+- any admin/data quality panels
+- projectData shape and save/update helpers
+- glossary/finding/item/category relationship logic
+
+Questions to answer:
+
+1. Where is the best place to put this audit panel?
+   Options:
+   - LibraryCompletenessPanel
+   - LibraryManager
+   - DataExplorer
+   - new MeasurementMetadataAuditPanel
+   - admin-only section
+
+2. What projectData records should be flagged?
+   Suggested criteria:
+   - fldMeasurement exists but fldMeasurementType is blank/missing
+   - fldMeasurement exists but fldMeasurementUnit is blank/missing
+   - fldMeasurementType blank/missing regardless of measurement value
+   - fldMeasurementUnit blank/missing regardless of measurement value
+   Decide the safest criteria.
+
+3. How can each projectData record resolve the suggested metadata?
+   Explore:
+   - projectData.fldData → glossary.fldGlosId/id → glossary.fldFind → finding
+   - projectData custom records with fldPDataMasterFindID → finding
+   - projectData custom records without template source → no suggested value
+   - fallback via text matching should probably be avoided unless clearly safe
+
+4. What suggested fields should be shown?
+   - suggestedMeasurementType from finding.fldMeasurementType
+   - suggestedMeasurementUnit from finding.fldUnitType
+   - current projectData.fldMeasurementType
+   - current projectData.fldMeasurementUnit
+   - current projectData.fldMeasurement
+   - record source glossary/custom
+   - category/item/finding labels if resolvable
+   - location/project/facility if easily available
+
+5. Which existing helper logic can be reused for resolving glossary/category/item/finding labels?
+
+6. What should the Stage 1 UI look like?
+   Suggested:
+   - table/card list of affected projectData records
+   - filters: missing type, missing unit, has suggestion, no suggestion, glossary/custom
+   - no write buttons yet
+   - display “Repair available” when suggested values exist
+
+7. What should Stage 2 repair do later?
+   - update selected projectData records only
+   - set fldMeasurementType and/or fldMeasurementUnit from suggested values
+   - never update glossary/library
+   - require explicit user action
+   - maybe confirmation modal
+
+8. Should Stage 1 include export/copy diagnostics?
+   Optional.
+
+9. Files likely affected for Stage 1 read-only implementation.
+10. Files likely affected for Stage 2 repair implementation.
+11. Risks and edge cases.
+
+Constraints:
+- Do not edit files.
+- Do not modify Firestore data.
+- Do not implement writes.
+- Do not change Data Entry save behavior.
+- Do not update glossary/library records.
+- Do not infer from text unless clearly called out as unsafe.
+- Keep Stage 1 read-only.
+
+Report:
+- Recommended placement
+- Recommended flagged criteria
+- Resolution strategy
+- Minimal Stage 1 implementation plan
+- Later Stage 2 implementation plan
+- Exact files likely affected
+My recommendation going in: put this in or near Library Completeness Panel, because it is a data-quality/admin cleanup tool, not ordinary Data Entry. Stage 1 should only show affected records and proposed values. Stage 2 can add selected repair.
+
+
+We can probably remove the library completeness panel as I have edited all the necessary records 
+
+Thought for a few seconds
+Agreed. If you’ve finished the cleanup, the Library Completeness Panel should be removed so it doesn’t remain as a confusing temporary admin surface.
+
+I’d do this before building the measurement audit panel, because otherwise we risk layering one temporary cleanup tool on top of another.
+
+Use this Cursor prompt:
+
+Apply a focused cleanup to remove the temporary Library Completeness Panel.
+
+Goal:
+Remove the temporary LibraryCompletenessPanel now that the library measurement/cost cleanup work is complete.
+
+Files likely affected:
+- src/components/LibraryManager.tsx
+- src/components/LibraryCompletenessPanel.tsx
+- possibly src/types/index.ts only if types were added solely for this panel
+
+Requirements:
+1. Remove LibraryCompletenessPanel from LibraryManager.
+2. Remove the import from LibraryManager.
+3. Delete src/components/LibraryCompletenessPanel.tsx if it is no longer referenced anywhere.
+4. Search the repo for LibraryCompletenessPanel and remove all references.
+5. Do not remove Library Manager measurement fields:
+   - fldMeasurementType
+   - fldUnitType
+6. Do not remove recommendation cost fields:
+   - fldUnit
+   - fldUOM
+7. Do not change Firestore data.
+8. Do not change ProjectDataEntry.
+9. Do not change DataExplorer.
+10. Do not change ReportPreview.
+11. Keep this as a cleanup-only change.
+
+After changes:
+- Report exact diff.
+- Report whether LibraryCompletenessPanel has zero remaining references.
+- Report lint results for affected files.
+Then test Library Manager still opens and findings still expose:
+
+Measurement Type
+Measurement Unit
+After that, commit:
+
+git add src/components/LibraryManager.tsx
+git rm src/components/LibraryCompletenessPanel.tsx
+git commit -m "Remove temporary library completeness panel"
+git push origin data-entry-flow-refactor
+If Cursor removes the file for you, use git status first; you may only need:
+
+git add -A
+git commit -m "Remove temporary library completeness panel"
+git push origin data-entry-flow-refactor
+
+
+Pasted markdown(47).md
+File
+
+Pasted markdown (2).md
+File
+
+Thought for 5s
+Good. The Library Completeness Panel removal looks clean:
+
+LibraryCompletenessPanel import removed.
+
+completeness tab removed from the LibraryTab union.
+
+Dropdown option removed.
+
+Conditional render replaced with the normal Library Manager list panel.
+
+src/components/LibraryCompletenessPanel.tsx deleted.
+
+Remaining references: zero.
+
+LibraryManager.tsx lint: clean. 
+
+
+Commit it with:
+
+git add -A
+git commit -m "Remove temporary library completeness panel"
+git push origin data-entry-flow-refactor
+Then confirm:
+
+git status
+After that, the next phase is the Measurement Metadata Audit Panel, preferably in or near Data Explorer as a read-only diagnostic panel first. Cursor’s analysis recommends DataExplorer with a new MeasurementMetadataAuditPanel, because it already has the project data, glossary, category/item/finding, project/facility/location context needed to diagnose missing measurement metadata. 
+
+
+
+Working tree is clean.  Next!
+
+Thought for 4s
+Next is Measurement Metadata Audit — Stage 1 read-only.
+
+Goal: identify existing projectData records missing measurement metadata and show suggested values from the linked finding/template, without writing anything yet.
+
+Use this Cursor prompt:
+
+Implement Stage 1 read-only Measurement Metadata Audit.
+
+Goal:
+Create a read-only audit panel that identifies projectData records missing measurement metadata and shows suggested repair values from explicit linked sources.
+
+Recommended placement:
+- New component: src/components/MeasurementMetadataAuditPanel.tsx
+- Mount it in src/components/DataExplorer.tsx, near the top of the Data Explorer view.
+
+Context:
+Project data records now support:
+- fldMeasurementType
+- fldMeasurementUnit
+- fldMeasurement
+
+Finding library records may contain:
+- fldMeasurementType
+- fldUnitType
+
+Custom project records may contain:
+- fldPDataMasterFindID
+
+Rules:
+- Stage 1 is read-only.
+- Do not write Firestore data.
+- Do not add repair buttons yet.
+- Do not modify glossary/library/projectData records.
+- Do not infer from finding text.
+- Use only explicit ID relationships.
+
+Flag criteria:
+Default flagged records should be projectData records where:
+- fldMeasurement is present / not blank / not null
+AND either:
+- fldMeasurementType is blank/missing
+OR
+- fldMeasurementUnit is blank/missing
+
+Also include filters to optionally show:
+- missing type regardless of measurement value
+- missing unit regardless of measurement value
+- has suggestion
+- no suggestion
+- glossary records
+- custom records
+
+Suggestion resolution:
+
+1. Glossary-linked records:
+- projectData.fldData → glossary.fldGlosId or glossary.id
+- glossary.fldFind → finding.fldFindID or finding.id
+- suggestedMeasurementType = finding.fldMeasurementType
+- suggestedMeasurementUnit = finding.fldUnitType
+
+2. Custom records with template trace:
+- projectData.fldPDataMasterFindID → finding.fldFindID or finding.id
+- suggestedMeasurementType = finding.fldMeasurementType
+- suggestedMeasurementUnit = finding.fldUnitType
+
+3. Custom records without template trace:
+- no suggestion
+- display “No linked finding/template; cannot suggest safely.”
+
+UI:
+Create a compact panel:
+Title:
+- Measurement Metadata Audit
+
+Summary chips:
+- Flagged records: X
+- Repair available: Y
+- No suggestion: Z
+
+Filters:
+- Missing type
+- Missing unit
+- Has measurement value
+- Has suggestion
+- No suggestion
+- Source: all / glossary / custom / unknown
+
+Table or compact rows:
+Columns:
+- Source
+- Project / Facility / Location if resolvable
+- Category / Item if resolvable
+- Finding text or finding label
+- Measurement value
+- Current Type
+- Current Unit
+- Suggested Type
+- Suggested Unit
+- Status
+
+Status labels:
+- Repair available
+- No suggestion
+- Complete, if shown by filters
+
+Implementation details:
+- Use useMemo to compute audit rows.
+- Normalize IDs using trim/lowercase.
+- Match both document id and explicit id fields where applicable.
+- Reuse local helpers inside the new component; avoid large refactors.
+- Keep performance reasonable for larger projectData arrays.
+
+DataExplorer integration:
+- Import MeasurementMetadataAuditPanel.
+- Pass:
+  projectData
+  glossary
+  findings
+  items
+  categories
+  locations
+  projects
+  facilities
+
+Constraints:
+- Do not modify Data Entry save behavior.
+- Do not modify ReportPreview.
+- Do not modify LibraryManager.
+- Do not restore LibraryCompletenessPanel.
+- Do not write Firestore data.
+- Do not add batch repair yet.
+
+After changes:
+- Report exact diff.
+- Report lint results.
+- Explain how records are flagged.
+- Explain how suggestions are resolved.
+This is the right next step because it gives you visibility before any repair writes. Cursor’s earlier analysis recommended Data Explorer as the best placement because it already has the project data and related context needed for triage. 
+
+
+
+## Exact diff
+
+### src/components/DataExplorer.tsx
+
+27:43:src/components/DataExplorer.tsx
+ import { db } from '../firebase';
+ import { useAuth } from '../hooks/useAuth';
+ import { v4 as uuidv4 } from 'uuid';
+ import { toast } from 'sonner';
++import { MeasurementMetadataAuditPanel } from './MeasurementMetadataAuditPanel';
+ 
+ export function DataExplorer({ 
+   projectData,
+
+
+519:537:src/components/DataExplorer.tsx
+       </Card>
+ 
++      <MeasurementMetadataAuditPanel
++        projectData={projectData}
++        glossary={glossary}
++        findings={findings}
++        items={items}
++        categories={categories}
++        locations={locations}
++        projects={projects}
++        facilities={facilities}
++      />
++
+       <div className="flex-1 overflow-y-auto min-h-0 pr-2 space-y-4">
+         {Object.keys(groupedData).length === 0 ? (
+           <div className="flex flex-col items-center justify-center py-20 text-zinc-400 italic">
+
+
+### src/components/MeasurementMetadataAuditPanel.tsx
+
+New file added: src/components/MeasurementMetadataAuditPanel.tsx (read-only audit panel).
+
+## Lint results
+
+- src/components/MeasurementMetadataAuditPanel.tsx: **no linter errors**
+- src/components/DataExplorer.tsx: **no linter errors**
+
+## How records are flagged
+
+A record is **flagged by default** when:
+
+- **fldMeasurement is present** (not null/undefined/''; numeric 0 counts as present)
+- AND (**fldMeasurementType is blank/missing** OR **fldMeasurementUnit is blank/missing**)
+
+The panel includes filters to widen/narrow beyond the default view:
+- Missing type, missing unit (toggles)
+- Has measurement value (toggle; default ON)
+- Has suggestion / No suggestion
+- Source filter: all / glossary / custom / unknown
+- “Include complete” (off by default)
+
+## How suggestions are resolved (explicit IDs only)
+
+- **Glossary-linked records**
+  - projectData.fldData → match glossary.fldGlosId **or** glossary.id (trim/lower normalized)
+  - glossary.fldFind → match finding.fldFindID **or** finding.id
+  - Suggest:
+    - suggestedMeasurementType = finding.fldMeasurementType
+    - suggestedMeasurementUnit = finding.fldUnitType
+
+- **Custom records with template trace**
+  - projectData.fldPDataMasterFindID → match finding.fldFindID **or** finding.id
+  - Suggest the same two fields from the finding.
+
+- **Custom records without template trace**
+  - No suggestion; shows: **“No linked finding/template; cannot suggest safely.”**
+
+No text matching or inference is used, and there are **no Firestore writes** in Stage 1.
+
+This sounds exactly right for Stage 1 read-only.
+
+You now have:
+
+DataExplorer
+→ MeasurementMetadataAuditPanel
+→ read-only flagged records
+→ suggested repair values from explicit links only
+That is the safe visibility layer we wanted before any write/repair workflow.
+
+Before committing, do a quick visual check in Data Explorer:
+
+Panel appears near the top.
+
+Summary counts look reasonable.
+
+Filters work.
+
+At least one flagged row shows current type/unit and suggested type/unit if available.
+
+No buttons or controls write data.
+
+Then commit:
+
+git add src/components/DataExplorer.tsx src/components/MeasurementMetadataAuditPanel.tsx
+git commit -m "Add read-only measurement metadata audit panel"
+git push origin data-entry-flow-refactor
+After that, Stage 2 would be selective repair: checkboxes + confirmation modal + update only missing projectData.fldMeasurementType / fldMeasurementUnit from the suggested finding values.
+
+
+OK, done.  I want to make the available repairs identified in the new audit section
+
+Thought for 4s
+Great. That is Stage 2: selective repair.
+
+The rule should be:
+
+Only update projectData.
+Only fill missing fields.
+Never overwrite existing measurement metadata unless explicitly added later.
+Use this Cursor prompt:
+
+Implement Stage 2: selective repair in Measurement Metadata Audit Panel.
+
+Files likely affected:
+- src/components/MeasurementMetadataAuditPanel.tsx
+- possibly src/services/firestoreService.ts only if an existing batch update helper cannot be reused
+
+Goal:
+Allow users to apply available measurement metadata repairs identified in the read-only audit panel.
+
+Current Stage 1 behavior:
+- MeasurementMetadataAuditPanel identifies projectData records missing fldMeasurementType and/or fldMeasurementUnit.
+- It shows suggested values from explicit linked sources only:
+  - glossary-linked record → glossary → finding
+  - custom record with fldPDataMasterFindID → finding
+- No text inference is used.
+
+Stage 2 goal:
+Add a safe, explicit repair workflow.
+
+Repair rules:
+1. Only update projectData records.
+2. Never update glossary records.
+3. Never update finding/recommendation/library records.
+4. Only repair rows where hasSuggestion is true.
+5. Only fill missing fields by default:
+   - If projectData.fldMeasurementType is blank/missing and suggestedMeasurementType exists, set fldMeasurementType.
+   - If projectData.fldMeasurementUnit is blank/missing and suggestedMeasurementUnit exists, set fldMeasurementUnit.
+6. Do not overwrite non-empty fldMeasurementType or fldMeasurementUnit.
+7. Do not infer values from text.
+8. Do not repair rows with no suggestion.
+9. Add updated timestamp only if consistent with existing projectData update patterns.
+
+UI requirements:
+1. Add checkbox selection for repairable rows.
+2. Add “Select all repairable” control.
+3. Add “Clear selection” control.
+4. Add button:
+   “Apply Selected Repairs”
+5. Button disabled when no repairable rows are selected.
+6. Show count of selected records.
+7. Before writing, show a confirmation modal or confirmation prompt summarizing:
+   - number of records to update
+   - number of measurement types to fill
+   - number of measurement units to fill
+   - warning: “This updates project data records only and does not change glossary or library records.”
+8. After successful repair:
+   - show toast success
+   - clear selection
+   - panel should refresh naturally from updated projectData props/listener
+
+Implementation details:
+1. Reuse existing Firestore utilities if available.
+2. Prefer batch write/update for selected records.
+3. Match projectData document by:
+   - fldPDataID if that is the document id convention
+   - otherwise inspect existing projectData save/update patterns and use the same id.
+4. Keep writes minimal:
+   only include fields that need repair.
+5. If a selected row has no actual fields to update after recomputing, skip it.
+6. Handle partial/empty updates safely.
+7. Show toast error if repair fails.
+
+Safety:
+- Do not add an overwrite mode yet.
+- Do not auto-select no-suggestion rows.
+- Do not repair custom records without fldPDataMasterFindID.
+- Do not change DataExplorer grouping.
+- Do not change ProjectDataEntry.
+- Do not change ReportPreview.
+- Do not modify Firestore data outside the explicit repair button.
+
+After changes:
+- Report exact diff.
+- Report lint results.
+- Explain:
+  a. what rows are selectable,
+  b. what fields are updated,
+  c. how overwrite is prevented,
+  d. how projectData document IDs are resolved for writes.
+After Cursor finishes, test with one or two records first. Confirm Firestore updates only:
+
+fldMeasurementType
+fldMeasurementUnit
+and only when they were blank.
+
+
+
+Pasted markdown(48).md
+File
+
+Thought for a few seconds
+This looks like a solid Stage 2 repair workflow.
+
+It follows the safety rules we wanted:
+
+repairable only
+explicit selection only
+projectData only
+fill missing only
+no overwrite
+no glossary/library writes
+The ID convention is also correct if the app consistently saves project data docs by fldPDataID, which it has been doing.
+
+Before committing, test with one repairable row only:
+
+Select one row.
+
+Click Apply Selected Repairs.
+
+Confirm the modal counts are right.
+
+Apply.
+
+Check Firestore for that projectData record:
+
+fldMeasurementType filled only if blank
+
+fldMeasurementUnit filled only if blank
+
+no other unexpected fields changed
+
+Confirm the row drops out of the default flagged list after the listener refreshes.
+
+Then commit:
+
+git add src/components/MeasurementMetadataAuditPanel.tsx
+git commit -m "Add selective measurement metadata repair workflow"
+git push origin data-entry-flow-refactor
+Then confirm clean:
+
+git status
+
+All of the finding records have been repaired/fixed
+
+Great — that means the repair workflow did its job.
+
+Since the records are fixed, commit the Stage 2 repair tool if you haven’t already:
+
+git add src/components/MeasurementMetadataAuditPanel.tsx
+git commit -m "Add selective measurement metadata repair workflow"
+git push origin data-entry-flow-refactor
+Then check:
+
+git status
+At this point, I’d keep the audit/repair panel for now rather than remove it immediately. It is useful as an ongoing data-quality/admin tool, unlike the temporary Library Completeness Panel.
+
+
+did the audit / repair panel check for empty fields in the recommendations library?
+
+Thought for a couple of seconds
+No. The Measurement Metadata Audit / Repair Panel checks project data records, not the recommendations library.
+
+It is focused on fields like:
+
+projectData.fldMeasurementType
+projectData.fldMeasurementUnit
+projectData.fldMeasurement
+and it suggests repairs from the linked finding record:
+
+finding.fldMeasurementType
+finding.fldUnitType
+It does not audit recommendation library fields such as:
+
+recommendation.fldUnit
+recommendation.fldUOM
+Those are a separate cleanup category: recommendation cost metadata, not finding measurement metadata.
+
+So if we want to check recommendations next, we need a separate audit, likely for:
+
+Recommendations missing:
+- fldUnit        // unit cost
+- fldUOM         // cost unit/type
+That belongs either in Library Manager or a new broader Library/Data Quality Audit panel, not the current project-data measurement repair panel.
+
+
+OK, let's retire the audit/repair panel.  I think we're done.  Perhaps we can keep the code but remove it from the UI
+
+Yes — that’s a good compromise.
+
+We can leave MeasurementMetadataAuditPanel.tsx in the codebase for future admin/data-quality use, but unmount it from Data Explorer so it no longer appears in the UI.
+
+Use this Cursor prompt:
+
+Apply a focused UI cleanup only.
+
+Goal:
+Retire the Measurement Metadata Audit / Repair panel from the visible UI, but keep the component file in the codebase for future use.
+
+File:
+src/components/DataExplorer.tsx
+
+Requirements:
+1. Remove the visible `<MeasurementMetadataAuditPanel ... />` render from DataExplorer.
+2. Remove the `MeasurementMetadataAuditPanel` import from DataExplorer if it becomes unused.
+3. Do NOT delete `src/components/MeasurementMetadataAuditPanel.tsx`.
+4. Do NOT modify the audit/repair panel component itself.
+5. Do NOT change projectData, repair logic, Firestore services, or any data behavior.
+6. Do NOT modify Data Entry, Report Preview, Library Manager, or Glossary Builder.
+7. Keep this as a UI unmount only.
+
+After changes:
+- Report exact diff.
+- Report lint result for DataExplorer.tsx.
+- Confirm `MeasurementMetadataAuditPanel.tsx` still exists but has no active UI mount.
+Then commit:
+
+git add src/components/DataExplorer.tsx
+git commit -m "Hide measurement metadata audit panel from Data Explorer"
+git push origin data-entry-flow-refactor
+If Cursor reports the component is now unused but still present, that’s fine for now.
+
+
+Applied as a UI-unmount-only change.
+
+## Exact diff (src/components/DataExplorer.tsx)
+
+diff
+diff --git a/src/components/DataExplorer.tsx b/src/components/DataExplorer.tsx
+index 669d9c2..2948c09 100644
+--- a/src/components/DataExplorer.tsx
++++ b/src/components/DataExplorer.tsx
+@@ -27,7 +27,6 @@ import { db } from '../firebase';
+ import { useAuth } from '../hooks/useAuth';
+ import { v4 as uuidv4 } from 'uuid';
+ import { toast } from 'sonner';
+-import { MeasurementMetadataAuditPanel } from './MeasurementMetadataAuditPanel';
+ 
+ export function DataExplorer({ 
+   projectData, 
+@@ -520,17 +519,6 @@ export function DataExplorer({
+         </div>
+       </Card>
+ 
+-      <MeasurementMetadataAuditPanel
+-        projectData={projectData}
+-        glossary={glossary}
+-        findings={findings}
+-        items={items}
+-        categories={categories}
+-        locations={locations}
+-        projects={projects}
+-        facilities={facilities}
+-      />
+-
+       <div className="flex-1 overflow-y-auto min-h-0 pr-2 space-y-4">
+         {Object.keys(groupedData).length === 0 ? (
+           <div className="flex flex-col items-center justify-center py-20 text-zinc-400 italic">
+
+
+## Lint result
+
+- src/components/DataExplorer.tsx: **No linter errors found**.
+
+## Confirmation
+
+- src/components/MeasurementMetadataAuditPanel.tsx **still exists**.
+- It now has **no active UI mount in DataExplorer.tsx** (import and render removed).
+
+Perfect — that is exactly the right cleanup.
+
+The audit/repair component remains available for future use, but it is no longer visible in Data Explorer.
+
+Commit it:
+
+git add src/components/DataExplorer.tsx
+git commit -m "Hide measurement metadata audit panel from Data Explorer"
+git push origin data-entry-flow-refactor
+Then confirm clean:
+
+git status
+You should see:
+
+nothing to commit, working tree clean
+
+tree is clean
+
+Excellent. You’re at a clean stopping point.
+
+Current milestone state:
+
+Branch: data-entry-flow-refactor
+Working tree: clean
+Remote: up to date
+Recent completed work includes:
+
+Custom project-only records
+Grouped custom template copy options
+Record-level citations with Standards Browser
+Citation inheritance and report alignment
+Measurement type snapshot on projectData
+Measurement metadata repair completed
+Audit panel hidden but retained in code
+Data Entry UI cleanup
+You’re good to keep testing or move to the next feature.
+
+
+We had a glossary discussion about categorizing glossaries by project type.  I think we need to review that conversation because I have been using this current project: Harris Center (client) Accessibility Assessment (project), which is a this project type: Housing with Federal Funding, to vet the app, and will continue doing so.  There are other types of projects: Housing without federal funding (which will require compliance with things like the International Building Code, ANSI A117.1; and the Fair Housing Act Guidelines; RAS projects (which are projects that will be done by Registered Accessibility Specialists licensed by the  Texas Department of Licensing and Regulation - these projects are exclusively TAS-related.  There will be ADA assessments for entities covered under title III of the ADA, which can be anywhere in the United States and which will primarily require compliance with the 2010 ADA Standards for Accessible Design; there will be many others.  
+
+As I am developing glossaries for this project, I want to make sure we are keeping those in a collection called Housing with Federal Funding for now, but I also want to discuss with you the idea of having Families - project types whose glossaries have a common base set of standards, but then can toggle to include additional glossaries.  
+
+Earlier I thought that it might not be good to index glossaries to a standard, but to instead index them to a project type.  I'm second-guessing that now.  Although it runs the risk of having duplicate findings show up in a dropdown list, here's my thought: if the project is a housing project that includes federal funds and the project is in Texas, there are an array of applicable standards: obviously, UFAS because there are federal funds involved and those funding mechanisms require compliance with UFAS, but it could be that the funding agency has elected to comply with a more strict standard (the ADA Standards for Accessible Design), and since the project could be multifamily housing, there will be a requirement to comply with the Fair Housing Act, which gives the option for the developer to choose among a litany of "safe harbor" standards, including the Fair Housing Act Guidelines, various versions of the International Building Code (which in turn require compliance with various versions of the ANSI A117.1), and then perhaps local building code (which tends to be a version of the IBC with local amendments).   
+
+All this to say that glossaries should, in fact, be indexed to a specific Standard and the user should be able to select one or more of these glossaries when creating data records for his project.  How it would work is this, assuming that it is a housing type project with federal funds in Texas: user selects the TAS glossary to review/inspect the exterior parking, accessible route, site arrival points, entrances, and public access areas like the leasing office, etc. (because he knows that these standards are the most stringent among those with which the project must comply for these elements and spaces; then deselects the TAS and selects the UFAS and 2020 IBC and 2009 ANSI for the dwelling units (because these are the most stringent).  
+
+Down the road we may be able to help a user navigate through the identification of required and relevant standards, and which applies where, etc., but for now the process will have to rely on the user's expertise.
+
+Ask me questions and give me your thought. Whatever the full implementation is, at this point I want to know that we can save the glossary work I am doing now as a "UFAS" glossary (not a TAS glossary).
+
+Thought for 52s
+Yes — and I think your second thought is the better architecture.
+
+You are moving back toward the model we landed on earlier:
+
+Project Type / Family = preset or workflow context
+Glossary = standard-specific working set
+Project = enables one or more glossaries
+Data Entry = user chooses active glossary as they work
+That is the right direction for Harris Center.
+
+Earlier we had two competing ideas:
+
+Glossary = context/project-type based
+versus:
+
+Glossary = standard/version based
+The more we work through Harris Center, the more I think the answer is:
+
+Glossary Set = tied primarily to a Standard + Version
+Project Type / Family = suggests which Glossary Sets should be enabled
+That matches your real-world workflow better. Your example of a Housing with Federal Funding project needing UFAS, ADA 2010, TAS, FHA/ANSI, IBC, and possibly local code is exactly why a project type should not own the glossary exclusively. A project type can suggest the relevant compliance universe, but the user needs to switch between standard-specific glossaries depending on the facility element or scope being reviewed. This is consistent with the earlier architecture notes that projects may involve multiple standards, enable multiple glossaries, and maintain an active glossary context. 
+
+
+My revised recommendation
+1. Glossaries should be indexed to a Standard + Version
+Examples:
+
+UFAS Glossary
+ADA 2010 Glossary
+TAS 2012 Glossary
+TAS 1994 Glossary
+FHA Guidelines Glossary
+ANSI A117.1 2009 Glossary
+IBC 2020 Accessibility Glossary
+Each glossary can contain findings/recommendations that may look similar or even identical, but they are separate because the authority, citation, applicability, and sometimes thresholds differ. We already documented that controlled duplication across ADA/TAS/UFAS is expected and correct when legal authority or citation references differ. 
+
+
+So yes: the glossary work you are doing for Harris Center should be able to be saved as a UFAS glossary, not a TAS glossary.
+
+2. Project Types should become “Families” or presets
+A project type/family should answer:
+
+For this kind of project, what standards are likely relevant?
+Which glossaries should be enabled by default?
+Which glossary should be active by default?
+Example:
+
+Project Family:
+Housing with Federal Funding
+
+Default enabled glossaries:
+- UFAS
+- ADA 2010
+- FHA Guidelines
+- ANSI A117.1 2009
+- IBC 2020
+- TAS 2012, if Texas/public facility scope applies
+
+Default active glossary:
+- UFAS, or project/admin selected
+For RAS projects:
+
+Project Family:
+TDLR / RAS Plan Review
+
+Default enabled glossaries:
+- TAS 2012
+
+Default active glossary:
+- TAS 2012
+For Title III ADA assessments:
+
+Project Family:
+ADA Title III Assessment
+
+Default enabled glossaries:
+- ADA 2010
+
+Optional:
+- State/local code glossary
+This aligns with the earlier idea that project types are presets, not constraints. The user should be able to override and enable additional standards/glossaries when the project requires it. 
+
+
+3. Families should not be the primary index for glossary records
+This is the key distinction.
+
+I would not make the record itself belong only to:
+
+Housing with Federal Funding
+because then the same UFAS finding would have to be duplicated again for:
+
+Housing with Federal Funding
+Public Entity Assessment
+Federal Program Review
+Historic Facility Review
+Instead:
+
+UFAS Glossary
+can be used by multiple project families.
+
+Then:
+
+Housing with Federal Funding
+simply enables the UFAS glossary, plus other relevant glossaries.
+
+That gives you reusability without losing real-world context.
+
+The “Family” concept still matters
+I like your word Family better than Project Type for this.
+
+A Family could represent a practical compliance context:
+
+Housing with Federal Funding
+Housing without Federal Funding
+TDLR / RAS Project
+ADA Title II Assessment
+ADA Title III Assessment
+Fair Housing Review
+Public Right-of-Way Review
+Each Family has a recommended bundle:
+
+enabledGlossarySetIds
+defaultActiveGlossarySetId
+recommendedStandardTypes
+reportDefaults
+But the actual glossary remains standard/version specific.
+
+What the user experience should eventually be
+In project setup:
+
+Project Family:
+Housing with Federal Funding
+
+Enabled Glossaries:
+[x] UFAS
+[x] ADA 2010
+[x] FHA Guidelines
+[x] ANSI A117.1 2009
+[x] IBC 2020
+[x] TAS 2012
+In Data Entry:
+
+Active Glossary:
+[ UFAS ▼ ]
+
+Category → Item → Finding → Recommendation
+The user can switch:
+
+UFAS → TAS → ANSI → IBC
+and the app filters the available glossary records accordingly.
+
+The selection should persist until changed.
+
+That fits your Harris Center workflow exactly:
+
+Use TAS for exterior/site/public access where TAS is most stringent.
+Switch to UFAS / IBC / ANSI for dwelling units where those are more relevant.
+Immediate practical concern: your current work
+You asked the right practical question:
+
+can we save the glossary work I am doing now as a “UFAS” glossary?
+
+Yes — but we need a metadata field or grouping mechanism before we go too much farther.
+
+Minimum non-breaking metadata layer:
+
+glossarySetId?: string
+fldGlossaryStandardType?: "UFAS" | "TAS" | "ADA" | "ANSI" | "IBC" | "FHA"
+fldGlossaryStandardVersion?: string
+fldGlossaryFamilyTags?: string[]
+Better structure:
+
+glossarySets
+  id
+  name                 "UFAS Glossary"
+  standardType          "UFAS"
+  standardVersion       "1984"
+  familyTags            ["Housing with Federal Funding", "Federal Program"]
+  status                "active"
+Then each glossary record gets:
+
+fldGlossarySetId: "ufas-1984"
+This is cleaner than putting all metadata on every glossary row, though we could do both temporarily.
+
+My recommended next implementation path
+Do not rebuild the whole system yet.
+
+Do this incrementally:
+
+Phase 1 — Metadata only
+Add glossary set metadata without changing Data Entry behavior yet.
+
+Create:
+
+glossarySets
+or, if we want very fast/non-breaking:
+
+add fldGlossarySetId / fldStandardType / fldStandardVersion to glossary rows
+Then tag your current Harris Center glossary work as:
+
+UFAS
+Phase 2 — Glossary Builder filter
+Add a selector in Glossary Builder:
+
+Glossary Set: UFAS
+New glossary records created while that set is active get:
+
+fldGlossarySetId = UFAS set id
+Phase 3 — Data Entry active glossary selector
+Add:
+
+Active Glossary
+to Data Entry.
+
+Then Data Entry filters only glossary records from the active glossary set.
+
+Phase 4 — Project Family presets
+Add project family setup later:
+
+Housing with Federal Funding → enable UFAS, ADA, FHA/ANSI, IBC, TAS
+This keeps today’s work safe while moving toward the right model.
+
+Questions I’d ask before implementation
+For the glossary work you are doing now, is it specifically UFAS 1984, or do you want the user-facing label to be simply UFAS for now?
+
+Do you want one UFAS glossary for all contexts, or do you foresee:
+
+UFAS Housing Glossary
+UFAS Public Facility Glossary
+UFAS General Glossary
+My instinct: start with one UFAS glossary.
+
+Should “Housing with Federal Funding” be stored as:
+
+Project Family
+or as:
+
+Project Type
+My vote: Project Family as the user-facing label, with projectType still acceptable internally if simpler.
+
+In Data Entry, when multiple glossaries are enabled, should the app show:
+
+Active Glossary: UFAS
+or:
+
+Standard Context: UFAS
+I prefer Active Glossary because the user is selecting a working library, not merely a citation source.
+
+Should custom records remain available regardless of active glossary?
+My answer: yes.
+
+Bottom line
+Yes, your current instinct is right:
+
+Glossaries should be standard/version indexed.
+Families/project types should enable and suggest glossaries.
+Projects should allow multiple enabled glossaries.
+Users should switch active glossary during data entry.
+And yes, the glossary work you are doing now should be saved/tagged as UFAS, not TAS.
+
+I would not let this wait too long. The next safe step is a metadata-only glossary set layer, so your current UFAS work is not mixed indistinguishably with TAS or general glossary records.
+
+
+OK, let's do what you think is the right step for this.  The only caveat i have is that the "family" types should be prescriptive, not restrictive.  One should not be limited to the "suggested" list of applicable standards - they should be a suggested list but not exclusive.  
+
+Thought for 4s
+Agreed. The right next step is metadata-first, not a large workflow rewrite.
+
+We should add the concept of Glossary Sets now, so the glossary work you’re doing can be tagged as UFAS, while leaving Project Families as future suggested bundles.
+
+Use this Cursor prompt:
+
+ANALYSIS ONLY. Do not edit files.
+
+We need to add a metadata layer for standard-specific glossary sets.
+
+Architecture decision:
+Glossary records should be indexed primarily to a Standard / Version, not exclusively to a project type.
+
+Examples of glossary sets:
+- UFAS
+- ADA 2010
+- TAS 2012
+- TAS 1994
+- FHA Guidelines
+- ANSI A117.1 2009
+- IBC 2020
+
+Project Families / Project Types are prescriptive, not restrictive:
+- They may suggest/default a list of applicable glossary sets.
+- They must not restrict the user to that list.
+- Users should be able to enable additional glossary sets as needed.
+- Families are guidance/presets, not hard compliance gates.
+
+Immediate goal:
+Determine the safest Phase 1 implementation to tag glossary records with a glossary set, so current Harris Center glossary work can be saved/tagged as UFAS.
+
+Scope for Phase 1:
+- Metadata only if possible.
+- Do not redesign Data Entry yet.
+- Do not implement Project Family presets yet.
+- Do not restrict available glossaries yet.
+- Do not migrate data automatically.
+- Do not change projectData save behavior yet.
+
+Inspect:
+- src/components/GlossaryBuilder.tsx
+- src/components/GlossaryExplorer.tsx
+- src/components/ProjectDataEntry.tsx
+- src/components/DataExplorer.tsx
+- src/types/index.ts
+- firestoreService / collections
+- existing glossary record shape
+- existing standards fields, especially fldStandardType / fldStandardVersion
+- any config/list of standard types or standard versions
+- how glossary records are created and saved
+- how glossary records are displayed/searched/filtered
+- how Data Entry receives and filters glossary records
+
+Questions to answer:
+
+1. What is the current glossary record shape?
+2. Is there already any field on glossary rows that could represent standard/glossary type?
+3. What is the safest new field name?
+   Options:
+   - fldGlossarySetId
+   - fldGlossaryStandardType
+   - fldGlossaryStandardVersion
+   - fldGlossaryName
+4. Should Phase 1 use:
+   A. a new glossarySets collection, referenced by fldGlossarySetId
+   B. direct fields on each glossary row only
+   C. both
+5. Which option is safest and least disruptive right now?
+6. How should we tag existing Harris Center work as UFAS?
+   - manual edit in Firestore?
+   - temporary UI field in Glossary Builder?
+   - default selected glossary set when creating rows?
+7. Where should Glossary Builder expose the active glossary set?
+8. Should Glossary Explorer show/filter by glossary set?
+9. Should Data Entry use glossary set filtering now, or defer?
+10. How would Project Families later suggest glossary sets without restricting users?
+11. What Firestore collection/data shape would support future project families?
+12. What is the minimal Phase 1 implementation plan?
+13. What files would be affected?
+14. What should be documented in ARCHITECTURE_DESIGN.md?
+
+Important constraints:
+- Project Families must be suggested/default bundles only.
+- They must not prevent enabling other glossary sets.
+- Do not hard-code Harris Center-specific logic.
+- Do not remove existing glossary behavior.
+- Do not break existing glossary records without a glossary set.
+- Existing records with no glossary set should continue to work.
+- Keep this incremental and reversible.
+
+Report:
+- Recommended data model
+- Recommended Phase 1 implementation
+- Future Phase 2/3 roadmap
+- Risks
+- Exact files likely affected
+- Suggested architecture note language
+My expected recommendation is:
+
+Phase 1:
+Add direct metadata fields to glossary records:
+- fldGlossarySetId
+- fldGlossarySetName
+- fldGlossaryStandardType
+- fldGlossaryStandardVersion
+
+Possibly seed a small glossarySets collection later.
+But I want Cursor to inspect the current code first before we decide whether to create a full glossarySets collection immediately.
+
+Your caveat is important and should be written into the architecture:
+
+Project Families suggest applicable glossary sets.
+They do not restrict or limit which glossary sets a user may enable.
+
+
+Pasted markdown(49).md
+File
+
+Thought for 4s
+This confirms the right Phase 1 path: add glossary-set metadata directly to glossary rows now, without changing Data Entry behavior yet.
+
+That means you can tag the Harris Center work as UFAS while keeping legacy glossary records valid and avoiding a full glossarySets collection build for now. Cursor’s analysis recommends fields like fldGlossarySetId, fldGlossarySetName, fldGlossaryStandardType, and fldGlossaryStandardVersion, with Data Entry filtering deferred. 
+
+
+Use this implementation prompt:
+
+Implement Phase 1 glossary-set metadata.
+
+Goal:
+Allow glossary records to be tagged with a standard/version glossary set, such as UFAS, ADA 2010, TAS 2012, etc.
+
+Architecture:
+- Glossary records are indexed primarily by glossary set / standard context.
+- Project Families are future suggested/default bundles only.
+- Project Families must not restrict users from enabling other glossary sets.
+- Phase 1 is metadata only. Do not change Data Entry filtering yet.
+
+Files likely affected:
+- src/types/index.ts
+- src/components/GlossaryBuilder.tsx
+- src/components/GlossaryExplorer.tsx
+- optionally a small constants file for known glossary sets
+
+Data fields:
+Add optional fields to Glossary:
+- fldGlossarySetId?: string
+- fldGlossarySetName?: string
+- fldGlossaryStandardType?: string
+- fldGlossaryStandardVersion?: string
+
+Initial glossary set options:
+- UFAS
+  - set id: UFAS
+  - name: UFAS
+  - standard type: UFAS
+  - version: 1984 or blank if existing app convention does not use year
+- ADA_2010
+  - name: ADA 2010
+  - standard type: ADA
+  - version: 2010
+- TAS_2012
+  - name: TAS 2012
+  - standard type: TAS
+  - version: 2012
+- TAS_1994
+  - name: TAS 1994
+  - standard type: TAS
+  - version: 1994
+- FHA_GUIDELINES
+  - name: FHA Guidelines
+  - standard type: FHA
+  - version: Guidelines
+- ANSI_A117_1_2009
+  - name: ANSI A117.1 2009
+  - standard type: ANSI
+  - version: 2009
+- IBC_2020
+  - name: IBC 2020
+  - standard type: IBC
+  - version: 2020
+
+Requirements:
+
+1. Type update
+Update Glossary interface in src/types/index.ts with the optional fields listed above.
+
+2. Glossary Builder UI
+Add a lightweight “Glossary Set” selector in GlossaryBuilder near the current Save Record workflow/context area.
+
+The selector should:
+- allow choosing from the predefined glossary set list
+- default to blank/legacy if none selected
+- not block saving existing records yet unless user is creating new records and the implementation is trivial
+- keep legacy rows valid
+
+3. Glossary Builder save payload
+When creating or updating a glossary record, include the selected glossary set metadata:
+- fldGlossarySetId
+- fldGlossarySetName
+- fldGlossaryStandardType
+- fldGlossaryStandardVersion
+
+Do not change category/item/finding/recommendation link behavior.
+
+4. Editing existing glossary rows
+When an existing glossary row is selected/loaded, hydrate the selector from that row’s glossary-set fields if present.
+
+5. Glossary Explorer
+Show glossary set metadata in Glossary Explorer:
+- Add a compact badge/column showing fldGlossarySetName || fldGlossarySetId || "Unassigned"
+- Add an optional filter dropdown:
+  - All glossary sets
+  - Unassigned
+  - each known set found or predefined
+
+6. Do not change Data Entry yet
+Do not filter Data Entry by glossary set in this phase.
+Do not change projectData.
+Do not change DataExplorer.
+Do not change ReportPreview.
+
+7. Do not auto-migrate existing rows
+Existing glossary records without set metadata must continue to work.
+Do not modify Firestore data directly.
+
+8. Documentation
+Update docs/ARCHITECTURE_DESIGN.md with:
+- Glossary records are indexed primarily by glossary set / standard-version context.
+- Project Families are prescriptive defaults only, not restrictive.
+- Phase 1 adds metadata only; no Data Entry filtering yet.
+- Future phases may add glossarySets collection, projectFamilies collection, and project enabled glossary sets.
+
+After changes:
+- Report exact diff.
+- Report lint results.
+- Explain how new glossary rows get tagged.
+- Explain how existing rows remain valid.
+- Explain how Glossary Explorer displays/filters glossary sets.
+This lets you immediately start treating the current Harris Center glossary work as UFAS without blocking the rest of the app.
+
+
+After this, can I keep working and subsequent to this project continue this exercise?  Or will there be another step first?  Regardless, I am going to upload the architecture_design.md file to you and have you update the appropriate sections with this new methodology or protocol.
+
+Thought for 4s
+Yes — after the glossary-set metadata step is implemented, you can keep working.
+
+The immediate purpose of this step is to make sure the glossary records you are creating now can be tagged as something like:
+
+UFAS
+ADA 2010
+TAS 2012
+ANSI A117.1 2009
+IBC 2020
+So for your current Harris Center work, once the metadata field exists and the Glossary Builder lets you choose UFAS, you can continue building that glossary as the UFAS glossary.
+
+There will be later phases, but they do not need to block your current work:
+
+Phase 1 now:
+Glossary records can be tagged by glossary set / standard context.
+
+Later:
+Projects can enable multiple glossary sets.
+
+Later:
+Data Entry can filter by active glossary set.
+
+Later:
+Project Families can suggest default glossary sets.
+The one thing to watch after Phase 1 is this: make sure new glossary records you create for Harris Center are tagged UFAS. Existing untagged records can be backfilled later if needed.
+
+And yes — upload ARCHITECTURE_DESIGN.md, and I’ll update the appropriate sections to reflect this methodology/protocol:
+
+Glossary Sets are standard/version indexed.
+Project Families are prescriptive defaults, not restrictions.
+Projects may enable multiple glossary sets.
+Users may switch active glossary context depending on the work area/scope.
+Existing glossary records without set metadata remain valid.
+Once you upload it, I’ll revise the document so it is paste-ready or return an updated file, depending on what you prefer.
+
+
+
+Pasted markdown(50).md
+File
+
+Thought for 27s
+Yes. I reviewed the uploaded ARCHITECTURE_DESIGN.md. The sections that need updating are the current Glossaries = Context (Not Standards) section, the Glossary Types / Projects Enable Glossaries sections, and the Project Types section. Those currently describe glossaries mostly as workflow/context tools, while our newer decision is more precise: Glossary Sets are standard/version-indexed; Project Families are suggested bundles, not restrictions. The existing snapshot model and “Project Types are presets, NOT constraints” principle should stay. 
+
+ 
+
+
+Here is a paste-ready replacement section.
+
+## 🧠 Libraries, Glossaries, Glossary Sets, and Data Records
+
+### 3. Libraries Are the Foundation
+
+Libraries define reusable professional content:
+
+- finding language
+- recommendation language
+- measurement types
+- units of measure
+- unit costs
+- default standards associations
+
+Libraries are the origin of structured content.
+
+---
+
+### 4. Snapshot Inheritance Model (Critical)
+
+```text
+Library → Glossary Record → Project Data Record
+Rules:
+
+Data is copied downward.
+
+Each layer is independently editable after copying.
+
+No automatic upstream propagation.
+
+No automatic downstream mutation after the snapshot is created.
+
+This ensures:
+
+historical accuracy
+
+stable reporting
+
+project-specific flexibility
+
+protection from unintended global changes
+
+5. Glossary Sets Are Standard / Version Contexts
+✅ DECIDED: Glossary records are indexed primarily by Glossary Set, meaning a standard/type/version context.
+
+Examples of Glossary Sets:
+
+UFAS
+ADA 2010
+TAS 2012
+TAS 1994
+FHA Guidelines
+ANSI A117.1 2009
+IBC 2020
+A Glossary Set represents the reusable working content associated with a particular compliance authority or standard version.
+
+Examples:
+
+UFAS Glossary
+ADA 2010 Glossary
+TAS 2012 Glossary
+ANSI A117.1 2009 Glossary
+IBC 2020 Glossary
+This does not mean that a project uses only one Glossary Set. Many real projects require multiple overlapping standards.
+
+6. Glossary Records
+A glossary record links:
+
+Category → Item → Finding → Recommendation
+and belongs to a Glossary Set.
+
+Phase 1 metadata fields on glossary records:
+
+fldGlossarySetId?: string;
+fldGlossarySetName?: string;
+fldGlossaryStandardType?: string;
+fldGlossaryStandardVersion?: string;
+Examples:
+
+fldGlossarySetId: "UFAS"
+fldGlossarySetName: "UFAS"
+fldGlossaryStandardType: "UFAS"
+fldGlossaryStandardVersion: "1984"
+fldGlossarySetId: "ADA_2010"
+fldGlossarySetName: "ADA 2010"
+fldGlossaryStandardType: "ADA"
+fldGlossaryStandardVersion: "2010"
+Existing glossary records without this metadata remain valid as legacy/unassigned records.
+
+7. Project Families Are Prescriptive, Not Restrictive
+✅ DECIDED: Project Families / Project Types are presets, not constraints.
+
+A Project Family suggests which Glossary Sets are likely applicable, but it must not restrict users from enabling additional Glossary Sets.
+
+Examples of Project Families:
+
+Housing with Federal Funding
+Housing without Federal Funding
+TDLR / RAS Project
+ADA Title II Assessment
+ADA Title III Assessment
+Fair Housing Review
+Public Right-of-Way Review
+A Project Family may define:
+
+default Glossary Sets
+
+default active Glossary Set
+
+suggested standards
+
+report defaults
+
+workflow defaults
+
+But users must be able to add or remove Glossary Sets based on professional judgment and project conditions.
+
+Example:
+
+Project Family:
+Housing with Federal Funding
+
+Suggested Glossary Sets:
+- UFAS
+- ADA 2010
+- FHA Guidelines
+- ANSI A117.1 2009
+- IBC 2020
+- TAS 2012, if Texas / public facility scope applies
+These are suggested defaults only.
+
+8. Projects Enable Glossary Sets
+Each project may enable one or more Glossary Sets.
+
+A project should eventually store:
+
+fldEnabledGlossarySetIds?: string[];
+fldActiveGlossarySetId?: string;
+fldProjectFamilyId?: string;
+The enabled Glossary Sets define the working compliance universe for that project.
+
+The active Glossary Set controls which glossary records are shown in Data Entry at a given moment.
+
+Example:
+
+Client:
+Harris Center
+
+Project:
+Accessibility Assessment
+
+Project Family:
+Housing with Federal Funding
+
+Enabled Glossary Sets:
+- UFAS
+- ADA 2010
+- FHA Guidelines
+- ANSI A117.1 2009
+- IBC 2020
+- TAS 2012
+
+Active Glossary Set:
+UFAS
+The user may switch the active Glossary Set depending on the scope being evaluated.
+
+Example:
+
+Site arrival / parking / exterior route:
+Active Glossary Set = TAS 2012
+
+Dwelling units:
+Active Glossary Sets = UFAS, IBC 2020, ANSI A117.1 2009
+The system should eventually help users identify likely applicable standards, but it should not replace professional judgment.
+
+9. Data Records = Source of Truth
+Each project data record:
+
+inherits from a glossary record or is created as a custom project-only record
+
+is fully editable
+
+may diverge from the glossary
+
+stores final project-specific values
+
+For glossary-based records:
+
+Glossary Record → Project Data Record
+For custom records:
+
+Custom Project Record
+Custom records are project-only and are not automatically added to the library or glossary.
+
+Project data records are the final reporting source.
+
+10. Controlled Duplication Across Glossary Sets
+Duplicate or near-duplicate findings across standards are expected and correct.
+
+Example:
+
+"Curb ramp slope exceeds allowable maximum"
+may exist in:
+
+ADA 2010
+TAS 2012
+UFAS
+ANSI A117.1
+IBC
+Even if the wording is identical, the records may differ in:
+
+citation
+
+legal authority
+
+applicability
+
+thresholds
+
+measurement rules
+
+recommended corrective language
+
+reporting context
+
+This duplication is not a data-quality problem. It reflects real compliance differences.
+
+11. Immediate Phase 1 Glossary Set Implementation
+✅ DECIDED: Phase 1 adds Glossary Set metadata directly to glossary records.
+
+Phase 1 does not require a separate glossarySets collection.
+
+Phase 1 does not change Data Entry filtering yet.
+
+Phase 1 does not automatically migrate existing glossary records.
+
+Phase 1 goals:
+
+allow new glossary records to be tagged as UFAS, ADA 2010, TAS 2012, etc.
+
+allow current Harris Center work to be tagged as UFAS
+
+preserve legacy/unassigned glossary rows
+
+prepare for future active Glossary Set filtering
+
+Files likely affected:
+
+src/types/index.ts
+src/components/GlossaryBuilder.tsx
+src/components/GlossaryExplorer.tsx
+docs/ARCHITECTURE_DESIGN.md
+Files not affected in Phase 1:
+
+src/components/ProjectDataEntry.tsx
+src/components/DataExplorer.tsx
+src/components/ReportPreview.tsx
+src/services/firestoreService.ts
+12. Future Phase: Glossary Set Registry
+A future phase may add a formal collection:
+
+glossarySets
+Possible fields:
+
+id: string;
+name: string;
+standardType: string;
+standardVersion?: string;
+isActive?: boolean;
+sortOrder?: number;
+Examples:
+
+UFAS
+ADA_2010
+TAS_2012
+TAS_1994
+FHA_GUIDELINES
+ANSI_A117_1_2009
+IBC_2020
+This registry would support:
+
+controlled Glossary Set options
+
+admin management
+
+sorting
+
+activation/deactivation
+
+future Project Family presets
+
+13. Future Phase: Project Families
+A future phase may add:
+
+projectFamilies
+Possible fields:
+
+id: string;
+name: string;
+defaultGlossarySetIds: string[];
+defaultActiveGlossarySetId?: string;
+description?: string;
+isActive?: boolean;
+A project may then store:
+
+fldProjectFamilyId?: string;
+fldEnabledGlossarySetIds?: string[];
+fldActiveGlossarySetId?: string;
+Important rule:
+
+Project Families suggest.
+They do not restrict.
+Users must always be able to enable additional Glossary Sets or remove suggested Glossary Sets when professional judgment requires it.
+
+14. Future Phase: Active Glossary Set in Data Entry
+A future Data Entry phase should add:
+
+Active Glossary Set
+This will allow users to switch the working Glossary Set while entering records.
+
+Example:
+
+Active Glossary Set: UFAS
+Category → Item → Finding → Recommendation
+Switching the active Glossary Set should filter available glossary records.
+
+Custom Record mode remains available regardless of active Glossary Set.
+
+15. Revised Mental Model
+User-facing mental model:
+
+1. Choose project context.
+2. Enable applicable Glossary Sets.
+3. Select the active Glossary Set.
+4. Select a finding/recommendation.
+5. Adjust the data record as needed.
+6. Add or modify citations if needed.
+Users should not need to understand:
+
+joins
+
+normalization
+
+many-to-many relationships
+
+database structure
+
+But users should understand:
+
+Glossary Set = standard/version working context
+Project Family = suggested bundle
+Project Data Record = final project-specific truth
+
+I would also update the **Final Architecture Summary** section to this:
+
+```md
+## 🟢 Final Architecture Summary
+
+```text
+Libraries → define reusable language and defaults
+Glossary Sets → define standard/version working contexts
+Glossary Records → define approved category/item/finding/recommendation combinations
+Project Families → suggest applicable Glossary Sets
+Projects → enable one or more Glossary Sets
+Project Data Records → define final project-specific truth
+Standards → define legal/technical authority
+
+And update **Architectural Decisions Locked** to this:
+
+```md
+## ✅ Architectural Decisions Locked
+
+- Concept layer → deferred, future-ready
+- Snapshot inheritance → copied downward, independently editable
+- Glossary records → standard/version-indexed through Glossary Set metadata
+- Project Families / Project Types → prescriptive defaults only, never restrictive
+- Standards handling → implicit multi-citation model
+- Library sync → explicit only, never automatic, with backup protection
+- Citation inheritance → copied downward, later refresh explicit only
+- Measurement metadata → snapshotted onto project data records
+- Custom records → project-only unless promoted through future admin workflow
+This update intentionally replaces the older “Glossaries = Context (Not Standards)” idea. The new wording is more precise: Glossary Sets are standard/version contexts; Project Families provide real-world context and suggested bundles.
+
+
+Please just give me the entire new md file instead of just this section.  give me one thing to copy the entire md file that includes the new section
+
+Thought for 5s
+Below is a complete paste-ready replacement for docs/ARCHITECTURE_DESIGN.md.
+
+# FREDAsoft Architecture & Design Decisions
+
+This document is the single source of truth for architectural decisions in FREDAsoft.
+
+It defines system behavior, data modeling philosophy, workflow decisions, and development constraints.
+
+All contributors, including human developers and AI agents, must follow this document.
+
+---
+
+## 🧠 AI Operations Layer
+
+### Agent Roles
+
+#### Archie — Architect
+
+Archie defines system-level structure and refactoring strategy.
+
+Responsibilities:
+
+- define architectural direction
+- identify safe implementation phases
+- break work into atomic tasks
+- preserve system integrity
+- prioritize scalability, safety, clarity, and traceability
+
+#### Gabe — Sentry
+
+Gabe reviews and hardens prompts before execution.
+
+Responsibilities:
+
+- enforce strict scope control
+- prevent unintended refactors
+- preserve existing behavior unless explicitly changed
+- convert design direction into deterministic implementation instructions
+- identify risk before work begins
+
+#### Francine — Execution Agent
+
+Francine executes implementation tasks.
+
+Responsibilities:
+
+- follow instructions exactly
+- modify only the files and behavior specified
+- report exact diffs and lint results
+- avoid architectural decisions unless explicitly asked
+
+Francine has no authority to:
+
+- refactor beyond instructions
+- introduce new patterns without approval
+- modify unrelated code
+- change data behavior without instruction
+
+---
+
+## 🛡️ Non-Negotiable Execution Rules
+
+- Only modify what is explicitly specified.
+- Preserve all existing behavior unless explicitly changed.
+- No implicit refactors.
+- No unrelated cleanup.
+- Use explicit logic.
+- Avoid truthy/falsy shortcuts when data integrity matters.
+- Use safe, targeted React state updates.
+- Do not mix unrelated concerns such as UI, security, data modeling, and performance in one task.
+- If a task is marked **ANALYSIS ONLY**, no code changes are allowed.
+- Do not assume intent.
+- Report uncertainty instead of guessing.
+
+---
+
+## 🧪 Required Verification
+
+For implementation tasks, verify:
+
+- target behavior works
+- app builds or targeted lint/type checks pass where possible
+- no new console errors are introduced
+- no unrelated UI regression is introduced
+- no unrelated data model or Firestore behavior is changed
+
+Known unrelated lint/type issues should be reported separately and not hidden.
+
+---
+
+## 🚦 Current Work State
+
+Current phase:
+
+```text
+Data Integrity Stabilization
+```
+
+Recent completed areas:
+
+```text
+Custom project-only data records
+Grouped custom template copy options
+Record-level citations using Standards Browser
+Citation inheritance into new data records
+Reports using record-level citations as final references
+Measurement type snapshot on projectData
+Measurement metadata repair completed
+Data Entry UI cleanup
+Glossary Set metadata planning
+```
+
+Known ongoing risk areas:
+
+- Firestore security rules may be overly permissive
+- `App.tsx` remains a large coordination component
+- several components are large and should be refactored carefully later
+- heavy use of `any`
+- Firestore subscription lifecycle should be reviewed
+- runtime debug/migration logic should not remain in production indefinitely
+- bundle size should be monitored
+
+---
+
+## 📦 Proven Code Patterns
+
+### Safe React State Update
+
+```ts
+setState(prev =>
+  prev.map(item =>
+    item.id === targetId
+      ? { ...item, ...updates }
+      : item
+  )
+);
+```
+
+### Snapshot Rule
+
+When copying data from one layer to another:
+
+```text
+copy values downward
+then treat copied values as an editable snapshot
+```
+
+Do not continue linking values in a way that silently mutates historical records.
+
+---
+
+# 🧱 Core System Architecture
+
+## 1. System Identity
+
+FREDAsoft is a data-centric compliance platform.
+
+It supports:
+
+- inspections
+- plan reviews
+- accessibility assessments
+- compliance documentation
+- report generation
+
+The system must support multiple standards, multiple project contexts, and project-specific professional judgment.
+
+---
+
+## 2. Core Data Model
+
+High-level structure:
+
+```text
+Project
+  → Facilities / Locations
+  → projectData
+  → Glossary Records
+  → Glossary Sets
+  → Libraries
+  → Standards
+```
+
+Key collections:
+
+```text
+projectData       → findings and recommendations; primary operational data
+glossary          → approved category/item/finding/recommendation combinations
+master_standards  → standards and citation library
+categories        → library categories
+items             → library items
+findings          → library findings
+recommendations   → library recommendations / master recommendations
+users             → roles and identity
+```
+
+---
+
+# 🧠 Libraries, Glossary Sets, Glossary Records, and Data Records
+
+## 3. Libraries Are the Foundation
+
+Libraries define reusable professional content:
+
+- finding language
+- recommendation language
+- measurement types
+- units of measure
+- unit costs
+- default standards associations
+
+Libraries are the origin of structured content.
+
+Library records should eventually support direct citation associations.
+
+Examples:
+
+```text
+finding.fldStandards
+recommendation.fldStandards
+```
+
+These are reusable defaults, not project-specific final citations.
+
+---
+
+## 4. Snapshot Inheritance Model
+
+The system follows a snapshot inheritance model:
+
+```text
+Library → Glossary Record → Project Data Record
+```
+
+Rules:
+
+- data is copied downward
+- each layer is independently editable after copying
+- no automatic upstream propagation
+- no automatic downstream mutation after the snapshot is created
+
+This ensures:
+
+- historical accuracy
+- stable reporting
+- project-specific flexibility
+- protection from unintended global changes
+
+---
+
+## 5. Glossary Sets Are Standard / Version Contexts
+
+✅ DECIDED: Glossary records are indexed primarily by **Glossary Set**, meaning a standard/type/version context.
+
+Examples of Glossary Sets:
+
+```text
+UFAS
+ADA 2010
+TAS 2012
+TAS 1994
+FHA Guidelines
+ANSI A117.1 2009
+IBC 2020
+```
+
+A Glossary Set represents the reusable working content associated with a particular compliance authority or standard version.
+
+Examples:
+
+```text
+UFAS Glossary
+ADA 2010 Glossary
+TAS 2012 Glossary
+ANSI A117.1 2009 Glossary
+IBC 2020 Glossary
+```
+
+This does not mean that a project uses only one Glossary Set. Many real projects require multiple overlapping standards.
+
+---
+
+## 6. Glossary Records
+
+A glossary record links:
+
+```text
+Category → Item → Finding → Recommendation
+```
+
+and belongs to a Glossary Set.
+
+Phase 1 metadata fields on glossary records:
+
+```ts
+fldGlossarySetId?: string;
+fldGlossarySetName?: string;
+fldGlossaryStandardType?: string;
+fldGlossaryStandardVersion?: string;
+```
+
+Examples:
+
+```text
+fldGlossarySetId: "UFAS"
+fldGlossarySetName: "UFAS"
+fldGlossaryStandardType: "UFAS"
+fldGlossaryStandardVersion: "1984"
+```
+
+```text
+fldGlossarySetId: "ADA_2010"
+fldGlossarySetName: "ADA 2010"
+fldGlossaryStandardType: "ADA"
+fldGlossaryStandardVersion: "2010"
+```
+
+Existing glossary records without this metadata remain valid as legacy or unassigned records.
+
+---
+
+## 7. Project Families Are Prescriptive, Not Restrictive
+
+✅ DECIDED: Project Families / Project Types are presets, not constraints.
+
+A Project Family suggests which Glossary Sets are likely applicable, but it must not restrict users from enabling additional Glossary Sets.
+
+Examples of Project Families:
+
+```text
+Housing with Federal Funding
+Housing without Federal Funding
+TDLR / RAS Project
+ADA Title II Assessment
+ADA Title III Assessment
+Fair Housing Review
+Public Right-of-Way Review
+```
+
+A Project Family may define:
+
+- default Glossary Sets
+- default active Glossary Set
+- suggested standards
+- report defaults
+- workflow defaults
+
+But users must be able to add or remove Glossary Sets based on professional judgment and project conditions.
+
+Example:
+
+```text
+Project Family:
+Housing with Federal Funding
+
+Suggested Glossary Sets:
+- UFAS
+- ADA 2010
+- FHA Guidelines
+- ANSI A117.1 2009
+- IBC 2020
+- TAS 2012, if Texas / public facility scope applies
+```
+
+These are suggested defaults only.
+
+---
+
+## 8. Projects Enable Glossary Sets
+
+Each project may enable one or more Glossary Sets.
+
+A project should eventually store:
+
+```ts
+fldEnabledGlossarySetIds?: string[];
+fldActiveGlossarySetId?: string;
+fldProjectFamilyId?: string;
+```
+
+The enabled Glossary Sets define the working compliance universe for that project.
+
+The active Glossary Set controls which glossary records are shown in Data Entry at a given moment.
+
+Example:
+
+```text
+Client:
+Harris Center
+
+Project:
+Accessibility Assessment
+
+Project Family:
+Housing with Federal Funding
+
+Enabled Glossary Sets:
+- UFAS
+- ADA 2010
+- FHA Guidelines
+- ANSI A117.1 2009
+- IBC 2020
+- TAS 2012
+
+Active Glossary Set:
+UFAS
+```
+
+The user may switch the active Glossary Set depending on the scope being evaluated.
+
+Example:
+
+```text
+Site arrival / parking / exterior route:
+Active Glossary Set = TAS 2012
+
+Dwelling units:
+Active Glossary Sets = UFAS, IBC 2020, ANSI A117.1 2009
+```
+
+The system should eventually help users identify likely applicable standards, but it should not replace professional judgment.
+
+---
+
+## 9. Data Records Are the Source of Truth
+
+Each project data record:
+
+- inherits from a glossary record or is created as a custom project-only record
+- is fully editable
+- may diverge from the glossary
+- stores final project-specific values
+
+For glossary-based records:
+
+```text
+Glossary Record → Project Data Record
+```
+
+For custom records:
+
+```text
+Custom Project Record
+```
+
+Custom records are project-only and are not automatically added to the library or glossary.
+
+Project data records are the final reporting source.
+
+---
+
+## 10. Controlled Duplication Across Glossary Sets
+
+Duplicate or near-duplicate findings across standards are expected and correct.
+
+Example:
+
+```text
+"Curb ramp slope exceeds allowable maximum"
+```
+
+may exist in:
+
+```text
+ADA 2010
+TAS 2012
+UFAS
+ANSI A117.1
+IBC
+```
+
+Even if the wording is identical, the records may differ in:
+
+- citation
+- legal authority
+- applicability
+- thresholds
+- measurement rules
+- recommended corrective language
+- reporting context
+
+This duplication is not a data-quality problem. It reflects real compliance differences.
+
+---
+
+## 11. Immediate Phase 1 Glossary Set Implementation
+
+✅ DECIDED: Phase 1 adds Glossary Set metadata directly to glossary records.
+
+Phase 1 does not require a separate `glossarySets` collection.
+
+Phase 1 does not change Data Entry filtering yet.
+
+Phase 1 does not automatically migrate existing glossary records.
+
+Phase 1 goals:
+
+- allow new glossary records to be tagged as UFAS, ADA 2010, TAS 2012, etc.
+- allow current Harris Center work to be tagged as UFAS
+- preserve legacy/unassigned glossary rows
+- prepare for future active Glossary Set filtering
+
+Files likely affected:
+
+```text
+src/types/index.ts
+src/components/GlossaryBuilder.tsx
+src/components/GlossaryExplorer.tsx
+docs/ARCHITECTURE_DESIGN.md
+```
+
+Files not affected in Phase 1:
+
+```text
+src/components/ProjectDataEntry.tsx
+src/components/DataExplorer.tsx
+src/components/ReportPreview.tsx
+src/services/firestoreService.ts
+```
+
+---
+
+## 12. Future Phase: Glossary Set Registry
+
+A future phase may add a formal collection:
+
+```text
+glossarySets
+```
+
+Possible fields:
+
+```ts
+id: string;
+name: string;
+standardType: string;
+standardVersion?: string;
+isActive?: boolean;
+sortOrder?: number;
+```
+
+Examples:
+
+```text
+UFAS
+ADA_2010
+TAS_2012
+TAS_1994
+FHA_GUIDELINES
+ANSI_A117_1_2009
+IBC_2020
+```
+
+This registry would support:
+
+- controlled Glossary Set options
+- admin management
+- sorting
+- activation/deactivation
+- future Project Family presets
+
+---
+
+## 13. Future Phase: Project Families
+
+A future phase may add:
+
+```text
+projectFamilies
+```
+
+Possible fields:
+
+```ts
+id: string;
+name: string;
+defaultGlossarySetIds: string[];
+defaultActiveGlossarySetId?: string;
+description?: string;
+isActive?: boolean;
+```
+
+A project may then store:
+
+```ts
+fldProjectFamilyId?: string;
+fldEnabledGlossarySetIds?: string[];
+fldActiveGlossarySetId?: string;
+```
+
+Important rule:
+
+```text
+Project Families suggest.
+They do not restrict.
+```
+
+Users must always be able to enable additional Glossary Sets or remove suggested Glossary Sets when professional judgment requires it.
+
+---
+
+## 14. Future Phase: Active Glossary Set in Data Entry
+
+A future Data Entry phase should add:
+
+```text
+Active Glossary Set
+```
+
+This will allow users to switch the working Glossary Set while entering records.
+
+Example:
+
+```text
+Active Glossary Set: UFAS
+Category → Item → Finding → Recommendation
+```
+
+Switching the active Glossary Set should filter available glossary records.
+
+Custom Record mode remains available regardless of active Glossary Set.
+
+---
+
+## 15. Revised User Mental Model
+
+User-facing mental model:
+
+```text
+1. Choose project context.
+2. Enable applicable Glossary Sets.
+3. Select the active Glossary Set.
+4. Select a finding/recommendation.
+5. Adjust the data record as needed.
+6. Add or modify citations if needed.
+```
+
+Users should not need to understand:
+
+- joins
+- normalization
+- many-to-many relationships
+- database structure
+
+But users should understand:
+
+```text
+Glossary Set = standard/version working context
+Project Family = suggested bundle
+Project Data Record = final project-specific truth
+```
+
+---
+
+# ⚖️ Standards Model
+
+## 16. Standards Are Layered
+
+Projects may involve multiple overlapping standards, including:
+
+- ADA
+- TAS
+- UFAS
+- FHA / ANSI
+- IBC
+- local code amendments
+- federal funding requirements
+- agency-specific requirements
+
+The system must allow multiple standards to be relevant to the same project.
+
+---
+
+## 17. Time-Based Compliance
+
+Evaluation Standard may differ from Recommendation Standard.
+
+Example:
+
+```text
+Building constructed: 2008
+Evaluation standard: TAS 1994
+Recommendation standard: TAS 2012
+```
+
+The system must support this distinction.
+
+A project or record may need to document:
+
+- the standard used to evaluate the existing condition
+- the standard used for recommended corrective work
+- why those standards differ
+
+---
+
+## 18. Standard Record Model
+
+The `master_standards` library uses a unified schema.
+
+Standard relation types include:
+
+```text
+Standard
+Advisory
+Exception
+Figure
+Table
+```
+
+Optional fields may include:
+
+```text
+imageUrl
+imageCaption
+content_text
+citation_num
+citation_name
+fldStandardType
+fldStandardVersion
+```
+
+---
+
+# 🧬 Concept vs Version
+
+## 19. Concept Layer — Deferred
+
+A future concept layer may be added.
+
+Planned field:
+
+```text
+conceptId
+```
+
+The concept layer would allow the system to associate equivalent or related requirements across standard versions.
+
+Example:
+
+```text
+Accessible route running slope
+  → ADA 2010 version
+  → TAS 2012 version
+  → UFAS version
+  → ANSI version
+```
+
+This is deferred but should remain future-ready.
+
+---
+
+## 20. Version Layer
+
+Each concept may eventually exist as:
+
+- ADA version
+- TAS version
+- UFAS version
+- ANSI version
+- IBC version
+- context-specific version
+
+For now, controlled duplication across standards is acceptable and expected.
+
+---
+
+# 🔁 Data Flow
+
+## 21. Library → Glossary
+
+When creating a glossary record from library content, copy:
+
+- finding text
+- recommendation text
+- measurement metadata
+- cost defaults
+- standards/citations
+- category/item/finding/recommendation IDs
+
+The glossary record becomes independently editable.
+
+Later changes to the library do not automatically update the glossary.
+
+---
+
+## 22. Glossary → Data Record
+
+When creating a project data record from a glossary record, copy:
+
+- finding text
+- recommendation text
+- measurement metadata
+- cost defaults
+- standards/citations
+- glossary linkage
+- category/item/finding/recommendation context as needed
+
+The project data record becomes independently editable.
+
+Later changes to the glossary do not automatically update the data record.
+
+---
+
+## 23. Integrity Rule
+
+```text
+Records NEVER update glossary automatically.
+Glossary NEVER updates library automatically.
+Library changes NEVER silently mutate glossary or project data.
+Glossary changes NEVER silently mutate saved project data.
+```
+
+Explicit sync or refresh tools may be added in the future, but they must be:
+
+- intentional
+- reviewable
+- selective
+- reversible where possible
+- protected by backup or confirmation safeguards
+
+---
+
+# 🧾 Record-Level Citations
+
+## 24. Citation Snapshot Model
+
+The citation model follows the broader snapshot inheritance architecture:
+
+```text
+Library → Glossary → Project Data Record
+```
+
+Citations may eventually exist at all three layers:
+
+```text
+Finding / Recommendation Library Citations
+        ↓ copied into
+Glossary Citations
+        ↓ copied into
+Project Data Record Citations
+```
+
+Each layer inherits defaults from the layer above, but once copied, the citation set becomes an editable snapshot for that layer.
+
+---
+
+## 25. Project Data Citations
+
+✅ DECIDED: Project data citations are stored on:
+
+```text
+projectData.fldStandards
+```
+
+This field represents the final citation set for that specific record.
+
+For glossary-based records:
+
+- citations are inherited from the glossary when the record is created
+- the user may add or remove citations for that specific data record
+- changes apply only to that data record
+
+For custom records:
+
+- citations start empty unless the user adds them
+- the user may add citations manually
+
+Reports use `projectData.fldStandards` as the final citation source.
+
+---
+
+## 26. Citation Reporting Policy
+
+✅ DECIDED: Reports treat `projectData.fldStandards` as authoritative.
+
+If `projectData.fldStandards` exists as an array:
+
+- use that array
+- even if it is empty
+
+If an older glossary-linked record has no `fldStandards` field:
+
+- fallback to `glossary.fldStandards` for legacy display only
+
+Do not union record citations with glossary citations at report time.
+
+This prevents removed record-level citations from reappearing in reports.
+
+---
+
+## 27. Future Citation Drift / Refresh Workflow
+
+Changes to citations at an upstream layer should not automatically mutate downstream records.
+
+Example:
+
+```text
+finding.fldStandards changes
+```
+
+should not automatically update:
+
+```text
+glossary.fldStandards
+projectData.fldStandards
+```
+
+A future workflow may allow users/admins to compare current library citation defaults against citations currently stored on a glossary record.
+
+Possible UI action:
+
+```text
+Review Library Citation Updates
+```
+
+This action would compare:
+
+```text
+Current Library Defaults
+vs.
+Current Glossary Citations
+```
+
+Example:
+
+```text
+Current Glossary Citations
+- TAS 302.1
+- TAS 403.5.1
+
+Current Library Defaults
+- TAS 302.1
+- TAS 403.5.2
+```
+
+The user/admin could then decide whether to:
+
+- add a newly inherited citation
+- remove an outdated citation
+- replace a citation
+- keep the glossary as-is
+- apply all suggested changes
+- ignore the difference for this glossary record
+
+---
+
+## 28. Citation Refresh Options
+
+### Option A: Per-Glossary Review
+
+Add a review action directly in Glossary Builder.
+
+Example:
+
+```text
+Review Library Citation Updates
+```
+
+This evaluates only the currently selected glossary record.
+
+Benefits:
+
+- simple mental model
+- lower risk
+- good for case-by-case review
+- avoids accidental bulk changes
+
+This is likely the best first implementation.
+
+### Option B: Admin Citation Drift Audit
+
+Create a future admin/audit panel that identifies glossary records whose citations differ from their underlying library defaults.
+
+Example:
+
+```text
+Glossary Citation Drift Audit
+```
+
+The audit could list:
+
+- glossary record
+- associated category/item/finding/recommendation
+- current glossary citations
+- current library default citations
+- added/removed/different citation IDs
+- suggested action
+
+This should require explicit approval before changes are applied.
+
+### Option C: Bulk Refresh With Preview
+
+A future advanced admin workflow could allow selected glossary records to be refreshed from library defaults in bulk.
+
+This should only be allowed with:
+
+- clear preview
+- selective approval
+- backup protection
+- duplicate detection
+- ability to skip records
+- confirmation before write
+
+Bulk refresh must never be silent or automatic.
+
+---
+
+## 29. Possible Citation Metadata for Future Sync
+
+Future records may store citation inheritance metadata such as:
+
+```text
+fldInheritedFindingStandardsSnapshot
+fldInheritedRecommendationStandardsSnapshot
+fldCitationLastSyncedAt
+fldCitationSourceVersion
+```
+
+These fields are not required immediately, but may help distinguish:
+
+- citations originally inherited from the library
+- citations added directly to the glossary
+- citations removed intentionally at the glossary level
+- citations that differ because the library changed later
+
+A simpler first implementation can compare live library citation values against current glossary citation values without additional metadata.
+
+---
+
+# 📏 Measurement Metadata
+
+## 30. Measurement Metadata Snapshot
+
+✅ DECIDED: Project data snapshots measurement metadata from the finding/library context at record creation.
+
+Project data stores:
+
+```text
+projectData.fldMeasurementType
+projectData.fldMeasurementUnit
+projectData.fldMeasurement
+```
+
+Library findings store:
+
+```text
+finding.fldMeasurementType
+finding.fldUnitType
+```
+
+Examples:
+
+```text
+fldMeasurementType: "Slope"
+fldMeasurementUnit: "%"
+fldMeasurement: 2.5
+```
+
+```text
+fldMeasurementType: "Width"
+fldMeasurementUnit: "IN"
+fldMeasurement: 31.5
+```
+
+Data Entry does not allow direct editing of measurement type for glossary-based records.
+
+This protects statistical consistency and prevents users from accidentally mixing incompatible measurement types.
+
+---
+
+## 31. Measurement Metadata Repair
+
+If a data record is missing measurement metadata, the correct process is:
+
+```text
+Fix source metadata upstream.
+Review affected data records.
+Apply repair explicitly.
+```
+
+Do not silently mutate existing project data when library metadata changes.
+
+A read-only measurement metadata audit panel may identify records where:
+
+```text
+projectData.fldMeasurementType is missing
+projectData.fldMeasurementUnit is missing
+```
+
+A repair workflow may explicitly update selected project data records from linked finding metadata.
+
+Repair rules:
+
+- update projectData only
+- never update glossary/library records from repair
+- fill missing fields only by default
+- do not overwrite non-empty measurement metadata unless a future explicit overwrite workflow is designed
+- do not infer from text
+
+The temporary audit/repair panel may be hidden from the UI after cleanup, but retained in the codebase for future admin use.
+
+---
+
+# 🧰 Custom Project Records
+
+## 32. Custom Record Mode
+
+✅ DECIDED: Data Entry supports custom project-only records.
+
+Custom records:
+
+- are not linked to a glossary
+- do not create library records
+- do not create glossary records
+- are project-specific
+- save `fldRecordSource: "custom"`
+- save `fldData: ""`
+
+Custom records may store:
+
+```text
+fldPDataCategoryID
+fldPDataItemID
+fldPDataMasterFindID
+fldPDataMasterRecID
+```
+
+Template IDs are trace fields only. They do not create glossary linkage.
+
+---
+
+## 33. Custom Record Template Copy
+
+In Custom Record mode, users may:
+
+- write a finding freehand
+- write a recommendation freehand
+- optionally copy a finding template from the library
+- optionally copy a recommendation template from the library
+
+Copying from the library:
+
+- copies text/default values into the data record
+- does not link the record to the glossary
+- does not create a glossary record
+- does not create a library record
+- remains editable before save
+
+Finding template copy may populate:
+
+```text
+fldFindShort
+fldFindLong
+fldMeasurementType
+fldMeasurementUnit
+```
+
+Recommendation template copy may populate:
+
+```text
+fldRecShort
+fldRecLong
+fldUnitCost
+fldUnitType
+```
+
+---
+
+## 34. Custom Record Promotion — Future Phase
+
+Phase 1 allows users to create project-only custom data records that are not linked to the glossary or library.
+
+A future phase will define how high-quality custom records can be reviewed and promoted into reusable library/glossary content.
+
+Core principle:
+
+```text
+Custom Project Record ≠ Library Record
+Custom Project Record ≠ Glossary Record
+```
+
+Promotion into the library/glossary must be intentional and controlled.
+
+---
+
+## 35. Request Add to Glossary — Future Phase
+
+A future workflow may allow a user to submit a custom data record for review.
+
+Example action:
+
+```text
+Request Add to Glossary
+```
+
+This action should create a pending request, not a glossary record.
+
+Possible collection:
+
+```text
+glossaryRequests
+```
+
+Possible fields:
+
+```text
+sourceProjectDataId
+sourceProjectId
+sourceFacilityId
+proposedCategoryId
+proposedItemId
+proposedFindingShort
+proposedFindingLong
+proposedRecommendationShort
+proposedRecommendationLong
+proposedMeasurementType
+proposedMeasurementUnit
+proposedUnitCost
+proposedCostUnit
+proposedStandards
+submittedBy
+submittedAt
+status
+reviewedBy
+reviewedAt
+reviewNotes
+```
+
+Suggested statuses:
+
+```text
+pending
+approved
+rejected
+duplicate
+needs_revision
+```
+
+---
+
+## 36. Admin Review Workflow — Future Phase
+
+Admins should eventually have a review queue for pending glossary requests.
+
+Admin actions may include:
+
+- approve as new glossary entry
+- reject request
+- mark as duplicate
+- edit before approving
+- link to an existing finding
+- link to an existing recommendation
+- create new finding and/or recommendation records
+- create final glossary link row
+
+Approval may create or update:
+
+```text
+findings
+recommendations
+glossary
+```
+
+depending on whether reusable library records already exist.
+
+Promotion should avoid creating duplicate or low-quality library records.
+
+Before approval, the admin should be able to compare the requested custom record against existing:
+
+- categories
+- items
+- findings
+- recommendations
+- glossary rows
+- standards associations
+
+The admin should decide whether to:
+
+```text
+Use existing library records
+Create new library records
+Create only a new glossary link
+Reject as project-specific only
+```
+
+---
+
+# 🏗️ Project Types / Project Families
+
+## 37. Project Families
+
+Project Families are practical compliance contexts.
+
+Examples:
+
+```text
+Housing with Federal Funding
+Housing without Federal Funding
+TDLR / RAS Project
+ADA Title II Assessment
+ADA Title III Assessment
+Fair Housing Review
+Public Right-of-Way Review
+```
+
+Project Families are:
+
+```text
+prescriptive defaults
+not restrictive gates
+```
+
+They may suggest:
+
+- applicable Glossary Sets
+- default active Glossary Set
+- report defaults
+- workflow defaults
+- likely standards
+
+They may not prevent users from enabling additional Glossary Sets.
+
+---
+
+## 38. Harris Center Example
+
+The Harris Center project is an example of a complex housing assessment.
+
+Example context:
+
+```text
+Client:
+Harris Center
+
+Project:
+Accessibility Assessment
+
+Project Family:
+Housing with Federal Funding
+
+Possible relevant Glossary Sets:
+- UFAS
+- ADA 2010
+- FHA Guidelines
+- ANSI A117.1 2009
+- IBC 2020
+- TAS 2012
+```
+
+Because the project involves housing, federal funding, disability programs, and Texas facilities, multiple standards may apply.
+
+The user may use:
+
+- TAS for exterior/site/public facility elements where TAS is most stringent or required
+- UFAS for federally funded program requirements
+- ADA 2010 when applicable or adopted by agency policy
+- FHA / ANSI / IBC for dwelling-unit or multifamily housing conditions
+- other standards as professional judgment requires
+
+The app may help organize these choices in the future, but the user must remain able to exercise professional judgment.
+
+---
+
+# 🧪 UI Strategy
+
+## 39. Dual Mode
+
+FREDAsoft supports two broad usage modes:
+
+```text
+Field / mobile → fast input, access to mobile device camera
+Office / desktop → full management, review, reporting, cleanup
+```
+
+Data Entry must remain efficient in the field.
+
+Management and cleanup tools may be more detailed and desktop-oriented.
+
+---
+
+## 40. Data Entry Modes
+
+Data Entry supports:
+
+```text
+Glossary Record mode
+Custom Record mode
+```
+
+Glossary Record mode:
+
+- uses approved glossary records
+- saves a glossary link
+- inherits defaults from the glossary
+- allows project-specific edits
+
+Custom Record mode:
+
+- creates a project-only record
+- does not require glossary linkage
+- allows freehand finding/recommendation text
+- may copy library templates as starting points
+
+---
+
+## 41. Citation UI in Data Entry
+
+Data Entry uses the Standards Browser for record-level citations.
+
+Users may:
+
+- search and filter standards
+- click `+` to add a citation
+- drag/drop citations into the record citation area
+- remove selected citations
+
+All changes affect only:
+
+```text
+projectData.fldStandards
+```
+
+---
+
+# 📸 Image Architecture — Future
+
+Planned image features:
+
+- image ordering
+- primary report images
+- appendix images
+- metadata-based image storage
+- caption management
+- image source tracking
+
+Project data records may store image arrays, but reporting should eventually support richer image metadata.
+
+---
+
+# 🔐 Firebase Safety
+
+Firestore behavior must follow these principles:
+
+- no uncontrolled writes
+- no loops
+- explicit triggers only
+- scoped queries
+- use operation locks where needed
+- avoid runtime migrations in production
+- avoid broad unreviewed batch updates
+- use confirmation and backup protection for destructive or broad operations
+
+---
+
+# 🧭 User Mental Model
+
+Users should understand:
+
+```text
+Libraries define reusable language.
+Glossary Sets define standard/version context.
+Glossary Records define approved combinations.
+Project Families suggest applicable Glossary Sets.
+Projects enable one or more Glossary Sets.
+Data Records are final project-specific truth.
+Standards define legal/technical authority.
+```
+
+Users should not need to understand:
+
+- joins
+- normalization
+- database structure
+- many-to-many relationships
+- Firestore document IDs
+
+---
+
+# 🧭 Design Philosophy
+
+The system must balance:
+
+- flexibility
+- clarity
+- traceability
+- accuracy
+- usability
+- historical stability
+- professional judgment
+
+The system should guide users, not trap them.
+
+Defaults should be helpful, but not restrictive.
+
+---
+
+# 🟢 Final Architecture Summary
+
+```text
+Libraries → define reusable language and defaults
+Glossary Sets → define standard/version working contexts
+Glossary Records → define approved category/item/finding/recommendation combinations
+Project Families → suggest applicable Glossary Sets
+Projects → enable one or more Glossary Sets
+Project Data Records → define final project-specific truth
+Standards → define legal/technical authority
+```
+
+---
+
+# ✅ Architectural Decisions Locked
+
+- Concept layer → deferred, future-ready
+- Snapshot inheritance → copied downward, independently editable
+- Glossary records → standard/version-indexed through Glossary Set metadata
+- Project Families / Project Types → prescriptive defaults only, never restrictive
+- Standards handling → implicit multi-citation model
+- Library sync → explicit only, never automatic, with backup protection
+- Citation inheritance → copied downward, later refresh explicit only
+- Measurement metadata → snapshotted onto project data records
+- Custom records → project-only unless promoted through future admin workflow
+- Project data records → final reporting source
+
+---
+
+# 🚀 Next Steps
+
+Near-term:
+
+- implement Phase 1 Glossary Set metadata
+- tag current Harris Center glossary work as UFAS
+- expose Glossary Set metadata in Glossary Builder
+- show/filter Glossary Set metadata in Glossary Explorer
+
+Later:
+
+- add formal `glossarySets` registry
+- add Project Family presets
+- allow projects to enable multiple Glossary Sets
+- add active Glossary Set selector in Data Entry
+- add explicit citation drift review
+- add custom record promotion workflow
+- continue Firestore security hardening
+This version replaces the older “Glossaries = Context (Not Standards)” wording with the newer protocol: Glossary Sets are standard/version contexts; Project Families are suggested bundles and never restrictions. It also cleans up the broken markdown structure in the uploaded file and folds in the recent citation, custom-record, and measurement decisions. 
+
+
+
+
+Pasted markdown(52).md
+File
+
+Thought for 4s
+This is exactly the Phase 1 glossary-set metadata layer we wanted.
+
+You now have:
+
+Glossary rows can be tagged as UFAS / ADA 2010 / TAS 2012 / etc.
+Existing rows remain valid as Unassigned.
+Glossary Explorer can display and filter by set.
+Data Entry behavior is unchanged.
+That means you can keep working on Harris Center and tag the glossary records you are building as UFAS going forward. 
+
+
+Before committing, test quickly:
+
+Open Glossary Builder.
+
+Select UFAS in the new Glossary Set selector.
+
+Create or update one glossary record.
+
+Confirm Firestore has:
+
+fldGlossarySetId: "UFAS"
+
+fldGlossarySetName: "UFAS"
+
+fldGlossaryStandardType: "UFAS"
+
+fldGlossaryStandardVersion: "1984"
+
+Open Glossary Explorer.
+
+Confirm the row shows a UFAS badge and the filter works.
+
+Confirm existing untagged rows show as Unassigned and still work.
+
+Then commit:
+
+git add src/types/index.ts src/lib/glossarySets.ts src/components/GlossaryBuilder.tsx src/components/GlossaryExplorer.tsx docs/ARCHITECTURE_DESIGN.md
+git commit -m "Add glossary set metadata to glossary records"
+git push origin data-entry-flow-refactor
+After that, you can continue building the Harris Center glossary work under the UFAS set.
+
+
+
+That looks correct.
+
+The Firestore row now has the new glossary-set metadata:
+
+fldGlossarySetId: "UFAS"
+fldGlossarySetName: "UFAS"
+fldGlossaryStandardType: "UFAS"
+fldGlossaryStandardVersion: "1984"
+So Phase 1 is doing what we needed: the glossary record is now explicitly tagged as part of the UFAS glossary set, while the existing category/item/finding/recommendation linkage remains unchanged.
+
+Next, verify the same row in Glossary Explorer:
+
+It should show a UFAS badge/column.
+
+Filtering by UFAS should include this record.
+
+Filtering by Unassigned should exclude this record.
+
+Then commit:
+
+git add src/types/index.ts src/lib/glossarySets.ts src/components/GlossaryBuilder.tsx src/components/GlossaryExplorer.tsx docs/ARCHITECTURE_DESIGN.md
+git commit -m "Add glossary set metadata to glossary records"
+git push origin data-entry-flow-refactor
+You can continue building the Harris Center glossary work as UFAS after this.
+
+
+Uploaded image
+Uploaded image
+
+Looks good. Both screenshots confirm the feature is working:
+
+UFAS filter selected:
+  only UFAS-tagged rows shown
+
+All Glossary Sets selected:
+  UFAS rows plus Unassigned legacy rows shown
+That is exactly the Phase 1 behavior we wanted: metadata visibility/filtering without changing Data Entry or breaking legacy glossary rows.
+
+Commit it now:
+
+git add src/types/index.ts src/lib/glossarySets.ts src/components/GlossaryBuilder.tsx src/components/GlossaryExplorer.tsx docs/ARCHITECTURE_DESIGN.md
+git commit -m "Add glossary set metadata to glossary records"
+git push origin data-entry-flow-refactor
+After this, you can continue building Harris Center glossary records under UFAS. Existing unassigned records can be backfilled later when you’re ready.
+
+
+PS C:\dev\fredasoft> git add src/types/index.ts src/lib/glossarySets.ts src/components/GlossaryBuilder.tsx src/components/GlossaryExplorer.tsx docs/ARCHITECTURE_DESIGN.md
+>> git commit -m "Add glossary set metadata to glossary records"
+>> git push origin data-entry-flow-refactor
+w-refactor;2a63bcc9-f3f1-44fe-bf83-2795a7dac4cawarning: in the working copy of 'docs/ARCHITECTURE_D
+ESIGN.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/GlossaryBuilder.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/GlossaryExplorer.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/types/index.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/lib/glossarySets.ts', LF will be replaced by CRLF the next time Git[data-entry-flow-refactor 5d08162] Add glossary set 
+metadata to glossary records
+ 5 files changed, 1484 insertions(+), 416 deletions(-)
+ create mode 100644 src/lib/glossarySets.ts
+Enumerating objects: 22, done.
+Counting objects: 100% (22/22), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (11/11), done.
+Writing objects: 100% (12/12), 12.93 KiB | 1.44 MiB/s, done.
+Total 12 (delta 7), reused 0 (delta 0), pack-reused 
+0 (from 0)
+remote: Resolving deltas: 100% (7/7), completed with 7 local objects.
+To https://github.com/kenotten/FREDAsoft.git        
+   ea4bdc3..5d08162  data-entry-flow-refactor -> data-entry-flow-refactor
+PS C:\dev\fredasoft> git status
+On branch data-entry-flow-refactor
+Your branch is up to date with 'origin/data-entry-flow-refactor'.
+
+nothing to commit, working tree clean
+PS C:\dev\fredasoft> 
+
+Excellent — committed, pushed, and clean.
+
+Current latest commit:
+
+5d08162 Add glossary set metadata to glossary records
+Current state:
+
+Branch: data-entry-flow-refactor
+Remote: up to date
+Working tree: clean
+This is a strong checkpoint. You can keep building Harris Center glossary records under UFAS now, and the architecture is set up for later project-family / active-glossary filtering without blocking today’s work.
+
+
+
+Pasted text(43).txt
+Document
+This is an example of the last handoff document which was used to start this current chat session.  I need you to create an updated handoff document so I can start a new chat as this session is getting pretty full and starting to take an unacceptably long time to converse.
+
+Handoff instructions (to be used as a guide for a revised version:
+
+ 
+
+Thought for 14s
+I used your prior handoff as the structure and updated it for the work completed in this chat. 
+
+
+Copy the full text below into the new chat.
+
+# Handoff Note for New Chat — Archie
+
+## Identity / Working Relationship
+
+Your name is Archie.
+
+You are assisting Ken with a React + TypeScript application called **FREDAsoft**.
+
+Ken is the project owner and is working in Cursor IDE with an AI coding agent. Your role is not to blindly code. Your role is:
+
+- architect
+- debugger
+- code-review partner
+- workflow guide
+- prompt writer for Cursor
+- guardrail against AI overreach
+
+Cursor is the coding agent. Archie helps Ken decide what Cursor should and should not do, reviews Cursor’s analysis/diffs, and keeps changes small, staged, and safe.
+
+Ken prefers:
+
+- step-by-step guidance
+- plain-English explanations
+- careful Git workflow
+- scoped prompts
+- analysis before implementation
+- no uncontrolled refactors
+- no “AI sprawl”
+- small commits with clear messages
+
+Full prior chat history is being maintained in:
+
+```text
+C:\dev\fredasoft\docs\ArchieHistory.md
+Local repo:
+
+C:\dev\fredasoft
+Current feature branch:
+
+data-entry-flow-refactor
+Most recent known commit from this session:
+
+5d08162 Add glossary set metadata to glossary records
+At last check, working tree was clean and branch was up to date with origin.
+
+Important Process Rules
+Ken has strong rules in docs/ARCHITECTURE_DESIGN.md.
+
+Important principles:
+
+If prompt says ANALYSIS ONLY, Cursor must not edit files.
+
+If prompt does not explicitly say apply changes, Cursor should inspect/report only.
+
+Cursor has sometimes overstepped by editing files during analysis prompts. Be strict.
+
+Always prefer:
+
+investigate
+
+review exact diff
+
+test
+
+commit
+
+push
+
+Do not merge to main unless Ken explicitly asks.
+
+Do not run broad migrations or Firestore writes without explicit confirmation.
+
+Keep changes narrow and scoped.
+
+When Cursor returns work:
+
+git status
+git diff
+Verify only expected files changed before committing.
+
+Project Context
+FREDAsoft is a React + TypeScript app using:
+
+React / TSX
+
+Firebase / Firestore
+
+Firebase Storage
+
+local development in Cursor
+
+Git feature branches
+
+PowerShell on Windows
+
+The app supports:
+
+accessibility inspections
+
+plan reviews
+
+assessments
+
+standards/citation management
+
+reporting
+
+The current work has focused heavily on the data-entry flow, glossary architecture, custom records, citations, measurement metadata, and glossary set metadata.
+
+Major Completed Work Before This Chat
+The prior handoff included these major completed areas:
+
+Project Data Entry image upload restored/fixed.
+
+Firebase Storage bucket corrected to:
+
+path-recovery.firebasestorage.app
+Storage path corrected from:
+
+projectData/...
+to:
+
+project-data/...
+Data Explorer scoped to active project/facility.
+
+fldData / glossary link save bug fixed.
+
+Dirty guards and draft recovery behavior implemented.
+
+Active context guard added to Project Data Entry.
+
+After save/update, Data Entry resets to a new clean record while preserving category/location.
+
+Data Explorer glossary lookup fixed to match both glossary.fldGlosId and glossary.id.
+
+App projectData project filter normalized.
+
+Glossary retire behavior fixed.
+
+UFAS standards transform/import tooling created, but import should still be handled carefully if revisited.
+
+Major Completed Work in This Chat
+1. Custom Project-Only Records
+Data Entry now supports two modes:
+
+Glossary Record mode
+Custom Record mode
+Custom records:
+
+are project-only
+
+are not linked to glossary
+
+do not create library records
+
+do not create glossary records
+
+save fldRecordSource: "custom"
+
+save fldData: ""
+
+save project category/item context using:
+
+fldPDataCategoryID
+fldPDataItemID
+A key bug was fixed: custom mode was initially local component state and could reset to glossary mode on remount. It was moved into parent selections state as:
+
+selections.dataEntryMode
+This fixed custom records incorrectly saving as glossary records.
+
+Relevant commits included:
+
+d18f2ae WIP support custom project-only data records
+c8d9bdb Persist custom data entry mode in selections
+2. Custom Record Template Copy
+Custom Record mode now allows users to optionally copy from both the finding library and recommendation library as templates.
+
+Important rule:
+
+Template copy does not create glossary linkage.
+Template copy does not create library records.
+Template copy only seeds projectData fields.
+Trace fields:
+
+fldPDataMasterFindID
+fldPDataMasterRecID
+Finding template copy may populate:
+
+fldFindShort
+fldFindLong
+fldMeasurementType
+fldMeasurementUnit
+Recommendation template copy may populate:
+
+fldRecShort
+fldRecLong
+fldUnitCost
+fldUnitType
+Dropdown grouping was improved:
+
+For both finding and recommendation template dropdowns:
+
+1. Selected item
+2. Other items in selected category
+3. Other categories, grouped by category name
+The “Other Categories —” prefix was removed, so category group labels are clean.
+
+Relevant commit:
+
+3d29575 Add grouped custom record template copy options
+3. Record-Level Citations in Data Entry
+Data Entry now supports record-level citations using the same Standards Browser experience as Glossary Builder.
+
+Record citations are stored in:
+
+projectData.fldStandards
+Users can:
+
+search/filter standards
+
+click + to add citation
+
+drag/drop citation into the Record Citations area
+
+remove selected citations
+
+The initial simplified citation picker was rejected because it lacked the full Standards Library functionality. It was replaced with StandardsBrowser.
+
+The Record Citations and Standards Browser layout was changed to side-by-side on wide screens so drag/drop is usable.
+
+Relevant commits:
+
+1803762 Improve record citation layout for drag and drop
+4. Citation Inheritance and Reporting Policy
+New glossary-based data records now inherit citations from the glossary row:
+
+glossary.fldStandards → projectData.fldStandards
+Existing records preserve their saved projectData.fldStandards.
+
+Custom records start with no inherited citations unless the user adds them manually.
+
+Reports were updated so projectData.fldStandards is authoritative.
+
+Important reporting policy:
+
+If projectData.fldStandards exists as an array:
+  use it as the final citation set, even if empty.
+
+If an older glossary-linked record has no fldStandards:
+  fallback to glossary.fldStandards for legacy display only.
+
+Do not union projectData.fldStandards with glossary.fldStandards.
+This prevents citations removed at the record level from reappearing in reports.
+
+Relevant commits:
+
+bd6c8f7 Inherit glossary citations for new data records
+76e0fed Use record-level citations as final report references
+5. Citation Drift / Refresh Workflow Documented
+A future workflow was documented in docs/ARCHITECTURE_DESIGN.md.
+
+Policy:
+
+Library citation changes do not automatically mutate glossaries.
+Glossary citation changes do not automatically mutate saved projectData.
+Refresh must be explicit, reviewable, selective, and reversible where possible.
+Future options documented:
+
+per-glossary citation review
+
+admin citation drift audit
+
+bulk refresh with preview
+
+Do not implement this yet unless Ken explicitly asks.
+
+6. Measurement Metadata in Library Manager
+Finding records in Library Manager now expose:
+
+fldMeasurementType
+fldUnitType
+Labels:
+
+Measurement Type
+Measurement Unit
+Measurement Unit uses the project’s MEASUREMENT_UNITS list.
+
+This was added because the fields existed but were not exposed when editing findings.
+
+Relevant commit likely around:
+
+Expose finding measurement fields in Library Manager
+7. Measurement Type Snapshot on ProjectData
+projectData now snapshots measurement metadata:
+
+projectData.fldMeasurementType
+projectData.fldMeasurementUnit
+projectData.fldMeasurement
+Library findings store:
+
+finding.fldMeasurementType
+finding.fldUnitType
+Data Entry does not allow direct editing of measurement type for glossary-based records.
+
+Reason:
+
+statistical consistency
+historical stability
+self-contained projectData records
+Existing records preserve saved snapshot values.
+
+Custom records can get measurement metadata from a copied finding template.
+
+Relevant commit:
+
+da4c27a Snapshot measurement type on project data records
+8. Measurement Metadata Audit / Repair
+A read-only MeasurementMetadataAuditPanel was created to identify projectData records missing measurement metadata.
+
+Then Stage 2 added selective repair:
+
+checkbox selection
+
+select all repairable
+
+confirmation modal
+
+batch update projectData only
+
+fill missing fields only
+
+no overwrite
+
+no glossary/library writes
+
+Repair source logic:
+
+Glossary record:
+
+projectData.fldData → glossary → finding → suggested fldMeasurementType/fldUnitType
+Custom record with template trace:
+
+projectData.fldPDataMasterFindID → finding → suggested fldMeasurementType/fldUnitType
+Custom record without template trace:
+
+No safe suggestion
+Ken used the repair workflow and all finding records were repaired/fixed.
+
+After cleanup, the audit/repair panel was hidden from Data Explorer but the component file was retained for future use.
+
+Important file retained:
+
+src/components/MeasurementMetadataAuditPanel.tsx
+It is not currently mounted in Data Explorer.
+
+9. Library Completeness Panel Removed
+The temporary LibraryCompletenessPanel was removed after library cleanup was completed.
+
+Deleted file:
+
+src/components/LibraryCompletenessPanel.tsx
+References were removed from Library Manager.
+
+Important: do not restore this unless Ken specifically wants it.
+
+10. Data Entry UI Cleanup
+Several UI refinements were made in ProjectDataEntry.tsx:
+
+removed subtitle “Recording Inspection Findings”
+
+made the five Data Entry cards light blue
+
+made the top context card slightly darker blue
+
+made finding/recommendation dropdowns yellow
+
+focused active fields turn green
+
+detailed description fields were made consistent with normal field backgrounds
+
+Relevant commits included:
+
+658728b Clean up Data Entry card styling
+c56252e Refine Data Entry field color cues
+Glossary Set Metadata — Most Recent Major Work
+Architectural Decision
+Glossary records should be indexed primarily by Glossary Set, meaning standard/type/version context.
+
+Examples:
+
+UFAS
+ADA 2010
+TAS 2012
+TAS 1994
+FHA Guidelines
+ANSI A117.1 2009
+IBC 2020
+Project Families / Project Types are prescriptive, not restrictive.
+
+They may suggest applicable glossary sets, but they must not restrict users from enabling additional glossary sets.
+
+This is critical.
+
+Example project family:
+
+Housing with Federal Funding
+Suggested glossary sets may include:
+
+UFAS
+ADA 2010
+FHA Guidelines
+ANSI A117.1 2009
+IBC 2020
+TAS 2012
+But the user must be able to add/remove glossary sets based on professional judgment.
+
+Implemented Phase 1 Glossary Set Metadata
+Phase 1 implemented direct glossary-set metadata fields on glossary records.
+
+No Data Entry behavior change yet.
+
+No migration.
+
+No restriction/filtering in Data Entry yet.
+
+New optional fields on Glossary:
+
+fldGlossarySetId?: string;
+fldGlossarySetName?: string;
+fldGlossaryStandardType?: string;
+fldGlossaryStandardVersion?: string;
+New constants file:
+
+src/lib/glossarySets.ts
+Initial glossary set definitions:
+
+UFAS
+ADA_2010
+TAS_2012
+TAS_1994
+FHA_GUIDELINES
+ANSI_A117_1_2009
+IBC_2020
+Glossary Builder now includes a Glossary Set selector.
+
+Glossary Explorer now:
+
+displays glossary set badge/column
+
+filters by glossary set
+
+shows unassigned legacy rows as Unassigned
+
+Data Entry was intentionally not changed in this phase.
+
+Relevant latest commit:
+
+5d08162 Add glossary set metadata to glossary records
+Verified Behavior
+Ken tested Firestore and Glossary Explorer.
+
+Firestore glossary row correctly saved:
+
+fldGlossarySetId: "UFAS"
+fldGlossarySetName: "UFAS"
+fldGlossaryStandardType: "UFAS"
+fldGlossaryStandardVersion: "1984"
+Glossary Explorer:
+
+UFAS filter shows only UFAS-tagged records
+
+All Glossary Sets shows UFAS plus Unassigned rows
+
+legacy rows remain valid
+
+Ken can continue building Harris Center glossary records under UFAS.
+
+Current Architecture Document
+Ken uploaded and replaced docs/ARCHITECTURE_DESIGN.md with a cleaned-up version that now includes:
+
+Glossary Sets as standard/version contexts
+
+Project Families as suggested bundles, not restrictions
+
+Custom records
+
+Citation snapshot model
+
+Measurement metadata snapshot model
+
+Future citation drift workflow
+
+Future custom record promotion workflow
+
+Future glossary set registry
+
+Future project family presets
+
+Future active glossary set in Data Entry
+
+Important wording:
+
+Glossary Set = standard/version working context
+Project Family = suggested bundle
+Project Data Record = final project-specific truth
+Important locked decisions:
+
+Snapshot inheritance → copied downward, independently editable
+Glossary records → standard/version-indexed through Glossary Set metadata
+Project Families / Project Types → prescriptive defaults only, never restrictive
+Citation inheritance → copied downward, later refresh explicit only
+Measurement metadata → snapshotted onto project data records
+Custom records → project-only unless promoted through future admin workflow
+Current Git State
+At the end of this session:
+
+Branch: data-entry-flow-refactor
+Working tree: clean
+Remote: up to date
+Latest known commit: 5d08162 Add glossary set metadata to glossary records
+Always verify with:
+
+git status
+Recommended Next Steps
+Ken can continue working on Harris Center glossary creation under the UFAS glossary set.
+
+Immediate next work does not need to block glossary building.
+
+Likely Next Feature Phases
+Phase A — Continue UFAS Glossary Building
+Ken can keep creating/tagging glossary records as:
+
+Glossary Set: UFAS
+Backfill unassigned rows later if needed.
+
+Phase B — Optional Backfill Tool
+Later, build a safe tool/script to tag existing unassigned glossary rows as UFAS where appropriate.
+
+Do not auto-migrate.
+
+Suggested safe approach:
+
+filter unassigned rows
+
+select rows manually
+
+apply glossary set metadata
+
+confirm before write
+
+Phase C — Active Glossary Set in Data Entry
+Future Data Entry work:
+
+add Active Glossary Set selector
+
+filter available glossary records by active set
+
+project can eventually enable multiple glossary sets
+
+Do not implement this until Ken asks.
+
+Phase D — Project Families
+Future work:
+
+projectFamilies collection
+
+projects store enabled glossary set IDs
+
+families suggest defaults only
+
+users can always add/remove glossary sets
+
+Do not implement this until Ken asks.
+
+Important Distinctions to Preserve
+Glossary Set vs Project Family
+Glossary Set:
+
+standard/version working context
+Example:
+
+UFAS
+ADA 2010
+TAS 2012
+Project Family:
+
+suggested bundle of likely applicable glossary sets
+Example:
+
+Housing with Federal Funding
+Project Family is not restrictive.
+
+Measurement Unit vs Cost Unit
+Do not confuse:
+
+finding.fldUnitType
+projectData.fldMeasurementUnit
+with:
+
+recommendation.fldUOM
+projectData.fldUnitType
+Finding measurement metadata:
+
+fldMeasurementType
+fldUnitType
+Project measurement snapshot:
+
+fldMeasurementType
+fldMeasurementUnit
+fldMeasurement
+Recommendation cost metadata:
+
+fldUnit
+fldUOM
+Project cost fields:
+
+fldUnitCost
+fldUnitType
+fldQTY
+fldTotalCost
+Citations vs Glossary Sets
+Do not confuse:
+
+glossary.fldStandards
+projectData.fldStandards
+with glossary set metadata:
+
+fldGlossarySetId
+fldGlossarySetName
+fldGlossaryStandardType
+fldGlossaryStandardVersion
+fldStandards are citation IDs.
+
+Glossary Set fields classify the glossary row’s standard/version working context.
+
+PowerShell / Terminal Notes for Ken
+If terminal appears frozen but shows Vite server output, it is running the dev server. Open a new terminal or press Ctrl+C to stop it.
+
+In PowerShell, Ctrl+C cancels a command unless text is selected. For copy, prefer Ctrl+Shift+C or the top menu.
+
+If terminal shows (END), press q to exit pager.
+
+If accidentally pasting terminal output into PowerShell, ignore the error and continue.
+
+Useful commands:
+
+git status
+git diff
+git add <file>
+git commit -m "Clear commit message"
+git push origin data-entry-flow-refactor
+Cursor Prompting Style
+Ken prefers prompts like:
+
+ANALYSIS ONLY. Do not edit files.
+or:
+
+Apply a focused change only.
+Files likely affected:
+...
+Do not modify:
+...
+After changes:
+- Report exact diff.
+- Report lint results.
+When asking Cursor to implement:
+
+be explicit about files
+
+define constraints
+
+say what not to modify
+
+ask for exact diff and lint results
+
+test before commit
+
+Do Not Do Without Explicit Permission
+Do not:
+
+merge to main
+
+run broad Firestore migrations
+
+run import scripts
+
+run npm audit fix --force
+
+refactor large components opportunistically
+
+modify App.tsx unless scoped
+
+alter Data Entry behavior while working only on metadata
+
+add restrictive project-family logic
+
+auto-update downstream glossary or project data from library changes
+
+hard-delete glossary records referenced by projectData
+
+restore temporary cleanup panels without asking
+
+Current User Intent
+Ken wants to continue building and vetting the app using:
+
+Client: Harris Center
+Project: Accessibility Assessment
+Project type/family: Housing with Federal Funding
+Current glossary work: UFAS
+Ken wants to be able to continue this exercise in a new chat without losing the architecture and workflow context.
+
+The next chat should pick up from:
+
+Glossary Set metadata has been implemented and tested.
+Harris Center glossary work can continue under UFAS.
+Data Entry filtering by active glossary set is future work, not current.
+
+
+
 
 
