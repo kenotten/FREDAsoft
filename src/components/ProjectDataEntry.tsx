@@ -155,6 +155,7 @@ export default function ProjectDataEntry({
     setFldFindLong('');
     setFldRecShort('');
     setFldRecLong('');
+    setFldMeasurementType('');
     setFldStandards([]);
     onSelectionChange({ 
       ...selections, 
@@ -177,6 +178,7 @@ export default function ProjectDataEntry({
     setFldFindLong('');
     setFldRecShort('');
     setFldRecLong('');
+    setFldMeasurementType('');
     setFldStandards([]);
     onSelectionChange({ ...selections, itemId: val, findId: '', recId: '', glosId: '', standards: [], isDirty: true });
     setCustomMasterRecId('');
@@ -188,6 +190,8 @@ export default function ProjectDataEntry({
   const [fldQTY, setFldQTY] = useState<number | ''>(0);
   const [fldMeasurement, setFldMeasurement] = useState<number | ''>('');
   const [fldMeasurementUnit, setFldMeasurementUnit] = useState('');
+  /** Snapshot field: not directly editable; set from library finding / template or hydrated from saved record */
+  const [fldMeasurementType, setFldMeasurementType] = useState('');
   const [fldUnitType, setFldUnitType] = useState('Decimal');
   const [fldUnitCost, setFldUnitCost] = useState<number | ''>(0);
   const [fldTotalCost, setFldTotalCost] = useState<number | ''>(0);
@@ -225,6 +229,7 @@ export default function ProjectDataEntry({
         fldRecLong !== (activeRecord.fldRecLong || '') ||
         (fldQTY === '' ? 0 : Number(fldQTY)) !== (activeRecord.fldQTY || 0) ||
         (fldMeasurement === '' ? null : Number(fldMeasurement)) !== (activeRecord.fldMeasurement ?? null) ||
+        (fldMeasurementType || '') !== (activeRecord.fldMeasurementType || '') ||
         fldMeasurementUnit !== (activeRecord.fldMeasurementUnit || '') ||
         fldUnitType !== (activeRecord.fldUnitType || 'Decimal') ||
         (fldUnitCost === '' ? 0 : Number(fldUnitCost)) !== (activeRecord.fldUnitCost || 0) ||
@@ -249,7 +254,7 @@ export default function ProjectDataEntry({
   }, [
     activeRecord, selections.categoryId, selections.itemId, selections.findId, selections.recId,
     fldFindShort, fldFindLong, fldRecShort, fldRecLong,
-    fldQTY, fldMeasurement, fldUnitType, fldLocation, fldImages, fldStandards
+    fldQTY, fldMeasurement, fldMeasurementType, fldMeasurementUnit, fldUnitType, fldLocation, fldImages, fldStandards
   ]);
 
   useEffect(() => {
@@ -294,6 +299,8 @@ export default function ProjectDataEntry({
     }
     if (hadGlossaryLinks) {
       setFldStandards([]);
+      setFldMeasurementType('');
+      setFldMeasurementUnit('');
       onSelectionChange({
         ...selections,
         findId: '',
@@ -409,7 +416,7 @@ export default function ProjectDataEntry({
       const draftData = {
         timestamp: new Date().toISOString(),
         fldFindShort, fldFindLong, fldRecShort, fldRecLong,
-        fldQTY, fldMeasurement, fldMeasurementUnit, fldUnitType,
+        fldQTY, fldMeasurement, fldMeasurementType, fldMeasurementUnit, fldUnitType,
         fldLocation,
         fldImages, fldStandards,
         fldUnitCost, fldTotalCost,
@@ -426,7 +433,7 @@ export default function ProjectDataEntry({
     return () => clearInterval(interval);
   }, [
     isDirty, fldFindShort, fldFindLong, fldRecShort, fldRecLong,
-    fldQTY, fldMeasurement, fldUnitType,
+    fldQTY, fldMeasurement, fldMeasurementType, fldMeasurementUnit, fldUnitType,
     fldUnitCost, fldTotalCost,
     fldLocation,
     fldImages, fldStandards, selections
@@ -440,6 +447,7 @@ export default function ProjectDataEntry({
     setFldRecLong(savedDraft.fldRecLong || '');
     setFldQTY(savedDraft.fldQTY || 0);
     setFldMeasurement(savedDraft.fldMeasurement || '');
+    setFldMeasurementType(savedDraft.fldMeasurementType || '');
     setFldMeasurementUnit(savedDraft.fldMeasurementUnit || '');
     setFldUnitType(savedDraft.fldUnitType || 'Decimal');
     setFldUnitCost(savedDraft.fldUnitCost || 0);
@@ -526,6 +534,7 @@ export default function ProjectDataEntry({
       setFldRecLong(activeRecord.fldRecLong || '');
       setFldQTY(activeRecord.fldQTY || 0);
       setFldMeasurement(activeRecord.fldMeasurement || '');
+      setFldMeasurementType(activeRecord.fldMeasurementType || '');
       setFldMeasurementUnit(activeRecord.fldMeasurementUnit || '');
       setFldUnitType(activeRecord.fldUnitType || 'Decimal');
       setFldUnitCost(activeRecord.fldUnitCost || 0);
@@ -554,6 +563,7 @@ export default function ProjectDataEntry({
     activeRecord?.fldPDataItemID,
     activeRecord?.fldPDataMasterRecID,
     activeRecord?.fldPDataMasterFindID,
+    activeRecord?.fldMeasurementType,
     glossary
   ]);
 
@@ -631,6 +641,7 @@ export default function ProjectDataEntry({
         fldRecLong,
         fldQTY: Number(fldQTY) || 0,
         fldMeasurement: fldMeasurement === '' ? null : Number(fldMeasurement),
+        fldMeasurementType: fldMeasurementType || '',
         fldMeasurementUnit,
         fldUnitCost: Number(fldUnitCost) || 0,
         fldUnitType,
@@ -652,6 +663,7 @@ export default function ProjectDataEntry({
     setFldRecLong('');
     setFldQTY(0);
     setFldMeasurement('');
+    setFldMeasurementType('');
     setFldMeasurementUnit('');
     setFldUnitType('Decimal');
     setFldUnitCost(0);
@@ -705,6 +717,7 @@ export default function ProjectDataEntry({
         setFldRecLong('');
         setFldQTY(0);
         setFldMeasurement('');
+        setFldMeasurementType('');
         setFldMeasurementUnit('');
         setFldUnitType('Decimal');
         setFldUnitCost(0);
@@ -746,6 +759,7 @@ export default function ProjectDataEntry({
         setFldRecLong(activeRecord.fldRecLong || '');
         setFldQTY(activeRecord.fldQTY || 0);
         setFldMeasurement(activeRecord.fldMeasurement || '');
+        setFldMeasurementType(activeRecord.fldMeasurementType || '');
         setFldMeasurementUnit(activeRecord.fldMeasurementUnit || '');
         setFldUnitType(activeRecord.fldUnitType || 'Decimal');
         setFldUnitCost(activeRecord.fldUnitCost || 0);
@@ -771,6 +785,7 @@ export default function ProjectDataEntry({
         setFldRecLong('');
         setFldQTY(0);
         setFldMeasurement('');
+        setFldMeasurementType('');
         setFldMeasurementUnit('');
         setFldUnitCost(0);
         setFldTotalCost(0);
@@ -1042,10 +1057,54 @@ export default function ProjectDataEntry({
 
   const selectedFindingMeasurementType = selectedFinding?.fldMeasurementType || '';
 
+  /** New glossary records: keep measurement snapshot fields aligned with selected finding (findings may load after selections). */
+  useEffect(() => {
+    if (activeRecord) return;
+    if (dataEntryMode !== 'glossary') return;
+    const id = normalizeId(selections.findId);
+    if (!id) {
+      setFldMeasurementType('');
+      setFldMeasurementUnit('');
+      return;
+    }
+    const find = (findings || []).find(
+      (f: any) => normalizeId(f.fldFindID || f.id) === id
+    );
+    if (!find) return;
+    setFldMeasurementType(find.fldMeasurementType || '');
+    setFldMeasurementUnit(find.fldUnitType || '');
+  }, [activeRecord, dataEntryMode, selections.findId, findings]);
+
   const activeFindingsList = useMemo(
     () => (findings || []).filter((f: any) => !f?.fldDeleted && !f?.fldIsDeleted),
     [findings]
   );
+
+  const customTemplateFinding = useMemo(() => {
+    const id = normalizeId(customMasterFindId);
+    if (!id) return undefined;
+    return activeFindingsList.find(
+      (x: any) => normalizeId(x.fldFindID || x.id) === id
+    );
+  }, [customMasterFindId, activeFindingsList]);
+
+  const displayMeasurementTypeReadonly = useMemo(() => {
+    const trimmed = (fldMeasurementType || '').trim();
+    if (trimmed) return trimmed;
+    if (!activeRecord && dataEntryMode === 'glossary') {
+      return (selectedFindingMeasurementType || '').trim() || '(Not set)';
+    }
+    if (!activeRecord && dataEntryMode === 'custom') {
+      return (customTemplateFinding?.fldMeasurementType || '').trim() || '(Not set)';
+    }
+    return '(Not set)';
+  }, [
+    fldMeasurementType,
+    activeRecord,
+    dataEntryMode,
+    selectedFindingMeasurementType,
+    customTemplateFinding
+  ]);
 
   const usableGlossaryTemplateRows = useMemo(
     () => (glossary || []).filter((g: any) => !g?.fldDeleted && !g?.fldIsDeleted),
@@ -1403,9 +1462,12 @@ export default function ProjectDataEntry({
                 value={selections.findId || ''}
                 onChange={(e: any) => {
                    const find = (findings || []).find(f => (f.id || f.fldFindID || "").toLowerCase() === (e.target.value || "").toLowerCase());
-                   if(find) { 
-                     setFldFindShort(find.fldFindShort); 
-                     setFldFindLong(find.fldFindLong); 
+                   if (find) {
+                     setFldFindShort(find.fldFindShort);
+                     setFldFindLong(find.fldFindLong);
+                     if (!activeRecord) {
+                       setFldMeasurementType(find.fldMeasurementType || '');
+                     }
                      setFldMeasurementUnit(find.fldUnitType || '');
                    }
                    setFldStandards([]); // Clear standards on finding change
@@ -1427,6 +1489,7 @@ export default function ProjectDataEntry({
                   const id = e.target.value || '';
                   setCustomMasterFindId(id);
                   if (!id) {
+                    setFldMeasurementType('');
                     setIsDirty(true);
                     return;
                   }
@@ -1436,6 +1499,7 @@ export default function ProjectDataEntry({
                   if (f) {
                     setFldFindShort(f.fldFindShort || '');
                     setFldFindLong(f.fldFindLong || '');
+                    setFldMeasurementType(f.fldMeasurementType || '');
                     if (f.fldUnitType) setFldMeasurementUnit(String(f.fldUnitType));
                     setIsDirty(true);
                   }
@@ -1495,8 +1559,8 @@ export default function ProjectDataEntry({
                 />
               </div>
               
-              {/* Finding Footer Row: Measurement, Measurement Type (from library finding), Measurement Unit */}
-              <div className={cn("grid grid-cols-1 gap-4 pt-2 border-t border-zinc-100", dataEntryMode === 'glossary' ? "md:grid-cols-3" : "md:grid-cols-2")}>
+              {/* Finding Footer Row: Measurement, snapshot Measurement Type (read-only), Measurement Unit */}
+              <div className={cn("grid grid-cols-1 gap-4 pt-2 border-t border-zinc-100", "md:grid-cols-3")}>
                 <Input 
                   label="Measurement"
                   value={fldMeasurement}
@@ -1504,14 +1568,12 @@ export default function ProjectDataEntry({
                   className={focusClasses}
                   placeholder="Actual recorded value"
                 />
-                {dataEntryMode === 'glossary' && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Type</label>
-                    <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
-                      {selectedFindingMeasurementType || '(Not set)'}
-                    </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Type</label>
+                  <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
+                    {displayMeasurementTypeReadonly}
                   </div>
-                )}
+                </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Unit</label>
                   <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">

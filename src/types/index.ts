@@ -191,6 +191,8 @@ export interface ProjectData {
   fldRecLong: string;
   fldQTY: number;
   fldMeasurement?: number;
+  /** Snapshot: what is being measured (from library finding at save time) */
+  fldMeasurementType?: string;
   fldMeasurementUnit?: string;
   fldUnitCost?: number;
   fldUnitType?: string;

@@ -605,6 +605,8 @@ projectData.fldStandards
 
 That field represents the final citation set for that specific record.
 
+✅ DECIDED: Project data also snapshots measurement metadata from the library finding at record creation (`fldMeasurementType`, `fldMeasurementUnit` from `finding.fldMeasurementType` / `finding.fldUnitType`). Data Entry does not allow editing measurement type on the project record; saved values are not auto-updated when the library finding later changes.
+
 Later changes to either:
 
 glossary.fldStandards
