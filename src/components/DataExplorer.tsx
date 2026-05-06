@@ -27,7 +27,6 @@ import { db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'sonner';
-import { MeasurementMetadataAuditPanel } from './MeasurementMetadataAuditPanel';
 
 export function DataExplorer({ 
   projectData, 
@@ -519,17 +518,6 @@ export function DataExplorer({
           </select>
         </div>
       </Card>
-
-      <MeasurementMetadataAuditPanel
-        projectData={projectData}
-        glossary={glossary}
-        findings={findings}
-        items={items}
-        categories={categories}
-        locations={locations}
-        projects={projects}
-        facilities={facilities}
-      />
 
       <div className="flex-1 overflow-y-auto min-h-0 pr-2 space-y-4">
         {Object.keys(groupedData).length === 0 ? (
