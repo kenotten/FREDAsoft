@@ -21,7 +21,7 @@ import {
   MoreVertical
 } from 'lucide-react';
 import { Button, Card, Select } from './ui/core';
-import { cn, sortEntities } from '../lib/utils';
+import { cn, sortEntities, MEASUREMENT_UNITS } from '../lib/utils';
 import { doc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'sonner';
@@ -393,6 +393,11 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
 
     const isOverLimit = isFindingOrRec && charCount > 120;
 
+    const findingUnitVal = isFinding ? String(getValue(record, 'fldUnitType') ?? '').trim() : '';
+    const findingUnitInList =
+      findingUnitVal !== '' &&
+      MEASUREMENT_UNITS.includes(findingUnitVal as (typeof MEASUREMENT_UNITS)[number]);
+
     return (
       <div key={record.id} className="flex flex-col gap-1.5 p-3 hover:bg-zinc-50 transition-all group border-b border-zinc-100 last:border-0">
         <div className="flex items-center gap-3">
@@ -469,6 +474,38 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 target.style.height = Math.min(300, Math.max(60, target.scrollHeight)) + 'px';
               }}
             />
+            {isFinding && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Measurement Type</label>
+                  <input
+                    type="text"
+                    value={getValue(record, 'fldMeasurementType') ?? ''}
+                    onChange={(e) => handleEdit(record.id, 'fldMeasurementType', e.target.value)}
+                    placeholder="Slope, Width, Height, Count, Area, Clearance"
+                    className="w-full bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Measurement Unit</label>
+                  <select
+                    value={findingUnitVal}
+                    onChange={(e) => handleEdit(record.id, 'fldUnitType', e.target.value)}
+                    className="w-full bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Select unit</option>
+                    {MEASUREMENT_UNITS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                    {findingUnitVal !== '' && !findingUnitInList && (
+                      <option value={findingUnitVal}>{findingUnitVal}</option>
+                    )}
+                  </select>
+                </div>
+              </div>
+            )}
             {isRec && (
               <div className="grid grid-cols-2 gap-4 pt-1">
                 <div className="flex items-center gap-2">
