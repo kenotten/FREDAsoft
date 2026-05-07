@@ -1280,6 +1280,39 @@ export default function ProjectDataEntry({
     .filter(l => (l.fldProjectID === selections.projectId || (l.fldFacID && l.fldFacID === selections.facilityId)) && !l.fldIsDeleted)
     .sort((a, b) => a.fldLocName.localeCompare(b.fldLocName));
 
+  const displayFldStandards = useMemo(() => {
+    const ids = safeArray(fldStandards);
+    const withIndex = ids.map((id, index) => {
+      const standard = (standards || []).find(
+        (st: any) => normalizeId(st.id) === normalizeId(id)
+      );
+      return { id, index, standard };
+    });
+
+    return withIndex
+      .sort((a, b) => {
+        const aOrder = Number(a.standard?.order);
+        const bOrder = Number(b.standard?.order);
+        const aHasOrder = Number.isFinite(aOrder);
+        const bHasOrder = Number.isFinite(bOrder);
+        if (aHasOrder && bHasOrder && aOrder !== bOrder) return aOrder - bOrder;
+        if (aHasOrder !== bHasOrder) return aHasOrder ? -1 : 1;
+
+        const aCitation = String(a.standard?.citation_num || '').trim();
+        const bCitation = String(b.standard?.citation_num || '').trim();
+        if (aCitation || bCitation) {
+          const citationCompare = aCitation.localeCompare(bCitation, undefined, {
+            numeric: true,
+            sensitivity: 'base'
+          });
+          if (citationCompare !== 0) return citationCompare;
+        }
+
+        return a.index - b.index;
+      })
+      .map((entry) => entry.id);
+  }, [fldStandards, standards]);
+
   const addRecordCitation = (standardId: string) => {
     const canonical = (standards || []).find(
       (st: any) => normalizeId(st.id) === normalizeId(standardId)
@@ -2198,7 +2231,7 @@ export default function ProjectDataEntry({
                     </p>
                   ) : (
                     <ul className="space-y-2 max-h-[20rem] overflow-y-auto pr-1">
-                      {safeArray(fldStandards).map((id) => {
+                      {displayFldStandards.map((id) => {
                         const s = standards.find(
                           (st: any) => normalizeId(st.id) === normalizeId(id)
                         );
