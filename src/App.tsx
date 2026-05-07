@@ -447,7 +447,29 @@ export default function App() {
   }, [isTrayOpen, selections]);
 
   const handleApplyTraySelections = () => {
-    setSelections(prev => ({ ...prev, ...traySelections }));
+    setSelections((prev) => {
+      const workspaceChanged =
+        traySelections.clientId !== prev.clientId ||
+        traySelections.facilityId !== prev.facilityId ||
+        traySelections.projectId !== prev.projectId;
+      if (!workspaceChanged) {
+        return { ...prev, ...traySelections };
+      }
+      return {
+        ...prev,
+        ...traySelections,
+        editingRecordId: null,
+        itemId: '',
+        findId: '',
+        recId: '',
+        glosId: '',
+        images: [],
+        standards: [],
+        isDirty: false,
+        locationId: '',
+        locationName: ''
+      };
+    });
     setIsTrayOpen(false);
     toast.success('Context Updated');
   };
@@ -570,6 +592,7 @@ export default function App() {
       itemId: '', 
       findId: '', 
       recId: '', 
+      glosId: '',
       // locationId: '', // STICKY: Keep location
       images: [], 
       isDirty: false, 

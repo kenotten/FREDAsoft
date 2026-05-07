@@ -148,6 +148,72 @@ function isRecoverableDataEntryDraft(parsed: any): boolean {
   return false;
 }
 
+/** True when draft payload includes workspace fields (v2+). Legacy drafts omit these and must not be recovered. */
+function hasDraftContextMetadata(parsed: any): boolean {
+  if (!parsed || typeof parsed !== 'object') return false;
+  return (
+    Object.prototype.hasOwnProperty.call(parsed, 'clientId') &&
+    Object.prototype.hasOwnProperty.call(parsed, 'projectId') &&
+    Object.prototype.hasOwnProperty.call(parsed, 'facilityId')
+  );
+}
+
+function ctxNorm(v: any): string {
+  return String(v ?? '').trim().toLowerCase();
+}
+
+/**
+ * Draft must match current workspace and new-vs-existing record mode.
+ * For existing-record drafts, the record must exist in projectData and match project/facility.
+ * User-id scoping can be added later if uid is passed into ProjectDataEntry.
+ */
+function isDraftContextCompatible(draft: any, selections: any, projectData: any[]): boolean {
+  if (!hasDraftContextMetadata(draft)) return false;
+  if (ctxNorm(draft.clientId) !== ctxNorm(selections?.clientId)) return false;
+  if (ctxNorm(draft.projectId) !== ctxNorm(selections?.projectId)) return false;
+  if (ctxNorm(draft.facilityId) !== ctxNorm(selections?.facilityId)) return false;
+
+  const draftRid = String(draft.editingRecordId ?? '').trim();
+  const curRid = String(selections?.editingRecordId ?? '').trim();
+  const draftIsNew = !draftRid;
+  const curIsNew = !curRid;
+  if (draftIsNew !== curIsNew) return false;
+  if (!draftIsNew && ctxNorm(draftRid) !== ctxNorm(curRid)) return false;
+
+  if (!draftIsNew) {
+    const rec = (projectData || []).find((d: any) => String(d?.fldPDataID || '').trim() === draftRid);
+    if (!rec) return false;
+    if (ctxNorm(rec.fldPDataProject) !== ctxNorm(selections?.projectId)) return false;
+    if (ctxNorm(rec.fldFacility) !== ctxNorm(selections?.facilityId)) return false;
+  }
+
+  return true;
+}
+
+/** Persist only when recoverable and fully scoped (project + facility required). */
+function isDraftPayloadPersistable(payload: any): boolean {
+  if (!isRecoverableDataEntryDraft(payload)) return false;
+  if (!hasDraftContextMetadata(payload)) return false;
+  if (!ctxNorm(payload.projectId) || !ctxNorm(payload.facilityId)) return false;
+  return true;
+}
+
+/**
+ * Glossary-mode drafts must carry linkage so resume cannot yield unlinked saves.
+ * Custom drafts skip this (category/item/text rules differ).
+ */
+function isGlossaryDraftLinkageSafe(parsed: any): boolean {
+  if (!parsed || typeof parsed !== 'object') return false;
+  if (parsed.dataEntryMode === 'custom') return true;
+  if (String(parsed.glosId ?? '').trim()) return true;
+  const s = parsed.selections && typeof parsed.selections === 'object' ? parsed.selections : {};
+  const cat = String(s.categoryId ?? '').trim();
+  const item = String(s.itemId ?? '').trim();
+  const find = String(s.findId ?? '').trim();
+  const rec = String(s.recId ?? '').trim();
+  return Boolean(cat && item && find && rec);
+}
+
 export default function ProjectDataEntry({ 
   project = {}, facility = {}, inspector = {}, glossary = [], standards = [], projectData = [],
   onSave, onReset, items = [], findings = [], recommendations = [], masterRecommendations = [],
@@ -179,6 +245,11 @@ export default function ProjectDataEntry({
   const skipHydrationAfterDraftRef = useRef(false);
   const isFormDirtyRef = useRef(false);
   const buildDraftPayloadRef = useRef<() => Record<string, unknown>>(() => ({}));
+  /** Avoid re-opening the same draft recovery modal when projectData refreshes without context change. */
+  const draftRecoveryOfferedSigRef = useRef('');
+  /** Tracks client|project|facility to detect workspace switches for Data Entry cleanup. */
+  const prevWorkspaceKeyRef = useRef<string | null>(null);
+  const lastContextCleanupToastAtRef = useRef(0);
 
   /** Approved glossary rows only: not soft-deleted, full Cat/Item/Find + Rec FKs. */
   const activeGlossaryRows = useMemo(() => {
@@ -385,9 +456,19 @@ export default function ProjectDataEntry({
   }, [isFormDirty]);
 
   const buildDraftPayload = useCallback(() => {
+    const rid = selections.editingRecordId ?? null;
+    const ridStr = rid != null && String(rid).trim() !== '' ? String(rid).trim() : '';
     return {
       draftVersion: DATA_ENTRY_DRAFT_VERSION,
       timestamp: new Date().toISOString(),
+      clientId: selections.clientId || '',
+      projectId: selections.projectId || '',
+      facilityId: selections.facilityId || '',
+      /**
+       * Per-user draft scoping: add `uid` when ProjectDataEntry receives auth user id from parent.
+       * `recordKey` is `new` vs normalized id for debugging; compatibility uses `editingRecordId`.
+       */
+      recordKey: ridStr ? normalizeId(ridStr) : 'new',
       editingRecordId: selections.editingRecordId ?? null,
       glosId: String(selections.glosId ?? ''),
       dataEntryMode: selections.dataEntryMode === 'custom' ? 'custom' : 'glossary',
@@ -445,7 +526,7 @@ export default function ProjectDataEntry({
       if (!isFormDirtyRef.current) return;
       try {
         const payload = buildDraftPayloadRef.current();
-        if (!isRecoverableDataEntryDraft(payload)) return;
+        if (!isDraftPayloadPersistable(payload)) return;
         localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
       } catch {
         /* ignore quota errors */
@@ -462,13 +543,110 @@ export default function ProjectDataEntry({
   const [savedDraft, setSavedDraft] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Project Safety: Reset form state when switching projects to prevent data contamination
+  // Workspace / record guard: clear stale Data Entry when project/facility/client changes, record is ghosted,
+  // or the loaded record does not belong to the current project/facility.
   useEffect(() => {
-    if (project?.fldProjID && activeRecord && activeRecord.fldPDataProject !== project.fldProjID) {
-      console.log("[ProjectDataEntry] Project misalignment detected. Clearing active record.");
-      onReset();
+    const proj = String(selections?.projectId || '').trim();
+    const fac = String(selections?.facilityId || '').trim();
+    if (!proj || !fac) return;
+
+    const workspaceKey = `${ctxNorm(selections?.clientId)}|${ctxNorm(proj)}|${ctxNorm(fac)}`;
+    const rid = String(selections?.editingRecordId ?? '').trim();
+    const ghost = Boolean(rid) && !activeRecord;
+    const projMismatch =
+      Boolean(activeRecord) &&
+      Boolean(project?.fldProjID) &&
+      ctxNorm(activeRecord.fldPDataProject) !== ctxNorm(project.fldProjID);
+    const facMismatch =
+      Boolean(activeRecord) &&
+      Boolean(facility?.fldFacID) &&
+      ctxNorm(activeRecord.fldFacility) !== ctxNorm(facility.fldFacID);
+
+    const hadPrevWorkspace = prevWorkspaceKeyRef.current !== null;
+    const workspaceChanged = hadPrevWorkspace && prevWorkspaceKeyRef.current !== workspaceKey;
+    if (!hadPrevWorkspace) {
+      prevWorkspaceKeyRef.current = workspaceKey;
+    } else if (workspaceChanged) {
+      prevWorkspaceKeyRef.current = workspaceKey;
     }
-  }, [project?.fldProjID, activeRecord, onReset]);
+
+    const shouldCleanup = workspaceChanged || ghost || projMismatch || facMismatch;
+    if (!shouldCleanup) return;
+
+    const hadRecordOrDirty = Boolean(rid) || isFormDirtyRef.current;
+
+    try {
+      localStorage.removeItem('fredasoft_draft');
+    } catch {
+      /* ignore */
+    }
+    draftRecoveryOfferedSigRef.current = '';
+    setShowRecoveryModal(false);
+    setSavedDraft(null);
+    isFormDirtyRef.current = false;
+    setIsDirty(false);
+    initialSelectionRef.current = {
+      categoryId: '',
+      itemId: '',
+      findId: '',
+      recId: '',
+      glosId: ''
+    };
+
+    setFldFindShort('');
+    setFldFindLong('');
+    setFldRecShort('');
+    setFldRecLong('');
+    setFldQTY(0);
+    setFldMeasurement('');
+    setFldMeasurementType('');
+    setFldMeasurementUnit('');
+    setFldUnitType('Decimal');
+    setFldUnitCost(0);
+    setFldTotalCost(0);
+    setFldLocation('');
+    setFldImages([]);
+    setFldStandards([]);
+    setCustomMasterRecId('');
+    setCustomMasterFindId('');
+
+    onSelectionChange({
+      ...selections,
+      editingRecordId: null,
+      itemId: '',
+      findId: '',
+      recId: '',
+      glosId: '',
+      images: [],
+      standards: [],
+      isDirty: false,
+      locationId: '',
+      locationName: ''
+    });
+
+    const shouldToast =
+      ghost ||
+      projMismatch ||
+      facMismatch ||
+      (workspaceChanged && hadRecordOrDirty);
+    const now = Date.now();
+    if (
+      shouldToast &&
+      now - lastContextCleanupToastAtRef.current > 2000
+    ) {
+      lastContextCleanupToastAtRef.current = now;
+      toast.info('Project/facility changed; previous record was closed.');
+    }
+  }, [
+    selections.clientId,
+    selections.projectId,
+    selections.facilityId,
+    selections.editingRecordId,
+    activeRecord,
+    project?.fldProjID,
+    facility?.fldFacID,
+    onSelectionChange
+  ]);
 
   // Switching to custom mode clears glossary-only selection state.
   // New custom record: drop glossary links and any citation snapshot inherited from a glossary row.
@@ -660,21 +838,63 @@ export default function ProjectDataEntry({
     [glossary]
   );
 
-  // Recovery: each Data Entry mount checks localStorage (tab returns included). No sessionStorage gate.
+  // Recovery: when workspace is known, validate draft context before offering recovery.
   useEffect(() => {
+    const proj = String(selections?.projectId || '').trim();
+    const fac = String(selections?.facilityId || '').trim();
+    if (!proj || !fac) return;
+
     const draft = localStorage.getItem('fredasoft_draft');
-    if (!draft) return;
+    if (!draft) {
+      draftRecoveryOfferedSigRef.current = '';
+      return;
+    }
     try {
       const parsed = JSON.parse(draft);
       if (!isRecoverableDataEntryDraft(parsed)) {
         localStorage.removeItem('fredasoft_draft');
+        draftRecoveryOfferedSigRef.current = '';
         return;
       }
+      const draftRidEarly = String(parsed.editingRecordId ?? '').trim();
+      if (draftRidEarly && !(projectData || []).length) {
+        return;
+      }
+      if (!isDraftContextCompatible(parsed, selections, projectData)) {
+        localStorage.removeItem('fredasoft_draft');
+        draftRecoveryOfferedSigRef.current = '';
+        toast.info('Old draft discarded because it belonged to another context or is outdated.');
+        return;
+      }
+      if (parsed.dataEntryMode !== 'custom' && !isGlossaryDraftLinkageSafe(parsed)) {
+        localStorage.removeItem('fredasoft_draft');
+        draftRecoveryOfferedSigRef.current = '';
+        setShowRecoveryModal(false);
+        setSavedDraft(null);
+        toast.info('Incomplete draft was discarded.');
+        return;
+      }
+      const ctxKey = `${ctxNorm(selections?.clientId)}|${ctxNorm(proj)}|${ctxNorm(fac)}|${ctxNorm(selections?.editingRecordId)}`;
+      if (draftRecoveryOfferedSigRef.current === ctxKey) return;
+      draftRecoveryOfferedSigRef.current = ctxKey;
       setSavedDraft(parsed);
       setShowRecoveryModal(true);
     } catch {
       localStorage.removeItem('fredasoft_draft');
+      draftRecoveryOfferedSigRef.current = '';
     }
+  }, [
+    selections.projectId,
+    selections.facilityId,
+    selections.clientId,
+    selections.editingRecordId,
+    projectData
+  ]);
+
+  useEffect(() => {
+    return () => {
+      draftRecoveryOfferedSigRef.current = '';
+    };
   }, []);
 
   // Debounced draft write when the form is dirty (do not wait for the 5s interval).
@@ -682,8 +902,9 @@ export default function ProjectDataEntry({
     if (!isFormDirty) return;
     const t = setTimeout(() => {
       try {
+        if (!isFormDirtyRef.current) return;
         const payload = buildDraftPayload();
-        if (!isRecoverableDataEntryDraft(payload)) return;
+        if (!isDraftPayloadPersistable(payload)) return;
         localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
       } catch {
         /* quota */
@@ -697,8 +918,9 @@ export default function ProjectDataEntry({
     if (!isFormDirty) return;
     const interval = setInterval(() => {
       try {
+        if (!isFormDirtyRef.current) return;
         const payload = buildDraftPayload();
-        if (!isRecoverableDataEntryDraft(payload)) return;
+        if (!isDraftPayloadPersistable(payload)) return;
         localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
       } catch {
         /* quota */
@@ -714,7 +936,24 @@ export default function ProjectDataEntry({
       localStorage.removeItem('fredasoft_draft');
       setShowRecoveryModal(false);
       setSavedDraft(null);
+      draftRecoveryOfferedSigRef.current = '';
       toast.info('Draft was incomplete and was discarded.');
+      return;
+    }
+    if (!isDraftContextCompatible(d, selections, projectData)) {
+      localStorage.removeItem('fredasoft_draft');
+      setShowRecoveryModal(false);
+      setSavedDraft(null);
+      draftRecoveryOfferedSigRef.current = '';
+      toast.info('Draft no longer matches this workspace and was discarded.');
+      return;
+    }
+    if (d.dataEntryMode !== 'custom' && !isGlossaryDraftLinkageSafe(d)) {
+      localStorage.removeItem('fredasoft_draft');
+      setShowRecoveryModal(false);
+      setSavedDraft(null);
+      draftRecoveryOfferedSigRef.current = '';
+      toast.info('Incomplete draft was discarded.');
       return;
     }
 
@@ -774,6 +1013,7 @@ export default function ProjectDataEntry({
 
   const handleDiscardDraft = () => {
     localStorage.removeItem('fredasoft_draft');
+    draftRecoveryOfferedSigRef.current = '';
     setShowRecoveryModal(false);
     setSavedDraft(null);
     toast.info('Draft discarded');
@@ -965,8 +1205,21 @@ export default function ProjectDataEntry({
       return;
     }
 
-    localStorage.removeItem('fredasoft_draft');
+    try {
+      localStorage.removeItem('fredasoft_draft');
+    } catch {
+      /* ignore */
+    }
+    setShowRecoveryModal(false);
+    setSavedDraft(null);
     isFormDirtyRef.current = false;
+    const projSave = String(selections?.projectId || '').trim();
+    const facSave = String(selections?.facilityId || '').trim();
+    if (projSave && facSave) {
+      draftRecoveryOfferedSigRef.current = `${ctxNorm(selections?.clientId)}|${ctxNorm(projSave)}|${ctxNorm(facSave)}|${ctxNorm(selections?.editingRecordId)}`;
+    } else {
+      draftRecoveryOfferedSigRef.current = '';
+    }
 
     if (wasExisting) {
       setIsDirty(false);
@@ -1008,6 +1261,7 @@ export default function ProjectDataEntry({
       itemId: '',
       findId: '',
       recId: '',
+      glosId: '',
       standards: [],
       images: [],
       editingRecordId: null,
@@ -1084,6 +1338,9 @@ export default function ProjectDataEntry({
         isFormDirtyRef.current = false;
         setIsDirty(false);
         localStorage.removeItem('fredasoft_draft');
+        setShowRecoveryModal(false);
+        setSavedDraft(null);
+        draftRecoveryOfferedSigRef.current = '';
         
         // 3. Update global selections to drop identity and downstream links
         // Retain: projectId, facilityId, categoryId, locationId, inspectorId
@@ -1145,6 +1402,9 @@ export default function ProjectDataEntry({
         setFldImages(Array.isArray(activeRecord.fldImages) ? activeRecord.fldImages : []);
         setFldStandards(safeArray(activeRecord.fldStandards));
         localStorage.removeItem('fredasoft_draft');
+        setShowRecoveryModal(false);
+        setSavedDraft(null);
+        draftRecoveryOfferedSigRef.current = '';
         setIsDirty(false);
         toast.info('Restored to original');
       }
@@ -1173,6 +1433,9 @@ export default function ProjectDataEntry({
         setFldStandards([]);
         setIsDirty(false);
         localStorage.removeItem('fredasoft_draft');
+        setShowRecoveryModal(false);
+        setSavedDraft(null);
+        draftRecoveryOfferedSigRef.current = '';
         toast.info('Edit cancelled');
       }
     );
