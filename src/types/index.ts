@@ -94,7 +94,8 @@ export interface Finding {
   /** What is being measured (e.g. Slope, Width) — optional until backfilled */
   fldMeasurementType?: string;
   fldUnitType?: string;
-  fldStandards: string[]; // Array of MasterStandard IDs
+  /** Library default citation IDs; may be absent on older Firestore rows */
+  fldStandards?: string[];
   fldSuggestedRecs: string[]; // Array of MasterRecommendation IDs
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
@@ -119,7 +120,8 @@ export interface MasterRecommendation {
   fldUnit: number; // Unit Cost (Currency)
   fldUOM: string; // Unit of Measure (EA, LF, etc.)
   fldCitation?: string;
-  fldStandards: string[]; // Array of MasterStandard IDs
+  /** Library default citation IDs; may be absent on older Firestore rows */
+  fldStandards?: string[];
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
 }

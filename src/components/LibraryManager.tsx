@@ -18,15 +18,43 @@ import {
   PanelLeft,
   Info,
   Settings,
-  MoreVertical
+  MoreVertical,
+  Quote,
+  X
 } from 'lucide-react';
 import { Button, Card, Select } from './ui/core';
 import { cn, sortEntities, MEASUREMENT_UNITS } from '../lib/utils';
 import { doc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'sonner';
-import { Category, Item, Finding, MasterRecommendation } from '../types';
+import { Category, Item, Finding, MasterRecommendation, MasterStandard } from '../types';
 import { UnsavedChangesModal } from './modals/UnsavedChangesModal';
+import { StandardsBrowser } from './StandardsBrowser';
+
+function safeLibraryStandardsArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value as string[];
+  if (value && typeof value === 'object') return Object.values(value).filter(Boolean).map(String);
+  return [];
+}
+
+function libNormId(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
+
+function libraryCitationDisplayLabel(standard: MasterStandard | undefined, idFallback: string): string {
+  if (standard) {
+    const t = String(standard.fldStandardType ?? '').trim();
+    const n = String(standard.citation_num ?? '').trim();
+    if (t !== '' && n !== '') return `${t} ${n}`;
+    if (n !== '') return n;
+    const sid = String(standard.id ?? '').trim();
+    if (sid !== '') return sid;
+  }
+  const fb = String(idFallback ?? '').trim();
+  return fb ? `Unknown standard (${fb})` : 'Unknown standard';
+}
 
 export interface LibraryManagerHandle {
   save: () => Promise<boolean>;
@@ -38,6 +66,8 @@ interface LibraryManagerProps {
   items: Item[];
   findings: Finding[];
   recommendations: MasterRecommendation[];
+  /** Same master standards list as Data Entry / StandardsBrowser */
+  standards?: MasterStandard[];
   onDirtyChange?: (isDirty: boolean) => void;
   onNavigateAway?: (nextTab: string) => void;
 }
@@ -49,6 +79,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   items, 
   findings, 
   recommendations,
+  standards = [],
   onDirtyChange,
   onNavigateAway
 }, ref) => {
@@ -64,6 +95,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isNavCollapsed, setIsNavCollapsed] = useState(false);
+  /** Active finding/recommendation id for shared library citations editor */
+  const [citationTargetId, setCitationTargetId] = useState<string | null>(null);
 
   // Intercept navigation
   const [pendingAction, setPendingAction] = useState<{ type: 'tab' | 'cat' | 'item' | 'away', value: string } | null>(null);
@@ -73,6 +106,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     discard: () => {
       setEdits({});
       setIsDirty(false);
+      setCitationTargetId(null);
     }
   }));
 
@@ -104,6 +138,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   const handleDiscardAndLeave = () => {
     setEdits({});
     setIsDirty(false);
+    setCitationTargetId(null);
     if (pendingAction) {
       executeNavigation(pendingAction.type, pendingAction.value);
     }
@@ -325,6 +360,144 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     }).filter(group => group.findings.length > 0);
   }, [isGroupedMode, selectedCatId, items, visibleData]);
 
+  useEffect(() => {
+    if (activeTab !== 'findings' && activeTab !== 'recommendations') {
+      setCitationTargetId(null);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!citationTargetId) return;
+    if (activeTab !== 'findings' && activeTab !== 'recommendations') return;
+    const stillHere = visibleData.some((r) => r.id === citationTargetId);
+    if (!stillHere) setCitationTargetId(null);
+  }, [visibleData, citationTargetId, activeTab]);
+
+  const citationTargetEntity = useMemo(() => {
+    if (!citationTargetId) return null;
+    return visibleData.find((r) => r.id === citationTargetId) ?? null;
+  }, [visibleData, citationTargetId]);
+
+  const displaySortedLibraryCitations = useMemo(() => {
+    if (!citationTargetEntity) return [];
+    const ids = safeLibraryStandardsArray(getValue(citationTargetEntity, 'fldStandards'));
+    const withIndex = ids.map((id, index) => {
+      const standard = standards.find((st) => libNormId(st.id) === libNormId(id));
+      return { id, index, standard };
+    });
+    return withIndex
+      .sort((a, b) => {
+        const aOrder = Number(a.standard?.order);
+        const bOrder = Number(b.standard?.order);
+        const aHas = Number.isFinite(aOrder);
+        const bHas = Number.isFinite(bOrder);
+        if (aHas && bHas && aOrder !== bOrder) return aOrder - bOrder;
+        if (aHas !== bHas) return aHas ? -1 : 1;
+        const aC = String(a.standard?.citation_num || '').trim();
+        const bC = String(b.standard?.citation_num || '').trim();
+        if (aC || bC) {
+          const cmp = aC.localeCompare(bC, undefined, { numeric: true, sensitivity: 'base' });
+          if (cmp !== 0) return cmp;
+        }
+        return a.index - b.index;
+      })
+      .map((e) => e.id);
+  }, [citationTargetEntity, standards, edits, visibleData]);
+
+  const libraryCitationsUiKey = useMemo(
+    () =>
+      citationTargetId && (activeTab === 'findings' || activeTab === 'recommendations')
+        ? `lib:cit:${activeTab}:${citationTargetId}`
+        : 'lib:cit:none',
+    [citationTargetId, activeTab]
+  );
+
+  const citationModalBadges = useMemo(() => {
+    if (!citationTargetEntity) return [] as { key: string; text: string }[];
+    const badges: { key: string; text: string }[] = [];
+    if (activeTab === 'findings') {
+      const cat = navigationCategories.find((c) => (c.fldCategoryID || (c as any).id) === selectedCatId);
+      if (cat?.fldCategoryName) badges.push({ key: 'cat', text: `Category: ${cat.fldCategoryName}` });
+      const itemId = selectedItemId || (citationTargetEntity.parentId as string) || '';
+      if (itemId) {
+        const it = navigationItems.find((i) => (i.fldItemID || (i as any).id) === itemId);
+        if (it?.fldItemName) badges.push({ key: 'item', text: `Item: ${it.fldItemName}` });
+      }
+      const findLabel = String(
+        citationTargetEntity.displayName || getValue(citationTargetEntity, 'fldFindShort') || ''
+      ).trim();
+      if (findLabel) badges.push({ key: 'find', text: `Finding: ${findLabel}` });
+    } else {
+      const r = citationTargetEntity;
+      const itemFk = String(r.fldItem ?? '').trim();
+      if (itemFk) {
+        const it = items.find((i) => libNormId(i.fldItemID || (i as any).id) === libNormId(itemFk));
+        if (it) {
+          const cat = categories.find((c) =>
+            libNormId(c.fldCategoryID || (c as any).id) === libNormId(it.fldCatID)
+          );
+          if (cat?.fldCategoryName) badges.push({ key: 'cat', text: `Category: ${cat.fldCategoryName}` });
+          const iname = String(it.fldItemName || '').trim();
+          if (iname) badges.push({ key: 'item', text: `Item: ${iname}` });
+        }
+      }
+      const recLabel = String(r.displayName || getValue(r, 'fldRecShort') || '').trim();
+      if (recLabel) badges.push({ key: 'rec', text: `Recommendation: ${recLabel}` });
+    }
+    return badges;
+  }, [
+    citationTargetEntity,
+    activeTab,
+    selectedCatId,
+    selectedItemId,
+    navigationCategories,
+    navigationItems,
+    items,
+    categories,
+    edits
+  ]);
+
+  const addLibraryCitationToTarget = (standardId: string) => {
+    if (!citationTargetId) return;
+    const entity = visibleData.find((r) => r.id === citationTargetId);
+    if (!entity) return;
+    const canonical = standards.find((st) => libNormId(st.id) === libNormId(standardId));
+    const idToStore = canonical?.id ?? standardId;
+    if (!idToStore) return;
+    const current = safeLibraryStandardsArray(getValue(entity, 'fldStandards'));
+    if (current.some((id) => libNormId(id) === libNormId(idToStore))) return;
+    handleEdit(citationTargetId, 'fldStandards', [...current, idToStore]);
+  };
+
+  const removeLibraryCitationFromTarget = (standardId: string) => {
+    if (!citationTargetId) return;
+    const entity = visibleData.find((r) => r.id === citationTargetId);
+    if (!entity) return;
+    const current = safeLibraryStandardsArray(getValue(entity, 'fldStandards'));
+    handleEdit(
+      citationTargetId,
+      'fldStandards',
+      current.filter((id) => libNormId(id) !== libNormId(standardId))
+    );
+  };
+
+  const handleLibraryCitationsDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleLibraryCitationsDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const standardId = e.dataTransfer.getData('standardId');
+    if (!standardId) return;
+    addLibraryCitationToTarget(standardId);
+  };
+
+  const handleStandardsBrowserSelect = (standard: MasterStandard) => {
+    if (!standard?.id) return;
+    addLibraryCitationToTarget(standard.id);
+  };
+
   const handleNormalizeAllGroups = () => {
     if (!groupedFindings) return;
     
@@ -534,6 +707,26 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 </div>
               </div>
             )}
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setCitationTargetId(record.id)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest transition-colors',
+                  citationTargetId === record.id
+                    ? 'border-blue-400 bg-blue-50 text-blue-800'
+                    : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50'
+                )}
+              >
+                <Quote size={12} />
+                Library citations
+                {safeLibraryStandardsArray(getValue(record, 'fldStandards')).length > 0 ? (
+                  <span className="rounded-full bg-zinc-900 text-white px-1.5 py-0 text-[9px] tabular-nums">
+                    {safeLibraryStandardsArray(getValue(record, 'fldStandards')).length}
+                  </span>
+                ) : null}
+              </button>
+            </div>
             {isOverLimit && (
               <div className="mt-0.5 text-[9px] font-bold text-red-500 uppercase tracking-widest flex items-center">
                 <AlertCircle size={10} className="mr-1" /> Limit Exceeded
@@ -597,6 +790,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   const handleCancel = () => {
     setEdits({});
     setIsDirty(false);
+    setCitationTargetId(null);
     toast.info('Changes discarded.');
   };
 
@@ -874,6 +1068,132 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
           </Card>
         </div>
       </div>
+
+      {(activeTab === 'findings' || activeTab === 'recommendations') &&
+        citationTargetId &&
+        citationTargetEntity && (
+          <div
+            className="fixed inset-0 z-[140] flex items-center justify-center p-4 sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="library-citation-modal-title"
+          >
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+              aria-label="Close citation editor"
+              onClick={() => setCitationTargetId(null)}
+            />
+            <div
+              className="relative z-10 flex max-h-[min(92vh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="shrink-0 border-b border-zinc-100 bg-gradient-to-r from-blue-50/80 to-white px-5 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <h2
+                      id="library-citation-modal-title"
+                      className="text-base font-black uppercase tracking-tight text-zinc-900"
+                    >
+                      {activeTab === 'findings'
+                        ? 'Finding citation defaults'
+                        : 'Recommendation citation defaults'}
+                    </h2>
+                    <p className="mt-1 truncate font-mono text-[11px] text-zinc-500">{citationTargetEntity.id}</p>
+                    <p className="mt-2 text-[11px] leading-snug text-zinc-500">
+                      Changes stay pending until you use <span className="font-semibold text-zinc-700">Save Changes</span>{' '}
+                      in the Library toolbar.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="h-9 shrink-0 px-4 text-[10px] font-black uppercase tracking-widest"
+                    onClick={() => setCitationTargetId(null)}
+                  >
+                    Close
+                  </Button>
+                </div>
+                {citationModalBadges.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {citationModalBadges.map((b, idx) => (
+                      <span
+                        key={`${b.key}-${idx}`}
+                        className="inline-flex max-w-full items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-zinc-700"
+                      >
+                        <span className="truncate">{b.text}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-4 lg:grid-cols-12 lg:gap-5 lg:p-5">
+                <div className="flex min-h-0 flex-col space-y-2 lg:col-span-5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    Selected citations
+                  </p>
+                  <div
+                    className={cn(
+                      'flex min-h-[14rem] flex-1 flex-col rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50/50 p-3 transition-colors lg:min-h-[20rem]',
+                      'hover:border-zinc-300'
+                    )}
+                    onDragOver={handleLibraryCitationsDragOver}
+                    onDrop={handleLibraryCitationsDrop}
+                  >
+                    {displaySortedLibraryCitations.length === 0 ? (
+                      <p className="flex flex-1 items-center justify-center py-6 text-center text-xs italic text-zinc-400">
+                        Drop a citation here or add one with + in the Standards Library.
+                      </p>
+                    ) : (
+                      <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                        {displaySortedLibraryCitations.map((id) => {
+                          const s = standards.find((st) => libNormId(st.id) === libNormId(id));
+                          const label = libraryCitationDisplayLabel(s, id);
+                          return (
+                            <li
+                              key={id}
+                              className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs"
+                            >
+                              <span className="truncate font-medium text-zinc-800" title={label}>
+                                {label}
+                              </span>
+                              <button
+                                type="button"
+                                className="shrink-0 rounded-md p-1 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                title="Remove citation"
+                                onClick={() => removeLibraryCitationFromTarget(id)}
+                              >
+                                <X size={14} />
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+                <div className="flex min-h-0 min-w-0 flex-col space-y-2 lg:col-span-7">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    Standards Library
+                  </p>
+                  <StandardsBrowser
+                    standards={standards}
+                    onSelect={handleStandardsBrowserSelect}
+                    className="h-[min(58vh,520px)] min-h-[20rem] shrink-0 border border-zinc-200 bg-white lg:h-[min(62vh,560px)]"
+                    showSearchClear
+                    showBulkExpandControls={false}
+                    treeExpansionMode="accordion"
+                    enableAutoExpand502={false}
+                    uiResetKey={libraryCitationsUiKey}
+                    persistUiStateKey={libraryCitationsUiKey}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       <UnsavedChangesModal 
         isOpen={!!pendingAction}
