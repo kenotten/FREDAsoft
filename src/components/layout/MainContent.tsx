@@ -157,7 +157,14 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           projects={projects}
         />
       )}
-      {activeTab === 'glossary_explorer' && (
+      <div
+        className={cn(
+          activeTab === 'glossary_explorer'
+            ? 'flex min-h-0 w-full flex-1 flex-col'
+            : 'hidden'
+        )}
+        aria-hidden={activeTab !== 'glossary_explorer'}
+      >
         <GlossaryExplorer 
           clients={clients}
           facilities={facilities}
@@ -185,12 +192,19 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           setRawMasterRecommendations={setRawMasterRecommendations}
           setGlossary={setGlossary}
         />
-      )}
-      {activeTab === 'standards_manager' && (
+      </div>
+      <div
+        className={cn(
+          activeTab === 'standards_manager'
+            ? 'flex min-h-0 w-full flex-1 flex-col'
+            : 'hidden'
+        )}
+        aria-hidden={activeTab !== 'standards_manager'}
+      >
         <StandardsManager 
           standards={standards}
         />
-      )}
+      </div>
       {activeTab === 'sequence_manager' && (
         <OrderManager 
           categories={categories}
@@ -198,7 +212,14 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           findings={findings}
         />
       )}
-      {activeTab === 'library_manager' && (
+      <div
+        className={cn(
+          activeTab === 'library_manager'
+            ? 'flex min-h-0 w-full flex-1 flex-col'
+            : 'hidden'
+        )}
+        aria-hidden={activeTab !== 'library_manager'}
+      >
         <LibraryManager 
           ref={(props as any).libraryManagerRef}
           categories={categories}
@@ -207,7 +228,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           recommendations={recommendations as any}
           onDirtyChange={(props as any).onLibraryDirtyChange}
         />
-      )}
+      </div>
       {activeTab === 'settings' && (
         <SettingsPage 
           sessionReads={sessionReads}
