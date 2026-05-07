@@ -608,6 +608,7 @@ export default function App() {
     } catch (error) {
       console.error('Error saving record:', error);
       toast.error('Failed to save record.');
+      throw error;
     }
   };
 
