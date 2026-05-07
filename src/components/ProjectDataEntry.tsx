@@ -161,6 +161,12 @@ export default function ProjectDataEntry({
 
   const editingRecordId = selections.editingRecordId;
 
+  /** Scope StandardsBrowser UI (search + tree + item expand) per Data Entry record; sessionStorage-backed. */
+  const dataEntryStandardsUiKey = useMemo(
+    () => (editingRecordId ? `pd:${String(editingRecordId)}` : 'pd:new'),
+    [editingRecordId]
+  );
+
   const initialSelectionRef = useRef({
     categoryId: '',
     itemId: '',
@@ -2268,6 +2274,12 @@ export default function ProjectDataEntry({
                   standards={standards}
                   onSelect={handleAddRecordCitation}
                   className="h-[32rem]"
+                  showSearchClear
+                  showBulkExpandControls={false}
+                  treeExpansionMode="accordion"
+                  enableAutoExpand502={false}
+                  uiResetKey={dataEntryStandardsUiKey}
+                  persistUiStateKey={dataEntryStandardsUiKey}
                 />
               </div>
             </div>
