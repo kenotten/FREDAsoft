@@ -8,6 +8,11 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Lowercase for search; avoids crashes when master_standards fields are null/undefined */
+function searchFieldLower(value: unknown): string {
+  return String(value ?? '').toLowerCase();
+}
+
 const StandardItem = ({
   s,
   onSelect,
@@ -308,12 +313,12 @@ export function StandardsBrowser({
 
     if (!searchQuery) return base;
     const query = searchQuery.toLowerCase();
-    const filtered = base.filter(s => 
-      s.citation_num.toLowerCase().includes(query) || 
-      s.citation_name.toLowerCase().includes(query) ||
-      s.content_text.toLowerCase().includes(query) ||
-      s.chapter_name.toLowerCase().includes(query) ||
-      s.section_name.toLowerCase().includes(query)
+    const filtered = base.filter(s =>
+      searchFieldLower(s.citation_num).includes(query) ||
+      searchFieldLower(s.citation_name).includes(query) ||
+      searchFieldLower(s.content_text).includes(query) ||
+      searchFieldLower(s.chapter_name).includes(query) ||
+      searchFieldLower(s.section_name).includes(query)
     );
     return filtered;
   }, [standards, searchQuery, selectedType, selectedVersion]);
