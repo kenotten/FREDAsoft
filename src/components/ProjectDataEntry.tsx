@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import { 
   Save, 
@@ -13,7 +13,9 @@ import {
   AlertCircle,
   Undo,
   DollarSign,
-  Edit2
+  Edit2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { doc, writeBatch } from 'firebase/firestore';
 import { db, storage } from '../firebase';
@@ -24,7 +26,7 @@ import { Select } from './ui/select';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { StandardsBrowser } from './StandardsBrowser';
-import { cn, sortEntities, formatCurrency, COST_UNIT_TYPES, MEASUREMENT_UNITS } from '../lib/utils';
+import { cn, sortEntities, formatCurrency, COST_UNIT_TYPES, MEASUREMENT_UNITS, compareEntities } from '../lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { resizeImage } from '../lib/imageUtils';
 import { toFraction, fromFraction } from '../lib/utils';
@@ -36,8 +38,7 @@ const safeArray = (value: any): string[] => {
   return [];
 };
 
-/** Session flag: draft recovery runs once per tab session; cleared on full reload so refresh still prompts. */
-const FREDASOFT_DRAFT_SESSION_CHECK_KEY = 'fredasoft_draft_checked';
+const DATA_ENTRY_DRAFT_VERSION = 2;
 
 function Modal({ title, children, onClose }: any) {
   return (
@@ -92,6 +93,61 @@ function recordCitationDisplayLabel(standard: any | undefined, idFallback: strin
   return 'Citation';
 }
 
+/** Local nav helpers: mirrors DataExplorer structural sort (category → location name → item) without shared module. */
+function getGlossaryContextForNav(d: any, glossaryList: any[]) {
+  if (!d?.fldData) return null;
+  const cleanKey = String(d.fldData).trim().toLowerCase();
+  return (glossaryList || []).find((g: any) => {
+    const byGlos = String(g.fldGlosId || '').trim().toLowerCase() === cleanKey;
+    const byId = String(g.id || '').trim().toLowerCase() === cleanKey;
+    return byGlos || byId;
+  });
+}
+
+function getRecordContextForNav(d: any, glossaryList: any[]) {
+  const glos = getGlossaryContextForNav(d, glossaryList);
+  if (glos) {
+    return {
+      catId: glos?.fldCat || 'uncategorized',
+      itemId: glos?.fldItem || 'unspecified-item',
+      findId: glos?.fldFind || 'unspecified-finding'
+    };
+  }
+  if (d?.fldRecordSource === 'custom') {
+    return {
+      catId: String(d.fldPDataCategoryID || '').trim() || 'uncategorized',
+      itemId: String(d.fldPDataItemID || '').trim() || 'unspecified-item',
+      findId: ''
+    };
+  }
+  return {
+    catId: 'uncategorized',
+    itemId: 'unspecified-item',
+    findId: ''
+  };
+}
+
+/** editingRecordId alone is not recoverable — require substantive form or selection context. */
+function isRecoverableDataEntryDraft(parsed: any): boolean {
+  if (!parsed || typeof parsed !== 'object') return false;
+  const textAny =
+    String(parsed.fldFindShort || '').trim() ||
+    String(parsed.fldFindLong || '').trim() ||
+    String(parsed.fldRecShort || '').trim() ||
+    String(parsed.fldRecLong || '').trim();
+  const qty = parsed.fldQTY;
+  const qtyMeaningful = qty !== '' && qty !== undefined && qty !== null && Number(qty) !== 0;
+  const meas = parsed.fldMeasurement;
+  const measMeaningful = meas !== undefined && meas !== null && meas !== '';
+  const imgs = Array.isArray(parsed.fldImages) && parsed.fldImages.length > 0;
+  const std = safeArray(parsed.fldStandards).length > 0;
+  const uc = parsed.fldUnitCost;
+  const ucMeaningful =
+    uc !== undefined && uc !== null && uc !== '' && !Number.isNaN(Number(uc)) && Number(uc) !== 0;
+  if (textAny || qtyMeaningful || measMeaningful || imgs || std || ucMeaningful) return true;
+  return false;
+}
+
 export default function ProjectDataEntry({ 
   project = {}, facility = {}, inspector = {}, glossary = [], standards = [], projectData = [],
   onSave, onReset, items = [], findings = [], recommendations = [], masterRecommendations = [],
@@ -112,6 +168,11 @@ export default function ProjectDataEntry({
     recId: '',
     glosId: ''
   });
+
+  /** After resuming a localStorage draft, skip one activeRecord hydration so form fields are not reset to server state. */
+  const skipHydrationAfterDraftRef = useRef(false);
+  const isFormDirtyRef = useRef(false);
+  const buildDraftPayloadRef = useRef<() => Record<string, unknown>>(() => ({}));
 
   /** Approved glossary rows only: not soft-deleted, full Cat/Item/Find + Rec FKs. */
   const activeGlossaryRows = useMemo(() => {
@@ -136,6 +197,47 @@ export default function ProjectDataEntry({
     });
     return s;
   }, [activeGlossaryRows]);
+
+  const navRecords = useMemo(() => {
+    const list = projectData || [];
+    const activeProjectId = String(selections.projectId || '').trim().toLowerCase();
+    const activeFacilityId = String(selections.facilityId || '').trim().toLowerCase();
+    if (!activeProjectId || !activeFacilityId) return [];
+
+    const filtered = list.filter((d: any) => {
+      if (!d?.fldPDataID) return false;
+      const recordProjectId = String(d.fldPDataProject || '').trim().toLowerCase();
+      const recordFacilityId = String(d.fldFacility || '').trim().toLowerCase();
+      return recordProjectId === activeProjectId && recordFacilityId === activeFacilityId;
+    });
+
+    const categories = mergedCategories || [];
+    const itemsList = items || [];
+    const locList = locations || [];
+
+    return [...filtered].sort((a: any, b: any) => {
+      const ctxA = getRecordContextForNav(a, glossary);
+      const ctxB = getRecordContextForNav(b, glossary);
+      const catA = categories.find((c: any) => c.fldCategoryID === ctxA.catId);
+      const catB = categories.find((c: any) => c.fldCategoryID === ctxB.catId);
+      const resCat = compareEntities(catA, catB, 'fldCategoryName');
+      if (resCat !== 0) return resCat;
+
+      const locA = (locList.find((l: any) => l.fldLocID === a.fldLocation)?.fldLocName || '').toLowerCase();
+      const locB = (locList.find((l: any) => l.fldLocID === b.fldLocation)?.fldLocName || '').toLowerCase();
+      const orderLoc = locA.localeCompare(locB);
+      if (orderLoc !== 0) return orderLoc;
+
+      const itemA = itemsList.find((i: any) => i.fldItemID === ctxA.itemId);
+      const itemB = itemsList.find((i: any) => i.fldItemID === ctxB.itemId);
+      return compareEntities(itemA, itemB, 'fldItemID');
+    });
+  }, [projectData, selections.projectId, selections.facilityId, glossary, mergedCategories, items, locations]);
+
+  const navIndex = useMemo(() => {
+    if (!editingRecordId) return -1;
+    return navRecords.findIndex((d: any) => d.fldPDataID === editingRecordId);
+  }, [navRecords, editingRecordId]);
 
   const hasRequiredContext = Boolean(selections.projectId && inspector?.fldInspID);
   
@@ -218,6 +320,13 @@ export default function ProjectDataEntry({
   const isFormDirty = useMemo(() => {
     if (activeRecord) {
       const init = initialSelectionRef.current;
+      const localMeas = fldMeasurement === '' ? null : Number(fldMeasurement);
+      const rawStoredMeas = activeRecord.fldMeasurement;
+      const storedMeas =
+        rawStoredMeas === null || rawStoredMeas === undefined || rawStoredMeas === ''
+          ? null
+          : Number(rawStoredMeas);
+      const measDirty = localMeas !== storedMeas;
       return (
         (selections.categoryId || '') !== (init.categoryId || '') ||
         (selections.itemId || '') !== (init.itemId || '') ||
@@ -228,12 +337,13 @@ export default function ProjectDataEntry({
         fldRecShort !== (activeRecord.fldRecShort || '') ||
         fldRecLong !== (activeRecord.fldRecLong || '') ||
         (fldQTY === '' ? 0 : Number(fldQTY)) !== (activeRecord.fldQTY || 0) ||
-        (fldMeasurement === '' ? null : Number(fldMeasurement)) !== (activeRecord.fldMeasurement ?? null) ||
+        measDirty ||
         (fldMeasurementType || '') !== (activeRecord.fldMeasurementType || '') ||
         fldMeasurementUnit !== (activeRecord.fldMeasurementUnit || '') ||
         fldUnitType !== (activeRecord.fldUnitType || 'Decimal') ||
         (fldUnitCost === '' ? 0 : Number(fldUnitCost)) !== (activeRecord.fldUnitCost || 0) ||
-        (fldTotalCost === '' ? 0 : Number(fldTotalCost)) !== (activeRecord.fldTotalCost || 0) ||
+        // fldTotalCost is derived from fldUnitCost * fldQTY (see effect below). Comparing to
+        // activeRecord.fldTotalCost caused false DIRTY when stored totals lagged or differed.
         fldLocation !== (activeRecord.fldLocation || '') ||
         JSON.stringify(fldImages) !== JSON.stringify(activeRecord.fldImages || []) ||
         JSON.stringify(safeArray(fldStandards)) !== JSON.stringify(safeArray(activeRecord.fldStandards))
@@ -263,6 +373,79 @@ export default function ProjectDataEntry({
       if (typeof onDirtyChange === 'function') onDirtyChange(false);
     };
   }, [isFormDirty, onDirtyChange]);
+
+  useEffect(() => {
+    isFormDirtyRef.current = isFormDirty;
+  }, [isFormDirty]);
+
+  const buildDraftPayload = useCallback(() => {
+    return {
+      draftVersion: DATA_ENTRY_DRAFT_VERSION,
+      timestamp: new Date().toISOString(),
+      editingRecordId: selections.editingRecordId ?? null,
+      glosId: String(selections.glosId ?? ''),
+      dataEntryMode: selections.dataEntryMode === 'custom' ? 'custom' : 'glossary',
+      customMasterRecId,
+      customMasterFindId,
+      selections: {
+        categoryId: selections.categoryId,
+        itemId: selections.itemId,
+        findId: selections.findId,
+        recId: selections.recId,
+        locationId: selections.locationId
+      },
+      fldFindShort,
+      fldFindLong,
+      fldRecShort,
+      fldRecLong,
+      fldQTY,
+      fldMeasurement,
+      fldMeasurementType,
+      fldMeasurementUnit,
+      fldUnitType,
+      fldLocation,
+      fldImages,
+      fldStandards,
+      fldUnitCost,
+      fldTotalCost
+    };
+  }, [
+    selections,
+    customMasterRecId,
+    customMasterFindId,
+    fldFindShort,
+    fldFindLong,
+    fldRecShort,
+    fldRecLong,
+    fldQTY,
+    fldMeasurement,
+    fldMeasurementType,
+    fldMeasurementUnit,
+    fldUnitType,
+    fldLocation,
+    fldImages,
+    fldStandards,
+    fldUnitCost,
+    fldTotalCost
+  ]);
+
+  useEffect(() => {
+    buildDraftPayloadRef.current = buildDraftPayload;
+  }, [buildDraftPayload]);
+
+  /** Flush dirty state on unmount (tab switch) so edits survive before interval/debounce fires. */
+  useEffect(() => {
+    return () => {
+      if (!isFormDirtyRef.current) return;
+      try {
+        const payload = buildDraftPayloadRef.current();
+        if (!isRecoverableDataEntryDraft(payload)) return;
+        localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
+      } catch {
+        /* ignore quota errors */
+      }
+    };
+  }, []);
 
   const focusClasses = "focus:border-amber-500 focus:bg-green-50 focus:ring-amber-500/10";
 
@@ -380,91 +563,205 @@ export default function ProjectDataEntry({
     setIsDirty(true);
   };
 
-  // Recovery Protocol: check for draft on first Data Entry mount per tab session only.
-  // Tab switches unmount/remount this component; sessionStorage skips re-prompting until reload/new tab.
-  useEffect(() => {
-    const navEntries =
-      typeof performance !== 'undefined' && typeof performance.getEntriesByType === 'function'
-        ? performance.getEntriesByType('navigation')
-        : [];
-    const nav =
-      navEntries.length > 0 ? (navEntries[0] as PerformanceNavigationTiming) : undefined;
-    if (nav?.type === 'reload') {
-      sessionStorage.removeItem(FREDASOFT_DRAFT_SESSION_CHECK_KEY);
-    }
-    if (sessionStorage.getItem(FREDASOFT_DRAFT_SESSION_CHECK_KEY) !== null) {
+  /** Match hydration's server baseline for initialSelectionRef (dirty vs selection path) without resetting form fields. */
+  const syncInitialSelectionRefFromRecord = useCallback((rec: any | null) => {
+    if (!rec) {
+      initialSelectionRef.current = {
+        categoryId: '',
+        itemId: '',
+        findId: '',
+        recId: '',
+        glosId: ''
+      };
       return;
     }
-
-    const draft = localStorage.getItem('fredasoft_draft');
-    if (draft) {
-      try {
-        const parsed = JSON.parse(draft);
-        setSavedDraft(parsed);
-        setShowRecoveryModal(true);
-      } catch (e) {
-        localStorage.removeItem('fredasoft_draft');
-      }
+    const fldDataBlank = !(rec.fldData || '').trim();
+    const hasPDataCatItem =
+      !!(rec.fldPDataCategoryID || '').trim() && !!(rec.fldPDataItemID || '').trim();
+    const isCustom =
+      rec.fldRecordSource === 'custom' ||
+      (fldDataBlank && hasPDataCatItem);
+    let newSelections: any;
+    if (isCustom) {
+      newSelections = {
+        categoryId: rec.fldPDataCategoryID || '',
+        itemId: rec.fldPDataItemID || '',
+        findId: '',
+        recId: '',
+        glosId: ''
+      };
+    } else {
+      const targetId = (rec.fldData || '').trim().toLowerCase();
+      const glos = (glossary || []).find(
+        (g: any) => (g.id || g.fldGlosId || '').trim().toLowerCase() === targetId
+      );
+      newSelections = {
+        categoryId: glos?.fldCat || '',
+        itemId: glos?.fldItem || '',
+        findId: glos?.fldFind || '',
+        recId: glos?.fldRec || glos?.fldRecID || '',
+        glosId: glos?.fldGlosId || glos?.id || ''
+      };
     }
-    sessionStorage.setItem(FREDASOFT_DRAFT_SESSION_CHECK_KEY, '1');
+    initialSelectionRef.current = {
+      categoryId: newSelections.categoryId || '',
+      itemId: newSelections.itemId || '',
+      findId: newSelections.findId || '',
+      recId: newSelections.recId || '',
+      glosId: newSelections.glosId || ''
+    };
+  }, [glossary]);
+
+  /** Same selection keys as activeRecord hydration (Reset to Original / baseline). */
+  const buildHydrationSelectionsFromRecord = useCallback(
+    (rec: any, prev: any) => {
+      if (!rec) return prev;
+      const fldDataBlank = !(rec.fldData || '').trim();
+      const hasPDataCatItem =
+        !!(rec.fldPDataCategoryID || '').trim() && !!(rec.fldPDataItemID || '').trim();
+      const isCustom =
+        rec.fldRecordSource === 'custom' ||
+        (fldDataBlank && hasPDataCatItem);
+      if (isCustom) {
+        return {
+          ...prev,
+          dataEntryMode: 'custom' as const,
+          locationId: rec.fldLocation || prev.locationId,
+          categoryId: rec.fldPDataCategoryID || prev.categoryId || '',
+          itemId: rec.fldPDataItemID || prev.itemId || '',
+          findId: '',
+          recId: '',
+          glosId: '',
+          isDirty: false
+        };
+      }
+      const targetId = (rec.fldData || '').trim().toLowerCase();
+      const glos = (glossary || []).find(
+        (g: any) => (g.id || g.fldGlosId || '').trim().toLowerCase() === targetId
+      );
+      return {
+        ...prev,
+        dataEntryMode: 'glossary' as const,
+        locationId: rec.fldLocation || prev.locationId,
+        categoryId: glos?.fldCat || prev.categoryId || '',
+        itemId: glos?.fldItem || prev.itemId || '',
+        findId: glos?.fldFind || prev.findId || '',
+        recId: glos?.fldRec || glos?.fldRecID || prev.recId || '',
+        glosId: glos?.fldGlosId || glos?.id || '',
+        isDirty: false
+      };
+    },
+    [glossary]
+  );
+
+  // Recovery: each Data Entry mount checks localStorage (tab returns included). No sessionStorage gate.
+  useEffect(() => {
+    const draft = localStorage.getItem('fredasoft_draft');
+    if (!draft) return;
+    try {
+      const parsed = JSON.parse(draft);
+      if (!isRecoverableDataEntryDraft(parsed)) {
+        localStorage.removeItem('fredasoft_draft');
+        return;
+      }
+      setSavedDraft(parsed);
+      setShowRecoveryModal(true);
+    } catch {
+      localStorage.removeItem('fredasoft_draft');
+    }
   }, []);
 
-  // Auto-Save Logic: Every 5 seconds if dirty
+  // Debounced draft write when the form is dirty (do not wait for the 5s interval).
   useEffect(() => {
-    if (!isDirty) return;
+    if (!isFormDirty) return;
+    const t = setTimeout(() => {
+      try {
+        const payload = buildDraftPayload();
+        if (!isRecoverableDataEntryDraft(payload)) return;
+        localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
+      } catch {
+        /* quota */
+      }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [isFormDirty, buildDraftPayload]);
+
+  // Periodic backup while dirty (same payload as flush/debounce).
+  useEffect(() => {
+    if (!isFormDirty) return;
     const interval = setInterval(() => {
-      const draftData = {
-        timestamp: new Date().toISOString(),
-        fldFindShort, fldFindLong, fldRecShort, fldRecLong,
-        fldQTY, fldMeasurement, fldMeasurementType, fldMeasurementUnit, fldUnitType,
-        fldLocation,
-        fldImages, fldStandards,
-        fldUnitCost, fldTotalCost,
-        selections: {
-          categoryId: selections.categoryId,
-          itemId: selections.itemId,
-          findId: selections.findId,
-          recId: selections.recId,
-          locationId: selections.locationId
-        }
-      };
-      localStorage.setItem('fredasoft_draft', JSON.stringify(draftData));
+      try {
+        const payload = buildDraftPayload();
+        if (!isRecoverableDataEntryDraft(payload)) return;
+        localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
+      } catch {
+        /* quota */
+      }
     }, 5000);
     return () => clearInterval(interval);
-  }, [
-    isDirty, fldFindShort, fldFindLong, fldRecShort, fldRecLong,
-    fldQTY, fldMeasurement, fldMeasurementType, fldMeasurementUnit, fldUnitType,
-    fldUnitCost, fldTotalCost,
-    fldLocation,
-    fldImages, fldStandards, selections
-  ]);
+  }, [isFormDirty, buildDraftPayload]);
 
   const handleResumeDraft = () => {
     if (!savedDraft) return;
-    setFldFindShort(savedDraft.fldFindShort || '');
-    setFldFindLong(savedDraft.fldFindLong || '');
-    setFldRecShort(savedDraft.fldRecShort || '');
-    setFldRecLong(savedDraft.fldRecLong || '');
-    setFldQTY(savedDraft.fldQTY || 0);
-    setFldMeasurement(savedDraft.fldMeasurement || '');
-    setFldMeasurementType(savedDraft.fldMeasurementType || '');
-    setFldMeasurementUnit(savedDraft.fldMeasurementUnit || '');
-    setFldUnitType(savedDraft.fldUnitType || 'Decimal');
-    setFldUnitCost(savedDraft.fldUnitCost || 0);
-    setFldTotalCost(savedDraft.fldTotalCost || 0);
-    setFldLocation(savedDraft.fldLocation || '');
-    setFldImages(savedDraft.fldImages || []);
-    setFldStandards(safeArray(savedDraft.fldStandards));
-    
-    if (savedDraft.selections) {
-      onSelectionChange({
-        ...selections,
-        ...savedDraft.selections
-      });
+    const d: any = savedDraft;
+    if (!isRecoverableDataEntryDraft(d)) {
+      localStorage.removeItem('fredasoft_draft');
+      setShowRecoveryModal(false);
+      setSavedDraft(null);
+      toast.info('Draft was incomplete and was discarded.');
+      return;
     }
-    
+
+    skipHydrationAfterDraftRef.current = true;
+
+    const mergedSel: any = {
+      ...selections,
+      ...(d.selections || {}),
+      editingRecordId:
+        d.editingRecordId !== undefined && d.editingRecordId !== null && d.editingRecordId !== ''
+          ? d.editingRecordId
+          : selections.editingRecordId,
+      glosId: d.glosId !== undefined ? d.glosId : selections.glosId || '',
+      dataEntryMode:
+        d.dataEntryMode === 'custom'
+          ? 'custom'
+          : d.dataEntryMode === 'glossary'
+            ? 'glossary'
+            : selections.dataEntryMode === 'custom'
+              ? 'custom'
+              : 'glossary',
+      isDirty: false
+    };
+
+    onSelectionChange(mergedSel);
+
+    setFldFindShort(d.fldFindShort || '');
+    setFldFindLong(d.fldFindLong || '');
+    setFldRecShort(d.fldRecShort || '');
+    setFldRecLong(d.fldRecLong || '');
+    setFldQTY(d.fldQTY ?? 0);
+    setFldMeasurement(d.fldMeasurement ?? '');
+    setFldMeasurementType(d.fldMeasurementType || '');
+    setFldMeasurementUnit(d.fldMeasurementUnit || '');
+    setFldUnitType(d.fldUnitType || 'Decimal');
+    setFldUnitCost(d.fldUnitCost ?? 0);
+    setFldTotalCost(d.fldTotalCost ?? 0);
+    setFldLocation(d.fldLocation || '');
+    setFldImages(Array.isArray(d.fldImages) ? d.fldImages : []);
+    setFldStandards(safeArray(d.fldStandards));
+    setCustomMasterRecId(d.customMasterRecId || '');
+    setCustomMasterFindId(d.customMasterFindId || '');
+
+    const rid = mergedSel.editingRecordId;
+    const rec =
+      rid && String(rid).trim()
+        ? (projectData || []).find((x: any) => x.fldPDataID === rid)
+        : null;
+    syncInitialSelectionRefFromRecord(rec);
+
     localStorage.removeItem('fredasoft_draft');
     setShowRecoveryModal(false);
+    setSavedDraft(null);
     setIsDirty(true);
     toast.success('Draft recovered');
   };
@@ -477,6 +774,10 @@ export default function ProjectDataEntry({
   };
 
   useEffect(() => {
+    if (skipHydrationAfterDraftRef.current) {
+      skipHydrationAfterDraftRef.current = false;
+      return;
+    }
     if (activeRecord) {
       console.log("Hydrating Form with:", activeRecord);
       const fldDataBlank = !(activeRecord.fldData || '').trim();
@@ -533,7 +834,7 @@ export default function ProjectDataEntry({
       setFldRecShort(activeRecord.fldRecShort || '');
       setFldRecLong(activeRecord.fldRecLong || '');
       setFldQTY(activeRecord.fldQTY || 0);
-      setFldMeasurement(activeRecord.fldMeasurement || '');
+      setFldMeasurement(activeRecord.fldMeasurement ?? '');
       setFldMeasurementType(activeRecord.fldMeasurementType || '');
       setFldMeasurementUnit(activeRecord.fldMeasurementUnit || '');
       setFldUnitType(activeRecord.fldUnitType || 'Decimal');
@@ -584,6 +885,7 @@ export default function ProjectDataEntry({
     
     // Ensure we have a valid ID before saving
     const finalizedId = editingRecordId || uuidv4();
+    const wasExisting = Boolean(editingRecordId && String(editingRecordId).trim());
 
     const isCustomMode = selections.dataEntryMode === 'custom';
 
@@ -657,6 +959,27 @@ export default function ProjectDataEntry({
       return;
     }
 
+    localStorage.removeItem('fredasoft_draft');
+    isFormDirtyRef.current = false;
+
+    if (wasExisting) {
+      setIsDirty(false);
+      initialSelectionRef.current = {
+        categoryId: selections.categoryId || '',
+        itemId: selections.itemId || '',
+        findId: selections.findId || '',
+        recId: selections.recId || '',
+        glosId: selections.glosId || ''
+      };
+      onSelectionChange({
+        ...selections,
+        locationId: fldLocation,
+        editingRecordId: finalizedId,
+        isDirty: false
+      });
+      return;
+    }
+
     setFldFindShort('');
     setFldFindLong('');
     setFldRecShort('');
@@ -671,7 +994,6 @@ export default function ProjectDataEntry({
     setFldImages([]);
     setFldStandards([]);
 
-    localStorage.removeItem('fredasoft_draft');
     setIsDirty(false);
     onSelectionChange({
       ...selections,
@@ -705,6 +1027,33 @@ export default function ProjectDataEntry({
     }
   };
 
+  const navigateToRecord = (targetId: string) => {
+    confirmAction(
+      'Switch record',
+      'You have unsaved changes. Switching records will discard unsaved edits unless you save first. Continue?',
+      () =>
+        onSelectionChange({
+          ...selections,
+          editingRecordId: targetId,
+          isDirty: false
+        })
+    );
+  };
+
+  const handleNavPrev = () => {
+    if (navIndex <= 0) return;
+    const prev = navRecords[navIndex - 1];
+    if (!prev?.fldPDataID) return;
+    navigateToRecord(prev.fldPDataID);
+  };
+
+  const handleNavNext = () => {
+    if (navIndex < 0 || navIndex >= navRecords.length - 1) return;
+    const next = navRecords[navIndex + 1];
+    if (!next?.fldPDataID) return;
+    navigateToRecord(next.fldPDataID);
+  };
+
   const handleClearForm = () => {
     confirmAction(
       "Clear Form",
@@ -726,6 +1075,7 @@ export default function ProjectDataEntry({
         setFldStandards([]);
         
         // 2. Reset baseline for unsaved changes baseline
+        isFormDirtyRef.current = false;
         setIsDirty(false);
         localStorage.removeItem('fredasoft_draft');
         
@@ -753,12 +1103,33 @@ export default function ProjectDataEntry({
       "Reset to Original",
       "You have unsaved changes. Are you sure you want to revert to the original record state?",
       () => {
+        isFormDirtyRef.current = false;
+
+        const fldDataBlank = !(activeRecord.fldData || '').trim();
+        const hasPDataCatItem =
+          !!(activeRecord.fldPDataCategoryID || '').trim() &&
+          !!(activeRecord.fldPDataItemID || '').trim();
+        const isCustom =
+          activeRecord.fldRecordSource === 'custom' ||
+          (fldDataBlank && hasPDataCatItem);
+        if (isCustom) {
+          setCustomMasterRecId(activeRecord.fldPDataMasterRecID || '');
+          setCustomMasterFindId(activeRecord.fldPDataMasterFindID || '');
+        } else {
+          setCustomMasterRecId('');
+          setCustomMasterFindId('');
+        }
+
+        const newSel = buildHydrationSelectionsFromRecord(activeRecord, selections);
+        syncInitialSelectionRefFromRecord(activeRecord);
+        onSelectionChange(newSel);
+
         setFldFindShort(activeRecord.fldFindShort || '');
         setFldFindLong(activeRecord.fldFindLong || '');
         setFldRecShort(activeRecord.fldRecShort || '');
         setFldRecLong(activeRecord.fldRecLong || '');
         setFldQTY(activeRecord.fldQTY || 0);
-        setFldMeasurement(activeRecord.fldMeasurement || '');
+        setFldMeasurement(activeRecord.fldMeasurement ?? '');
         setFldMeasurementType(activeRecord.fldMeasurementType || '');
         setFldMeasurementUnit(activeRecord.fldMeasurementUnit || '');
         setFldUnitType(activeRecord.fldUnitType || 'Decimal');
@@ -767,6 +1138,7 @@ export default function ProjectDataEntry({
         setFldLocation(activeRecord.fldLocation || '');
         setFldImages(Array.isArray(activeRecord.fldImages) ? activeRecord.fldImages : []);
         setFldStandards(safeArray(activeRecord.fldStandards));
+        localStorage.removeItem('fredasoft_draft');
         setIsDirty(false);
         toast.info('Restored to original');
       }
@@ -778,6 +1150,7 @@ export default function ProjectDataEntry({
       "Cancel Edit",
       "You have unsaved changes. Are you sure you want to cancel editing and switch to a new record?",
       () => {
+        isFormDirtyRef.current = false;
         onReset(); // This should set editingRecordId to null in parent
         setFldFindShort('');
         setFldFindLong('');
@@ -787,6 +1160,7 @@ export default function ProjectDataEntry({
         setFldMeasurement('');
         setFldMeasurementType('');
         setFldMeasurementUnit('');
+        setFldUnitType('Decimal');
         setFldUnitCost(0);
         setFldTotalCost(0);
         setFldImages([]);
@@ -1279,6 +1653,40 @@ export default function ProjectDataEntry({
     categoryLabelById
   ]);
 
+  const hasNavContext = Boolean(
+    String(selections.projectId || '').trim() && String(selections.facilityId || '').trim()
+  );
+  const navCount = navRecords.length;
+  const navLabel = !hasNavContext
+    ? ''
+    : editingRecordId
+      ? navIndex >= 0
+        ? `Record ${navIndex + 1} of ${navCount}`
+        : `Record not in list — ${navCount} in facility`
+      : `New Record — ${navCount} existing records`;
+  const canNavStep =
+    Boolean(editingRecordId && String(editingRecordId).trim()) && navIndex >= 0 && navCount > 0;
+  const prevNavDisabled = !canNavStep || navIndex <= 0;
+  const nextNavDisabled = !canNavStep || navIndex < 0 || navIndex >= navCount - 1;
+
+  const draftRecoveryFindingPreview = useMemo(() => {
+    const d = savedDraft;
+    if (!d) return '';
+    const t = String(d.fldFindShort || '').trim();
+    if (t) return t;
+    const fid = String(d.selections?.findId || '').trim();
+    if (fid) {
+      const f = (findings || []).find(
+        (x: any) => normalizeId(x.fldFindID || x.id) === normalizeId(fid)
+      );
+      const fs = String(f?.fldFindShort || '').trim();
+      if (fs) return fs;
+      return 'Draft for selected finding';
+    }
+    if (d.editingRecordId) return 'Existing record draft';
+    return 'Draft';
+  }, [savedDraft, findings]);
+
   return (
     <div className="flex flex-col h-full bg-transparent overflow-hidden">
       <div className="flex-1 overflow-y-auto w-full bg-transparent">
@@ -1308,6 +1716,43 @@ export default function ProjectDataEntry({
                 </div>
               )}
             </div>
+
+            {hasNavContext && (
+              <div className="flex flex-wrap items-center gap-3 bg-white px-4 py-2 rounded-xl border border-zinc-200 shadow-sm text-xs">
+                <span
+                  className={cn(
+                    'text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded select-none',
+                    isFormDirty ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
+                  )}
+                  aria-live="polite"
+                >
+                  {isFormDirty ? 'DIRTY' : 'CLEAN'}
+                </span>
+                <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-8 px-2 min-w-[2rem]"
+                    disabled={prevNavDisabled}
+                    onClick={handleNavPrev}
+                    aria-label="Previous record"
+                  >
+                    <ChevronLeft size={16} />
+                  </Button>
+                  <span className="text-zinc-700 font-medium flex-1 text-center">{navLabel}</span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-8 px-2 min-w-[2rem]"
+                    disabled={nextNavDisabled}
+                    onClick={handleNavNext}
+                    aria-label="Next record"
+                  >
+                    <ChevronRight size={16} />
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {!hasRequiredContext && (
               <div className="mb-4 p-4 rounded-xl border border-zinc-200 bg-zinc-50/90 text-zinc-700 shadow-sm">
@@ -1916,7 +2361,7 @@ export default function ProjectDataEntry({
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-zinc-400 uppercase">Finding</label>
-                    <p className="text-sm font-medium truncate">{savedDraft.fldFindShort || 'Untitled'}</p>
+                    <p className="text-sm font-medium truncate">{draftRecoveryFindingPreview}</p>
                   </div>
                 </div>
               </div>
