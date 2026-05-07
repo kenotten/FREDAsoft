@@ -56,6 +56,39 @@ function libraryCitationDisplayLabel(standard: MasterStandard | undefined, idFal
   return fb ? `Unknown standard (${fb})` : 'Unknown standard';
 }
 
+/** Same ordering as modal selected list: order → citation_num → stable index */
+function sortLibraryStandardIds(ids: string[], standardsList: MasterStandard[]): string[] {
+  const withIndex = ids.map((id, index) => ({
+    id,
+    index,
+    standard: standardsList.find((st) => libNormId(st.id) === libNormId(id))
+  }));
+  return withIndex
+    .sort((a, b) => {
+      const aOrder = Number(a.standard?.order);
+      const bOrder = Number(b.standard?.order);
+      const aHas = Number.isFinite(aOrder);
+      const bHas = Number.isFinite(bOrder);
+      if (aHas && bHas && aOrder !== bOrder) return aOrder - bOrder;
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      const aC = String(a.standard?.citation_num || '').trim();
+      const bC = String(b.standard?.citation_num || '').trim();
+      if (aC || bC) {
+        const cmp = aC.localeCompare(bC, undefined, { numeric: true, sensitivity: 'base' });
+        if (cmp !== 0) return cmp;
+      }
+      return a.index - b.index;
+    })
+    .map((e) => e.id);
+}
+
+function inlineLibraryCitationChipText(standard: MasterStandard | undefined, idFallback: string): string {
+  const num = String(standard?.citation_num ?? '').trim();
+  if (num) return num;
+  const full = libraryCitationDisplayLabel(standard, idFallback);
+  return full.length > 22 ? `${full.slice(0, 20)}…` : full;
+}
+
 export interface LibraryManagerHandle {
   save: () => Promise<boolean>;
   discard: () => void;
@@ -381,27 +414,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   const displaySortedLibraryCitations = useMemo(() => {
     if (!citationTargetEntity) return [];
     const ids = safeLibraryStandardsArray(getValue(citationTargetEntity, 'fldStandards'));
-    const withIndex = ids.map((id, index) => {
-      const standard = standards.find((st) => libNormId(st.id) === libNormId(id));
-      return { id, index, standard };
-    });
-    return withIndex
-      .sort((a, b) => {
-        const aOrder = Number(a.standard?.order);
-        const bOrder = Number(b.standard?.order);
-        const aHas = Number.isFinite(aOrder);
-        const bHas = Number.isFinite(bOrder);
-        if (aHas && bHas && aOrder !== bOrder) return aOrder - bOrder;
-        if (aHas !== bHas) return aHas ? -1 : 1;
-        const aC = String(a.standard?.citation_num || '').trim();
-        const bC = String(b.standard?.citation_num || '').trim();
-        if (aC || bC) {
-          const cmp = aC.localeCompare(bC, undefined, { numeric: true, sensitivity: 'base' });
-          if (cmp !== 0) return cmp;
-        }
-        return a.index - b.index;
-      })
-      .map((e) => e.id);
+    return sortLibraryStandardIds(ids, standards);
   }, [citationTargetEntity, standards, edits, visibleData]);
 
   const libraryCitationsUiKey = useMemo(
@@ -707,12 +720,12 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 </div>
               </div>
             )}
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex min-w-0 items-center gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setCitationTargetId(record.id)}
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest transition-colors',
+                  'inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest transition-colors',
                   citationTargetId === record.id
                     ? 'border-blue-400 bg-blue-50 text-blue-800'
                     : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50'
@@ -726,6 +739,34 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                   </span>
                 ) : null}
               </button>
+              {(() => {
+                const rowIds = sortLibraryStandardIds(
+                  safeLibraryStandardsArray(getValue(record, 'fldStandards')),
+                  standards
+                );
+                if (rowIds.length === 0) return null;
+                return (
+                  <div className="min-h-[28px] min-w-0 flex-1 overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1">
+                    <div className="flex w-max items-center gap-1 py-0.5 pr-1">
+                      {rowIds.map((cid) => {
+                        const s = standards.find((st) => libNormId(st.id) === libNormId(cid));
+                        const title = libraryCitationDisplayLabel(s, cid);
+                        const compact = inlineLibraryCitationChipText(s, cid);
+                        return (
+                          <span
+                            key={cid}
+                            role="presentation"
+                            title={title}
+                            className="max-w-[10rem] shrink-0 truncate rounded-full border border-zinc-200 bg-zinc-100/90 px-2 py-0.5 font-mono text-[9px] font-semibold text-zinc-700"
+                          >
+                            {compact}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
             {isOverLimit && (
               <div className="mt-0.5 text-[9px] font-bold text-red-500 uppercase tracking-widest flex items-center">
