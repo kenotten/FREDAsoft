@@ -1692,9 +1692,9 @@ export default function ProjectDataEntry({
       <div className="flex-1 overflow-y-auto w-full bg-transparent">
         {/* LAYER 1: STICKY HEADER - Opaque background to mask scrolling content */}
         <div className="sticky top-0 z-30 bg-zinc-50 border-b border-zinc-200 shadow-sm">
-          <div className="max-w-6xl mx-auto px-8 py-6 space-y-6">
+          <div className="max-w-6xl mx-auto px-8 pt-3 pb-4 space-y-4">
             {/* Header Title & Inspector Badge - Wrapped in a card-like container for floating effect */}
-            <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-amber-200">
                   <Book size={20} />
@@ -1704,17 +1704,53 @@ export default function ProjectDataEntry({
                 </div>
               </div>
               
-              {inspector && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl shadow-sm">
-                  <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider leading-none">Active Inspector</span>
-                    <span className="text-xs font-bold text-zinc-900 tracking-tight">
-                      {inspector.fldInspName || inspector.fldInspID}
-                    </span>
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Mode</label>
+                  <div className="flex items-center bg-zinc-100 rounded-xl p-1 border border-zinc-200">
+                    <button
+                      type="button"
+                      disabled={!hasRequiredContext}
+                      onClick={() => {
+                        setCustomMasterRecId('');
+                        setCustomMasterFindId('');
+                        onSelectionChange({ ...selections, dataEntryMode: 'glossary' });
+                      }}
+                      className={cn(
+                        "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
+                        dataEntryMode === 'glossary' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+                      )}
+                      title="Use approved glossary record combinations"
+                    >
+                      Use Glossary Record
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!hasRequiredContext}
+                      onClick={() => onSelectionChange({ ...selections, dataEntryMode: 'custom' })}
+                      className={cn(
+                        "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
+                        dataEntryMode === 'custom' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+                      )}
+                      title="Create a project-only custom record"
+                    >
+                      Create Custom Record
+                    </button>
                   </div>
                 </div>
-              )}
+
+                {inspector && (
+                  <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl shadow-sm">
+                    <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider leading-none">Active Inspector</span>
+                      <span className="text-xs font-bold text-zinc-900 tracking-tight">
+                        {inspector.fldInspName || inspector.fldInspID}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {hasNavContext && (
@@ -1774,46 +1810,6 @@ export default function ProjectDataEntry({
 
             {/* TOP CONTEXT CARD - Now part of sticky header */}
             <Card className="p-6 border-zinc-200 shadow-sm !bg-blue-100">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-                <div className="flex items-center gap-2">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Mode</label>
-                  <div className="flex items-center bg-zinc-100 rounded-xl p-1 border border-zinc-200">
-                    <button
-                      type="button"
-                      disabled={!hasRequiredContext}
-                      onClick={() => {
-                        setCustomMasterRecId('');
-                        setCustomMasterFindId('');
-                        onSelectionChange({ ...selections, dataEntryMode: 'glossary' });
-                      }}
-                      className={cn(
-                        "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
-                        dataEntryMode === 'glossary' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
-                      )}
-                      title="Use approved glossary record combinations"
-                    >
-                      Use Glossary Record
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!hasRequiredContext}
-                      onClick={() => onSelectionChange({ ...selections, dataEntryMode: 'custom' })}
-                      className={cn(
-                        "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
-                        dataEntryMode === 'custom' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
-                      )}
-                      title="Create a project-only custom record"
-                    >
-                      Create Custom Record
-                    </button>
-                  </div>
-                </div>
-                {dataEntryMode === 'custom' && (
-                  <div className="text-[10px] font-bold px-3 py-2 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl">
-                    This record is project-specific and will not be added to the glossary or library.
-                  </div>
-                )}
-              </div>
               <div className="flex flex-wrap gap-6">
                 {/* CATEGORY SELECT */}
                 <div className="flex-1 min-w-[240px] relative group">
