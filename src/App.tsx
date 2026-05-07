@@ -295,8 +295,26 @@ export default function App() {
 
   const [selections, setSelections] = useState<any>(() => {
     const saved = localStorage.getItem('fredasoft_selections');
-    const initial = { clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null, dataEntryMode: 'glossary' as const };
-    if (saved) try { return { ...initial, ...JSON.parse(saved), isDirty: false, editingRecordId: null }; } catch (e) { return initial; }
+    const initial = { clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', glosId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null, dataEntryMode: 'glossary' as const };
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) || {};
+        return {
+          ...initial,
+          ...parsed,
+          // Startup always begins in "new record" mode.
+          isDirty: false,
+          editingRecordId: null,
+          // Do not pre-populate downstream record selections on startup.
+          itemId: '',
+          findId: '',
+          recId: '',
+          glosId: ''
+        };
+      } catch (e) {
+        return initial;
+      }
+    }
     return initial;
   });
 
@@ -393,9 +411,30 @@ export default function App() {
     };
 
     const timeoutId = setTimeout(saveContext, 1000); // Debounce saves
-    localStorage.setItem('fredasoft_selections', JSON.stringify(selections));
     return () => clearTimeout(timeoutId);
   }, [selections.clientId, selections.facilityId, selections.projectId, user?.uid, isRestored]);
+
+  // Persist only intended sticky selections locally (not record-specific fields).
+  useEffect(() => {
+    const sticky = {
+      clientId: selections.clientId || '',
+      facilityId: selections.facilityId || '',
+      projectId: selections.projectId || '',
+      categoryId: selections.categoryId || '',
+      locationId: selections.locationId || '',
+      locationName: selections.locationName || '',
+      dataEntryMode: selections.dataEntryMode === 'custom' ? 'custom' : 'glossary'
+    };
+    localStorage.setItem('fredasoft_selections', JSON.stringify(sticky));
+  }, [
+    selections.clientId,
+    selections.facilityId,
+    selections.projectId,
+    selections.categoryId,
+    selections.locationId,
+    selections.locationName,
+    selections.dataEntryMode
+  ]);
 
   // Hook for Project-Specific Data Collections
   const { rawProjectData, rawLocations } = useProjectData(selections.projectId);
