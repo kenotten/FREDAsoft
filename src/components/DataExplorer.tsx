@@ -312,7 +312,6 @@ export function DataExplorer({
       const catId = ctx.catId;
       const itemId = ctx.itemId;
       const findId = ctx.findId;
-      const finding = (findings || []).find((f: any) => f.fldFindID === findId);
 
       const matchesSearch = 
         (d.fldFindShort || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
