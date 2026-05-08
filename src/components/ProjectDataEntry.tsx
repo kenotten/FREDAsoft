@@ -2355,6 +2355,7 @@ export default function ProjectDataEntry({
             {dataEntryMode === 'glossary' && (
               <Select 
                 label="Finding"
+                labelClassName="text-base font-bold text-zinc-900 leading-tight normal-case tracking-normal"
                 value={selections.findId || ''}
                 onChange={(e: any) => {
                    const find = (findings || []).find(f => (f.id || f.fldFindID || "").toLowerCase() === (e.target.value || "").toLowerCase());
@@ -2482,7 +2483,7 @@ export default function ProjectDataEntry({
           </Card>
 
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
-             <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-2">Recommendation</label>
+             <label className="text-base font-bold text-zinc-900 leading-tight block mb-2">Recommendation</label>
              {dataEntryMode === 'glossary' && (
                <Select 
                 value={recommendationSelectValue || ''}
@@ -2627,7 +2628,7 @@ export default function ProjectDataEntry({
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
             <div className="flex flex-col gap-1 border-b border-zinc-100 pb-2">
               <div>
-                <h3 className="text-sm font-bold text-zinc-900">Record Citations</h3>
+                <h3 className="text-base font-bold text-zinc-900 leading-tight">Record Citations</h3>
                 <p className="text-[11px] text-zinc-500 mt-0.5">
                   Stored on this project data record as <span className="font-mono text-zinc-600">fldStandards</span>.
                 </p>
