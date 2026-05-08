@@ -2040,22 +2040,39 @@ export default function ProjectDataEntry({
       <div className="flex-1 overflow-y-auto w-full bg-transparent">
         {/* LAYER 1: STICKY HEADER - Opaque background to mask scrolling content */}
         <div className="sticky top-0 z-30 bg-zinc-50 border-b border-zinc-200 shadow-sm">
-          <div className="max-w-6xl mx-auto px-8 pt-3 pb-4 space-y-4">
-            {/* Header Title & Inspector Badge - Wrapped in a card-like container for floating effect */}
-            <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-amber-200">
-                  <Book size={20} />
+          <div className="max-w-6xl mx-auto px-6 pt-2 pb-2 space-y-2">
+            {/* Header: title | record nav | mode + inspector */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-white py-2 px-3 rounded-xl border border-zinc-200 shadow-sm">
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-white shadow-md shadow-amber-200">
+                  <Book size={18} />
                 </div>
-                <div>
-                  <h2 className="text-lg font-bold text-zinc-900 leading-tight">Data Entry</h2>
-                </div>
+                <h2 className="text-base font-bold text-zinc-900 leading-tight">Data Entry</h2>
               </div>
-              
-              <div className="flex flex-wrap items-center justify-end gap-3">
-                <div className="flex items-center gap-2">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Mode</label>
-                  <div className="flex items-center bg-zinc-100 rounded-xl p-1 border border-zinc-200">
+
+              {hasNavContext ? (
+                <div className="flex flex-1 min-w-0 items-center justify-center gap-2 px-1">
+                  <span
+                    className={cn(
+                      'shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded select-none',
+                      isFormDirty ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
+                    )}
+                    aria-live="polite"
+                  >
+                    {isFormDirty ? 'DIRTY' : 'CLEAN'}
+                  </span>
+                  <span className="text-xs font-medium text-zinc-600 truncate text-center min-w-0 max-w-full">
+                    {navLabel}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex-1 min-w-0" aria-hidden />
+              )}
+
+              <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 ml-auto">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Mode</label>
+                  <div className="flex items-center bg-zinc-100 rounded-lg p-0.5 border border-zinc-200">
                     <button
                       type="button"
                       disabled={!hasRequiredContext}
@@ -2065,7 +2082,7 @@ export default function ProjectDataEntry({
                         onSelectionChange({ ...selections, dataEntryMode: 'glossary' });
                       }}
                       className={cn(
-                        "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
+                        "px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-md transition-all",
                         dataEntryMode === 'glossary' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                       )}
                       title="Use approved glossary record combinations"
@@ -2077,7 +2094,7 @@ export default function ProjectDataEntry({
                       disabled={!hasRequiredContext}
                       onClick={() => onSelectionChange({ ...selections, dataEntryMode: 'custom' })}
                       className={cn(
-                        "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
+                        "px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-md transition-all",
                         dataEntryMode === 'custom' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                       )}
                       title="Create a project-only custom record"
@@ -2088,11 +2105,11 @@ export default function ProjectDataEntry({
                 </div>
 
                 {inspector && (
-                  <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl shadow-sm">
-                    <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider leading-none">Active Inspector</span>
-                      <span className="text-xs font-bold text-zinc-900 tracking-tight">
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg shadow-sm">
+                    <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse shadow-[0_0_6px_rgba(245,158,11,0.5)]" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider leading-none">Active Inspector</span>
+                      <span className="text-[11px] font-bold text-zinc-900 tracking-tight truncate max-w-[10rem]">
                         {inspector.fldInspName || inspector.fldInspID}
                       </span>
                     </div>
@@ -2101,148 +2118,238 @@ export default function ProjectDataEntry({
               </div>
             </div>
 
-            {hasNavContext && (
-              <div className="flex flex-wrap items-center gap-3 bg-white px-4 py-2 rounded-xl border border-zinc-200 shadow-sm text-xs">
-                <span
-                  className={cn(
-                    'text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded select-none',
-                    isFormDirty ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
-                  )}
-                  aria-live="polite"
+            {hasNavContext ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-9 w-9 shrink-0 p-0 min-w-0"
+                  disabled={prevNavDisabled}
+                  onClick={handleNavPrev}
+                  aria-label="Previous record"
                 >
-                  {isFormDirty ? 'DIRTY' : 'CLEAN'}
-                </span>
-                <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-8 px-2 min-w-[2rem]"
-                    disabled={prevNavDisabled}
-                    onClick={handleNavPrev}
-                    aria-label="Previous record"
-                  >
-                    <ChevronLeft size={16} />
-                  </Button>
-                  <span className="text-zinc-700 font-medium flex-1 text-center">{navLabel}</span>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-8 px-2 min-w-[2rem]"
-                    disabled={nextNavDisabled}
-                    onClick={handleNavNext}
-                    aria-label="Next record"
-                  >
-                    <ChevronRight size={16} />
-                  </Button>
-                </div>
+                  <ChevronLeft size={18} />
+                </Button>
+                <Card className="flex-1 min-w-0 border-zinc-200 shadow-sm !bg-blue-100 p-3 py-2">
+                  <div className="flex flex-wrap gap-3">
+                    <div className="flex-1 min-w-[180px] relative group">
+                      <Select
+                        label="Category"
+                        value={selectedCat}
+                        onChange={(e: any) => setSelectedCat(e.target.value)}
+                        disabled={!hasRequiredContext}
+                        selectClassName={cn(focusClasses, '!py-1.5')}
+                        options={(dataEntryMode === 'custom'
+                          ? sortEntities(mergedCategories || [], 'fldCategoryName')
+                          : sortedCategories
+                        ).map((c: any, index: number) => ({
+                          value: c.fldCategoryID || c.fldCatID || `missing-${index}`,
+                          label: c.fldCategoryName || c.fldCatName || 'Select Category',
+                          key: `cat-${c.fldCategoryID || c.fldCatID || index}-${index}`
+                        }))}
+                      />
+                      {selectedCat && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCat('')}
+                          className="absolute right-9 top-7 p-1 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Clear Category"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-[180px]">
+                      <Select
+                        label="Item"
+                        value={selectedItem}
+                        onChange={(e: any) => setSelectedItem(e.target.value)}
+                        selectClassName={cn(focusClasses, '!py-1.5')}
+                        options={(dataEntryMode === 'custom'
+                          ? sortEntities(
+                              (items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat),
+                              'fldItemName'
+                            )
+                          : sortedItems
+                        ).map((i: any, index: number) => ({
+                          value: i.fldItemID || `missing-item-${index}`,
+                          label: i.fldItemName || 'Select Item',
+                          key: `item-${i.fldItemID || index}-${index}`
+                        }))}
+                      />
+                    </div>
+                    <div className="flex min-w-[180px] flex-1 items-end gap-2">
+                      <div className="relative min-w-0 flex-1 group">
+                        <Select
+                          label="Location / Area"
+                          value={fldLocation}
+                          onChange={(e: any) => {
+                            setFldLocation(e.target.value);
+                            onSelectionChange({ ...selections, locationId: e.target.value });
+                            setIsDirty(true);
+                          }}
+                          selectClassName={cn(focusClasses, '!py-1.5')}
+                          options={facilityLocations.map((l) => ({
+                            value: l.fldLocID,
+                            label: l.fldLocName,
+                            key: l.fldLocID
+                          }))}
+                        />
+                        {fldLocation && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFldLocation('');
+                              onSelectionChange({ ...selections, locationId: '' });
+                            }}
+                            className="absolute right-9 top-7 p-1 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Clear Location"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        type="button"
+                        className="h-9 w-9 shrink-0 p-0"
+                        onClick={() => setIsLocationModalOpen(true)}
+                        title="Manage Locations"
+                      >
+                        <Edit2 size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-9 w-9 shrink-0 p-0 min-w-0"
+                  disabled={nextNavDisabled}
+                  onClick={handleNavNext}
+                  aria-label="Next record"
+                >
+                  <ChevronRight size={18} />
+                </Button>
               </div>
+            ) : (
+              <Card className="border-zinc-200 shadow-sm !bg-blue-100 p-3 py-2">
+                <div className="flex flex-wrap gap-3">
+                  <div className="flex-1 min-w-[180px] relative group">
+                    <Select
+                      label="Category"
+                      value={selectedCat}
+                      onChange={(e: any) => setSelectedCat(e.target.value)}
+                      disabled={!hasRequiredContext}
+                      selectClassName={cn(focusClasses, '!py-1.5')}
+                      options={(dataEntryMode === 'custom'
+                        ? sortEntities(mergedCategories || [], 'fldCategoryName')
+                        : sortedCategories
+                      ).map((c: any, index: number) => ({
+                        value: c.fldCategoryID || c.fldCatID || `missing-${index}`,
+                        label: c.fldCategoryName || c.fldCatName || 'Select Category',
+                        key: `cat-${c.fldCategoryID || c.fldCatID || index}-${index}`
+                      }))}
+                    />
+                    {selectedCat && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCat('')}
+                        className="absolute right-9 top-7 p-1 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Clear Category"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-[180px]">
+                    <Select
+                      label="Item"
+                      value={selectedItem}
+                      onChange={(e: any) => setSelectedItem(e.target.value)}
+                      selectClassName={cn(focusClasses, '!py-1.5')}
+                      options={(dataEntryMode === 'custom'
+                        ? sortEntities(
+                            (items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat),
+                            'fldItemName'
+                          )
+                        : sortedItems
+                      ).map((i: any, index: number) => ({
+                        value: i.fldItemID || `missing-item-${index}`,
+                        label: i.fldItemName || 'Select Item',
+                        key: `item-${i.fldItemID || index}-${index}`
+                      }))}
+                    />
+                  </div>
+                  <div className="flex min-w-[180px] flex-1 items-end gap-2">
+                    <div className="relative min-w-0 flex-1 group">
+                      <Select
+                        label="Location / Area"
+                        value={fldLocation}
+                        onChange={(e: any) => {
+                          setFldLocation(e.target.value);
+                          onSelectionChange({ ...selections, locationId: e.target.value });
+                          setIsDirty(true);
+                        }}
+                        selectClassName={cn(focusClasses, '!py-1.5')}
+                        options={facilityLocations.map((l) => ({
+                          value: l.fldLocID,
+                          label: l.fldLocName,
+                          key: l.fldLocID
+                        }))}
+                      />
+                      {fldLocation && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFldLocation('');
+                            onSelectionChange({ ...selections, locationId: '' });
+                          }}
+                          className="absolute right-9 top-7 p-1 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Clear Location"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      type="button"
+                      className="h-9 w-9 shrink-0 p-0"
+                      onClick={() => setIsLocationModalOpen(true)}
+                      title="Manage Locations"
+                    >
+                      <Edit2 size={16} />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
             )}
 
             {!hasRequiredContext && (
-              <div className="mb-4 p-4 rounded-xl border border-zinc-200 bg-zinc-50/90 text-zinc-700 shadow-sm">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/90 p-3 text-zinc-700 shadow-sm">
                 <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Workspace incomplete</p>
-                <p className="text-sm text-zinc-600 mt-1.5 leading-snug">
+                <p className="mt-1 text-sm leading-snug text-zinc-600">
                   Select a client, facility, project, and inspector to enable data entry.
                 </p>
               </div>
             )}
 
             {dataEntryMode === 'glossary' && hasRequiredContext && activeGlossaryRows.length === 0 && (
-              <div className="mb-4 p-4 rounded-xl border border-amber-200 bg-amber-50/90 text-amber-900 shadow-sm">
+              <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-3 text-amber-900 shadow-sm">
                 <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">No glossary records</p>
-                <p className="text-sm text-amber-900/90 mt-1.5 leading-snug">
+                <p className="mt-1 text-sm leading-snug text-amber-900/90">
                   No glossary records are available. Create glossary records in Glossary Builder first.
                 </p>
               </div>
             )}
-
-            {/* TOP CONTEXT CARD - Now part of sticky header */}
-            <Card className="p-6 border-zinc-200 shadow-sm !bg-blue-100">
-              <div className="flex flex-wrap gap-6">
-                {/* CATEGORY SELECT */}
-                <div className="flex-1 min-w-[240px] relative group">
-                  <Select 
-                    label="Category"
-                    value={selectedCat}
-                    onChange={(e: any) => setSelectedCat(e.target.value)}
-                    disabled={!hasRequiredContext}
-                    selectClassName={focusClasses}
-                    options={(dataEntryMode === 'custom' ? sortEntities(mergedCategories || [], 'fldCategoryName') : sortedCategories).map((c: any, index: number) => ({ 
-                      value: c.fldCategoryID || c.fldCatID || `missing-${index}`, 
-                      label: c.fldCategoryName || c.fldCatName || 'Select Category',
-                      key: `cat-${c.fldCategoryID || c.fldCatID || index}-${index}` 
-                    }))}
-                  />
-                  {selectedCat && (
-                    <button 
-                      onClick={() => setSelectedCat('')}
-                      className="absolute right-10 top-8 p-1 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Clear Category"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-                {/* ITEM SELECT */}
-                <div className="flex-1 min-w-[240px]">
-                  <Select 
-                    label="Item"
-                    value={selectedItem}
-                    onChange={(e: any) => setSelectedItem(e.target.value)}
-                    selectClassName={focusClasses}
-                    options={(dataEntryMode === 'custom'
-                      ? sortEntities((items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat), 'fldItemName')
-                      : sortedItems
-                    ).map((i: any, index: number) => ({ 
-                      value: i.fldItemID || `missing-item-${index}`, 
-                      label: i.fldItemName || 'Select Item',
-                      key: `item-${i.fldItemID || index}-${index}` 
-                    }))}
-                  />
-                </div>
-                <div className="flex-1 min-w-[240px] flex items-end gap-2">
-                  <div className="flex-1 relative group">
-                    <Select 
-                      label="Location / Area"
-                      value={fldLocation}
-                      onChange={(e: any) => { 
-                        setFldLocation(e.target.value); 
-                        onSelectionChange({ ...selections, locationId: e.target.value });
-                        setIsDirty(true); 
-                      }}
-                      selectClassName={focusClasses}
-                      options={facilityLocations.map(l => ({ value: l.fldLocID, label: l.fldLocName, key: l.fldLocID }))}
-                    />
-                    {fldLocation && (
-                      <button 
-                        onClick={() => {
-                          setFldLocation('');
-                          onSelectionChange({ ...selections, locationId: '' });
-                        }}
-                        className="absolute right-10 top-8 p-1 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Clear Location"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                  <Button 
-                    variant="secondary" 
-                    size="icon" 
-                    className="mb-1"
-                    onClick={() => setIsLocationModalOpen(true)}
-                    title="Manage Locations"
-                  >
-                    <Edit2 size={16} />
-                  </Button>
-                </div>
-              </div>
-            </Card>
           </div>
         </div>
 
         {/* LAYER 2: SCROLLABLE CONTENT */}
-        <div className="max-w-6xl mx-auto px-8 py-8 space-y-8">
+        <div className="max-w-6xl mx-auto px-6 py-6 space-y-8">
           {/* FINDING CARD */}
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
             {dataEntryMode === 'glossary' && (
