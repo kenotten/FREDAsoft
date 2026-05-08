@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { Search, ChevronRight, ChevronDown, Book, FileText, Hash, Info, AlertCircle, Image as ImageIcon, Database, Plus, X } from 'lucide-react';
 import { MasterStandard } from '../types';
 import { clsx, type ClassValue } from 'clsx';
@@ -109,32 +109,61 @@ const StandardItem = ({
 };
 
 const STANDARDS_BROWSER_UI_STORAGE_PREFIX = 'fredasoft_standards_browser_ui_v1:';
+const STANDARDS_BROWSER_SELECTION_STORAGE_PREFIX = 'fredasoft_standards_browser_selection_v1:';
 
 type PersistedStandardsBrowserUi = {
   searchQuery?: string;
   expandedChapters?: Record<string, boolean>;
   expandedSections?: Record<string, boolean>;
   expandedStandardItemId?: string | null;
-  selectedType?: string;
-  selectedVersion?: string;
 };
 
-function validPersistedType(value: unknown, typeSet: Set<string>): value is string {
-  return typeof value === 'string' && (value === 'ALL' || typeSet.has(value));
+/** First-seen canonical trimmed type per normalized key */
+function canonicalTypeMapFromStandards(list: MasterStandard[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const s of list) {
+    const raw = s.fldStandardType;
+    if (raw == null || String(raw).trim() === '') continue;
+    const canon = String(raw).trim();
+    const nk = canon.toLowerCase();
+    if (!m.has(nk)) m.set(nk, canon);
+  }
+  return m;
 }
 
-/** Version must be ALL or appear on at least one standard for the given type (ALL = any type). */
-function validPersistedVersion(
-  type: string,
-  value: unknown,
-  standardsList: MasterStandard[]
-): value is string {
-  if (typeof value !== 'string') return false;
-  if (value === 'ALL') return true;
-  const filtered =
-    type === 'ALL' ? standardsList : standardsList.filter((s) => s.fldStandardType === type);
-  const versions = new Set(filtered.map((s) => s.fldStandardVersion).filter(Boolean));
-  return versions.has(value);
+/** null = no/invalid preference; 'ALL'; or canonical type string from data */
+function resolveCanonicalStoredType(persistedType: unknown, list: MasterStandard[]): 'ALL' | string | null {
+  if (persistedType === undefined || persistedType === null) return null;
+  const raw = String(persistedType).trim();
+  if (raw === '') return null;
+  if (raw.toUpperCase() === 'ALL') return 'ALL';
+  const m = canonicalTypeMapFromStandards(list);
+  return m.get(raw.toLowerCase()) ?? null;
+}
+
+/** 'ALL', canonical version, or null if invalid non-ALL */
+function resolveCanonicalStoredVersionForType(
+  canonicalType: string,
+  persistedVersion: unknown,
+  list: MasterStandard[]
+): 'ALL' | string | null {
+  if (persistedVersion === undefined || persistedVersion === null) return 'ALL';
+  const rawPv = String(persistedVersion).trim();
+  if (rawPv === '' || rawPv.toUpperCase() === 'ALL') return 'ALL';
+  const rows =
+    canonicalType === 'ALL'
+      ? list
+      : list.filter(
+          (s) => String(s.fldStandardType ?? '').trim().toLowerCase() === canonicalType.toLowerCase()
+        );
+  const vm = new Map<string, string>();
+  for (const s of rows) {
+    const v = s.fldStandardVersion;
+    if (v == null || String(v).trim() === '') continue;
+    const cv = String(v).trim();
+    vm.set(cv.toLowerCase(), cv);
+  }
+  return vm.get(rawPv.toLowerCase()) ?? null;
 }
 
 function readPersistedUiFromStorage(key: string): PersistedStandardsBrowserUi | null {
@@ -145,6 +174,71 @@ function readPersistedUiFromStorage(key: string): PersistedStandardsBrowserUi | 
   } catch {
     return null;
   }
+}
+
+type PersistedStandardSelection = { selectedType?: string; selectedVersion?: string };
+
+function readPersistedStandardSelection(key: string): PersistedStandardSelection | null {
+  try {
+    const raw = sessionStorage.getItem(STANDARDS_BROWSER_SELECTION_STORAGE_PREFIX + key);
+    if (!raw) return null;
+    return JSON.parse(raw) as PersistedStandardSelection;
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedStandardSelection(key: string, selectedType: string, selectedVersion: string) {
+  try {
+    sessionStorage.setItem(
+      STANDARDS_BROWSER_SELECTION_STORAGE_PREFIX + key,
+      JSON.stringify({ selectedType, selectedVersion })
+    );
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function selectionStorageSkipsTas2012(
+  key: string | undefined,
+  list: MasterStandard[]
+): { skipTas: boolean; skip2012: boolean } {
+  if (!key || !list.length) return { skipTas: false, skip2012: false };
+  const stored = readPersistedStandardSelection(key);
+  if (!stored) return { skipTas: false, skip2012: false };
+  const ct = resolveCanonicalStoredType(stored.selectedType, list);
+  if (ct === null) return { skipTas: false, skip2012: false };
+  return { skipTas: true, skip2012: true };
+}
+
+/** Lazy useState + layout restore: read session selection with same rules as first paint. */
+function computeInitialStandardSelection(
+  key: string | undefined,
+  list: MasterStandard[]
+): { selectedType: string; selectedVersion: string } {
+  const types = new Set(list.map((s) => s.fldStandardType).filter(Boolean));
+  const versions = new Set(list.map((s) => s.fldStandardVersion).filter(Boolean));
+  const fallbackType = types.has('TAS') ? 'TAS' : 'ALL';
+  const fallbackVersion = versions.has('2012') ? '2012' : 'ALL';
+
+  if (!key || !list.length) {
+    return { selectedType: fallbackType, selectedVersion: fallbackVersion };
+  }
+
+  const stored = readPersistedStandardSelection(key);
+  if (!stored) {
+    return { selectedType: fallbackType, selectedVersion: fallbackVersion };
+  }
+
+  const ct = resolveCanonicalStoredType(stored.selectedType, list);
+  if (ct === null) {
+    return { selectedType: fallbackType, selectedVersion: fallbackVersion };
+  }
+
+  const selectedType = ct;
+  const vr = resolveCanonicalStoredVersionForType(ct, stored.selectedVersion, list);
+  const selectedVersion = vr === null ? 'ALL' : vr;
+  return { selectedType, selectedVersion };
 }
 
 function sectionStorageKey(chapterName: string, sectionName: string, accordion: boolean) {
@@ -161,6 +255,8 @@ interface StandardsBrowserProps {
   treeExpansionMode?: 'default' | 'accordion';
   uiResetKey?: string | null;
   persistUiStateKey?: string | null;
+  /** Session-scoped sessionStorage key for selectedType/selectedVersion only (e.g. Data Entry). */
+  standardSelectionPersistKey?: string;
   enableAutoExpand502?: boolean;
 }
 
@@ -174,17 +270,16 @@ export function StandardsBrowser({
   treeExpansionMode = 'default',
   uiResetKey,
   persistUiStateKey,
+  standardSelectionPersistKey,
   enableAutoExpand502 = true,
 }: StandardsBrowserProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedType, setSelectedType] = useState<string>(() => {
-    const types = new Set(standards.map(s => s.fldStandardType).filter(Boolean));
-    return types.has('TAS') ? 'TAS' : 'ALL';
-  });
-  const [selectedVersion, setSelectedVersion] = useState<string>(() => {
-    const versions = new Set(standards.map(s => s.fldStandardVersion).filter(Boolean));
-    return versions.has('2012') ? '2012' : 'ALL';
-  });
+  const [selectedType, setSelectedType] = useState<string>(() =>
+    computeInitialStandardSelection(standardSelectionPersistKey, standards).selectedType
+  );
+  const [selectedVersion, setSelectedVersion] = useState<string>(() =>
+    computeInitialStandardSelection(standardSelectionPersistKey, standards).selectedVersion
+  );
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   /** Accordion mode: at most one StandardItem detail expanded at a time. */
@@ -192,18 +287,60 @@ export function StandardsBrowser({
 
   const accordion = treeExpansionMode === 'accordion';
 
+  const standardsRef = useRef(standards);
+  standardsRef.current = standards;
+
+  /** Detects material changes to available types/versions (not only array length). */
+  const standardsSelectionFingerprint = useMemo(() => {
+    const rows = standards
+      .map((s) => {
+        const t = String(s.fldStandardType ?? '').trim().toLowerCase();
+        const v = String(s.fldStandardVersion ?? '').trim().toLowerCase();
+        return `${t}\0${v}`;
+      })
+      .filter((r) => r !== '\0');
+    rows.sort();
+    return `${standards.length}:${rows.join('|')}`;
+  }, [standards]);
+
+  /** Prevents session selection writer from overwriting storage with initializer defaults before restore runs. */
+  const selectionWriterGateOpenRef = useRef(!standardSelectionPersistKey);
+
   const standardTypes = useMemo(() => {
     const types = new Set(standards.map(s => s.fldStandardType).filter(Boolean));
     return ['ALL', ...Array.from(types).sort()];
   }, [standards]);
 
   const standardVersions = useMemo(() => {
-    const filtered = selectedType === 'ALL' 
-      ? standards 
-      : standards.filter(s => s.fldStandardType === selectedType);
+    const filtered =
+      selectedType === 'ALL'
+        ? standards
+        : standards.filter(
+            (s) =>
+              String(s.fldStandardType ?? '').trim().toLowerCase() === selectedType.trim().toLowerCase()
+          );
     const versions = new Set(filtered.map(s => s.fldStandardVersion).filter(Boolean));
     return ['ALL', ...Array.from(versions).sort().reverse()];
   }, [standards, selectedType]);
+
+  useLayoutEffect(() => {
+    const key = standardSelectionPersistKey;
+    if (!key) {
+      selectionWriterGateOpenRef.current = true;
+      return;
+    }
+
+    selectionWriterGateOpenRef.current = false;
+    const list = standardsRef.current;
+    if (!list.length) {
+      return;
+    }
+
+    const { selectedType: t, selectedVersion: v } = computeInitialStandardSelection(key, list);
+    setSelectedType(t);
+    setSelectedVersion(v);
+    selectionWriterGateOpenRef.current = true;
+  }, [standardSelectionPersistKey, standardsSelectionFingerprint]);
 
   useEffect(() => {
     if (standards.length === 0) return;
@@ -212,19 +349,10 @@ export function StandardsBrowser({
 
     let persistedSkipsTasDefault = false;
     let persistedSkips2012Default = false;
-    if (persistUiStateKey) {
-      const stored = readPersistedUiFromStorage(persistUiStateKey);
-      if (stored) {
-        const pt = stored.selectedType;
-        if (validPersistedType(pt, types)) persistedSkipsTasDefault = true;
-        const effectiveType = validPersistedType(pt, types) ? pt : undefined;
-        if (
-          effectiveType !== undefined &&
-          validPersistedVersion(effectiveType, stored.selectedVersion, standards)
-        ) {
-          persistedSkips2012Default = true;
-        }
-      }
+    if (standardSelectionPersistKey) {
+      const skips = selectionStorageSkipsTas2012(standardSelectionPersistKey, standards);
+      persistedSkipsTasDefault = skips.skipTas;
+      persistedSkips2012Default = skips.skip2012;
     }
 
     if (!persistedSkipsTasDefault && selectedType === 'ALL' && types.has('TAS')) {
@@ -253,7 +381,14 @@ export function StandardsBrowser({
       const secKey = sectionStorageKey(chapterName, sectionName, accordion);
       setExpandedSections((prev) => ({ ...prev, [secKey]: true }));
     }
-  }, [standards, enableAutoExpand502, accordion, persistUiStateKey]);
+  }, [standards, enableAutoExpand502, accordion, standardSelectionPersistKey]);
+
+  useEffect(() => {
+    if (!standardSelectionPersistKey) return;
+    if (!selectionWriterGateOpenRef.current) return;
+    if (!standardsRef.current.length) return;
+    writePersistedStandardSelection(standardSelectionPersistKey, selectedType, selectedVersion);
+  }, [standardSelectionPersistKey, selectedType, selectedVersion, standardsSelectionFingerprint]);
 
   const toggleChapter = (chapter: string) => {
     if (accordion) {
@@ -310,18 +445,6 @@ export function StandardsBrowser({
         setExpandedStandardItemId(
           stored.expandedStandardItemId === undefined ? null : stored.expandedStandardItemId
         );
-        if (standards.length > 0) {
-          const typeSet = new Set(standards.map((s) => s.fldStandardType).filter(Boolean));
-          if (validPersistedType(stored.selectedType, typeSet)) {
-            const t = stored.selectedType as string;
-            setSelectedType(t);
-            if (validPersistedVersion(t, stored.selectedVersion, standards)) {
-              setSelectedVersion(stored.selectedVersion as string);
-            } else {
-              setSelectedVersion('ALL');
-            }
-          }
-        }
       } else {
         hardResetBrowserUi();
       }
@@ -343,8 +466,6 @@ export function StandardsBrowser({
             expandedChapters,
             expandedSections,
             expandedStandardItemId,
-            selectedType,
-            selectedVersion,
           })
         );
       } catch {
@@ -352,17 +473,23 @@ export function StandardsBrowser({
       }
     }, 300);
     return () => window.clearTimeout(t);
-  }, [persistUiStateKey, searchQuery, expandedChapters, expandedSections, expandedStandardItemId, selectedType, selectedVersion]);
+  }, [persistUiStateKey, searchQuery, expandedChapters, expandedSections, expandedStandardItemId]);
 
   const filteredStandards = useMemo(() => {
     let base = standards.filter(s => !s.fldIsArchived);
     
     if (selectedType !== 'ALL') {
-      base = base.filter(s => s.fldStandardType === selectedType);
+      const wantT = selectedType.trim().toLowerCase();
+      base = base.filter(
+        (s) => String(s.fldStandardType ?? '').trim().toLowerCase() === wantT
+      );
     }
     
     if (selectedVersion !== 'ALL') {
-      base = base.filter(s => s.fldStandardVersion === selectedVersion);
+      const wantV = selectedVersion.trim().toLowerCase();
+      base = base.filter(
+        (s) => String(s.fldStandardVersion ?? '').trim().toLowerCase() === wantV
+      );
     }
 
     if (!searchQuery) return base;
@@ -504,8 +631,12 @@ export function StandardsBrowser({
             <select 
               value={selectedType}
               onChange={(e) => {
-                setSelectedType(e.target.value);
+                const nextType = e.target.value;
+                setSelectedType(nextType);
                 setSelectedVersion('ALL');
+                if (standardSelectionPersistKey) {
+                  writePersistedStandardSelection(standardSelectionPersistKey, nextType, 'ALL');
+                }
               }}
               className="w-full px-2 py-1.5 text-[11px] border border-zinc-200 rounded-lg bg-white focus:ring-2 focus:ring-black/5 outline-none"
             >
@@ -516,7 +647,13 @@ export function StandardsBrowser({
             <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Version</label>
             <select 
               value={selectedVersion}
-              onChange={(e) => setSelectedVersion(e.target.value)}
+              onChange={(e) => {
+                const nextVersion = e.target.value;
+                setSelectedVersion(nextVersion);
+                if (standardSelectionPersistKey) {
+                  writePersistedStandardSelection(standardSelectionPersistKey, selectedType, nextVersion);
+                }
+              }}
               className="w-full px-2 py-1.5 text-[11px] border border-zinc-200 rounded-lg bg-white focus:ring-2 focus:ring-black/5 outline-none"
             >
               {standardVersions.map(v => <option key={v} value={v}>{v}</option>)}

@@ -2697,6 +2697,7 @@ export default function ProjectDataEntry({
                   enableAutoExpand502={false}
                   uiResetKey={dataEntryStandardsUiKey}
                   persistUiStateKey={dataEntryStandardsUiKey}
+                  standardSelectionPersistKey="project-data-entry-standards"
                 />
               </div>
             </div>
