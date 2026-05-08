@@ -923,7 +923,7 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
         {/* Finding Row */}
         <div className="flex border-b border-zinc-300">
           <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Finding</div>
-          <div className="flex-1 px-2 py-2 text-[11px] leading-snug border-r border-zinc-300">
+          <div className="flex-1 px-2 py-2 text-[11px] leading-snug border-r border-zinc-300 whitespace-pre-line">
             {record.fldFindLong}
             
             {/* Glossary Reference Images */}
@@ -952,7 +952,7 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
         {/* Recommendation Row */}
         <div className="flex">
           <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Recommendation</div>
-          <div className="flex-1 px-2 py-2 text-[11px] leading-snug">{record.fldRecLong}</div>
+          <div className="flex-1 px-2 py-2 text-[11px] leading-snug whitespace-pre-line">{record.fldRecLong}</div>
         </div>
 
         {/* Spacer to push Reference to bottom */}
