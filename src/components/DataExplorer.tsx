@@ -1,17 +1,11 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Search, 
-  Filter, 
   Download, 
   RotateCcw, 
   ChevronRight, 
   ChevronDown, 
   Image as ImageIcon,
-  FileText,
-  Building2,
-  Briefcase,
-  Users,
-  Layout,
   Table,
   Check,
   Copy,
@@ -138,9 +132,7 @@ export function DataExplorer({
   }, []); // Run once on mount to establish local source
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterClient, setFilterClient] = useState('');
-  const [filterFacility, setFilterFacility] = useState('');
-  const [filterProject, setFilterProject] = useState('');
+  const [filterLocation, setFilterLocation] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterItem, setFilterItem] = useState('');
   const [filterFinding, setFilterFinding] = useState('');
@@ -196,6 +188,25 @@ export function DataExplorer({
       findId: ''
     };
   }, [getGlossaryContext]);
+
+  /** Locations for the active workspace only (dropdown options). */
+  const explorerLocationOptions = useMemo(() => {
+    const pid = String(selections?.projectId || '').trim();
+    const fid = String(selections?.facilityId || '').trim();
+    if (!pid || !fid) return [];
+    return sortEntities(
+      (locations || []).filter((l: any) => {
+        if (!l?.fldLocID) return false;
+        if (l.fldIsDeleted) return false;
+        const lp = String(l.fldProjectID || '').trim();
+        const lfac = String(l.fldFacID || '').trim();
+        if (pid && lp && lp !== pid) return false;
+        if (fid && lfac && lfac !== fid) return false;
+        return true;
+      }),
+      'fldLocName'
+    );
+  }, [locations, selections?.projectId, selections?.facilityId]);
 
   const toggleSelection = (id: string) => {
     setSelectedIds(prev => {
@@ -297,7 +308,6 @@ export function DataExplorer({
       const inActiveScope = recordProjectId === activeProjectId && recordFacilityId === activeFacilityId;
       if (!inActiveScope) return false;
 
-      const project = projects.find((p: any) => p.fldProjID === d.fldPDataProject);
       const ctx = getRecordContext(d);
       const catId = ctx.catId;
       const itemId = ctx.itemId;
@@ -310,14 +320,13 @@ export function DataExplorer({
         (d.fldRecShort || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (d.fldRecLong || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchesClient = !filterClient || project?.fldClient === filterClient;
-      const matchesFacility = !filterFacility || d.fldFacility === filterFacility;
-      const matchesProject = !filterProject || d.fldPDataProject === filterProject;
+      const matchesLocation =
+        !filterLocation || String(d.fldLocation || '').trim() === filterLocation;
       const matchesCategory = !filterCategory || catId === filterCategory;
       const matchesItem = !filterItem || itemId === filterItem;
       const matchesFinding = !filterFinding || findId === filterFinding;
 
-      return matchesSearch && matchesClient && matchesFacility && matchesProject && matchesCategory && matchesItem && matchesFinding;
+      return matchesSearch && matchesLocation && matchesCategory && matchesItem && matchesFinding;
     });
 
     return [...filtered].sort((a: any, b: any) => {
@@ -351,7 +360,7 @@ export function DataExplorer({
         return locA.localeCompare(locB);
       }
     });
-  }, [projectData, searchTerm, filterClient, filterFacility, filterProject, filterCategory, filterItem, filterFinding, sortMode, projects, facilities, clients, categories, items, findings, locations, glossary, selections.projectId, selections.facilityId, getRecordContext]);
+  }, [projectData, searchTerm, filterLocation, filterCategory, filterItem, filterFinding, sortMode, projects, facilities, clients, categories, items, findings, locations, glossary, selections.projectId, selections.facilityId, getRecordContext]);
 
   const groupedData = useMemo(() => {
     const groups: any = {};
@@ -466,7 +475,7 @@ export function DataExplorer({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Data Explorer</h1>
-          <p className="text-sm text-zinc-500">Search and filter across your entire inspection portfolio</p>
+          <p className="text-sm text-zinc-500">Search and filter records for the active workspace</p>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 mr-2">
@@ -500,9 +509,7 @@ export function DataExplorer({
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={() => {
               setSearchTerm('');
-              setFilterClient('');
-              setFilterFacility('');
-              setFilterProject('');
+              setFilterLocation('');
               setFilterCategory('');
               setFilterItem('');
               setFilterFinding('');
@@ -518,7 +525,7 @@ export function DataExplorer({
       </div>
 
       <Card className="p-4 bg-zinc-50/50 border-dashed">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
             <input 
@@ -529,34 +536,6 @@ export function DataExplorer({
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <select 
-            className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
-            value={filterClient}
-            onChange={(e) => setFilterClient(e.target.value)}
-          >
-            <option value="">All Clients</option>
-            {(clients || []).filter((c: any) => c.fldClientID).map((c: any) => <option key={c.fldClientID} value={c.fldClientID}>{c.fldClientName}</option>)}
-          </select>
-          <select 
-            className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
-            value={filterFacility}
-            onChange={(e) => setFilterFacility(e.target.value)}
-          >
-            <option value="">All Facilities</option>
-            {(facilities || []).filter((f: any) => f.fldFacID && (!filterClient || f.fldClient === filterClient)).map((f: any, idx: number) => (
-              <option key={`${f.fldFacID}-${idx}`} value={f.fldFacID}>{f.fldFacName}</option>
-            ))}
-          </select>
-          <select 
-            className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
-            value={filterProject}
-            onChange={(e) => setFilterProject(e.target.value)}
-          >
-            <option value="">All Projects</option>
-            {(projects || []).filter((p: any) => p.fldProjID && (!filterClient || p.fldClient === filterClient)).map((p: any, idx: number) => (
-              <option key={`${p.fldProjID}-${idx}`} value={p.fldProjID}>{p.fldProjName}</option>
-            ))}
-          </select>
           <select 
             className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
             value={filterCategory}
@@ -592,7 +571,20 @@ export function DataExplorer({
               <option key={`${f.fldFindID}-${idx}`} value={f.fldFindID}>{f.fldFindShort}</option>
             ))}
           </select>
+          <select 
+            className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+            value={filterLocation}
+            onChange={(e) => setFilterLocation(e.target.value)}
+          >
+            <option value="">All locations</option>
+            {explorerLocationOptions.map((l: any) => (
+              <option key={l.fldLocID} value={l.fldLocID}>{l.fldLocName}</option>
+            ))}
+          </select>
         </div>
+        <p className="text-xs text-zinc-500 mt-3">
+          Showing records for the active project and facility.
+        </p>
       </Card>
 
       <div className="flex-1 overflow-y-auto min-h-0 pr-2 space-y-4">
