@@ -115,6 +115,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           masterRecommendations={masterRecommendations}
           locations={locations}
           glossary={glossary}
+          standards={standards}
           selections={selections}
           onEditRecord={(record) => {
             const targetId = record?.fldPDataID || '';

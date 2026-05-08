@@ -28,6 +28,81 @@ import { useAuth } from '../hooks/useAuth';
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'sonner';
 
+function explorerNormId(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
+
+/** Record-level citation ids only; missing/null/non-array → []. */
+function explorerSafeStandardsIds(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (value && typeof value === 'object') return Object.values(value).filter(Boolean).map(String);
+  return [];
+}
+
+function explorerCitationChipText(standard: any | undefined, idFallback: string): string {
+  if (standard) {
+    const t = String(standard.fldStandardType ?? '').trim();
+    const n = String(standard.citation_num ?? '').trim();
+    if (t !== '' && n !== '') return `${t} ${n}`;
+    if (n !== '') return n;
+    const sid = String(standard.id ?? '').trim();
+    if (sid !== '') return sid;
+  }
+  const fb = String(idFallback ?? '').trim();
+  return fb || '—';
+}
+
+function explorerCitationTitle(standard: any | undefined, chipText: string): string {
+  if (!standard) return chipText;
+  const parts: string[] = [];
+  const ch = String(standard.chapter_name ?? '').trim();
+  const sn = String(standard.section_num ?? '').trim();
+  const sname = String(standard.section_name ?? '').trim();
+  const cname = String(standard.citation_name ?? '').trim();
+  if (ch) parts.push(ch);
+  if (sn || sname) parts.push([sn, sname].filter(Boolean).join(' ').trim());
+  if (cname) parts.push(cname);
+  const extra = parts.filter(Boolean).join(' · ');
+  if (extra) return `${chipText} — ${extra}`;
+  return chipText;
+}
+
+/** Display order: order → citation_num → original index. Does not mutate stored ids. */
+function explorerSortedCitationDisplay(
+  fldStandards: unknown,
+  standardsList: any[]
+): { id: string; chip: string; title: string }[] {
+  const ids = explorerSafeStandardsIds(fldStandards);
+  const list = Array.isArray(standardsList) ? standardsList : [];
+  const withIndex = ids.map((id, index) => ({
+    id,
+    index,
+    standard: list.find((st: any) => explorerNormId(st?.id) === explorerNormId(id))
+  }));
+  return withIndex
+    .sort((a, b) => {
+      const aOrder = Number(a.standard?.order);
+      const bOrder = Number(b.standard?.order);
+      const aHas = Number.isFinite(aOrder);
+      const bHas = Number.isFinite(bOrder);
+      if (aHas && bHas && aOrder !== bOrder) return aOrder - bOrder;
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      const aC = String(a.standard?.citation_num || '').trim();
+      const bC = String(b.standard?.citation_num || '').trim();
+      if (aC || bC) {
+        const cmp = aC.localeCompare(bC, undefined, { numeric: true, sensitivity: 'base' });
+        if (cmp !== 0) return cmp;
+      }
+      return a.index - b.index;
+    })
+    .map(({ id, standard }) => {
+      const chip = explorerCitationChipText(standard, id);
+      return { id, chip, title: explorerCitationTitle(standard, chip) };
+    });
+}
+
 export function DataExplorer({ 
   projectData, 
   projects, 
@@ -40,6 +115,7 @@ export function DataExplorer({
   masterRecommendations,
   locations,
   glossary = [],
+  standards = [],
   selections,
   onEditRecord,
   onDeleteRecord
@@ -612,6 +688,8 @@ export function DataExplorer({
                                   return match;
                                 });
 
+                                const citationDisplayRows = explorerSortedCitationDisplay(d.fldStandards, standards);
+
                                 return (
                                   <Card key={d.fldPDataID} className={cn(
                                     "overflow-hidden group transition-all",
@@ -684,6 +762,25 @@ export function DataExplorer({
                                               <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Recommendation</label>
                                               <p className="text-sm font-medium text-zinc-900">{d.fldRecShort}</p>
                                               <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{d.fldRecLong}</p>
+                                              {citationDisplayRows.length > 0 ? (
+                                                <div className="mt-3 pt-2 border-t border-zinc-200/70">
+                                                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1.5">
+                                                    Citations
+                                                  </span>
+                                                  <div className="flex flex-wrap gap-1.5" role="list" aria-label="Record citations">
+                                                    {citationDisplayRows.map(({ id, chip, title }) => (
+                                                      <span
+                                                        key={`${d.fldPDataID}-cit-${id}`}
+                                                        title={title}
+                                                        role="listitem"
+                                                        className="max-w-full truncate rounded-md border border-zinc-200/90 bg-white/80 px-2 py-0.5 text-[10px] font-medium text-zinc-500"
+                                                      >
+                                                        {chip}
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              ) : null}
                                             </div>
                                           </div>
                                           <div className="space-y-4">
