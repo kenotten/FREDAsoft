@@ -245,6 +245,7 @@ export default function ProjectDataEntry({
   /** After resuming a localStorage draft, skip one activeRecord hydration so form fields are not reset to server state. */
   const skipHydrationAfterDraftRef = useRef(false);
   const isFormDirtyRef = useRef(false);
+  const isSavingRef = useRef(false);
   const buildDraftPayloadRef = useRef<() => Record<string, unknown>>(() => ({}));
   /** Avoid re-opening the same draft recovery modal when projectData refreshes without context change. */
   const draftRecoveryOfferedSigRef = useRef('');
@@ -525,6 +526,7 @@ export default function ProjectDataEntry({
   useEffect(() => {
     return () => {
       if (!isFormDirtyRef.current) return;
+      if (isSavingRef.current) return;
       try {
         const payload = buildDraftPayloadRef.current();
         if (!isDraftPayloadPersistable(payload)) return;
@@ -844,6 +846,7 @@ export default function ProjectDataEntry({
     const proj = String(selections?.projectId || '').trim();
     const fac = String(selections?.facilityId || '').trim();
     if (!proj || !fac) return;
+    if (isSavingRef.current) return;
 
     const draft = localStorage.getItem('fredasoft_draft');
     if (!draft) {
@@ -904,6 +907,7 @@ export default function ProjectDataEntry({
     const t = setTimeout(() => {
       try {
         if (!isFormDirtyRef.current) return;
+        if (isSavingRef.current) return;
         const payload = buildDraftPayload();
         if (!isDraftPayloadPersistable(payload)) return;
         localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
@@ -920,6 +924,7 @@ export default function ProjectDataEntry({
     const interval = setInterval(() => {
       try {
         if (!isFormDirtyRef.current) return;
+        if (isSavingRef.current) return;
         const payload = buildDraftPayload();
         if (!isDraftPayloadPersistable(payload)) return;
         localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
@@ -1170,6 +1175,7 @@ export default function ProjectDataEntry({
           ''
         );
     
+    isSavingRef.current = true;
     try {
       const basePayload: any = {
         fldPDataID: finalizedId,
@@ -1203,73 +1209,78 @@ export default function ProjectDataEntry({
 
       await onSave(basePayload);
     } catch {
+      isSavingRef.current = false;
       return;
     }
 
     try {
-      localStorage.removeItem('fredasoft_draft');
-    } catch {
-      /* ignore */
-    }
-    setShowRecoveryModal(false);
-    setSavedDraft(null);
-    isFormDirtyRef.current = false;
-    const projSave = String(selections?.projectId || '').trim();
-    const facSave = String(selections?.facilityId || '').trim();
-    if (projSave && facSave) {
-      draftRecoveryOfferedSigRef.current = `${ctxNorm(selections?.clientId)}|${ctxNorm(projSave)}|${ctxNorm(facSave)}|${ctxNorm(selections?.editingRecordId)}`;
-    } else {
-      draftRecoveryOfferedSigRef.current = '';
-    }
+      try {
+        localStorage.removeItem('fredasoft_draft');
+      } catch {
+        /* ignore */
+      }
+      setShowRecoveryModal(false);
+      setSavedDraft(null);
+      isFormDirtyRef.current = false;
+      const projSave = String(selections?.projectId || '').trim();
+      const facSave = String(selections?.facilityId || '').trim();
+      if (projSave && facSave) {
+        draftRecoveryOfferedSigRef.current = `${ctxNorm(selections?.clientId)}|${ctxNorm(projSave)}|${ctxNorm(facSave)}|${ctxNorm(selections?.editingRecordId)}`;
+      } else {
+        draftRecoveryOfferedSigRef.current = '';
+      }
 
-    if (wasExisting) {
+      if (wasExisting) {
+        setIsDirty(false);
+        initialSelectionRef.current = {
+          categoryId: selections.categoryId || '',
+          itemId: selections.itemId || '',
+          findId: selections.findId || '',
+          recId: selections.recId || '',
+          glosId: selections.glosId || ''
+        };
+        onSelectionChange({
+          ...selections,
+          locationId: fldLocation,
+          editingRecordId: finalizedId,
+          isDirty: false
+        });
+        return;
+      }
+
+      setFldFindShort('');
+      setFldFindLong('');
+      setFldRecShort('');
+      setFldRecLong('');
+      setFldQTY(0);
+      setFldMeasurement('');
+      setFldMeasurementType('');
+      setFldMeasurementUnit('');
+      setFldUnitType('Decimal');
+      setFldUnitCost(0);
+      setFldTotalCost(0);
+      setFldImages([]);
+      setFldStandards([]);
+
       setIsDirty(false);
-      initialSelectionRef.current = {
-        categoryId: selections.categoryId || '',
-        itemId: selections.itemId || '',
-        findId: selections.findId || '',
-        recId: selections.recId || '',
-        glosId: selections.glosId || ''
-      };
       onSelectionChange({
         ...selections,
+        categoryId: selections.categoryId,
         locationId: fldLocation,
-        editingRecordId: finalizedId,
+        itemId: '',
+        findId: '',
+        recId: '',
+        glosId: '',
+        standards: [],
+        images: [],
+        editingRecordId: null,
         isDirty: false
       });
-      return;
+      setCustomMasterRecId('');
+      setCustomMasterFindId('');
+    } finally {
+      isSavingRef.current = false;
     }
-
-    setFldFindShort('');
-    setFldFindLong('');
-    setFldRecShort('');
-    setFldRecLong('');
-    setFldQTY(0);
-    setFldMeasurement('');
-    setFldMeasurementType('');
-    setFldMeasurementUnit('');
-    setFldUnitType('Decimal');
-    setFldUnitCost(0);
-    setFldTotalCost(0);
-    setFldImages([]);
-    setFldStandards([]);
-
-    setIsDirty(false);
-    onSelectionChange({
-      ...selections,
-      categoryId: selections.categoryId,
-      locationId: fldLocation,
-      itemId: '',
-      findId: '',
-      recId: '',
-      glosId: '',
-      standards: [],
-      images: [],
-      editingRecordId: null,
-      isDirty: false
-    });
-    setCustomMasterRecId('');
-    setCustomMasterFindId('');
   };
 
   const confirmAction = (title: string, message: string, action: () => void) => {
