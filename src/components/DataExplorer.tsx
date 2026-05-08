@@ -5,9 +5,7 @@ import {
   RotateCcw, 
   ChevronRight, 
   ChevronDown, 
-  Image as ImageIcon,
   Table,
-  Check,
   Copy,
   Link,
   X as CloseIcon,
@@ -16,7 +14,7 @@ import {
 import { Button, Input, Select, Card } from './ui/core';
 import { cn, sortEntities, compareEntities } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { doc, writeBatch, serverTimestamp, collection, getDocs } from 'firebase/firestore';
+import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 import { v4 as uuidv4 } from 'uuid';
@@ -114,23 +112,6 @@ export function DataExplorer({
   onEditRecord,
   onDeleteRecord
 }: any) {
-  const [localMasterRecs, setLocalMasterRecs] = useState<any[]>([]);
-  
-  useEffect(() => {
-    const fetchMasterRecs = async () => {
-      console.log('[EXPLORER] GABRIEL DIRECTIVE: Forcing local fetch from Firestore...');
-      try {
-        const querySnapshot = await getDocs(collection(db, 'recommendations'));
-        const recs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.log(`[EXPLORER] Local fetch complete. Found ${recs.length} records.`);
-        setLocalMasterRecs(recs);
-      } catch (error) {
-        console.error('[EXPLORER] Local fetch FAILED:', error);
-      }
-    };
-    fetchMasterRecs();
-  }, []); // Run once on mount to establish local source
-
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLocation, setFilterLocation] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
@@ -399,9 +380,6 @@ export function DataExplorer({
     const newExpanded: any = {};
     Object.keys(groupedData).forEach(catId => {
       newExpanded[catId] = true;
-      Object.keys(groupedData[catId].locations).forEach(locId => {
-        newExpanded[`${catId}-${locId}`] = true;
-      });
     });
     setExpandedSections(newExpanded);
   };
@@ -619,65 +597,29 @@ export function DataExplorer({
                 </button>
 
                 {isCatExpanded && (
-                  <div className="pl-4 space-y-2 border-l-2 border-zinc-100 ml-3">
-                    {Object.keys(catGroup.locations).sort((a, b) => {
-                      const locA = (locations.find(l => l.fldLocID === a)?.fldLocName || a).toLowerCase();
-                      const locB = (locations.find(l => l.fldLocID === b)?.fldLocName || b).toLowerCase();
-                      return locA.localeCompare(locB);
-                    }).map(locId => {
-                      const loc = locations.find(l => l.fldLocID === locId);
-                      const locName = loc?.fldLocName || locId;
-                      const sectionKey = `${catId}-${locId}`;
-                      const isLocExpanded = expandedSections[sectionKey];
-                      const locGroup = catGroup.locations[locId];
-
-                      return (
-                        <div key={locId} className="space-y-2">
-                          <button 
-                            onClick={() => toggleSection(sectionKey)}
-                            className="w-full flex items-center justify-between p-2 hover:bg-zinc-50 rounded-lg transition-colors group/loc"
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className="text-zinc-400 group-hover/loc:text-zinc-600">
-                                {isLocExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                              </div>
-                              <span className="text-xs font-bold text-blue-600 uppercase tracking-widest">{locName}</span>
-                              <span className="text-[10px] font-bold text-zinc-400">[{locGroup.count}]</span>
-                            </div>
-                          </button>
-
-                          {isLocExpanded && (
-                            <div className="grid grid-cols-1 gap-3 pl-4">
-                              {locGroup.records.map((d: any) => {
+                  <div className="pl-4 space-y-3 border-l-2 border-zinc-100 ml-3">
+                    {Object.keys(catGroup.locations)
+                      .sort((a, b) => {
+                        const locA = (locations.find(l => l.fldLocID === a)?.fldLocName || a).toLowerCase();
+                        const locB = (locations.find(l => l.fldLocID === b)?.fldLocName || b).toLowerCase();
+                        return locA.localeCompare(locB);
+                      })
+                      .flatMap((locId) => {
+                        const locGroup = catGroup.locations[locId];
+                        return locGroup.records.map((d: any) => {
                                 const isExpanded = expandedId === d.fldPDataID;
                                 const ctx = getRecordContext(d);
-                                const glos = ctx.glos;
                                 const findId = ctx.findId || 'unspecified-finding';
                                 const itemId = ctx.itemId || 'unspecified-item';
-                                
-                                const project = projects.find((p: any) => p.fldProjID === d.fldPDataProject);
-                                const facility = facilities.find((f: any) => f.fldFacID === d.fldFacility) || 
-                                                 facilities.find((f: any) => f.fldFacID === project?.fldFacID);
-                                const client = clients.find((c: any) => c.fldClientID === project?.fldClient) ||
-                                               clients.find((c: any) => c.fldClientID === facility?.fldClient);
-                                const location = locations.find((l: any) => l.fldLocID === d.fldLocation);
-                                
-                                const finding = (findings || []).find((f: any) => f.fldFindID === findId);
-                                const cardTitle = d.fldFindShort || finding?.fldFindShort || 'Untitled Finding';
-                                const locationName = location?.fldLocName || 'No Location';
-                                const clientName = client?.fldClientName || 'Unknown Client';
-                                const facilityName = facility?.fldFacName || 'Unknown Facility';
-                                const projectName = project?.fldProjName || 'Unknown Project';
 
+                                const location = locations.find((l: any) => l.fldLocID === d.fldLocation);
                                 const item = (items || []).find((i: any) => i.fldItemID === itemId);
-                                const recommendation = (localMasterRecs || []).find((r: any) => {
-                                  const target = ctx.source === 'custom' ? (d.fldPDataMasterRecID || '') : (glos?.fldRec || '');
-                                  const match = (r.id || r.fldRecID || "").toLowerCase().trim() === (target || "").toLowerCase().trim();
-                                  if (isExpanded) {
-                                    console.log('Comparing:', target, 'to:', (r.id || r.fldRecID), 'Match:', match);
-                                  }
-                                  return match;
-                                });
+
+                                const finding = (findings || []).find((f: any) => f.fldFindID === findId);
+                                const findingShortDisplay =
+                                  d.fldFindShort || finding?.fldFindShort || 'Untitled Finding';
+                                const locationName = location?.fldLocName || 'No Location';
+                                const itemDisplay = item?.fldItemName || 'General';
 
                                 const citationDisplayRows = explorerSortedCitationDisplay(d.fldStandards, standards);
 
@@ -686,58 +628,84 @@ export function DataExplorer({
                                     "overflow-hidden group transition-all",
                                     selectedIds.has(d.fldPDataID) ? "ring-2 ring-blue-500 bg-blue-50/30" : ""
                                   )}>
-                                    <div 
-                                      className="p-4 flex items-center justify-between cursor-pointer hover:bg-zinc-50 transition-colors"
-                                      onClick={() => setExpandedId(isExpanded ? null : d.fldPDataID)}
-                                    >
-                                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                                        <div 
-                                          className="p-1 -ml-1 hover:bg-zinc-200 rounded transition-colors"
+                                    <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-4 border-b border-zinc-100 bg-white py-2 pl-4 pr-3">
+                                      <button
+                                        type="button"
+                                        className="flex min-w-0 flex-1 items-center justify-start gap-2 rounded-md py-0.5 text-left hover:bg-zinc-50/90"
+                                        onClick={() => setExpandedId(isExpanded ? null : d.fldPDataID)}
+                                        aria-expanded={isExpanded}
+                                        aria-label="Toggle record details"
+                                      >
+                                        <span
+                                          className="truncate text-xs font-bold uppercase tracking-widest text-blue-600 min-w-0 max-w-[11rem]"
+                                          title={locationName}
+                                        >
+                                          {locationName}
+                                        </span>
+                                        <span className="shrink-0 text-zinc-300 select-none" aria-hidden>
+                                          |
+                                        </span>
+                                        <span
+                                          className="truncate text-xs text-zinc-600 min-w-0 max-w-[11rem]"
+                                          title={itemDisplay}
+                                        >
+                                          {itemDisplay}
+                                        </span>
+                                        <span className="shrink-0 text-zinc-300 select-none" aria-hidden>
+                                          |
+                                        </span>
+                                        <span
+                                          className="truncate text-xs font-semibold text-zinc-900 min-w-0 max-w-[14rem]"
+                                          title={findingShortDisplay}
+                                        >
+                                          {findingShortDisplay}
+                                        </span>
+                                      </button>
+
+                                      <div className="flex shrink-0 items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          className="h-4 w-4 shrink-0 rounded border-zinc-300 text-blue-600 focus:ring-2 focus:ring-blue-500/30"
+                                          checked={selectedIds.has(d.fldPDataID)}
+                                          onChange={() => toggleSelection(d.fldPDataID)}
+                                          aria-label={`Select record for batch clone: ${findingShortDisplay}`}
+                                        />
+                                        <Button
+                                          variant="secondary"
+                                          size="sm"
+                                          type="button"
+                                          className="h-8 px-2.5 text-[11px] font-semibold whitespace-nowrap"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            toggleSelection(d.fldPDataID);
+                                            onEditRecord(d);
                                           }}
                                         >
-                                          <div className={cn(
-                                            "w-5 h-5 rounded border-2 flex items-center justify-center transition-all",
-                                            selectedIds.has(d.fldPDataID) 
-                                              ? "bg-blue-600 border-blue-600 text-white" 
-                                              : "border-zinc-300 bg-white"
-                                          )}>
-                                            {selectedIds.has(d.fldPDataID) && <Check size={12} strokeWidth={3} />}
-                                          </div>
-                                        </div>
-                                        <div className={cn(
-                                          "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
-                                          isExpanded ? "bg-black text-white" : "bg-zinc-100 text-zinc-500 group-hover:bg-zinc-200"
-                                        )}>
-                                          {d.fldImages?.[0] ? (
-                                            <img src={d.fldImages[0]} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
-                                          ) : (
-                                            <ImageIcon size={20} />
-                                          )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2">
-                                            <h3 className="font-bold text-zinc-900 truncate">{cardTitle}</h3>
-                                            <span className="text-[10px] font-bold px-2 py-0.5 bg-zinc-100 text-zinc-500 rounded-full uppercase tracking-widest shrink-0">
-                                              {item?.fldItemName || 'General'}
-                                            </span>
-                                          </div>
-                                          <div className="flex items-center gap-3 mt-1 overflow-hidden">
-                                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest truncate">
-                                              {clientName} / {facilityName} / {projectName}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-4 ml-4">
-                                        <div className="text-right hidden sm:block">
-                                          <div className="text-sm font-bold text-zinc-900">
-                                            QTY: {d.fldQTY}
-                                          </div>
-                                        </div>
-                                        {isExpanded ? <ChevronDown size={20} className="text-zinc-400" /> : <ChevronRight size={20} className="text-zinc-400" />}
+                                          Edit Record
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          type="button"
+                                          className="h-8 px-2.5 text-[11px] font-semibold whitespace-nowrap text-red-600 hover:bg-red-50"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onDeleteRecord(d.fldPDataID);
+                                          }}
+                                        >
+                                          Delete
+                                        </Button>
+                                        <button
+                                          type="button"
+                                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedId(isExpanded ? null : d.fldPDataID);
+                                          }}
+                                          aria-expanded={isExpanded}
+                                          aria-label={isExpanded ? 'Collapse record' : 'Expand record'}
+                                        >
+                                          {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                                        </button>
                                       </div>
                                     </div>
 
@@ -793,24 +761,12 @@ export function DataExplorer({
                                             )}
                                           </div>
                                         </div>
-                                        <div className="flex justify-end gap-2 pt-4 border-t border-zinc-200">
-                                          <Button variant="secondary" size="sm" onClick={() => onEditRecord(d)}>
-                                            Edit Record
-                                          </Button>
-                                          <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50" onClick={() => onDeleteRecord(d.fldPDataID)}>
-                                            Delete
-                                          </Button>
-                                        </div>
                                       </div>
                                     )}
                                   </Card>
                                 );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                        });
+                      })}
                   </div>
                 )}
               </div>
