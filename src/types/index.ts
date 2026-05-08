@@ -97,6 +97,11 @@ export interface Finding {
   /** Library default citation IDs; may be absent on older Firestore rows */
   fldStandards?: string[];
   fldSuggestedRecs: string[]; // Array of MasterRecommendation IDs
+  /** Glossary Set / standard-version context (e.g. UFAS vs TAS); optional on legacy rows */
+  fldGlossarySetId?: string;
+  fldGlossarySetName?: string;
+  fldStandardType?: string;
+  fldStandardVersion?: string;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
 }
@@ -122,6 +127,11 @@ export interface MasterRecommendation {
   fldCitation?: string;
   /** Library default citation IDs; may be absent on older Firestore rows */
   fldStandards?: string[];
+  /** Glossary Set / standard-version context; optional on legacy rows */
+  fldGlossarySetId?: string;
+  fldGlossarySetName?: string;
+  fldStandardType?: string;
+  fldStandardVersion?: string;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
 }

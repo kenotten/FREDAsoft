@@ -24,12 +24,20 @@ import {
 } from 'lucide-react';
 import { Button, Card, Select } from './ui/core';
 import { cn, sortEntities, MEASUREMENT_UNITS } from '../lib/utils';
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc, writeBatch, deleteField } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'sonner';
 import { Category, Item, Finding, MasterRecommendation, MasterStandard } from '../types';
 import { UnsavedChangesModal } from './modals/UnsavedChangesModal';
 import { StandardsBrowser } from './StandardsBrowser';
+import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
+
+const LIBRARY_GLOSSARY_CTX_FIELDS = [
+  'fldGlossarySetId',
+  'fldGlossarySetName',
+  'fldStandardType',
+  'fldStandardVersion'
+] as const;
 
 function safeLibraryStandardsArray(value: unknown): string[] {
   if (Array.isArray(value)) return value as string[];
@@ -121,6 +129,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   const [selectedItemId, setSelectedItemId] = useState<string>('');
   const [expandedCatId, setExpandedCatId] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
+  /** Findings / recommendations only: filter by Glossary Set (default All). */
+  const [glossarySetFilter, setGlossarySetFilter] = useState<string>('ALL');
   
   // Local working state for edits
   // Map of id -> partial document update
@@ -207,6 +217,30 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     setIsDirty(true);
   };
 
+  const applyLibraryGlossarySetToRecord = (recordId: string, setKey: string) => {
+    const def = String(setKey || '').trim() ? glossarySetById(setKey) : undefined;
+    setEdits((prev) => ({
+      ...prev,
+      [recordId]: {
+        ...(prev[recordId] || {}),
+        ...(def
+          ? {
+              fldGlossarySetId: def.id,
+              fldGlossarySetName: def.name,
+              fldStandardType: def.standardType,
+              fldStandardVersion: def.standardVersion
+            }
+          : {
+              fldGlossarySetId: '',
+              fldGlossarySetName: '',
+              fldStandardType: '',
+              fldStandardVersion: ''
+            })
+      }
+    }));
+    setIsDirty(true);
+  };
+
   // Helper to get current value (from edits or original)
   const getValue = (entity: any, field: string) => {
     const id = entity.fldCategoryID || entity.fldItemID || entity.fldFindID || entity.fldRecID || entity.id;
@@ -214,6 +248,14 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       return edits[id][field];
     }
     return entity[field];
+  };
+
+  const libraryRowGlossaryBadgeLabel = (record: any): string => {
+    const idRaw = String(getValue(record, 'fldGlossarySetId') || '').trim();
+    if (!idRaw) return 'Unassigned';
+    const def = glossarySetById(idRaw);
+    const name = String(getValue(record, 'fldGlossarySetName') || '').trim();
+    return (name || def?.name || idRaw).trim() || 'Unassigned';
   };
 
   // Move item to a new position and renormalize (Task 118 behavior)
@@ -339,9 +381,31 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       });
     }
 
+    if (
+      (activeTab === 'findings' || activeTab === 'recommendations') &&
+      glossarySetFilter !== 'ALL'
+    ) {
+      base = base.filter((item) => {
+        const gid = String(getValue(item, 'fldGlossarySetId') || '').trim();
+        if (glossarySetFilter === 'UNASSIGNED') return !gid;
+        return gid.toLowerCase() === glossarySetFilter.toLowerCase();
+      });
+    }
+
     // Sort by order then name
     return base.sort((a, b) => a.order - b.order || (a.displayName || '').localeCompare(b.displayName || ''));
-  }, [activeTab, categories, items, findings, recommendations, selectedCatId, selectedItemId, edits, searchTerm]);
+  }, [
+    activeTab,
+    categories,
+    items,
+    findings,
+    recommendations,
+    selectedCatId,
+    selectedItemId,
+    edits,
+    searchTerm,
+    glossarySetFilter
+  ]);
 
   // Derived navigation lists that respect local edits
   const navigationCategories = useMemo(() => {
@@ -608,6 +672,35 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               )}
             />
             {isFindingOrRec && (
+              <div
+                className="mt-1 flex flex-wrap items-center gap-1.5 pointer-events-auto"
+                title={!String(getValue(record, 'fldGlossarySetId') || '').trim() ? 'Legacy: no Glossary Set tag' : undefined}
+              >
+                <span
+                  className={cn(
+                    'inline-flex max-w-[11rem] truncate rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-widest',
+                    String(getValue(record, 'fldGlossarySetId') || '').trim()
+                      ? 'border-indigo-200 bg-indigo-50 text-indigo-800'
+                      : 'border-zinc-200 bg-zinc-100 text-zinc-500'
+                  )}
+                >
+                  {libraryRowGlossaryBadgeLabel(record)}
+                </span>
+                <select
+                  value={String(getValue(record, 'fldGlossarySetId') || '').trim()}
+                  onChange={(e) => applyLibraryGlossarySetToRecord(record.id, e.target.value)}
+                  className="max-w-[10rem] rounded-md border border-zinc-200 bg-white py-0.5 pl-1.5 pr-6 text-[9px] font-bold text-zinc-700 outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Unassigned</option>
+                  {GLOSSARY_SET_DEFS.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {isFindingOrRec && (
               <div className="absolute right-0 -top-2 flex items-center gap-1 pointer-events-none">
                 <span className={cn("text-[7px] font-black uppercase tracking-widest px-1 py-0.25 rounded-full border", zone.color, zone.bgColor, zone.color.replace('text-', 'border-').replace('500', '200'))}>
                   {zone.label}
@@ -798,7 +891,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       const batch = writeBatch(db);
       let count = 0;
 
-      Object.entries(edits).forEach(([id, fields]) => {
+      Object.entries(edits).forEach(([id, rawFields]) => {
         let collectionName = '';
         if (categories.some(c => (c.fldCategoryID || c.id) === id)) collectionName = 'categories';
         else if (items.some(i => (i.fldItemID || i.id) === id)) collectionName = 'items';
@@ -807,7 +900,17 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
 
         if (collectionName) {
           const docRef = doc(db, collectionName, id);
-          batch.update(docRef, fields);
+          const fields: Record<string, unknown> = { ...(rawFields as Record<string, unknown>) };
+          if (collectionName === 'findings' || collectionName === 'recommendations') {
+            const touchedCtx = LIBRARY_GLOSSARY_CTX_FIELDS.some((k) => k in fields);
+            const gid = fields.fldGlossarySetId;
+            if (touchedCtx && (gid === '' || gid === null || gid === undefined)) {
+              for (const k of LIBRARY_GLOSSARY_CTX_FIELDS) {
+                fields[k] = deleteField();
+              }
+            }
+          }
+          batch.update(docRef, fields as any);
           count++;
         }
       });
@@ -885,6 +988,26 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               className="w-full bg-zinc-100 border-none rounded-lg py-1.5 pl-8 pr-4 text-xs focus:ring-2 focus:ring-black/5 outline-none placeholder:text-zinc-400"
             />
           </div>
+
+          {(activeTab === 'findings' || activeTab === 'recommendations') && (
+            <div className="relative w-[11.5rem] shrink-0">
+              <select
+                value={glossarySetFilter}
+                onChange={(e) => setGlossarySetFilter(e.target.value || 'ALL')}
+                className="w-full appearance-none bg-amber-50/80 border border-amber-100 rounded-lg py-1.5 pl-2 pr-7 text-[10px] font-black uppercase tracking-tight text-zinc-800 focus:ring-2 focus:ring-black/5 outline-none cursor-pointer"
+                title="Filter by Glossary Set"
+              >
+                <option value="ALL">All sets</option>
+                <option value="UNASSIGNED">Unassigned / Legacy</option>
+                {GLOSSARY_SET_DEFS.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronRight size={12} className="absolute right-2 top-1/2 -translate-y-1/2 rotate-90 text-zinc-400 pointer-events-none" />
+            </div>
+          )}
 
           {breadcrumbs.length > 0 && (
             <div className="hidden lg:flex items-center gap-1.5 text-[9px] font-bold text-zinc-400 uppercase tracking-widest shrink-0 max-w-[200px] overflow-hidden">

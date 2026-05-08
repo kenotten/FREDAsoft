@@ -102,6 +102,10 @@ export function GlossaryBuilder({
   const { selectedCat, selectedItem, selectedFind, selectedRec } = selections;
   const hasMinimumContext = !!(selectedCat && selectedItem && selectedFind && selectedRec);
 
+  const masterRecsSource = Array.isArray(masterRecommendations) ? masterRecommendations : [];
+  const [selectedGlossarySetId, setSelectedGlossarySetId] = useState<string>('');
+  const [libraryGlossaryContextMismatch, setLibraryGlossaryContextMismatch] = useState(false);
+
   const normalizeStringArray = (value: any): string[] => {
     if (!value) return [];
 
@@ -167,8 +171,13 @@ export function GlossaryBuilder({
 
   // Sync glossary overrides to selections when combination changes
   useEffect(() => {
-    if (selectedCat && selectedItem && selectedFind && selectedRec && !isDirty) {
-      const existing = glossary.find((g: any) => 
+    if (!selectedCat || !selectedItem || !selectedFind || !selectedRec) {
+      setLibraryGlossaryContextMismatch(false);
+      return;
+    }
+    if (selections.isDirty) return;
+
+    const existing = glossary.find((g: any) => 
         String(g.fldCat || "").toLowerCase().trim() === String(selectedCat || "").toLowerCase().trim() && 
         String(g.fldItem || "").toLowerCase().trim() === String(selectedItem || "").toLowerCase().trim() && 
         String(g.fldFind || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim() && 
@@ -179,6 +188,7 @@ export function GlossaryBuilder({
         const matchedFinding = findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
         const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
         setSelectedGlossarySetId(existing.fldGlossarySetId || '');
+        setLibraryGlossaryContextMismatch(false);
 
         onSelectionChange({
           ...selections,
@@ -196,6 +206,28 @@ export function GlossaryBuilder({
         const matchedFinding = findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
         const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
 
+        const resolveLibSetId = (raw: string | undefined) => {
+          const t = String(raw || '').trim();
+          if (!t) return '';
+          return glossarySetById(t)?.id || t;
+        };
+        const fCanon = resolveLibSetId(matchedFinding?.fldGlossarySetId);
+        const rCanon = resolveLibSetId(matchedRec?.fldGlossarySetId);
+        const fKey = fCanon.toLowerCase();
+        const rKey = rCanon.toLowerCase();
+        let nextId = '';
+        let mismatch = false;
+        if (fKey && rKey && fKey !== rKey) {
+          mismatch = true;
+          nextId = fCanon;
+        } else if (fKey) {
+          nextId = fCanon;
+        } else if (rKey) {
+          nextId = rCanon;
+        }
+        setSelectedGlossarySetId(nextId);
+        setLibraryGlossaryContextMismatch(mismatch);
+
         onSelectionChange({
           ...selections,
           fldUnitCost: undefined,
@@ -209,12 +241,9 @@ export function GlossaryBuilder({
           isDirty: false
         });
       }
-    }
-  }, [selectedCat, selectedItem, selectedFind, selectedRec, glossary, findings, masterRecommendations]);
+  }, [selectedCat, selectedItem, selectedFind, selectedRec, glossary, findings, masterRecommendations, selections.isDirty]);
 
   const [newType, setNewType] = useState<'category' | 'item' | 'finding' | 'recommendation' | 'glossary_record' | 'link_recommendation' | null>(null);
-  const masterRecsSource = Array.isArray(masterRecommendations) ? masterRecommendations : [];
-  const [selectedGlossarySetId, setSelectedGlossarySetId] = useState<string>('');
 
   const [formData, setFormData] = useState({
     catName: '', catOrder: '', itemName: '', itemOrder: '', findShort: '', findLong: '', findOrder: '', fldUnitType: '', recShort: '', recLong: '', recOrder: '', unit: '', uom: '',
@@ -865,7 +894,10 @@ export function GlossaryBuilder({
               className="flex-1"
               label="Glossary Set"
               value={selectedGlossarySetId}
-              onChange={(e: any) => setSelectedGlossarySetId(e.target.value || '')}
+              onChange={(e: any) => {
+                setSelectedGlossarySetId(e.target.value || '');
+                setLibraryGlossaryContextMismatch(false);
+              }}
               options={GLOSSARY_SET_DEFS.map((s) => ({
                 value: s.id,
                 label: `${s.name} (${s.standardType}${s.standardVersion ? ` ${s.standardVersion}` : ''})`,
@@ -876,6 +908,12 @@ export function GlossaryBuilder({
               {selectedGlossarySetId ? (glossarySetById(selectedGlossarySetId)?.name || selectedGlossarySetId) : 'Unassigned'}
             </div>
           </div>
+          {libraryGlossaryContextMismatch && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-950">
+              <span className="font-bold">Glossary Set mismatch:</span> the selected library finding and recommendation are tagged to different standard contexts. The default above follows the{' '}
+              <span className="font-bold">finding&apos;s</span> Glossary Set (deterministic rule). Adjust the dropdown if the glossary record should use a different set.
+            </div>
+          )}
 
           <div className="flex gap-2 items-end">
             <Select 
