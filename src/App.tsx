@@ -635,14 +635,23 @@ export default function App() {
     }
   };
 
-  const handleDeleteRecord = async (id: string) => {
+  const handleDeleteRecord = async (
+    id: string,
+    options?: { afterDelete?: () => void; title?: string; message?: string }
+  ) => {
+    const afterDelete = options?.afterDelete;
+    const title = options?.title ?? 'Delete Record';
+    const message =
+      options?.message ??
+      'Are you sure you want to delete this inspection record? This action cannot be undone.';
     setDeleteConfirmation({
-      title: 'Delete Record',
-      message: 'Are you sure you want to delete this inspection record? This action cannot be undone.',
+      title,
+      message,
       onConfirm: async () => {
         try {
           await firestoreService.data.delete(id);
           toast.success('Record deleted');
+          if (afterDelete) afterDelete();
         } catch (error) {
           toast.error('Failed to delete record');
         } finally {

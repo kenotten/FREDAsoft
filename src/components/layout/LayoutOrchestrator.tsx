@@ -133,7 +133,10 @@ export interface ProjectContextProps {
   selectedInspector: Inspector | null;
   documents: AppDocument[];
   handleSaveRecord: (data: any) => Promise<void> | void;
-  handleDeleteRecord: (id: string) => Promise<void> | void;
+  handleDeleteRecord: (
+    id: string,
+    options?: { afterDelete?: () => void; title?: string; message?: string }
+  ) => Promise<void> | void;
   handleSetActiveProject: () => void;
   onResetForm: () => void;
   pendingChanges: any;

@@ -99,6 +99,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           unitTypes={unitTypes} 
           mergedCategories={mergedCategories} 
           onDirtyChange={(dirty: boolean) => onDataEntryDirtyChange?.(dirty)}
+          onDeleteRecord={handleDeleteRecord}
         />
       )}
       {activeTab === 'explorer' && (

@@ -217,7 +217,8 @@ function isGlossaryDraftLinkageSafe(parsed: any): boolean {
 export default function ProjectDataEntry({ 
   project = {}, facility = {}, inspector = {}, glossary = [], standards = [], projectData = [],
   onSave, onReset, items = [], findings = [], recommendations = [], masterRecommendations = [],
-  unitTypes = [], mergedCategories = [], locations = [], selections = {}, onSelectionChange, onDirtyChange
+  unitTypes = [], mergedCategories = [], locations = [], selections = {}, onSelectionChange, onDirtyChange,
+  onDeleteRecord
 }: any) {
   // Localized state management for the active record
   const activeRecord = useMemo(() => {
@@ -1441,6 +1442,51 @@ export default function ProjectDataEntry({
     );
   };
 
+  /** After a successful Firestore delete: same local wipe as cancel + parent new-record selections (onReset keeps sticky category/location). */
+  const resetDataEntryAfterRecordDeleted = () => {
+    isFormDirtyRef.current = false;
+    setFldFindShort('');
+    setFldFindLong('');
+    setFldRecShort('');
+    setFldRecLong('');
+    setFldQTY(0);
+    setFldMeasurement('');
+    setFldMeasurementType('');
+    setFldMeasurementUnit('');
+    setFldUnitType('Decimal');
+    setFldUnitCost(0);
+    setFldTotalCost(0);
+    setFldImages([]);
+    setFldStandards([]);
+    setCustomMasterRecId('');
+    setCustomMasterFindId('');
+    setIsDirty(false);
+    try {
+      localStorage.removeItem('fredasoft_draft');
+    } catch {
+      /* ignore */
+    }
+    setShowRecoveryModal(false);
+    setSavedDraft(null);
+    draftRecoveryOfferedSigRef.current = '';
+    onReset();
+    onSelectionChange((prev: any) => ({ ...prev, standards: [] }));
+  };
+
+  const handleRequestDeleteRecord = () => {
+    if (!activeRecord || !onDeleteRecord) return;
+    const rid = String(editingRecordId || '').trim();
+    if (!rid) return;
+    const id = String(activeRecord.fldPDataID || '').trim();
+    if (!id || id !== rid) return;
+    onDeleteRecord(id, {
+      title: 'Delete project data record',
+      message:
+        'You are about to permanently delete this inspection data record from the project. Its findings, recommendations, images, and citations will be removed. This action cannot be undone.',
+      afterDelete: resetDataEntryAfterRecordDeleted
+    });
+  };
+
   const handleAddLocation = async (name: string) => {
     if (!name || !selections.projectId) {
       toast.error('Project context is required to add locations.');
@@ -2598,7 +2644,23 @@ export default function ProjectDataEntry({
             )}
           </Card>
 
-          <div className="flex flex-wrap justify-end gap-3 p-4">
+          <div
+            className={cn(
+              'flex flex-wrap gap-3 p-4 w-full',
+              activeRecord && String(editingRecordId || '').trim() ? 'justify-between' : 'justify-end'
+            )}
+          >
+            {activeRecord && String(editingRecordId || '').trim() ? (
+              <Button
+                type="button"
+                variant="danger"
+                onClick={handleRequestDeleteRecord}
+                className="px-6 h-11 min-w-[140px]"
+              >
+                Delete Record
+              </Button>
+            ) : null}
+            <div className="flex flex-wrap justify-end gap-3">
              {editingRecordId ? (
                <>
                  <Button 
@@ -2632,6 +2694,7 @@ export default function ProjectDataEntry({
              >
                {activeRecord ? 'Update Record' : 'Save Record'}
              </Button>
+            </div>
           </div>
         </div>
       </div>
