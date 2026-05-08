@@ -110,6 +110,43 @@ const StandardItem = ({
 
 const STANDARDS_BROWSER_UI_STORAGE_PREFIX = 'fredasoft_standards_browser_ui_v1:';
 
+type PersistedStandardsBrowserUi = {
+  searchQuery?: string;
+  expandedChapters?: Record<string, boolean>;
+  expandedSections?: Record<string, boolean>;
+  expandedStandardItemId?: string | null;
+  selectedType?: string;
+  selectedVersion?: string;
+};
+
+function validPersistedType(value: unknown, typeSet: Set<string>): value is string {
+  return typeof value === 'string' && (value === 'ALL' || typeSet.has(value));
+}
+
+/** Version must be ALL or appear on at least one standard for the given type (ALL = any type). */
+function validPersistedVersion(
+  type: string,
+  value: unknown,
+  standardsList: MasterStandard[]
+): value is string {
+  if (typeof value !== 'string') return false;
+  if (value === 'ALL') return true;
+  const filtered =
+    type === 'ALL' ? standardsList : standardsList.filter((s) => s.fldStandardType === type);
+  const versions = new Set(filtered.map((s) => s.fldStandardVersion).filter(Boolean));
+  return versions.has(value);
+}
+
+function readPersistedUiFromStorage(key: string): PersistedStandardsBrowserUi | null {
+  try {
+    const raw = sessionStorage.getItem(STANDARDS_BROWSER_UI_STORAGE_PREFIX + key);
+    if (!raw) return null;
+    return JSON.parse(raw) as PersistedStandardsBrowserUi;
+  } catch {
+    return null;
+  }
+}
+
 function sectionStorageKey(chapterName: string, sectionName: string, accordion: boolean) {
   return accordion ? `${chapterName}\0${sectionName}` : sectionName;
 }
@@ -173,10 +210,27 @@ export function StandardsBrowser({
     const types = new Set(standards.map(s => s.fldStandardType).filter(Boolean));
     const versions = new Set(standards.map(s => s.fldStandardVersion).filter(Boolean));
 
-    if (selectedType === 'ALL' && types.has('TAS')) {
+    let persistedSkipsTasDefault = false;
+    let persistedSkips2012Default = false;
+    if (persistUiStateKey) {
+      const stored = readPersistedUiFromStorage(persistUiStateKey);
+      if (stored) {
+        const pt = stored.selectedType;
+        if (validPersistedType(pt, types)) persistedSkipsTasDefault = true;
+        const effectiveType = validPersistedType(pt, types) ? pt : undefined;
+        if (
+          effectiveType !== undefined &&
+          validPersistedVersion(effectiveType, stored.selectedVersion, standards)
+        ) {
+          persistedSkips2012Default = true;
+        }
+      }
+    }
+
+    if (!persistedSkipsTasDefault && selectedType === 'ALL' && types.has('TAS')) {
       setSelectedType('TAS');
     }
-    if (selectedVersion === 'ALL' && versions.has('2012')) {
+    if (!persistedSkips2012Default && selectedVersion === 'ALL' && versions.has('2012')) {
       setSelectedVersion('2012');
     }
 
@@ -199,7 +253,7 @@ export function StandardsBrowser({
       const secKey = sectionStorageKey(chapterName, sectionName, accordion);
       setExpandedSections((prev) => ({ ...prev, [secKey]: true }));
     }
-  }, [standards, enableAutoExpand502, accordion]);
+  }, [standards, enableAutoExpand502, accordion, persistUiStateKey]);
 
   const toggleChapter = (chapter: string) => {
     if (accordion) {
@@ -237,21 +291,7 @@ export function StandardsBrowser({
     setExpandedSections((prev) => ({ ...prev, [secKey]: !prev[secKey] }));
   };
 
-  const readPersistedUi = useCallback((key: string) => {
-    try {
-      const raw = sessionStorage.getItem(STANDARDS_BROWSER_UI_STORAGE_PREFIX + key);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as {
-        searchQuery?: string;
-        expandedChapters?: Record<string, boolean>;
-        expandedSections?: Record<string, boolean>;
-        expandedStandardItemId?: string | null;
-      };
-      return parsed;
-    } catch {
-      return null;
-    }
-  }, []);
+  const readPersistedUi = useCallback((key: string) => readPersistedUiFromStorage(key), []);
 
   const hardResetBrowserUi = useCallback(() => {
     setSearchQuery('');
@@ -270,6 +310,18 @@ export function StandardsBrowser({
         setExpandedStandardItemId(
           stored.expandedStandardItemId === undefined ? null : stored.expandedStandardItemId
         );
+        if (standards.length > 0) {
+          const typeSet = new Set(standards.map((s) => s.fldStandardType).filter(Boolean));
+          if (validPersistedType(stored.selectedType, typeSet)) {
+            const t = stored.selectedType as string;
+            setSelectedType(t);
+            if (validPersistedVersion(t, stored.selectedVersion, standards)) {
+              setSelectedVersion(stored.selectedVersion as string);
+            } else {
+              setSelectedVersion('ALL');
+            }
+          }
+        }
       } else {
         hardResetBrowserUi();
       }
@@ -278,7 +330,7 @@ export function StandardsBrowser({
     if (uiResetKey !== undefined && uiResetKey !== null) {
       hardResetBrowserUi();
     }
-  }, [uiResetKey, persistUiStateKey, readPersistedUi, hardResetBrowserUi]);
+  }, [uiResetKey, persistUiStateKey, readPersistedUi, hardResetBrowserUi, standards]);
 
   useEffect(() => {
     if (!persistUiStateKey) return;
@@ -291,6 +343,8 @@ export function StandardsBrowser({
             expandedChapters,
             expandedSections,
             expandedStandardItemId,
+            selectedType,
+            selectedVersion,
           })
         );
       } catch {
@@ -298,7 +352,7 @@ export function StandardsBrowser({
       }
     }, 300);
     return () => window.clearTimeout(t);
-  }, [persistUiStateKey, searchQuery, expandedChapters, expandedSections, expandedStandardItemId]);
+  }, [persistUiStateKey, searchQuery, expandedChapters, expandedSections, expandedStandardItemId, selectedType, selectedVersion]);
 
   const filteredStandards = useMemo(() => {
     let base = standards.filter(s => !s.fldIsArchived);
