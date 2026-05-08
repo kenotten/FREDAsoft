@@ -102,7 +102,14 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           onDeleteRecord={handleDeleteRecord}
         />
       )}
-      {activeTab === 'explorer' && (
+      <div
+        className={cn(
+          activeTab === 'explorer'
+            ? 'flex min-h-0 w-full flex-1 flex-col'
+            : 'hidden'
+        )}
+        aria-hidden={activeTab !== 'explorer'}
+      >
         <DataExplorer 
           projectData={projectData} 
           projects={projects} 
@@ -133,7 +140,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           }} 
           onDeleteRecord={handleDeleteRecord}
         />
-      )}
+      </div>
       {activeTab === 'maintenance' && (
         <GlossaryView 
           categories={categories}
