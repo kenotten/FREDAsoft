@@ -91,8 +91,11 @@ export interface Finding {
   fldFindShort: string;
   fldFindLong: string;
   fldOrder?: number;
+  /** What is being measured (e.g. Slope, Width) — optional until backfilled */
+  fldMeasurementType?: string;
   fldUnitType?: string;
-  fldStandards: string[]; // Array of MasterStandard IDs
+  /** Library default citation IDs; may be absent on older Firestore rows */
+  fldStandards?: string[];
   fldSuggestedRecs: string[]; // Array of MasterRecommendation IDs
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
@@ -117,7 +120,8 @@ export interface MasterRecommendation {
   fldUnit: number; // Unit Cost (Currency)
   fldUOM: string; // Unit of Measure (EA, LF, etc.)
   fldCitation?: string;
-  fldStandards: string[]; // Array of MasterStandard IDs
+  /** Library default citation IDs; may be absent on older Firestore rows */
+  fldStandards?: string[];
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
 }
@@ -129,6 +133,14 @@ export interface Recommendation extends MasterRecommendation {
 export interface Glossary {
   id?: string;
   fldGlosId: string;
+  /** Standard/version glossary set key (e.g. UFAS, ADA_2010, TAS_2012) */
+  fldGlossarySetId?: string;
+  /** Human-readable glossary set name (e.g. ADA 2010) */
+  fldGlossarySetName?: string;
+  /** Standard family/type for glossary set (e.g. ADA, TAS, UFAS) */
+  fldGlossaryStandardType?: string;
+  /** Standard version for glossary set (e.g. 2010, 2012, Guidelines) */
+  fldGlossaryStandardVersion?: string;
   fldCat: string; // FK from tblCategories.fldCategoryID
   fldItem: string; // FK from tblItems.fldItemID
   fldFind: string; // FK from tblFindings.fldFindID
@@ -176,6 +188,12 @@ export interface ProjectData {
   fldPDataProject: string; // FK from tblProject.fldProjID
   fldFacility: string; // FK from tblFacility.fldFacID
   fldData: string; // FK from tblGlossary.fldGlosID
+  fldRecordSource?: "glossary" | "custom";
+  fldPDataCategoryID?: string;
+  fldPDataItemID?: string;
+  /** Trace: master finding template used for optional copy in custom mode */
+  fldPDataMasterFindID?: string;
+  fldPDataMasterRecID?: string;
   fldLocation: string; // FK to tblLocation.fldLocID
   fldFindShort: string;
   fldFindLong: string;
@@ -183,6 +201,8 @@ export interface ProjectData {
   fldRecLong: string;
   fldQTY: number;
   fldMeasurement?: number;
+  /** Snapshot: what is being measured (from library finding at save time) */
+  fldMeasurementType?: string;
   fldMeasurementUnit?: string;
   fldUnitCost?: number;
   fldUnitType?: string;
@@ -215,6 +235,8 @@ export interface UserPreference {
     recId?: string;
     locationId?: string;
     locationName?: string;
+    /** Data Entry: glossary-approved path vs project-only custom record */
+    dataEntryMode?: 'glossary' | 'custom';
   };
   workspaceContext?: {
     selectedClientId: string;

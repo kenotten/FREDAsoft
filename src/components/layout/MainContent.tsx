@@ -99,6 +99,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           unitTypes={unitTypes} 
           mergedCategories={mergedCategories} 
           onDirtyChange={(dirty: boolean) => onDataEntryDirtyChange?.(dirty)}
+          onDeleteRecord={handleDeleteRecord}
         />
       )}
       {activeTab === 'explorer' && (
@@ -114,6 +115,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           masterRecommendations={masterRecommendations}
           locations={locations}
           glossary={glossary}
+          standards={standards}
           selections={selections}
           onEditRecord={(record) => {
             const targetId = record?.fldPDataID || '';
@@ -147,20 +149,24 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           standards={standards}
           selections={selections}
           onSelectionChange={setSelections}
-          isDeduplicating={isDeduplicating}
-          dedupStatus={dedupStatus}
           setIsSynced={setIsSynced}
           setActiveTab={setActiveTab}
           setActiveGlossaryId={setActiveGlossaryId}
           updatePreferences={setUserPreferences}
-          importMasterGlossary={importMasterGlossary}
           isUpdatingRef={isUpdatingRef}
           clients={clients}
           facilities={facilities}
           projects={projects}
         />
       )}
-      {activeTab === 'glossary_explorer' && (
+      <div
+        className={cn(
+          activeTab === 'glossary_explorer'
+            ? 'flex min-h-0 w-full flex-1 flex-col'
+            : 'hidden'
+        )}
+        aria-hidden={activeTab !== 'glossary_explorer'}
+      >
         <GlossaryExplorer 
           clients={clients}
           facilities={facilities}
@@ -188,12 +194,19 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           setRawMasterRecommendations={setRawMasterRecommendations}
           setGlossary={setGlossary}
         />
-      )}
-      {activeTab === 'standards_manager' && (
+      </div>
+      <div
+        className={cn(
+          activeTab === 'standards_manager'
+            ? 'flex min-h-0 w-full flex-1 flex-col'
+            : 'hidden'
+        )}
+        aria-hidden={activeTab !== 'standards_manager'}
+      >
         <StandardsManager 
           standards={standards}
         />
-      )}
+      </div>
       {activeTab === 'sequence_manager' && (
         <OrderManager 
           categories={categories}
@@ -201,16 +214,24 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           findings={findings}
         />
       )}
-      {activeTab === 'library_manager' && (
+      <div
+        className={cn(
+          activeTab === 'library_manager'
+            ? 'flex min-h-0 w-full flex-1 flex-col'
+            : 'hidden'
+        )}
+        aria-hidden={activeTab !== 'library_manager'}
+      >
         <LibraryManager 
           ref={(props as any).libraryManagerRef}
           categories={categories}
           items={items}
           findings={findings}
           recommendations={recommendations as any}
+          standards={standards}
           onDirtyChange={(props as any).onLibraryDirtyChange}
         />
-      )}
+      </div>
       {activeTab === 'settings' && (
         <SettingsPage 
           sessionReads={sessionReads}

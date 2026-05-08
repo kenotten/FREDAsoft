@@ -18,20 +18,16 @@ import {
   ShieldAlert,
   Loader2,
   Copy,
-  Pencil,
-  X,
-  FlaskConical
+  Pencil
 } from 'lucide-react';
 import { Button, Input, Select, Card } from './ui/core';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import { firestoreService } from '../services/firestoreService';
+import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
 import { db } from '../firebase';
 import { writeBatch, doc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
-
-import { stabilizationService } from '../services/stabilizationService';
-import { migrationService, MigrationResults } from '../services/migrationService';
 
 export default function GlossaryExplorer({
   categories = [], 
@@ -49,10 +45,6 @@ export default function GlossaryExplorer({
   setGlossary
 }: any) {
   const [localMasterRecs, setLocalMasterRecs] = useState<any[]>([]);
-  const [stabilizationReport, setStabilizationReport] = useState<any>(null);
-  const [isStabilizing, setIsStabilizing] = useState(false);
-  const [migrationResults, setMigrationResults] = useState<MigrationResults | null>(null);
-  const [isMigrating, setIsMigrating] = useState(false);
   
   useEffect(() => {
     setLocalMasterRecs(Array.isArray(masterRecommendations) ? masterRecommendations : []);
@@ -71,6 +63,7 @@ export default function GlossaryExplorer({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [selectedItemId, setSelectedItemId] = useState<string>('');
+  const [selectedGlossarySetFilter, setSelectedGlossarySetFilter] = useState<string>('ALL');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [editingField, setEditingField] = useState<{ id: string, field: string, value: any } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -234,62 +227,6 @@ export default function GlossaryExplorer({
     }
   };
 
-  const runStabilization = async () => {
-    setIsStabilizing(true);
-    try {
-      toast.info("Starting Phase 2: Data Hygiene...");
-      const hygieneResults = await stabilizationService.runDataHygiene();
-      
-      toast.info("Starting Phase 3: Glossary Repair...");
-      await stabilizationService.runGlossaryRepair();
-      
-      toast.info("Starting Phase 3.5: Gap Analysis...");
-      const gapReport = await stabilizationService.generateGapReport();
-      
-      setStabilizationReport({
-        hygiene: hygieneResults,
-        gap: gapReport
-      });
-
-      toast.success("Stabilization Sequence Complete!");
-    } catch (error: any) {
-      toast.error("Stabilization Failed: " + error.message);
-    } finally {
-      setIsStabilizing(false);
-    }
-  };
-
-  const runFallbackAnchors = async () => {
-    if (!stabilizationReport?.gap?.missingItems || stabilizationReport.gap.missingItems.length === 0) {
-      toast.info("No missing anchors identified.");
-      return;
-    }
-    setIsStabilizing(true);
-    try {
-      await stabilizationService.createFallbackAnchors(stabilizationReport.gap.missingItems);
-      // Refresh report
-      const gapReport = await stabilizationService.generateGapReport();
-      setStabilizationReport((prev: any) => ({ ...prev, gap: gapReport }));
-    } catch (error: any) {
-      toast.error("Fallback creation failed.");
-    } finally {
-      setIsStabilizing(false);
-    }
-  };
-
-  const runMigrationDryRun = async () => {
-    setIsMigrating(true);
-    try {
-      const results = await migrationService.runDryRun();
-      setMigrationResults(results);
-      toast.success("Migration Dry Run Complete!");
-    } catch (error: any) {
-      toast.error("Migration Dry Run Failed: " + error.message);
-    } finally {
-      setIsMigrating(false);
-    }
-  };
-
   const masterRecsRef = React.useRef(masterRecommendations);
   React.useEffect(() => {
     masterRecsRef.current = masterRecommendations;
@@ -386,6 +323,9 @@ export default function GlossaryExplorer({
       }
 
       const finalRec = matchedRec || legacyRec;
+      const setDef = glossarySetById(g.fldGlossarySetId);
+      const glossarySetId = String(g.fldGlossarySetId || '').trim();
+      const glossarySetName = String(g.fldGlossarySetName || '').trim();
 
       return {
         ...g,
@@ -411,6 +351,15 @@ export default function GlossaryExplorer({
         unitCost: finalRec?.fldUnit || 0,
         findingId: finding?.fldFindID || finding?.id,
         recommendationId: finalRec?.fldRecID || finalRec?.id,
+        glossarySetId: glossarySetId || '',
+        glossarySetName: glossarySetName || setDef?.name || '',
+        glossarySetType: String(g.fldGlossaryStandardType || setDef?.standardType || '').trim(),
+        glossarySetVersion: String(g.fldGlossaryStandardVersion || setDef?.standardVersion || '').trim(),
+        glossarySetLabel:
+          glossarySetName ||
+          setDef?.name ||
+          glossarySetId ||
+          'Unassigned',
         isOrphaned: !matchedRec && !!gRecId,
         canRecover: !matchedRec && !!gRecId,
         suggestedHealRec,
@@ -448,6 +397,12 @@ export default function GlossaryExplorer({
     }
     if (selectedItemId) {
       base = base.filter((d: any) => d.fldItem === selectedItemId);
+    }
+    if (selectedGlossarySetFilter === 'UNASSIGNED') {
+      base = base.filter((d: any) => !String(d.glossarySetId || '').trim());
+    } else if (selectedGlossarySetFilter !== 'ALL') {
+      const target = String(selectedGlossarySetFilter || '').toLowerCase().trim();
+      base = base.filter((d: any) => String(d.glossarySetId || '').toLowerCase().trim() === target);
     }
 
     // 3. Column Filters
@@ -506,7 +461,7 @@ export default function GlossaryExplorer({
       // Recommendation (Always by order then alpha per stability requirement)
       return (a.recOrder ?? Infinity) - (b.recOrder ?? Infinity) || (a.recommendationShort || '').localeCompare(b.recommendationShort || '');
     });
-  }, [resolvedGlossary, searchTerm, selectedCategoryId, selectedItemId, sortMode, showMissingOnly, columnFilters]);
+  }, [resolvedGlossary, searchTerm, selectedCategoryId, selectedItemId, selectedGlossarySetFilter, sortMode, showMissingOnly, columnFilters]);
 
   const EditableField = ({ id, field, value, type = 'text', label, inline = false }: any) => {
     const isEditing = editingField?.id === id && editingField?.field === field;
@@ -582,181 +537,38 @@ export default function GlossaryExplorer({
     });
   }, [items, selectedCategoryId, sortMode]);
 
+  const glossarySetFilterOptions = useMemo(() => {
+    const dynamicIds = new Set<string>();
+    (resolvedGlossary || []).forEach((r: any) => {
+      const id = String(r.glossarySetId || '').trim();
+      if (id) dynamicIds.add(id);
+    });
+
+    const knownById = new Map(GLOSSARY_SET_DEFS.map((s) => [s.id, s]));
+    const mergedIds = new Set<string>([...Array.from(knownById.keys()), ...Array.from(dynamicIds)]);
+    const mergedRows = Array.from(mergedIds).map((id) => {
+      const known = knownById.get(id);
+      const label = known?.name || id;
+      return { id, label };
+    });
+    mergedRows.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+
+    return [
+      { value: 'ALL', label: 'All Glossary Sets' },
+      { value: 'UNASSIGNED', label: 'Unassigned' },
+      ...mergedRows.map((r) => ({ value: r.id, label: r.label })),
+    ];
+  }, [resolvedGlossary]);
+
   return (
     <div className="flex flex-col flex-1 min-h-0 space-y-6 overflow-hidden">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Glossary Explorer</h1>
-            <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mt-1">v75.0 | COCKPIT_CLEANED</span>
-          </div>
-          <p className="text-sm text-zinc-500">Production-ready data management dashboard</p>
+      <div>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Glossary Explorer</h1>
+          <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mt-1">v75.0 | COCKPIT_CLEANED</span>
         </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            onClick={runStabilization}
-            disabled={isStabilizing}
-            variant="outline"
-            size="sm"
-            className="text-[10px] font-bold uppercase tracking-widest"
-          >
-            {isStabilizing ? <Loader2 size={12} className="animate-spin mr-2" /> : <RefreshCw size={12} className="mr-2" />}
-            Stabilize & Audit
-          </Button>
-          <Button 
-            onClick={runFallbackAnchors}
-            disabled={isStabilizing || !stabilizationReport}
-            variant="secondary"
-            size="sm"
-            className="text-[10px] font-bold uppercase tracking-widest"
-          >
-            Create Anchors ({stabilizationReport?.gap?.missingItemsCount || 0})
-          </Button>
-          <Button 
-            onClick={runMigrationDryRun}
-            disabled={isMigrating}
-            variant="primary"
-            size="sm"
-            className="text-[10px] font-bold uppercase tracking-widest bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            {isMigrating ? <Loader2 size={12} className="animate-spin mr-2" /> : <FlaskConical size={12} className="mr-2" />}
-            Migration Dry Run
-          </Button>
-        </div>
+        <p className="text-sm text-zinc-500">Production-ready data management dashboard</p>
       </div>
-
-      {migrationResults && (
-        <Card className="p-6 bg-zinc-900 text-white border-none shadow-2xl space-y-6">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4">
-            <div className="flex items-center gap-3">
-              <FlaskConical className="text-amber-500" />
-              <div>
-                <h3 className="font-bold">Harris Center Backfill: Dry Run Report</h3>
-                <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Stage 1 - Preview Mode</p>
-              </div>
-            </div>
-            <button onClick={() => setMigrationResults(null)} className="text-zinc-500 hover:text-white">
-              <X size={16} />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-6">
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Analyzed</p>
-              <div className="text-xl font-bold">{migrationResults.totalAnalyzed}</div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Clean (Short)</p>
-              <div className="text-xl font-bold text-green-500">{migrationResults.cleanMatchesShort}</div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Clean (Long)</p>
-              <div className="text-xl font-bold text-blue-500">{migrationResults.cleanMatchesLong}</div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Ambiguous</p>
-              <div className="text-xl font-bold text-amber-500">{migrationResults.ambiguous}</div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Unmatched</p>
-              <div className="text-xl font-bold text-red-500">{migrationResults.unmatched}</div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Resolvable</p>
-              <div className="text-2xl font-black text-blue-400">{migrationResults.resolvable}</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-3">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Top Resolvable Samples</p>
-              <div className="space-y-2">
-                {migrationResults.samples.matched.map((s, i) => (
-                  <div key={i} className="p-2 bg-white/5 rounded border border-white/5 flex flex-col gap-1">
-                    <div className="text-[10px] font-bold text-blue-400 truncate">{s.originalText}</div>
-                    <div className="text-[9px] text-zinc-500">→ GLOS: {s.proposedGlosId}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-3">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Ambiguity Conflict Samples</p>
-              <div className="space-y-2">
-                {migrationResults.samples.ambiguous.map((s, i) => (
-                  <div key={i} className="p-2 bg-white/5 rounded border border-white/5 flex flex-col gap-1 text-amber-500">
-                    <div className="text-[10px] font-bold truncate">{s.text}</div>
-                    <div className="text-[9px] text-zinc-500 italic">Found {s.matches.length} library matches</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-3">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Unmatched Samples</p>
-              <div className="space-y-2">
-                {migrationResults.samples.unmatched.map((s, i) => (
-                  <div key={i} className="p-2 bg-white/5 rounded border border-white/5 text-red-400 text-[10px]">
-                    {s.text}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center gap-3">
-            <AlertCircle size={16} className="text-blue-400" />
-            <p className="text-xs text-blue-200">
-              This report is a simulation. No writes have been performed. Approval required for Stage 2.
-            </p>
-          </div>
-        </Card>
-      )}
-
-      {stabilizationReport && (
-        <Card className="p-6 bg-zinc-900 text-white border-none shadow-2xl space-y-6">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4">
-            <div className="flex items-center gap-3">
-              <ShieldAlert className="text-blue-500" />
-              <div>
-                <h3 className="font-bold">Stabilization Command Console</h3>
-                <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Phase 2 - 3.5 Results</p>
-              </div>
-            </div>
-            <button onClick={() => setStabilizationReport(null)} className="text-zinc-500 hover:text-white">
-              <X size={16} />
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Hygiene (Mod/Skip)</p>
-              <div className="text-xl font-bold">{stabilizationReport.hygiene.modified} / {stabilizationReport.hygiene.skipped}</div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">PData Linkage (Clean)</p>
-              <div className="text-xl font-bold text-green-500">{stabilizationReport.gap.clean}</div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Unmatchable</p>
-              <div className="text-xl font-bold text-red-500">{stabilizationReport.gap.unmatchable}</div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Missing Anchors</p>
-              <div className="text-xl font-bold text-amber-500">{stabilizationReport.gap.missingItemsCount}</div>
-            </div>
-          </div>
-
-          {stabilizationReport.gap.missingItemsCount > 0 && (
-            <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Isolated Coverage Gaps:</p>
-              <div className="flex flex-wrap gap-2">
-                {stabilizationReport.gap.missingItems.map((item: string, i: number) => (
-                  <span key={i} className="px-2 py-1 bg-white/10 rounded text-[10px] transition-colors hover:bg-white/20">{item}</span>
-                ))}
-              </div>
-            </div>
-          )}
-        </Card>
-      )}
 
       <div className="flex flex-col gap-4">
         {healthAudit && (
@@ -842,6 +654,13 @@ export default function GlossaryExplorer({
               options={sortedItems.map((i: any) => ({ value: i.fldItemID, label: i.fldItemName })) || []}
               placeholder="All Items"
             />
+            <Select
+              value={selectedGlossarySetFilter}
+              onChange={(e: any) => setSelectedGlossarySetFilter(e.target.value || 'ALL')}
+              className="w-56"
+              options={glossarySetFilterOptions}
+              placeholder="All Glossary Sets"
+            />
           </div>
         </div>
 
@@ -872,6 +691,7 @@ export default function GlossaryExplorer({
                 <th className="w-10 px-4 py-3"></th>
                 <th className="w-32 px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Category</th>
                 <th className="w-32 px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Item</th>
+                <th className="w-32 px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Glossary Set</th>
                 <th className="px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Finding Short</span>
@@ -936,6 +756,18 @@ export default function GlossaryExplorer({
                     </td>
                     <td className="px-4 py-3 text-xs font-medium text-zinc-600 truncate">{row.categoryName}</td>
                     <td className="px-4 py-3 text-xs font-medium text-zinc-900 truncate">{row.itemName}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={cn(
+                          "inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border",
+                          row.glossarySetId
+                            ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                            : "bg-zinc-50 text-zinc-500 border-zinc-200"
+                        )}
+                      >
+                        {row.glossarySetLabel || 'Unassigned'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <EditableField id={row.findingId} field="fldFindShort" value={row.findingShort} inline />
                     </td>
@@ -1010,7 +842,7 @@ export default function GlossaryExplorer({
                   </tr>
                   {expandedRows.has(row.id) && (
                     <tr className="bg-zinc-50/50">
-                      <td colSpan={3}></td>
+                      <td colSpan={4}></td>
                       <td className="px-4 py-4 border-b border-zinc-100 align-top">
                         <div className="space-y-4">
                           <EditableField 
@@ -1087,7 +919,7 @@ export default function GlossaryExplorer({
               ))}
               {filteredData.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-zinc-400 italic text-sm">
+                  <td colSpan={9} className="px-4 py-12 text-center text-zinc-400 italic text-sm">
                     No records found matching your search.
                   </td>
                 </tr>

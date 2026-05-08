@@ -1,11 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Search, 
   Plus, 
   Edit2, 
   Trash2, 
   Book, 
-  FileText, 
   Hash, 
   AlertCircle, 
   Save, 
@@ -80,9 +79,9 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [selectedVersion, setSelectedVersion] = useState<string>('ALL');
-  const [showAlphanumericOnly, setShowAlphanumericOnly] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [editingStandard, setEditingStandard] = useState<Partial<MasterStandard> | null>(null);
+  const figureTableImageFileRef = useRef<HTMLInputElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<MasterStandard | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<MasterStandard | null>(null);
 
@@ -111,6 +110,8 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
   const [showBulkUploader, setShowBulkUploader] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [expandedStandards, setExpandedStandards] = useState<Set<string>>(new Set());
+  const PAGE_SIZE = 150;
+  const [page, setPage] = useState(1);
 
   const typePriority: Record<string, number> = {
     'Standard': 1,
@@ -144,15 +145,19 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
     return (a.order || 0) - (b.order || 0);
   };
 
+  // TODO: Future refinement should use an explicit sub_sequence / display label for repeated Exceptions, Figures, and Tables.
   const duplicateIds = useMemo(() => {
     const seen = new Map<string, string>();
     const duplicates = new Set<string>();
     standards.forEach(s => {
-      const num = (s.citation_num || '').trim();
-      const text = (s.content_text || '').trim();
-      const type = (s.relation_type || '').trim();
-      const key = `${num}|${text}|${type}`;
-      
+      const stdType = (s.fldStandardType || '').trim();
+      const stdVer = (s.fldStandardVersion || '').trim();
+      const citeNum = (s.citation_num || '').trim();
+      const relType = (s.relation_type || '').trim();
+      const citeName = (s.citation_name || '').trim();
+      const body = (s.content_text || '').trim();
+      const key = `${stdType}|${stdVer}|${citeNum}|${relType}|${citeName}|${body}`;
+
       if (seen.has(key)) {
         duplicates.add(s.id);
         const firstId = seen.get(key);
@@ -164,14 +169,9 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
     return duplicates;
   }, [standards]);
 
-  const alphanumericIds = useMemo(() => {
-    const ids = new Set<string>();
-    standards.forEach(s => {
-      if (/[a-zA-Z]/.test(s.citation_num || '')) {
-        ids.add(s.id);
-      }
-    });
-    return ids;
+  const maxOrder = useMemo(() => {
+    if (standards.length === 0) return 0;
+    return Math.max(...standards.map(s => s.order ?? 0));
   }, [standards]);
 
   const resequenceAll = async (currentStandards: MasterStandard[]) => {
@@ -251,9 +251,6 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
       base = base.filter(s => s.fldStandardVersion === selectedVersion);
     }
 
-    if (showAlphanumericOnly) {
-      base = base.filter(s => alphanumericIds.has(s.id));
-    }
     if (!searchQuery) return base;
     const q = searchQuery.toLowerCase();
     return base.filter(s => 
@@ -263,7 +260,27 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
       s.chapter_name.toLowerCase().includes(q) ||
       s.section_name.toLowerCase().includes(q)
     );
-  }, [standards, searchQuery, showAlphanumericOnly, showArchived, alphanumericIds, selectedType, selectedVersion]);
+  }, [standards, searchQuery, showArchived, selectedType, selectedVersion]);
+
+  const { total, start, pageItems } = useMemo(() => {
+    const total = filteredStandards.length;
+    const start = (page - 1) * PAGE_SIZE;
+    const pageItems = filteredStandards.slice(start, start + PAGE_SIZE);
+    return { total, start, pageItems };
+  }, [filteredStandards, page]);
+
+  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage(1);
+  }, [filteredStandards]);
+
+  useEffect(() => {
+    if (total === 0) return;
+    if (start >= total) {
+      setPage(lastPage);
+    }
+  }, [total, start, lastPage]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -283,6 +300,8 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
       toast.error('Failed to upload image');
     } finally {
       toast.dismiss(loadingToast);
+      const input = e.target as HTMLInputElement;
+      if (input) input.value = '';
       setIsSaving(false);
     }
   };
@@ -502,6 +521,41 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
     });
   };
 
+  const renderStandardsPaginationBar = (edgeClass: string) => (
+    <div
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-3 bg-zinc-50 px-4 py-3 text-sm text-zinc-600',
+        edgeClass
+      )}
+    >
+      <span>
+        {total === 0
+          ? 'Showing 0–0 of 0'
+          : `Showing ${start + 1}–${start + pageItems.length} of ${total}`}
+      </span>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={page <= 1 || total === 0}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+        >
+          Prev
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={page >= lastPage || total === 0}
+          onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-full bg-zinc-50">
       <div className="p-6 bg-white border-b border-zinc-200">
@@ -523,7 +577,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
             </Button>
             <Button onClick={() => setEditingStandard({ 
               relation_type: 'Standard', 
-              order: standards.length > 0 ? Math.max(...standards.map(s => s.order)) + 10 : 10,
+              order: maxOrder + 10,
               chapter_name: '',
               section_num: '',
               section_name: '',
@@ -576,20 +630,6 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
             />
           </div>
           <Button 
-            variant={showAlphanumericOnly ? 'primary' : 'secondary'} 
-            size="sm" 
-            onClick={() => setShowAlphanumericOnly(!showAlphanumericOnly)}
-            className="shrink-0"
-          >
-            <FileText size={16} className="mr-2" />
-            {showAlphanumericOnly ? 'Showing Alphanumeric' : 'Filter Alphanumeric'}
-            {alphanumericIds.size > 0 && !showAlphanumericOnly && (
-              <span className="ml-2 px-1.5 py-0.5 bg-zinc-100 text-zinc-600 rounded-full text-[10px] font-bold">
-                {alphanumericIds.size}
-              </span>
-            )}
-          </Button>
-          <Button 
             variant={showArchived ? 'primary' : 'secondary'} 
             size="sm" 
             onClick={() => setShowArchived(!showArchived)}
@@ -603,6 +643,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm">
+          {renderStandardsPaginationBar('border-b border-zinc-200')}
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-zinc-50 border-b border-zinc-200">
@@ -610,18 +651,30 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider w-16">Img</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider w-24">Citation</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider">Chapter / Section / Name</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider w-28">Source</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider">Type</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
-              {filteredStandards.map((s, index) => (
+              {pageItems.map((s, index) => (
                 <React.Fragment key={`${s.id || 'new'}-${index}`}>
                   <tr className={cn(
-                    "hover:bg-zinc-50 transition-colors group cursor-pointer", 
-                    expandedStandards.has(s.id) && "bg-zinc-50",
+                    "hover:bg-zinc-50 transition-colors group cursor-pointer",
                     duplicateIds.has(s.id) && "bg-orange-500/20 hover:bg-orange-500/30",
-                    alphanumericIds.has(s.id) && !duplicateIds.has(s.id) && "bg-purple-500/10 hover:bg-purple-500/20"
+                    !expandedStandards.has(s.id) &&
+                      !duplicateIds.has(s.id) &&
+                      s.relation_type === 'Table' &&
+                      "bg-green-50",
+                    !expandedStandards.has(s.id) &&
+                      !duplicateIds.has(s.id) &&
+                      s.relation_type === 'Figure' &&
+                      "bg-blue-50",
+                    !expandedStandards.has(s.id) &&
+                      !duplicateIds.has(s.id) &&
+                      s.relation_type === 'Exception' &&
+                      "bg-red-50",
+                    expandedStandards.has(s.id) && "bg-zinc-50"
                   )} onClick={() => toggleExpand(s.id)}>
                     <td className="px-4 py-3 text-xs font-mono text-zinc-400">{s.order}</td>
                     <td className="px-4 py-3">
@@ -632,26 +685,17 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                           className="w-8 h-8 object-cover rounded border border-zinc-200"
                           referrerPolicy="no-referrer"
                         />
-                      ) : (
+                      ) : s.relation_type === 'Figure' || s.relation_type === 'Table' ? (
                         <div className="w-8 h-8 rounded border border-dashed border-zinc-200 flex items-center justify-center text-zinc-300">
                           <ImageIcon size={12} />
                         </div>
-                      )}
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-xs font-bold text-zinc-900">
                       <div className="flex items-center gap-2">
-                        <span className={cn(
-                          alphanumericIds.has(s.id) && "text-purple-600"
-                        )}>
-                          {s.citation_num}
-                        </span>
+                        <span>{s.citation_num}</span>
                         {duplicateIds.has(s.id) && (
                           <AlertCircle size={12} className="text-orange-600" />
-                        )}
-                        {alphanumericIds.has(s.id) && (
-                          <div className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[9px] font-bold uppercase tracking-wider">
-                            Alphanumeric
-                          </div>
                         )}
                       </div>
                     </td>
@@ -661,6 +705,11 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                         <p className="text-xs font-medium text-zinc-700">{s.section_num} {s.section_name}</p>
                         <p className="text-[10px] text-zinc-500 italic">{s.citation_name}</p>
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-semibold tracking-wide bg-slate-100 text-slate-700 border border-slate-200/80">
+                        {(s.fldStandardType || '').trim() || 'Unknown'}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className={cn(
@@ -708,7 +757,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                   </tr>
                   {expandedStandards.has(s.id) && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-4 bg-zinc-50 text-sm text-zinc-700 border-b border-zinc-100">
+                      <td colSpan={7} className="px-4 py-4 bg-zinc-50 text-sm text-zinc-700 border-b border-zinc-100">
                         <div className="flex gap-6">
                           {s.image_url && (
                             <div className="shrink-0">
@@ -731,13 +780,14 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
               ))}
               {filteredStandards.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-zinc-500 italic text-sm">
+                  <td colSpan={7} className="px-4 py-12 text-center text-zinc-500 italic text-sm">
                     No standards found matching your search.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+          {renderStandardsPaginationBar('border-t border-zinc-200')}
         </div>
       </div>
 
@@ -824,6 +874,73 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                   onChange={(e: any) => setEditingStandard({ ...editingStandard, citation_name: e.target.value })} 
                 />
               </div>
+
+              {(editingStandard.relation_type === 'Figure' ||
+                editingStandard.relation_type === 'Table') && (
+                <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Figure / table image</p>
+                  {editingStandard.image_url ? (
+                    <div className="space-y-3">
+                      <img
+                        src={editingStandard.image_url}
+                        alt=""
+                        className="max-h-24 w-auto max-w-full rounded-lg border border-zinc-200 object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label
+                          className={cn(
+                            'inline-flex cursor-pointer items-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50',
+                            isSaving && 'pointer-events-none opacity-50'
+                          )}
+                        >
+                          Replace Image
+                          <input
+                            ref={figureTableImageFileRef}
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            disabled={isSaving}
+                            onChange={handleImageUpload}
+                          />
+                        </label>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={isSaving}
+                          onClick={() => {
+                            setEditingStandard({ ...editingStandard, image_url: null });
+                            if (figureTableImageFileRef.current) figureTableImageFileRef.current.value = '';
+                          }}
+                        >
+                          Remove Image
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-sm text-zinc-500">No image uploaded</p>
+                      <label
+                        className={cn(
+                          'inline-flex cursor-pointer items-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50',
+                          isSaving && 'pointer-events-none opacity-50'
+                        )}
+                      >
+                        Choose image
+                        <input
+                          ref={figureTableImageFileRef}
+                          type="file"
+                          accept="image/*"
+                          className="sr-only"
+                          disabled={isSaving}
+                          onChange={handleImageUpload}
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <TextArea 
                 label="Content Text" 

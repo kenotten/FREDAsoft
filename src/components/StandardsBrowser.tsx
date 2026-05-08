@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Search, ChevronRight, ChevronDown, Book, FileText, Hash, Info, AlertCircle, Image as ImageIcon, Database, Plus } from 'lucide-react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Search, ChevronRight, ChevronDown, Book, FileText, Hash, Info, AlertCircle, Image as ImageIcon, Database, Plus, X } from 'lucide-react';
 import { MasterStandard } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -8,8 +8,28 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const StandardItem = ({ s, onSelect, isDuplicate }: { s: MasterStandard, onSelect?: (s: MasterStandard) => void, isDuplicate?: boolean }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+/** Lowercase for search; avoids crashes when master_standards fields are null/undefined */
+function searchFieldLower(value: unknown): string {
+  return String(value ?? '').toLowerCase();
+}
+
+const StandardItem = ({
+  s,
+  onSelect,
+  isDuplicate,
+  expansionMode,
+  isExpandedControlled,
+  onToggleExpand,
+}: {
+  s: MasterStandard;
+  onSelect?: (s: MasterStandard) => void;
+  isDuplicate?: boolean;
+  expansionMode: 'default' | 'accordion';
+  isExpandedControlled?: boolean;
+  onToggleExpand?: () => void;
+}) => {
+  const [isExpandedLocal, setIsExpandedLocal] = useState(false);
+  const isExpanded = expansionMode === 'accordion' ? Boolean(isExpandedControlled) : isExpandedLocal;
   const isAdv = s.relation_type === 'Advisory';
   const isExc = s.relation_type === 'Exception';
   const isFig = s.relation_type === 'Figure';
@@ -25,7 +45,11 @@ const StandardItem = ({ s, onSelect, isDuplicate }: { s: MasterStandard, onSelec
         e.dataTransfer.effectAllowed = 'copy';
       }}
       onClick={() => {
-        setIsExpanded(!isExpanded);
+        if (expansionMode === 'accordion') {
+          onToggleExpand?.();
+        } else {
+          setIsExpandedLocal((v) => !v);
+        }
       }}
       className={cn(
         "p-3 border rounded-lg transition-all relative group cursor-grab active:cursor-grabbing hover:shadow-sm",
@@ -69,6 +93,7 @@ const StandardItem = ({ s, onSelect, isDuplicate }: { s: MasterStandard, onSelec
             </p>
           </div>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onSelect?.(s);
@@ -83,14 +108,37 @@ const StandardItem = ({ s, onSelect, isDuplicate }: { s: MasterStandard, onSelec
   );
 };
 
+const STANDARDS_BROWSER_UI_STORAGE_PREFIX = 'fredasoft_standards_browser_ui_v1:';
+
+function sectionStorageKey(chapterName: string, sectionName: string, accordion: boolean) {
+  return accordion ? `${chapterName}\0${sectionName}` : sectionName;
+}
+
 interface StandardsBrowserProps {
   standards: MasterStandard[];
   onSelect?: (standard: MasterStandard) => void;
   onSeed?: () => void;
   className?: string;
+  showSearchClear?: boolean;
+  showBulkExpandControls?: boolean;
+  treeExpansionMode?: 'default' | 'accordion';
+  uiResetKey?: string | null;
+  persistUiStateKey?: string | null;
+  enableAutoExpand502?: boolean;
 }
 
-export function StandardsBrowser({ standards, onSelect, onSeed, className }: StandardsBrowserProps) {
+export function StandardsBrowser({
+  standards,
+  onSelect,
+  onSeed,
+  className,
+  showSearchClear = false,
+  showBulkExpandControls = true,
+  treeExpansionMode = 'default',
+  uiResetKey,
+  persistUiStateKey,
+  enableAutoExpand502 = true,
+}: StandardsBrowserProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string>(() => {
     const types = new Set(standards.map(s => s.fldStandardType).filter(Boolean));
@@ -101,9 +149,11 @@ export function StandardsBrowser({ standards, onSelect, onSeed, className }: Sta
     return versions.has('2012') ? '2012' : 'ALL';
   });
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
-
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
-  const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
+  /** Accordion mode: at most one StandardItem detail expanded at a time. */
+  const [expandedStandardItemId, setExpandedStandardItemId] = useState<string | null>(null);
+
+  const accordion = treeExpansionMode === 'accordion';
 
   const standardTypes = useMemo(() => {
     const types = new Set(standards.map(s => s.fldStandardType).filter(Boolean));
@@ -119,46 +169,136 @@ export function StandardsBrowser({ standards, onSelect, onSeed, className }: Sta
   }, [standards, selectedType]);
 
   useEffect(() => {
-    if (standards.length > 0) {
-      const types = new Set(standards.map(s => s.fldStandardType).filter(Boolean));
-      const versions = new Set(standards.map(s => s.fldStandardVersion).filter(Boolean));
+    if (standards.length === 0) return;
+    const types = new Set(standards.map(s => s.fldStandardType).filter(Boolean));
+    const versions = new Set(standards.map(s => s.fldStandardVersion).filter(Boolean));
 
-      // Only set defaults if we are currently on 'ALL' (initial state)
-      if (selectedType === 'ALL' && types.has('TAS')) {
-        setSelectedType('TAS');
-      }
-      if (selectedVersion === 'ALL' && versions.has('2012')) {
-        setSelectedVersion('2012');
-      }
-
-      const target = standards.find(s => s.citation_num?.includes('502.2'));
-      if (target) {
-        // Clean up chapter name logic to match grouping
-        let chapterName = target.chapter_name || 'Unknown Chapter';
-        if (/^\d+$/.test(chapterName)) chapterName = `Chapter ${chapterName}`;
-        if (chapterName.length > 100) chapterName = 'General';
-
-        let sectionName = target.section_num ? `${target.section_num} ${target.section_name}`.trim() : (target.section_name || 'General');
-        if (sectionName.length > 150) sectionName = target.section_num || 'General';
-
-        setExpandedChapters(prev => ({ ...prev, [chapterName]: true }));
-        setExpandedSections(prev => ({ ...prev, [sectionName]: true }));
-        // console.log('DEBUG: Auto-expanding for 502.2:', { chapterName, sectionName });
-      }
+    if (selectedType === 'ALL' && types.has('TAS')) {
+      setSelectedType('TAS');
     }
-  }, [standards]);
+    if (selectedVersion === 'ALL' && versions.has('2012')) {
+      setSelectedVersion('2012');
+    }
+
+    if (!enableAutoExpand502) return;
+
+    const target = standards.find(s => s.citation_num?.includes('502.2'));
+    if (target) {
+      let chapterName = target.chapter_name || 'Unknown Chapter';
+      if (/^\d+$/.test(chapterName)) chapterName = `Chapter ${chapterName}`;
+      if (chapterName.length > 100) chapterName = 'General';
+
+      let sectionName = target.section_num ? `${target.section_num} ${target.section_name}`.trim() : (target.section_name || 'General');
+      if (sectionName.length > 150) sectionName = target.section_num || 'General';
+
+      if (accordion) {
+        setExpandedChapters({ [chapterName]: true });
+      } else {
+        setExpandedChapters((prev) => ({ ...prev, [chapterName]: true }));
+      }
+      const secKey = sectionStorageKey(chapterName, sectionName, accordion);
+      setExpandedSections((prev) => ({ ...prev, [secKey]: true }));
+    }
+  }, [standards, enableAutoExpand502, accordion]);
 
   const toggleChapter = (chapter: string) => {
-    setExpandedChapters(prev => ({ ...prev, [chapter]: !prev[chapter] }));
+    if (accordion) {
+      setExpandedChapters((prev) => {
+        const open = prev[chapter];
+        if (open) return {};
+        return { [chapter]: true };
+      });
+      return;
+    }
+    setExpandedChapters((prev) => ({ ...prev, [chapter]: !prev[chapter] }));
   };
 
-  const toggleSection = (section: string) => {
-    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  const toggleSection = (chapterName: string, sectionName: string) => {
+    const secKey = sectionStorageKey(chapterName, sectionName, accordion);
+    if (accordion) {
+      setExpandedSections((prev) => {
+        const open = prev[secKey];
+        const prefix = `${chapterName}\0`;
+        const next: Record<string, boolean> = {};
+        if (open) {
+          for (const k of Object.keys(prev)) {
+            if (k !== secKey) next[k] = prev[k];
+          }
+          return next;
+        }
+        for (const k of Object.keys(prev)) {
+          if (!k.startsWith(prefix)) next[k] = prev[k];
+        }
+        next[secKey] = true;
+        return next;
+      });
+      return;
+    }
+    setExpandedSections((prev) => ({ ...prev, [secKey]: !prev[secKey] }));
   };
 
-  const toggleCitation = (citation: string) => {
-    setExpandedCitations(prev => ({ ...prev, [citation]: !prev[citation] }));
-  };
+  const readPersistedUi = useCallback((key: string) => {
+    try {
+      const raw = sessionStorage.getItem(STANDARDS_BROWSER_UI_STORAGE_PREFIX + key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as {
+        searchQuery?: string;
+        expandedChapters?: Record<string, boolean>;
+        expandedSections?: Record<string, boolean>;
+        expandedStandardItemId?: string | null;
+      };
+      return parsed;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const hardResetBrowserUi = useCallback(() => {
+    setSearchQuery('');
+    setExpandedChapters({});
+    setExpandedSections({});
+    setExpandedStandardItemId(null);
+  }, []);
+
+  useEffect(() => {
+    if (persistUiStateKey != null && persistUiStateKey !== '') {
+      const stored = readPersistedUi(persistUiStateKey);
+      if (stored) {
+        setSearchQuery(stored.searchQuery ?? '');
+        setExpandedChapters(stored.expandedChapters ?? {});
+        setExpandedSections(stored.expandedSections ?? {});
+        setExpandedStandardItemId(
+          stored.expandedStandardItemId === undefined ? null : stored.expandedStandardItemId
+        );
+      } else {
+        hardResetBrowserUi();
+      }
+      return;
+    }
+    if (uiResetKey !== undefined && uiResetKey !== null) {
+      hardResetBrowserUi();
+    }
+  }, [uiResetKey, persistUiStateKey, readPersistedUi, hardResetBrowserUi]);
+
+  useEffect(() => {
+    if (!persistUiStateKey) return;
+    const t = window.setTimeout(() => {
+      try {
+        sessionStorage.setItem(
+          STANDARDS_BROWSER_UI_STORAGE_PREFIX + persistUiStateKey,
+          JSON.stringify({
+            searchQuery,
+            expandedChapters,
+            expandedSections,
+            expandedStandardItemId,
+          })
+        );
+      } catch {
+        /* ignore quota / private mode */
+      }
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [persistUiStateKey, searchQuery, expandedChapters, expandedSections, expandedStandardItemId]);
 
   const filteredStandards = useMemo(() => {
     let base = standards.filter(s => !s.fldIsArchived);
@@ -173,12 +313,12 @@ export function StandardsBrowser({ standards, onSelect, onSeed, className }: Sta
 
     if (!searchQuery) return base;
     const query = searchQuery.toLowerCase();
-    const filtered = base.filter(s => 
-      s.citation_num.toLowerCase().includes(query) || 
-      s.citation_name.toLowerCase().includes(query) ||
-      s.content_text.toLowerCase().includes(query) ||
-      s.chapter_name.toLowerCase().includes(query) ||
-      s.section_name.toLowerCase().includes(query)
+    const filtered = base.filter(s =>
+      searchFieldLower(s.citation_num).includes(query) ||
+      searchFieldLower(s.citation_name).includes(query) ||
+      searchFieldLower(s.content_text).includes(query) ||
+      searchFieldLower(s.chapter_name).includes(query) ||
+      searchFieldLower(s.section_name).includes(query)
     );
     return filtered;
   }, [standards, searchQuery, selectedType, selectedVersion]);
@@ -284,16 +424,22 @@ export function StandardsBrowser({ standards, onSelect, onSeed, className }: Sta
   return (
     <div className={cn("flex flex-col h-full bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm", className)}>
       <div className="p-4 border-b border-zinc-100 bg-zinc-50/50 space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <h2 className="text-sm font-bold text-zinc-900 flex items-center gap-2">
             <Book size={16} className="text-zinc-500" />
             Standards Library
           </h2>
-          <div className="flex gap-2">
-            <button onClick={expandAll} className="text-[10px] font-bold text-zinc-500 hover:text-zinc-900 uppercase">Expand All</button>
-            <button onClick={contractAll} className="text-[10px] font-bold text-zinc-500 hover:text-zinc-900 uppercase">Contract All</button>
-          </div>
-          <span className="px-2 py-0.5 bg-zinc-200 text-zinc-600 text-[10px] font-bold rounded-full">
+          {showBulkExpandControls && (
+            <div className="flex gap-2">
+              <button type="button" onClick={expandAll} className="text-[10px] font-bold text-zinc-500 hover:text-zinc-900 uppercase">
+                Expand All
+              </button>
+              <button type="button" onClick={contractAll} className="text-[10px] font-bold text-zinc-500 hover:text-zinc-900 uppercase">
+                Contract All
+              </button>
+            </div>
+          )}
+          <span className="px-2 py-0.5 bg-zinc-200 text-zinc-600 text-[10px] font-bold rounded-full ml-auto">
             {filteredStandards.length} ITEMS
           </span>
         </div>
@@ -325,54 +471,91 @@ export function StandardsBrowser({ standards, onSelect, onSeed, className }: Sta
         </div>
 
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4 pointer-events-none" />
           <input 
-            className="w-full pl-10 pr-4 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:ring-2 focus:ring-black/5 outline-none transition-all"
+            className={cn(
+              'w-full pl-10 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:ring-2 focus:ring-black/5 outline-none transition-all',
+              showSearchClear ? 'pr-10' : 'pr-4'
+            )}
             placeholder="Search (e.g. 206, ramp, advisory)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+          {showSearchClear && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              disabled={!searchQuery}
+              className={cn(
+                'absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors',
+                searchQuery
+                  ? 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
+                  : 'text-zinc-200 cursor-not-allowed'
+              )}
+              title="Clear search"
+              aria-label="Clear search"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {groupedStandards.map((chapter) => (
+        {groupedStandards.map((chapter) => {
+          const chapterOpen = expandedChapters[chapter.name] || Boolean(searchQuery);
+          return (
           <div key={chapter.name} className="space-y-1">
             <button 
+              type="button"
               onClick={() => toggleChapter(chapter.name)}
               className="w-full flex items-center gap-2 p-2 hover:bg-zinc-50 rounded-lg transition-colors text-left group"
             >
-              {expandedChapters[chapter.name] || searchQuery ? <ChevronDown size={14} className="text-zinc-400" /> : <ChevronRight size={14} className="text-zinc-400" />}
+              {chapterOpen ? <ChevronDown size={14} className="text-zinc-400" /> : <ChevronRight size={14} className="text-zinc-400" />}
               <Book size={14} className="text-zinc-500" />
               <span className="text-[11px] font-bold text-zinc-900 uppercase tracking-wider line-clamp-1">{chapter.name}</span>
             </button>
 
-            {(expandedChapters[chapter.name] || searchQuery) && (
+            {chapterOpen && (
               <div className="ml-4 space-y-1 border-l border-zinc-100 pl-2">
-                {chapter.sections.map((section) => (
-                  <div key={section.name} className="space-y-1">
+                {chapter.sections.map((section) => {
+                  const secKey = sectionStorageKey(chapter.name, section.name, accordion);
+                  const sectionOpen = expandedSections[secKey] || Boolean(searchQuery);
+                  return (
+                  <div key={secKey} className="space-y-1">
                     <button 
-                      onClick={() => toggleSection(section.name)}
+                      type="button"
+                      onClick={() => toggleSection(chapter.name, section.name)}
                       className="w-full flex items-center gap-2 p-2 hover:bg-zinc-50 rounded-lg transition-colors text-left group"
                     >
-                      {expandedSections[section.name] || searchQuery ? <ChevronDown size={14} className="text-zinc-400" /> : <ChevronRight size={14} className="text-zinc-400" />}
+                      {sectionOpen ? <ChevronDown size={14} className="text-zinc-400" /> : <ChevronRight size={14} className="text-zinc-400" />}
                       <FileText size={14} className="text-zinc-400" />
                       <span className="text-xs font-medium text-zinc-700">{section.name}</span>
                     </button>
 
-                    {(expandedSections[section.name] || searchQuery) && (
+                    {sectionOpen && (
                       <div className="ml-4 space-y-1 border-l border-zinc-100 pl-2">
                         {section.items.map(s => (
-                          <StandardItem key={s.id} s={s} onSelect={onSelect} isDuplicate={duplicateIds.has(s.id)} />
+                          <StandardItem
+                            key={s.id}
+                            s={s}
+                            onSelect={onSelect}
+                            isDuplicate={duplicateIds.has(s.id)}
+                            expansionMode={treeExpansionMode}
+                            isExpandedControlled={expandedStandardItemId === s.id}
+                            onToggleExpand={() =>
+                              setExpandedStandardItemId((id) => (id === s.id ? null : s.id))
+                            }
+                          />
                         ))}
                       </div>
                     )}
                   </div>
-                ))}
+                );})}
               </div>
             )}
           </div>
-        ))}
+        );})}
 
         {groupedStandards.length === 0 && (
           <div className="p-12 text-center">
@@ -383,6 +566,7 @@ export function StandardsBrowser({ standards, onSelect, onSeed, className }: Sta
             </p>
             {!searchQuery && onSeed && (
               <button 
+                type="button"
                 onClick={onSeed}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white text-xs font-bold rounded-lg hover:bg-zinc-800 transition-colors"
               >

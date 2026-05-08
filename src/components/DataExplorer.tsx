@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Search, 
   Filter, 
@@ -28,6 +28,81 @@ import { useAuth } from '../hooks/useAuth';
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'sonner';
 
+function explorerNormId(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
+
+/** Record-level citation ids only; missing/null/non-array → []. */
+function explorerSafeStandardsIds(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (value && typeof value === 'object') return Object.values(value).filter(Boolean).map(String);
+  return [];
+}
+
+function explorerCitationChipText(standard: any | undefined, idFallback: string): string {
+  if (standard) {
+    const t = String(standard.fldStandardType ?? '').trim();
+    const n = String(standard.citation_num ?? '').trim();
+    if (t !== '' && n !== '') return `${t} ${n}`;
+    if (n !== '') return n;
+    const sid = String(standard.id ?? '').trim();
+    if (sid !== '') return sid;
+  }
+  const fb = String(idFallback ?? '').trim();
+  return fb || '—';
+}
+
+function explorerCitationTitle(standard: any | undefined, chipText: string): string {
+  if (!standard) return chipText;
+  const parts: string[] = [];
+  const ch = String(standard.chapter_name ?? '').trim();
+  const sn = String(standard.section_num ?? '').trim();
+  const sname = String(standard.section_name ?? '').trim();
+  const cname = String(standard.citation_name ?? '').trim();
+  if (ch) parts.push(ch);
+  if (sn || sname) parts.push([sn, sname].filter(Boolean).join(' ').trim());
+  if (cname) parts.push(cname);
+  const extra = parts.filter(Boolean).join(' · ');
+  if (extra) return `${chipText} — ${extra}`;
+  return chipText;
+}
+
+/** Display order: order → citation_num → original index. Does not mutate stored ids. */
+function explorerSortedCitationDisplay(
+  fldStandards: unknown,
+  standardsList: any[]
+): { id: string; chip: string; title: string }[] {
+  const ids = explorerSafeStandardsIds(fldStandards);
+  const list = Array.isArray(standardsList) ? standardsList : [];
+  const withIndex = ids.map((id, index) => ({
+    id,
+    index,
+    standard: list.find((st: any) => explorerNormId(st?.id) === explorerNormId(id))
+  }));
+  return withIndex
+    .sort((a, b) => {
+      const aOrder = Number(a.standard?.order);
+      const bOrder = Number(b.standard?.order);
+      const aHas = Number.isFinite(aOrder);
+      const bHas = Number.isFinite(bOrder);
+      if (aHas && bHas && aOrder !== bOrder) return aOrder - bOrder;
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      const aC = String(a.standard?.citation_num || '').trim();
+      const bC = String(b.standard?.citation_num || '').trim();
+      if (aC || bC) {
+        const cmp = aC.localeCompare(bC, undefined, { numeric: true, sensitivity: 'base' });
+        if (cmp !== 0) return cmp;
+      }
+      return a.index - b.index;
+    })
+    .map(({ id, standard }) => {
+      const chip = explorerCitationChipText(standard, id);
+      return { id, chip, title: explorerCitationTitle(standard, chip) };
+    });
+}
+
 export function DataExplorer({ 
   projectData, 
   projects, 
@@ -40,6 +115,7 @@ export function DataExplorer({
   masterRecommendations,
   locations,
   glossary = [],
+  standards = [],
   selections,
   onEditRecord,
   onDeleteRecord
@@ -80,7 +156,7 @@ export function DataExplorer({
   const isSearchingRef = React.useRef(false);
 
   // 🧩 BLUEPRINT-ACCURATE LOOKUP
-  const getGlossaryContext = (d: any) => {
+  const getGlossaryContext = useCallback((d: any) => {
     if (!d.fldData) return null;
     const cleanKey = d.fldData.trim().toLowerCase();
     return glossary.find((g: any) => {
@@ -88,7 +164,38 @@ export function DataExplorer({
       const byId = (g.id || '').trim().toLowerCase() === cleanKey;
       return byGlos || byId;
     });
-  };
+  }, [glossary]);
+
+  const getRecordContext = useCallback((d: any) => {
+    const glos = getGlossaryContext(d);
+    if (glos) {
+      return {
+        source: 'glossary',
+        glos,
+        catId: glos?.fldCat || 'uncategorized',
+        itemId: glos?.fldItem || 'unspecified-item',
+        findId: glos?.fldFind || 'unspecified-finding'
+      };
+    }
+    if (d?.fldRecordSource === 'custom') {
+      const catId = (d.fldPDataCategoryID || '').trim() || 'uncategorized';
+      const itemId = (d.fldPDataItemID || '').trim() || 'unspecified-item';
+      return {
+        source: 'custom',
+        glos: null,
+        catId,
+        itemId,
+        findId: ''
+      };
+    }
+    return {
+      source: 'unknown',
+      glos: null,
+      catId: 'uncategorized',
+      itemId: 'unspecified-item',
+      findId: ''
+    };
+  }, [getGlossaryContext]);
 
   const toggleSelection = (id: string) => {
     setSelectedIds(prev => {
@@ -125,11 +232,17 @@ export function DataExplorer({
         }
 
         // Clean Slate Logic: Copy only static data matching BLUEPRINT
+        const originalIsCustom = original?.fldRecordSource === 'custom';
         const clonedRecord = {
           fldPDataID: newId,
           fldPDataProject: targetProjectId,
           fldFacility: original.fldFacility || "",
-          fldData: original.fldData || "",
+          fldData: originalIsCustom ? "" : (original.fldData || ""),
+          fldRecordSource: originalIsCustom ? "custom" : (original.fldRecordSource || "glossary"),
+          fldPDataCategoryID: original.fldPDataCategoryID || "",
+          fldPDataItemID: original.fldPDataItemID || "",
+          fldPDataMasterFindID: original.fldPDataMasterFindID || "",
+          fldPDataMasterRecID: original.fldPDataMasterRecID || "",
           fldLocation: cloneLocationId || "",
           fldFindShort: original.fldFindShort || "",
           fldFindLong: original.fldFindLong || "",
@@ -185,10 +298,10 @@ export function DataExplorer({
       if (!inActiveScope) return false;
 
       const project = projects.find((p: any) => p.fldProjID === d.fldPDataProject);
-      const glos = getGlossaryContext(d);
-      const catId = glos?.fldCat || 'uncategorized';
-      const itemId = glos?.fldItem || 'unspecified-item';
-      const findId = glos?.fldFind || 'unspecified-finding';
+      const ctx = getRecordContext(d);
+      const catId = ctx.catId;
+      const itemId = ctx.itemId;
+      const findId = ctx.findId;
       const finding = (findings || []).find((f: any) => f.fldFindID === findId);
 
       const matchesSearch = 
@@ -208,11 +321,13 @@ export function DataExplorer({
     });
 
     return [...filtered].sort((a: any, b: any) => {
-      const glosA = getGlossaryContext(a);
-      const glosB = getGlossaryContext(b);
+      const ctxA = getRecordContext(a);
+      const ctxB = getRecordContext(b);
+      const glosA = ctxA.glos;
+      const glosB = ctxB.glos;
       
-      const catA = categories.find(c => c.fldCategoryID === glosA?.fldCat);
-      const catB = categories.find(c => c.fldCategoryID === glosB?.fldCat);
+      const catA = categories.find(c => c.fldCategoryID === ctxA.catId);
+      const catB = categories.find(c => c.fldCategoryID === ctxB.catId);
       const resCat = compareEntities(catA, catB, 'fldCategoryName');
       if (resCat !== 0) return resCat;
 
@@ -222,12 +337,12 @@ export function DataExplorer({
         const orderLoc = locA.localeCompare(locB);
         if (orderLoc !== 0) return orderLoc;
 
-        const itemA = items.find(i => i.fldItemID === glosA?.fldItem);
-        const itemB = items.find(i => i.fldItemID === glosB?.fldItem);
+        const itemA = items.find(i => i.fldItemID === ctxA.itemId);
+        const itemB = items.find(i => i.fldItemID === ctxB.itemId);
         return compareEntities(itemA, itemB, 'fldItemID');
       } else {
-        const itemA = items.find(i => i.fldItemID === glosA?.fldItem);
-        const itemB = items.find(i => i.fldItemID === glosB?.fldItem);
+        const itemA = items.find(i => i.fldItemID === ctxA.itemId);
+        const itemB = items.find(i => i.fldItemID === ctxB.itemId);
         const orderItem = compareEntities(itemA, itemB, 'fldItemID');
         if (orderItem !== 0) return orderItem;
 
@@ -236,13 +351,13 @@ export function DataExplorer({
         return locA.localeCompare(locB);
       }
     });
-  }, [projectData, searchTerm, filterClient, filterFacility, filterProject, filterCategory, sortMode, projects, facilities, clients, categories, items, findings, locations, glossary, selections.projectId, selections.facilityId]);
+  }, [projectData, searchTerm, filterClient, filterFacility, filterProject, filterCategory, filterItem, filterFinding, sortMode, projects, facilities, clients, categories, items, findings, locations, glossary, selections.projectId, selections.facilityId, getRecordContext]);
 
   const groupedData = useMemo(() => {
     const groups: any = {};
     sortedData.forEach(d => {
-      const glos = getGlossaryContext(d);
-      const catId = glos?.fldCat || 'uncategorized';
+      const ctx = getRecordContext(d);
+      const catId = ctx.catId || 'uncategorized';
       const locId = d.fldLocation || 'unlocated';
       
       if (catId === 'uncategorized') {
@@ -266,7 +381,7 @@ export function DataExplorer({
       groups[catId].count++;
     });
     return groups;
-  }, [sortedData, glossary, items]);
+  }, [sortedData, glossary, items, getRecordContext]);
 
   const toggleSection = (key: string) => {
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -301,7 +416,7 @@ export function DataExplorer({
   const exportToCSV = () => {
     const headers = ['Client', 'Facility', 'Project', 'Location', 'Category', 'Item', 'Finding', 'Recommendation', 'Quantity', 'Unit', 'Total Cost'];
     const rows = sortedData.map((d: any) => {
-      const glos = getGlossaryContext(d);
+      const ctx = getRecordContext(d);
       const project = projects.find((p: any) => p.fldProjID === d.fldPDataProject);
       const facility = facilities.find((f: any) => f.fldFacID === d.fldFacility) || 
                        facilities.find((f: any) => f.fldFacID === project?.fldFacID);
@@ -309,8 +424,8 @@ export function DataExplorer({
       
       const facilityName = facility?.fldFacName || '';
       const projectName = project?.fldProjName || '';
-      const category = categories.find((c: any) => c.fldCategoryID === glos?.fldCat)?.fldCategoryName || '';
-      const item = items.find((i: any) => i.fldItemID === glos?.fldItem)?.fldItemName || '';
+      const category = categories.find((c: any) => c.fldCategoryID === ctx.catId)?.fldCategoryName || '';
+      const item = items.find((i: any) => i.fldItemID === ctx.itemId)?.fldItemName || '';
       const finding = d.fldFindShort || '';
       const recommendation = d.fldRecShort || '';
       const locationName = (locations.find(l => l.fldLocID === d.fldLocation))?.fldLocName || '';
@@ -544,9 +659,10 @@ export function DataExplorer({
                             <div className="grid grid-cols-1 gap-3 pl-4">
                               {locGroup.records.map((d: any) => {
                                 const isExpanded = expandedId === d.fldPDataID;
-                                const glos = getGlossaryContext(d);
-                                const findId = glos?.fldFind || 'unspecified-finding';
-                                const itemId = glos?.fldItem || 'unspecified-item';
+                                const ctx = getRecordContext(d);
+                                const glos = ctx.glos;
+                                const findId = ctx.findId || 'unspecified-finding';
+                                const itemId = ctx.itemId || 'unspecified-item';
                                 
                                 const project = projects.find((p: any) => p.fldProjID === d.fldPDataProject);
                                 const facility = facilities.find((f: any) => f.fldFacID === d.fldFacility) || 
@@ -564,12 +680,15 @@ export function DataExplorer({
 
                                 const item = (items || []).find((i: any) => i.fldItemID === itemId);
                                 const recommendation = (localMasterRecs || []).find((r: any) => {
-                                  const match = (r.id || r.fldRecID || "").toLowerCase().trim() === (glos?.fldRec || "").toLowerCase().trim();
+                                  const target = ctx.source === 'custom' ? (d.fldPDataMasterRecID || '') : (glos?.fldRec || '');
+                                  const match = (r.id || r.fldRecID || "").toLowerCase().trim() === (target || "").toLowerCase().trim();
                                   if (isExpanded) {
-                                    console.log('Comparing:', glos?.fldRec, 'to:', (r.id || r.fldRecID), 'Match:', match);
+                                    console.log('Comparing:', target, 'to:', (r.id || r.fldRecID), 'Match:', match);
                                   }
                                   return match;
                                 });
+
+                                const citationDisplayRows = explorerSortedCitationDisplay(d.fldStandards, standards);
 
                                 return (
                                   <Card key={d.fldPDataID} className={cn(
@@ -643,6 +762,25 @@ export function DataExplorer({
                                               <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Recommendation</label>
                                               <p className="text-sm font-medium text-zinc-900">{d.fldRecShort}</p>
                                               <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{d.fldRecLong}</p>
+                                              {citationDisplayRows.length > 0 ? (
+                                                <div className="mt-3 pt-2 border-t border-zinc-200/70">
+                                                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1.5">
+                                                    Citations
+                                                  </span>
+                                                  <div className="flex flex-wrap gap-1.5" role="list" aria-label="Record citations">
+                                                    {citationDisplayRows.map(({ id, chip, title }) => (
+                                                      <span
+                                                        key={`${d.fldPDataID}-cit-${id}`}
+                                                        title={title}
+                                                        role="listitem"
+                                                        className="max-w-full truncate rounded-md border border-zinc-200/90 bg-white/80 px-2 py-0.5 text-[10px] font-medium text-zinc-500"
+                                                      >
+                                                        {chip}
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              ) : null}
                                             </div>
                                           </div>
                                           <div className="space-y-4">
