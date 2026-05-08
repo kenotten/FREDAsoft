@@ -106,6 +106,7 @@ Measurement type snapshot on projectData
 Measurement metadata repair completed
 Data Entry UI cleanup
 Glossary Set metadata planning
+Library citation defaults for findings and recommendations
 ```
 
 Known ongoing risk areas:
@@ -209,7 +210,7 @@ Libraries define reusable professional content:
 
 Libraries are the origin of structured content.
 
-Library records should eventually support direct citation associations.
+Library Findings and Recommendations support direct citation associations.
 
 Examples:
 
@@ -219,6 +220,63 @@ recommendation.fldStandards
 ```
 
 These are reusable defaults, not project-specific final citations.
+
+### Library Standard Context
+
+✅ DECIDED: Library Findings and Recommendations are standard-context-specific.
+
+Each library Finding and Recommendation belongs to one Glossary Set / standard-version context.
+
+Examples:
+
+```text
+UFAS 1984 Finding
+ADA 2010 Finding
+TAS 2012 Finding
+ANSI A117.1 2009 Finding
+```
+
+The same wording may exist in multiple library records when it applies under multiple standards.
+
+This is intentional.
+
+A library record should not be treated as a multi-standard container. Instead, controlled duplication is preferred so each library record can carry the correct:
+
+- default citations
+- measurement metadata
+- thresholds
+- applicability assumptions
+- recommendation language
+- reporting context
+
+Possible fields:
+
+```ts
+fldGlossarySetId?: string;
+fldGlossarySetName?: string;
+fldStandardType?: string;
+fldStandardVersion?: string;
+```
+
+Examples:
+
+```text
+finding.fldGlossarySetId: "UFAS_1984"
+finding.fldGlossarySetName: "UFAS"
+finding.fldStandardType: "UFAS"
+finding.fldStandardVersion: "1984"
+```
+
+```text
+recommendation.fldGlossarySetId: "ADA_2010"
+recommendation.fldGlossarySetName: "ADA 2010"
+recommendation.fldStandardType: "ADA"
+recommendation.fldStandardVersion: "2010"
+```
+
+Existing library records without this metadata remain valid as legacy or unassigned records until explicitly classified.
+
+Library standard context is used to guide candidate selection when building glossary records. It does not restrict downstream professional judgment.
 
 ---
 
@@ -314,6 +372,8 @@ fldGlossaryStandardVersion: "2010"
 ```
 
 Existing glossary records without this metadata remain valid as legacy or unassigned records.
+
+Glossary records are editable snapshots. They may add or remove citations, including citations from standards other than the source library record’s standard, when professional judgment requires it.
 
 ---
 
@@ -479,6 +539,29 @@ Even if the wording is identical, the records may differ in:
 
 This duplication is not a data-quality problem. It reflects real compliance differences.
 
+Controlled duplication applies to both glossary records and library Finding / Recommendation records.
+
+If the same finding or recommendation language applies under multiple standards, separate library records may be created for each applicable Glossary Set / standard-version context.
+
+Example:
+
+```text
+Finding language:
+"Grab bar height exceeds allowable maximum."
+
+Library records:
+- UFAS 1984 version
+- ADA 2010 version
+- TAS 2012 version
+- ANSI A117.1 2009 version
+```
+
+These records may have identical or near-identical text, but each may carry different citations, thresholds, measurement assumptions, applicability notes, or reporting context.
+
+This avoids storing multiple standard-specific citation sets inside a single library record and keeps snapshot inheritance simple.
+
+Future copy tools may help create equivalent records across standards, but copying must create a new independently editable library record.
+
 ---
 
 ## 11. Immediate Phase 1 Glossary Set Implementation
@@ -559,7 +642,33 @@ This registry would support:
 
 ---
 
-## 13. Future Phase: Project Families
+## 13. Future Phase: Library Standard Context Metadata
+
+A future implementation phase may expose standard-context metadata on library Findings and Recommendations.
+
+Possible fields:
+
+```ts
+fldGlossarySetId?: string;
+fldGlossarySetName?: string;
+fldStandardType?: string;
+fldStandardVersion?: string;
+```
+
+This phase should:
+
+- apply only to library Findings and Recommendations
+- not add standard context to Categories or Items
+- treat existing untagged records as legacy/unassigned
+- avoid backfills or migrations unless explicitly reviewed
+- avoid changing glossary filtering until a separate phase
+- avoid changing Project Data or reports
+
+The goal is to allow users to classify new library content as UFAS, ADA 2010, TAS 2012, ANSI A117.1, etc., while continuing active project work.
+
+---
+
+## 14. Future Phase: Project Families
 
 A future phase may add:
 
@@ -597,7 +706,7 @@ Users must always be able to enable additional Glossary Sets or remove suggested
 
 ---
 
-## 14. Future Phase: Active Glossary Set in Data Entry
+## 15. Future Phase: Active Glossary Set in Data Entry
 
 A future Data Entry phase should add:
 
@@ -620,7 +729,7 @@ Custom Record mode remains available regardless of active Glossary Set.
 
 ---
 
-## 15. Revised User Mental Model
+## 16. Revised User Mental Model
 
 User-facing mental model:
 
@@ -652,7 +761,7 @@ Project Data Record = final project-specific truth
 
 # ⚖️ Standards Model
 
-## 16. Standards Are Layered
+## 17. Standards Are Layered
 
 Projects may involve multiple overlapping standards, including:
 
@@ -669,7 +778,7 @@ The system must allow multiple standards to be relevant to the same project.
 
 ---
 
-## 17. Time-Based Compliance
+## 18. Time-Based Compliance
 
 Evaluation Standard may differ from Recommendation Standard.
 
@@ -691,7 +800,7 @@ A project or record may need to document:
 
 ---
 
-## 18. Standard Record Model
+## 19. Standard Record Model
 
 The `master_standards` library uses a unified schema.
 
@@ -721,7 +830,7 @@ fldStandardVersion
 
 # 🧬 Concept vs Version
 
-## 19. Concept Layer — Deferred
+## 20. Concept Layer — Deferred
 
 A future concept layer may be added.
 
@@ -747,7 +856,7 @@ This is deferred but should remain future-ready.
 
 ---
 
-## 20. Version Layer
+## 21. Version Layer
 
 Each concept may eventually exist as:
 
@@ -764,7 +873,7 @@ For now, controlled duplication across standards is acceptable and expected.
 
 # 🔁 Data Flow
 
-## 21. Library → Glossary
+## 22. Library → Glossary
 
 When creating a glossary record from library content, copy:
 
@@ -775,13 +884,29 @@ When creating a glossary record from library content, copy:
 - standards/citations
 - category/item/finding/recommendation IDs
 
+When selecting library content for a glossary record, the preferred candidate list should eventually be filtered by the active Glossary Set / standard-version context.
+
+Example:
+
+```text
+Active Glossary Set: UFAS 1984
+Selected Item: Grab Bars
+
+Preferred finding candidates:
+- library findings for Grab Bars with fldGlossarySetId = "UFAS_1984"
+```
+
+Library records from other Glossary Sets may be used as copy/template sources through explicit search or copy workflows, but they should not be silently treated as belonging to the active Glossary Set.
+
+Creating a glossary record from a library record copies the library record’s current content and citation defaults into the glossary as a snapshot.
+
 The glossary record becomes independently editable.
 
 Later changes to the library do not automatically update the glossary.
 
 ---
 
-## 22. Glossary → Data Record
+## 23. Glossary → Data Record
 
 When creating a project data record from a glossary record, copy:
 
@@ -799,7 +924,7 @@ Later changes to the glossary do not automatically update the data record.
 
 ---
 
-## 23. Integrity Rule
+## 24. Integrity Rule
 
 ```text
 Records NEVER update glossary automatically.
@@ -820,7 +945,7 @@ Explicit sync or refresh tools may be added in the future, but they must be:
 
 # 🧾 Record-Level Citations
 
-## 24. Citation Snapshot Model
+## 25. Citation Snapshot Model
 
 The citation model follows the broader snapshot inheritance architecture:
 
@@ -840,9 +965,17 @@ Project Data Record Citations
 
 Each layer inherits defaults from the layer above, but once copied, the citation set becomes an editable snapshot for that layer.
 
+Library citation defaults are standard-context-specific because library Findings and Recommendations are standard-context-specific.
+
+A library Finding or Recommendation should carry the citation defaults for its own Glossary Set / standard-version context.
+
+If identical wording is needed under another standard, the preferred approach is to create a separate library record for that standard context and assign that record its own citation defaults.
+
+Glossary records and Project Data records remain professionally flexible snapshots. They may add or remove citations, including citations from standards other than the source library record’s standard, when professional judgment requires it.
+
 ---
 
-## 25. Project Data Citations
+## 26. Project Data Citations
 
 ✅ DECIDED: Project data citations are stored on:
 
@@ -867,7 +1000,7 @@ Reports use `projectData.fldStandards` as the final citation source.
 
 ---
 
-## 26. Citation Reporting Policy
+## 27. Citation Reporting Policy
 
 ✅ DECIDED: Reports treat `projectData.fldStandards` as authoritative.
 
@@ -886,7 +1019,7 @@ This prevents removed record-level citations from reappearing in reports.
 
 ---
 
-## 27. Future Citation Drift / Refresh Workflow
+## 28. Future Citation Drift / Refresh Workflow
 
 Changes to citations at an upstream layer should not automatically mutate downstream records.
 
@@ -902,6 +1035,8 @@ should not automatically update:
 glossary.fldStandards
 projectData.fldStandards
 ```
+
+Because library records are standard-context-specific, citation drift review should compare a glossary record against the library Finding / Recommendation records from which it was originally copied, not against superficially similar records from other standards.
 
 A future workflow may allow users/admins to compare current library citation defaults against citations currently stored on a glossary record.
 
@@ -940,9 +1075,11 @@ The user/admin could then decide whether to:
 - apply all suggested changes
 - ignore the difference for this glossary record
 
+Future copy or refresh tools may help create equivalent library records across Glossary Sets, but such tools must create or update records explicitly and reviewably. They must not silently merge standards or mutate downstream snapshots.
+
 ---
 
-## 28. Citation Refresh Options
+## 29. Citation Refresh Options
 
 ### Option A: Per-Glossary Review
 
@@ -1003,7 +1140,7 @@ Bulk refresh must never be silent or automatic.
 
 ---
 
-## 29. Possible Citation Metadata for Future Sync
+## 30. Possible Citation Metadata for Future Sync
 
 Future records may store citation inheritance metadata such as:
 
@@ -1027,7 +1164,7 @@ A simpler first implementation can compare live library citation values against 
 
 # 📏 Measurement Metadata
 
-## 30. Measurement Metadata Snapshot
+## 31. Measurement Metadata Snapshot
 
 ✅ DECIDED: Project data snapshots measurement metadata from the finding/library context at record creation.
 
@@ -1066,7 +1203,7 @@ This protects statistical consistency and prevents users from accidentally mixin
 
 ---
 
-## 31. Measurement Metadata Repair
+## 32. Measurement Metadata Repair
 
 If a data record is missing measurement metadata, the correct process is:
 
@@ -1101,7 +1238,7 @@ The temporary audit/repair panel may be hidden from the UI after cleanup, but re
 
 # 🧰 Custom Project Records
 
-## 32. Custom Record Mode
+## 33. Custom Record Mode
 
 ✅ DECIDED: Data Entry supports custom project-only records.
 
@@ -1127,7 +1264,7 @@ Template IDs are trace fields only. They do not create glossary linkage.
 
 ---
 
-## 33. Custom Record Template Copy
+## 34. Custom Record Template Copy
 
 In Custom Record mode, users may:
 
@@ -1164,7 +1301,7 @@ fldUnitType
 
 ---
 
-## 34. Custom Record Promotion — Future Phase
+## 35. Custom Record Promotion — Future Phase
 
 Phase 1 allows users to create project-only custom data records that are not linked to the glossary or library.
 
@@ -1181,7 +1318,7 @@ Promotion into the library/glossary must be intentional and controlled.
 
 ---
 
-## 35. Request Add to Glossary — Future Phase
+## 36. Request Add to Glossary — Future Phase
 
 A future workflow may allow a user to submit a custom data record for review.
 
@@ -1236,7 +1373,7 @@ needs_revision
 
 ---
 
-## 36. Admin Review Workflow — Future Phase
+## 37. Admin Review Workflow — Future Phase
 
 Admins should eventually have a review queue for pending glossary requests.
 
@@ -1285,7 +1422,7 @@ Reject as project-specific only
 
 # 🏗️ Project Types / Project Families
 
-## 37. Project Families
+## 38. Project Families
 
 Project Families are practical compliance contexts.
 
@@ -1320,7 +1457,7 @@ They may not prevent users from enabling additional Glossary Sets.
 
 ---
 
-## 38. Harris Center Example
+## 39. Harris Center Example
 
 The Harris Center project is an example of a complex housing assessment.
 
@@ -1361,7 +1498,7 @@ The app may help organize these choices in the future, but the user must remain 
 
 # 🧪 UI Strategy
 
-## 39. Dual Mode
+## 40. Dual Mode
 
 FREDAsoft supports two broad usage modes:
 
@@ -1376,7 +1513,7 @@ Management and cleanup tools may be more detailed and desktop-oriented.
 
 ---
 
-## 40. Data Entry Modes
+## 41. Data Entry Modes
 
 Data Entry supports:
 
@@ -1401,7 +1538,7 @@ Custom Record mode:
 
 ---
 
-## 41. Citation UI in Data Entry
+## 42. Citation UI in Data Entry
 
 Data Entry uses the Standards Browser for record-level citations.
 
@@ -1455,7 +1592,7 @@ Firestore behavior must follow these principles:
 Users should understand:
 
 ```text
-Libraries define reusable language.
+Libraries define standard-context-specific reusable language and defaults.
 Glossary Sets define standard/version context.
 Glossary Records define approved combinations.
 Project Families suggest applicable Glossary Sets.
@@ -1495,7 +1632,7 @@ Defaults should be helpful, but not restrictive.
 # 🟢 Final Architecture Summary
 
 ```text
-Libraries → define reusable language and defaults
+Libraries → define standard-context-specific reusable language and defaults
 Glossary Sets → define standard/version working contexts
 Glossary Records → define approved category/item/finding/recommendation combinations
 Project Families → suggest applicable Glossary Sets
@@ -1511,6 +1648,8 @@ Standards → define legal/technical authority
 - Concept layer → deferred, future-ready
 - Snapshot inheritance → copied downward, independently editable
 - Glossary records → standard/version-indexed through Glossary Set metadata
+- Library Findings / Recommendations → standard-context-specific, one Glossary Set / standard-version context per record
+- Controlled duplication across standards → expected and acceptable
 - Project Families / Project Types → prescriptive defaults only, never restrictive
 - Standards handling → implicit multi-citation model
 - Library sync → explicit only, never automatic, with backup protection
@@ -1529,6 +1668,7 @@ Near-term:
 - tag current Harris Center glossary work as UFAS
 - expose Glossary Set metadata in Glossary Builder
 - show/filter Glossary Set metadata in Glossary Explorer
+- document and later expose standard-context metadata for library Findings and Recommendations
 
 Later:
 
@@ -1536,6 +1676,76 @@ Later:
 - add Project Family presets
 - allow projects to enable multiple Glossary Sets
 - add active Glossary Set selector in Data Entry
+- add library Finding / Recommendation standard-context metadata if not already implemented
 - add explicit citation drift review
 - add custom record promotion workflow
 - continue Firestore security hardening
+
+## Project Context Management
+
+Projects, facilities, and locations are project-context entities.
+
+They may be edited, but they should not be hard-deleted while project data or child entities depend on them.
+
+Preferred lifecycle:
+
+```text
+active → archived → admin hard delete, only if safe
+
+
+And another section:
+
+```markdown
+## Project Personnel
+
+People may act as Inspectors, Reviewers, or both.
+
+Projects should eventually support multiple assigned people rather than a single inspector.
+
+Project team assignment is distinct from record authorship. A future project team model may store assigned users with project-specific roles such as inspector and reviewer.
+
+Plan review workflows will use Reviewers, while field assessment workflows will use Inspectors. Some users may serve in both capacities.
+
+## Future Phase: Project Context Entity Management
+
+Projects, facilities, and locations use archive-first lifecycle management.
+
+Preferred lifecycle:
+
+```text
+active → archived → admin hard delete, only if safe
+
+For dependency guards, I would use these rules:
+
+Project:
+- block archive if active projectData exists for the project
+- decide separately whether linked facilities in fldFacilities[] should also block archive
+Projects, facilities, and locations may be edited, but they must not be archived or hard-deleted while active dependent records exist.
+
+Dependency rules:
+
+A project may not be archived if active projectData records reference it.
+A facility may not be archived if active projectData records or active locations reference it.
+A location may not be archived if active projectData records reference it.
+
+Facilities are the working entity for buildings and other built-environment areas. Buildings are treated as a type of facility, not a separate required hierarchy layer.
+
+Locations remain a flexible project-defined label for now. Structured location fields may be added later, but current workflows should support disciplined naming conventions.
+
+Hard delete is reserved for admin cleanup of erroneous entries and should require strict proof that no active dependent records exist.
+
+Facility:
+- block archive if active projectData exists for the facility
+- block archive if active locations exist for the facility
+
+Location:
+- block archive if active projectData references the location
+
+Add a concise future phase section covering:
+1. active → archived → admin hard delete lifecycle
+2. dependency guards for projects, facilities, locations
+3. no cascade delete
+4. no silent mutation of projectData
+5. facility as the building/site entity
+6. locations as flexible labels for now
+7. inspector/reviewer/team model deferred
