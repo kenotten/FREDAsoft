@@ -1493,7 +1493,7 @@ export default function ProjectDataEntry({
     onDeleteRecord(id, {
       title: 'Delete project data record',
       message:
-        'You are about to permanently delete this inspection data record from the project. Its findings, recommendations, images, and citations will be removed. This action cannot be undone.',
+        'This inspection record will be moved to deleted records and hidden from Data Entry and Data Explorer. Its data stays in the project until you restore it from the dashboard Trash Bin (admin) or it is removed by maintenance cleanup.',
       afterDelete: resetDataEntryAfterRecordDeleted
     });
   };

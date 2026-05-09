@@ -120,8 +120,18 @@ export interface EntityManagementProps {
   onRestoreClient: (id: string) => void;
   onRestoreFacility: (id: string) => void;
   onRestoreProject: (id: string) => void;
+  onRestoreProjectData: (id: string) => void;
   onCleanupOrphans: () => Promise<void>;
   deletedRecords: any;
+  /** Raw portfolio + library rows for resolving deleted inspection record labels in Trash Bin */
+  trashInspectionLookup: {
+    clients: any[];
+    facilities: any[];
+    projects: any[];
+    locations: any[];
+    categories: any[];
+    items: any[];
+  };
 }
 
 export interface ProjectContextProps {

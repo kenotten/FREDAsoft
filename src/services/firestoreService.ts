@@ -197,11 +197,16 @@ export const firestoreService = {
   async softDelete(collectionName: string, id: string, deletedBy?: string) {
     try {
       const docRef = doc(db, collectionName, id);
-      await setDoc(docRef, { 
-        fldIsDeleted: true, 
+      const payload: Record<string, unknown> = {
+        fldIsDeleted: true,
         fldDeletedAt: serverTimestamp(),
         fldDeletedBy: deletedBy || 'system'
-      }, { merge: true });
+      };
+      // projectData is filtered in the app by both fldIsDeleted and fldDeleted
+      if (collectionName === 'projectData') {
+        payload.fldDeleted = true;
+      }
+      await setDoc(docRef, payload, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `${collectionName}/${id}`);
     }
@@ -213,8 +218,9 @@ export const firestoreService = {
   async restore(collectionName: string, id: string) {
     try {
       const docRef = doc(db, collectionName, id);
-      await setDoc(docRef, { 
-        fldIsDeleted: false, 
+      await setDoc(docRef, {
+        fldIsDeleted: false,
+        fldDeleted: false,
         fldDeletedAt: null,
         fldDeletedBy: null
       }, { merge: true });

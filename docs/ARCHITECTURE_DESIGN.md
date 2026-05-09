@@ -193,6 +193,8 @@ recommendations   → library recommendations / master recommendations
 users             → roles and identity
 ```
 
+✅ DECIDED: User-initiated deletion of `projectData` inspection records is a **soft delete** (`fldIsDeleted`, `fldDeleted`, `fldDeletedAt`, `fldDeletedBy`). Active views filter these out. Restore clears those flags via `firestoreService.restore('projectData', id)`. Hard document delete remains only for explicit maintenance paths (e.g. orphan cleanup), not for normal user delete.
+
 ---
 
 # 🧠 Libraries, Glossary Sets, Glossary Records, and Data Records

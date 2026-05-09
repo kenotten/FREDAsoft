@@ -136,9 +136,11 @@ export function DashboardView({
       {isAdmin && showTrash && (
         <TrashBin 
           deletedRecords={entityProps.deletedRecords}
+          trashInspectionLookup={entityProps.trashInspectionLookup}
           onRestoreClient={entityProps.onRestoreClient}
           onRestoreFacility={entityProps.onRestoreFacility}
           onRestoreProject={entityProps.onRestoreProject}
+          onRestoreProjectData={entityProps.onRestoreProjectData}
         />
       )}
 
