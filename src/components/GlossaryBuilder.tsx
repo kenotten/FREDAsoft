@@ -41,6 +41,59 @@ import {
   MasterStandard 
 } from '../types';
 
+/** Empty string = Unassigned/Legacy bucket (must not match a real set id). */
+function normalizeGlossaryRecordSetKey(raw: string | undefined | null): string {
+  const t = String(raw ?? '').trim();
+  if (!t) return '';
+  const def = glossarySetById(t);
+  return def ? def.id : t;
+}
+
+function glossarySameFourTuple(
+  g: any,
+  selectedCat: string,
+  selectedItem: string,
+  selectedFind: string,
+  selectedRec: string
+): boolean {
+  return (
+    String(g.fldCat || '').toLowerCase().trim() === String(selectedCat || '').toLowerCase().trim() &&
+    String(g.fldItem || '').toLowerCase().trim() === String(selectedItem || '').toLowerCase().trim() &&
+    String(g.fldFind || '').toLowerCase().trim() === String(selectedFind || '').toLowerCase().trim() &&
+    String(g.fldRec || g.fldRecID || '').toLowerCase().trim() === String(selectedRec || '').toLowerCase().trim()
+  );
+}
+
+function findExactGlossaryByFiveTuple(
+  glossaryList: any[],
+  selectedCat: string,
+  selectedItem: string,
+  selectedFind: string,
+  selectedRec: string,
+  selectedSetKey: string
+) {
+  return glossaryList.find(
+    (g: any) =>
+      glossarySameFourTuple(g, selectedCat, selectedItem, selectedFind, selectedRec) &&
+      normalizeGlossaryRecordSetKey(g.fldGlossarySetId) === selectedSetKey
+  );
+}
+
+function filterGlossaryFourTupleOtherSets(
+  glossaryList: any[],
+  selectedCat: string,
+  selectedItem: string,
+  selectedFind: string,
+  selectedRec: string,
+  selectedSetKey: string
+) {
+  return glossaryList.filter(
+    (g: any) =>
+      glossarySameFourTuple(g, selectedCat, selectedItem, selectedFind, selectedRec) &&
+      normalizeGlossaryRecordSetKey(g.fldGlossarySetId) !== selectedSetKey
+  );
+}
+
 interface GlossaryBuilderProps {
   categories: Category[];
   items: Item[];
@@ -169,7 +222,7 @@ export function GlossaryBuilder({
     setTimeout(() => { isUpdatingRef.current = false; }, 500);
   };
 
-  // Sync glossary overrides to selections when combination changes
+  // Sync glossary overrides to selections when combination + glossary set changes (5-tuple product model).
   useEffect(() => {
     if (!selectedCat || !selectedItem || !selectedFind || !selectedRec) {
       setLibraryGlossaryContextMismatch(false);
@@ -177,71 +230,149 @@ export function GlossaryBuilder({
     }
     if (selections.isDirty) return;
 
-    const existing = glossary.find((g: any) => 
-        String(g.fldCat || "").toLowerCase().trim() === String(selectedCat || "").toLowerCase().trim() && 
-        String(g.fldItem || "").toLowerCase().trim() === String(selectedItem || "").toLowerCase().trim() && 
-        String(g.fldFind || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim() && 
-        (g.fldRec || g.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim()
-      );
-      
-      if (existing) {
-        const matchedFinding = findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
-        const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
-        setSelectedGlossarySetId(existing.fldGlossarySetId || '');
-        setLibraryGlossaryContextMismatch(false);
-
-        onSelectionChange({
-          ...selections,
-          fldUnitCost: existing.fldUnitCost ?? undefined,
-          fldUnitType: existing.fldUnitType ?? undefined,
-          stagedFindShort: matchedFinding?.fldFindShort || "",
-          stagedFindLong: matchedFinding?.fldFindLong || "",
-          stagedRecShort: matchedRec?.fldRecShort || "",
-          stagedRecLong: matchedRec?.fldRecLong || "",
-          editingGlossaryId: existing.fldGlosId || existing.id || '',
-          images: existing.fldImages || [],
-          isDirty: false
-        });
-      } else {
-        const matchedFinding = findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
-        const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
-
-        const resolveLibSetId = (raw: string | undefined) => {
-          const t = String(raw || '').trim();
-          if (!t) return '';
-          return glossarySetById(t)?.id || t;
-        };
-        const fCanon = resolveLibSetId(matchedFinding?.fldGlossarySetId);
-        const rCanon = resolveLibSetId(matchedRec?.fldGlossarySetId);
-        const fKey = fCanon.toLowerCase();
-        const rKey = rCanon.toLowerCase();
-        let nextId = '';
-        let mismatch = false;
-        if (fKey && rKey && fKey !== rKey) {
-          mismatch = true;
-          nextId = fCanon;
-        } else if (fKey) {
-          nextId = fCanon;
-        } else if (rKey) {
-          nextId = rCanon;
+    /** User-selected set in dropdown; '' = Unassigned/Legacy. */
+    const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
+    /**
+     * When dropdown is still empty but Explorer set editingGlossaryId on a matching 4-tuple row,
+     * infer that row's set for exact lookup only (avoids matching the wrong legacy row first).
+     */
+    let keyForExactLookup = selectedSetKeyUi;
+    if (keyForExactLookup === '') {
+      const gid = String(selections.editingGlossaryId || '').trim();
+      if (gid) {
+        const rowById = (glossary || []).find(
+          (g: any) => String(g.fldGlosId || g.id || '').trim() === gid
+        );
+        if (
+          rowById &&
+          glossarySameFourTuple(rowById, selectedCat, selectedItem, selectedFind, selectedRec)
+        ) {
+          keyForExactLookup = normalizeGlossaryRecordSetKey(rowById.fldGlossarySetId);
         }
-        setSelectedGlossarySetId(nextId);
-        setLibraryGlossaryContextMismatch(mismatch);
-
-        onSelectionChange({
-          ...selections,
-          fldUnitCost: undefined,
-          fldUnitType: undefined,
-          stagedFindShort: matchedFinding?.fldFindShort || "",
-          stagedFindLong: matchedFinding?.fldFindLong || "",
-          stagedRecShort: matchedRec?.fldRecShort || "",
-          stagedRecLong: matchedRec?.fldRecLong || "",
-          editingGlossaryId: '',
-          images: [],
-          isDirty: false
-        });
       }
-  }, [selectedCat, selectedItem, selectedFind, selectedRec, glossary, findings, masterRecommendations, selections.isDirty]);
+    }
+
+    const exact = findExactGlossaryByFiveTuple(
+      glossary || [],
+      selectedCat,
+      selectedItem,
+      selectedFind,
+      selectedRec,
+      keyForExactLookup
+    );
+    const otherSetRows = filterGlossaryFourTupleOtherSets(
+      glossary || [],
+      selectedCat,
+      selectedItem,
+      selectedFind,
+      selectedRec,
+      selectedSetKeyUi
+    );
+
+    const matchedFinding = findings?.find(f =>
+      String(f.id || f.fldFindID || '').toLowerCase().trim() === String(selectedFind || '').toLowerCase().trim()
+    );
+    const matchedRec = masterRecsSource?.find(r =>
+      String(r.id || r.fldRecID || '').toLowerCase().trim() === String(selectedRec || '').toLowerCase().trim()
+    );
+
+    if (exact) {
+      setLibraryGlossaryContextMismatch(false);
+      setSelectedGlossarySetId(normalizeGlossaryRecordSetKey(exact.fldGlossarySetId));
+
+      onSelectionChange({
+        ...selections,
+        fldUnitCost: exact.fldUnitCost ?? undefined,
+        fldUnitType: exact.fldUnitType ?? undefined,
+        stagedFindShort: matchedFinding?.fldFindShort || '',
+        stagedFindLong: matchedFinding?.fldFindLong || '',
+        stagedRecShort: matchedRec?.fldRecShort || '',
+        stagedRecLong: matchedRec?.fldRecLong || '',
+        editingGlossaryId: exact.fldGlosId || exact.id || '',
+        images: exact.fldImages || [],
+        isDirty: false
+      });
+      return;
+    }
+
+    if (otherSetRows.length > 0) {
+      const templateRow = otherSetRows[0];
+      const resolveLibSetId = (raw: string | undefined) => {
+        const t = String(raw || '').trim();
+        if (!t) return '';
+        return glossarySetById(t)?.id || t;
+      };
+      const fCanon = resolveLibSetId(matchedFinding?.fldGlossarySetId);
+      const rCanon = resolveLibSetId(matchedRec?.fldGlossarySetId);
+      const fKey = fCanon.toLowerCase();
+      const rKey = rCanon.toLowerCase();
+      let mismatch = false;
+      if (fKey && rKey && fKey !== rKey) {
+        mismatch = true;
+      }
+      setLibraryGlossaryContextMismatch(mismatch);
+
+      onSelectionChange({
+        ...selections,
+        fldUnitCost: undefined,
+        fldUnitType: undefined,
+        stagedFindShort: matchedFinding?.fldFindShort || '',
+        stagedFindLong: matchedFinding?.fldFindLong || '',
+        stagedRecShort: matchedRec?.fldRecShort || '',
+        stagedRecLong: matchedRec?.fldRecLong || '',
+        editingGlossaryId: '',
+        images: Array.isArray(templateRow?.fldImages) ? templateRow.fldImages : [],
+        isDirty: false
+      });
+      return;
+    }
+
+    const resolveLibSetId = (raw: string | undefined) => {
+      const t = String(raw || '').trim();
+      if (!t) return '';
+      return glossarySetById(t)?.id || t;
+    };
+    const fCanon = resolveLibSetId(matchedFinding?.fldGlossarySetId);
+    const rCanon = resolveLibSetId(matchedRec?.fldGlossarySetId);
+    const fKey = fCanon.toLowerCase();
+    const rKey = rCanon.toLowerCase();
+    let nextId = '';
+    let mismatch = false;
+    if (fKey && rKey && fKey !== rKey) {
+      mismatch = true;
+      nextId = fCanon;
+    } else if (fKey) {
+      nextId = fCanon;
+    } else if (rKey) {
+      nextId = rCanon;
+    }
+    setSelectedGlossarySetId(nextId);
+    setLibraryGlossaryContextMismatch(mismatch);
+
+    onSelectionChange({
+      ...selections,
+      fldUnitCost: undefined,
+      fldUnitType: undefined,
+      stagedFindShort: matchedFinding?.fldFindShort || '',
+      stagedFindLong: matchedFinding?.fldFindLong || '',
+      stagedRecShort: matchedRec?.fldRecShort || '',
+      stagedRecLong: matchedRec?.fldRecLong || '',
+      editingGlossaryId: '',
+      images: [],
+      isDirty: false
+    });
+  }, [
+    selectedCat,
+    selectedItem,
+    selectedFind,
+    selectedRec,
+    selectedGlossarySetId,
+    glossary,
+    findings,
+    masterRecommendations,
+    selections.isDirty,
+    selections.editingGlossaryId
+  ]);
 
   const [newType, setNewType] = useState<'category' | 'item' | 'finding' | 'recommendation' | 'glossary_record' | 'link_recommendation' | null>(null);
 
@@ -357,23 +488,7 @@ export function GlossaryBuilder({
       return;
     }
 
-    // If we have an explicit editing ID, use it.
-    // Otherwise, try to find an existing record with the same link to avoid duplicates.
-    let targetGlosId = selections.editingGlossaryId;
-    let isUpdate = !!targetGlosId;
-
-    if (!targetGlosId) {
-      const existing = glossary.find((g: any) => 
-        String(g.fldCat || "").toLowerCase().trim() === String(selectedCat || "").toLowerCase().trim() && 
-        String(g.fldItem || "").toLowerCase().trim() === String(selectedItem || "").toLowerCase().trim() && 
-        String(g.fldFind || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim() && 
-        (g.fldRec || g.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim()
-      );
-      if (existing) {
-        targetGlosId = existing.fldGlosId || existing.id;
-        isUpdate = true;
-      }
-    }
+    const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
 
     try {
       setIsSynced(false);
@@ -420,8 +535,18 @@ export function GlossaryBuilder({
         fldStandards: normalizeStringArray(stagedGlosStds)
       };
 
-      if (isUpdate && targetGlosId) {
-        await firestoreService.glossary.save(sanitizeData(payload), targetGlosId);
+      const exactNow = findExactGlossaryByFiveTuple(
+        glossary || [],
+        selectedCat,
+        selectedItem,
+        selectedFind,
+        selectedRec,
+        selectedSetKeyUi
+      );
+      const updateId = exactNow ? String(exactNow.fldGlosId || exactNow.id || '').trim() : '';
+
+      if (updateId) {
+        await firestoreService.glossary.save(sanitizeData(payload), updateId);
         toast.success('Glossary record and master citations updated!');
       } else {
         const glosId = uuidv4();
@@ -443,7 +568,19 @@ export function GlossaryBuilder({
         isDirty: false 
       });
     } catch (error) {
-      handleFirestoreError(error, isUpdate ? OperationType.UPDATE : OperationType.CREATE, 'glossary');
+      const exactForErr = findExactGlossaryByFiveTuple(
+        glossary || [],
+        selectedCat,
+        selectedItem,
+        selectedFind,
+        selectedRec,
+        selectedSetKeyUi
+      );
+      handleFirestoreError(
+        error,
+        exactForErr ? OperationType.UPDATE : OperationType.CREATE,
+        'glossary'
+      );
     }
   };
 
@@ -851,6 +988,69 @@ export function GlossaryBuilder({
     return filtered;
   }, [masterRecsSource, glossary, selectedItem]);
 
+  const glossaryWorkflowStatus = useMemo(() => {
+    if (!selectedCat || !selectedItem || !selectedFind || !selectedRec) {
+      return { kind: 'incomplete' as const };
+    }
+    const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
+    let keyForExactLookup = selectedSetKeyUi;
+    if (keyForExactLookup === '') {
+      const gid = String(selections.editingGlossaryId || '').trim();
+      if (gid) {
+        const rowById = (glossary || []).find(
+          (g: any) => String(g.fldGlosId || g.id || '').trim() === gid
+        );
+        if (
+          rowById &&
+          glossarySameFourTuple(rowById, selectedCat, selectedItem, selectedFind, selectedRec)
+        ) {
+          keyForExactLookup = normalizeGlossaryRecordSetKey(rowById.fldGlossarySetId);
+        }
+      }
+    }
+    const exact = findExactGlossaryByFiveTuple(
+      glossary || [],
+      selectedCat,
+      selectedItem,
+      selectedFind,
+      selectedRec,
+      keyForExactLookup
+    );
+    const otherSetRows = filterGlossaryFourTupleOtherSets(
+      glossary || [],
+      selectedCat,
+      selectedItem,
+      selectedFind,
+      selectedRec,
+      selectedSetKeyUi
+    );
+    if (exact) {
+      const id = String(exact.fldGlosId || exact.id || '').trim();
+      return { kind: 'existing' as const, glosId: id };
+    }
+    if (otherSetRows.length > 0) {
+      const src = otherSetRows[0];
+      const sourceLabel =
+        String(src.fldGlossarySetName || '').trim() ||
+        glossarySetById(src.fldGlossarySetId)?.name ||
+        normalizeGlossaryRecordSetKey(src.fldGlossarySetId) ||
+        'Unassigned / Legacy';
+      const targetLabel =
+        glossarySetById(selectedGlossarySetId)?.name ||
+        (selectedSetKeyUi ? String(selectedGlossarySetId).trim() : 'Unassigned / Legacy');
+      return { kind: 'template' as const, sourceLabel, targetLabel };
+    }
+    return { kind: 'new' as const };
+  }, [
+    selectedCat,
+    selectedItem,
+    selectedFind,
+    selectedRec,
+    selectedGlossarySetId,
+    glossary,
+    selections.editingGlossaryId
+  ]);
+
   return (
     <div className="space-y-6">
       <div className="text-[10px] font-mono text-zinc-400 mb-2">v87.0 | DATA_ALIGNED</div>
@@ -863,11 +1063,14 @@ export function GlossaryBuilder({
             </Button>
             {selectedCat && selectedItem && selectedFind && selectedRec && (
               <Button size="sm" variant="ghost" onClick={() => {
-                const existing = glossary?.find((g: any) => 
-                  String(g.fldCat || "").toLowerCase().trim() === String(selectedCat || "").toLowerCase().trim() && 
-                  String(g.fldItem || "").toLowerCase().trim() === String(selectedItem || "").toLowerCase().trim() && 
-                  String(g.fldFind || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim() && 
-                  (g.fldRec || g.fldRecID) === selectedRec
+                const sk = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
+                const existing = findExactGlossaryByFiveTuple(
+                  glossary || [],
+                  selectedCat,
+                  selectedItem,
+                  selectedFind,
+                  selectedRec,
+                  sk
                 );
                 if (existing) setConfirmDelete({ id: existing.fldGlosId, collection: 'glossary', label: 'this glossary record', type: 'delete' });
               }} className="text-red-500 hover:text-red-700 hover:bg-red-50">
@@ -912,6 +1115,31 @@ export function GlossaryBuilder({
             <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-950">
               <span className="font-bold">Glossary Set mismatch:</span> the selected library finding and recommendation are tagged to different standard contexts. The default above follows the{' '}
               <span className="font-bold">finding&apos;s</span> Glossary Set (deterministic rule). Adjust the dropdown if the glossary record should use a different set.
+            </div>
+          )}
+
+          {hasMinimumContext && glossaryWorkflowStatus.kind === 'existing' && (
+            <div
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] leading-snug text-emerald-950"
+              title={glossaryWorkflowStatus.glosId}
+            >
+              <span className="font-bold">Existing Glossary Record</span>
+              {' — '}
+              <span className="font-mono text-[10px]">{glossaryWorkflowStatus.glosId}</span>
+            </div>
+          )}
+          {hasMinimumContext && glossaryWorkflowStatus.kind === 'new' && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-950">
+              <span className="font-bold">New Glossary Record Pending</span>
+              {' — '}
+              Save will create a new glossary row for the selected Glossary Set (no exact match for Category + Item + Finding + Recommendation + Set).
+            </div>
+          )}
+          {hasMinimumContext && glossaryWorkflowStatus.kind === 'template' && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-950">
+              <span className="font-bold">Template:</span> Using{' '}
+              <span className="font-bold">{glossaryWorkflowStatus.sourceLabel}</span> glossary as a reference for{' '}
+              <span className="font-bold">{glossaryWorkflowStatus.targetLabel}</span>. Save will create a new glossary record for the target set (the source row will not be moved).
             </div>
           )}
 
