@@ -31,6 +31,7 @@ import { Button, Select, Card, Input, Modal } from './ui/core';
 import { toast } from 'sonner';
 import { firestoreService, OperationType, handleFirestoreError } from '../services/firestoreService';
 import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
+import { normalizeForDeterministicMatch } from '../lib/textNormalize';
 import { 
   Category, 
   Item, 
@@ -195,6 +196,7 @@ export function GlossaryBuilder({
     sourceGlosStds: string[];
     sourceIdentityKey: string;
   } | null>(null);
+  const [isPreparingTargetSetRecords, setIsPreparingTargetSetRecords] = useState(false);
 
   useEffect(() => {
     onGlossarySetIdChange?.(String(selectedGlossarySetId || '').trim());
@@ -226,6 +228,161 @@ export function GlossaryBuilder({
     });
     setTemplateSourceSnapshot(null);
     setLibraryGlossaryContextMismatch(false);
+  };
+
+  const handlePrepareTargetSetRecords = async () => {
+    if (isPreparingTargetSetRecords) return;
+    if (!selectedCat || !selectedItem || !selectedFind || !selectedRec) {
+      toast.error('Select Category, Item, Finding, and Recommendation first.');
+      return;
+    }
+    const targetSet = glossarySetById(selectedGlossarySetId);
+    if (!targetSet) {
+      toast.error('Select a target Glossary Set first.');
+      return;
+    }
+
+    const sourceFinding = findings.find(
+      (f: any) =>
+        String(f.id || f.fldFindID || '').toLowerCase().trim() ===
+        String(selectedFind || '').toLowerCase().trim()
+    );
+    const sourceRec = masterRecsSource.find(
+      (r: any) =>
+        String(r.id || r.fldRecID || '').toLowerCase().trim() ===
+        String(selectedRec || '').toLowerCase().trim()
+    );
+    if (!sourceFinding || !sourceRec) {
+      toast.error('Source Finding/Recommendation not found.');
+      return;
+    }
+
+    const sourceSetId = String(templateSourceSnapshot?.sourceGlossarySetId || '').trim();
+    const sourceFindShortN = normalizeForDeterministicMatch(sourceFinding.fldFindShort);
+    const sourceFindLongN = normalizeForDeterministicMatch(sourceFinding.fldFindLong);
+    const sourceRecShortN = normalizeForDeterministicMatch(sourceRec.fldRecShort);
+    const sourceRecLongN = normalizeForDeterministicMatch(sourceRec.fldRecLong);
+    const sourceRecItem = String(sourceRec.fldItem || '').trim();
+
+    const findingMatches = (Array.isArray(findings) ? findings : []).filter((f: any) => {
+      const setKey = normalizeGlossaryRecordSetKey(f.fldGlossarySetId);
+      if (setKey !== targetSet.id) return false;
+      if (String(f.fldItem || '').toLowerCase().trim() !== String(selectedItem || '').toLowerCase().trim()) return false;
+      return (
+        normalizeForDeterministicMatch(f.fldFindShort) === sourceFindShortN &&
+        normalizeForDeterministicMatch(f.fldFindLong) === sourceFindLongN
+      );
+    });
+    const recMatches = (Array.isArray(masterRecsSource) ? masterRecsSource : []).filter((r: any) => {
+      const setKey = normalizeGlossaryRecordSetKey(r.fldGlossarySetId);
+      if (setKey !== targetSet.id) return false;
+      if (sourceRecItem) {
+        if (String(r.fldItem || '').toLowerCase().trim() !== sourceRecItem.toLowerCase().trim()) return false;
+      }
+      return (
+        normalizeForDeterministicMatch(r.fldRecShort) === sourceRecShortN &&
+        normalizeForDeterministicMatch(r.fldRecLong) === sourceRecLongN
+      );
+    });
+
+    if (findingMatches.length > 1) {
+      toast.error('Multiple target-set Finding text matches found. Resolve manually.');
+      return;
+    }
+    if (recMatches.length > 1) {
+      toast.error('Multiple target-set Recommendation text matches found. Resolve manually.');
+      return;
+    }
+
+    setIsPreparingTargetSetRecords(true);
+    try {
+      const copiedAt = new Date().toISOString();
+      let targetFindingId = String(findingMatches[0]?.id || findingMatches[0]?.fldFindID || '').trim();
+      let targetRecId = String(recMatches[0]?.id || recMatches[0]?.fldRecID || '').trim();
+
+      if (!targetFindingId) {
+        targetFindingId = uuidv4();
+        const findingPayload = sanitizeData({
+          fldFindID: targetFindingId,
+          fldItem: selectedItem,
+          fldFindShort: sourceFinding.fldFindShort || '',
+          fldFindLong: sourceFinding.fldFindLong || '',
+          fldOrder: sourceFinding.fldOrder ?? 999,
+          fldMeasurementType: sourceFinding.fldMeasurementType || '',
+          fldUnitType: sourceFinding.fldUnitType || '',
+          fldSuggestedRecs: [],
+          fldStandards: [],
+          fldGlossarySetId: targetSet.id,
+          fldGlossarySetName: targetSet.name,
+          fldStandardType: targetSet.standardType,
+          fldStandardVersion: targetSet.standardVersion,
+          fldSourceFindingId: String(sourceFinding.id || sourceFinding.fldFindID || '').trim(),
+          fldSourceGlossarySetId: sourceSetId || null,
+          fldSourceCopiedAt: copiedAt,
+        });
+        await firestoreService.save('findings', findingPayload, targetFindingId);
+        toast.success(`Created target-set Finding (${targetSet.name})`);
+      } else {
+        toast.success(`Reused existing target-set Finding (${targetSet.name})`);
+      }
+
+      if (!targetRecId) {
+        targetRecId = uuidv4();
+        const recPayload = sanitizeData({
+          fldRecID: targetRecId,
+          fldRecShort: sourceRec.fldRecShort || '',
+          fldRecLong: sourceRec.fldRecLong || '',
+          fldOrder: sourceRec.fldOrder ?? 999,
+          fldUnit: Number(sourceRec.fldUnit) || 0,
+          fldUOM: sourceRec.fldUOM || 'EA',
+          ...(sourceRecItem ? { fldItem: sourceRecItem } : {}),
+          fldStandards: [],
+          fldGlossarySetId: targetSet.id,
+          fldGlossarySetName: targetSet.name,
+          fldStandardType: targetSet.standardType,
+          fldStandardVersion: targetSet.standardVersion,
+          fldSourceRecommendationId: String(sourceRec.id || sourceRec.fldRecID || '').trim(),
+          fldSourceGlossarySetId: sourceSetId || null,
+          fldSourceCopiedAt: copiedAt,
+        });
+        await firestoreService.masterRecommendations.save(recPayload, targetRecId);
+        toast.success(`Created target-set Recommendation (${targetSet.name})`);
+      } else {
+        toast.success(`Reused existing target-set Recommendation (${targetSet.name})`);
+      }
+
+      const targetFinding = findingMatches[0] || findings.find(
+        (f: any) =>
+          String(f.id || f.fldFindID || '').toLowerCase().trim() === targetFindingId.toLowerCase().trim()
+      );
+      const targetRec = recMatches[0] || masterRecsSource.find(
+        (r: any) =>
+          String(r.id || r.fldRecID || '').toLowerCase().trim() === targetRecId.toLowerCase().trim()
+      );
+
+      onSelectionChange({
+        ...selections,
+        selectedFind: targetFindingId,
+        selectedRec: targetRecId,
+        editingGlossaryId: '',
+        stagedFindShort: targetFinding?.fldFindShort || sourceFinding.fldFindShort || '',
+        stagedFindLong: targetFinding?.fldFindLong || sourceFinding.fldFindLong || '',
+        stagedRecShort: targetRec?.fldRecShort || sourceRec.fldRecShort || '',
+        stagedRecLong: targetRec?.fldRecLong || sourceRec.fldRecLong || '',
+        isDirty: false,
+      });
+
+      onReplaceStagedStandards?.({
+        finding: findingMatches[0] ? normalizeStringArray(findingMatches[0].fldStandards) : [],
+        rec: recMatches[0] ? normalizeStringArray(recMatches[0].fldStandards) : [],
+        glossary: [],
+      });
+    } catch (error) {
+      console.error('Prepare target-set records error:', error);
+      toast.error('Failed to prepare target-set records');
+    } finally {
+      setIsPreparingTargetSetRecords(false);
+    }
   };
 
   const normalizeStringArray = (value: any): string[] => {
@@ -1300,15 +1457,35 @@ export function GlossaryBuilder({
                   <span className="font-bold">{glossaryWorkflowStatus.targetLabel}</span>. Save will create a new glossary record for the target set (the source row will not be moved).
                 </p>
                 {templateSourceSnapshot && (
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="secondary"
-                    className="h-6 px-2 text-[10px] whitespace-nowrap"
-                    onClick={handleRevertTemplateSource}
-                  >
-                    Revert
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="secondary"
+                      className="h-6 px-2 text-[10px] whitespace-nowrap"
+                      onClick={handlePrepareTargetSetRecords}
+                      disabled={
+                        isPreparingTargetSetRecords ||
+                        !selectedGlossarySetId ||
+                        !selectedCat ||
+                        !selectedItem ||
+                        !selectedFind ||
+                        !selectedRec
+                      }
+                    >
+                      {isPreparingTargetSetRecords ? 'Preparing...' : 'Prepare Target Set Records'}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="secondary"
+                      className="h-6 px-2 text-[10px] whitespace-nowrap"
+                      onClick={handleRevertTemplateSource}
+                      disabled={isPreparingTargetSetRecords}
+                    >
+                      Revert
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>

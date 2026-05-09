@@ -102,6 +102,12 @@ export interface Finding {
   fldGlossarySetName?: string;
   fldStandardType?: string;
   fldStandardVersion?: string;
+  /** Lineage only (not equality): source finding this record was copied from */
+  fldSourceFindingId?: string;
+  /** Lineage only (not equality): source glossary set id */
+  fldSourceGlossarySetId?: string;
+  /** Lineage timestamp/string */
+  fldSourceCopiedAt?: any;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
 }
@@ -132,6 +138,12 @@ export interface MasterRecommendation {
   fldGlossarySetName?: string;
   fldStandardType?: string;
   fldStandardVersion?: string;
+  /** Lineage only (not equality): source recommendation this record was copied from */
+  fldSourceRecommendationId?: string;
+  /** Lineage only (not equality): source glossary set id */
+  fldSourceGlossarySetId?: string;
+  /** Lineage timestamp/string */
+  fldSourceCopiedAt?: any;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
 }
