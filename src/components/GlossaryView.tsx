@@ -4,6 +4,7 @@ import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 import { GlossaryBuilder } from './GlossaryBuilder';
 import { MasterStandard, Finding, MasterRecommendation, Glossary } from '../types';
+import { glossarySetById } from '../lib/glossarySets';
 
 export function GlossaryView({ 
   categories = [], 
@@ -28,6 +29,19 @@ export function GlossaryView({
   const [stagedFindingStds, setStagedFindingStds] = useState<string[]>([]);
   const [stagedRecStds, setStagedRecStds] = useState<string[]>([]);
   const [stagedGlosStds, setStagedGlosStds] = useState<string[]>([]);
+  const [selectedGlossarySetIdForStandardsSync, setSelectedGlossarySetIdForStandardsSync] = useState('');
+
+  const preferredStandardContext = React.useMemo(() => {
+    const setId = String(selectedGlossarySetIdForStandardsSync || '').trim();
+    if (!setId) return undefined;
+    const setDef = glossarySetById(setId);
+    if (!setDef) return undefined;
+    return {
+      type: setDef.standardType,
+      version: setDef.standardVersion,
+      syncToken: setDef.id,
+    };
+  }, [selectedGlossarySetIdForStandardsSync]);
 
   // INITIALIZE STAGED STATE
   const initializeStaged = () => {
@@ -244,6 +258,7 @@ React.useEffect(() => {
             stagedFindingStds={stagedFindingStds}
             stagedRecStds={stagedRecStds}
             stagedGlosStds={stagedGlosStds}
+            onGlossarySetIdChange={setSelectedGlossarySetIdForStandardsSync}
           />
         </div>
 
@@ -253,6 +268,7 @@ React.useEffect(() => {
               standards={standards} 
               onSelect={handleAddStandard}
               className="flex-1"
+              preferredStandardContext={preferredStandardContext}
             />
           </div>
         )}

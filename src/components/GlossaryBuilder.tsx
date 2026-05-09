@@ -94,6 +94,15 @@ function filterGlossaryFourTupleOtherSets(
   );
 }
 
+/** Active glossary rows (exclude soft-deleted / archived). */
+function isActiveGlossaryRow(g: any): boolean {
+  return (
+    g.fldDeleted !== true &&
+    g.fldIsDeleted !== true &&
+    g.fldIsArchived !== true
+  );
+}
+
 interface GlossaryBuilderProps {
   categories: Category[];
   items: Item[];
@@ -121,6 +130,7 @@ interface GlossaryBuilderProps {
   stagedFindingStds?: string[];
   stagedRecStds?: string[];
   stagedGlosStds?: string[];
+  onGlossarySetIdChange?: (setId: string) => void;
 }
 
 export function GlossaryBuilder({
@@ -149,7 +159,8 @@ export function GlossaryBuilder({
   onDiscardChanges,
   stagedFindingStds = [],
   stagedRecStds = [],
-  stagedGlosStds = []
+  stagedGlosStds = [],
+  onGlossarySetIdChange
 }: GlossaryBuilderProps) {
   // Base UI should always render to prevent layout shifts.
   const { selectedCat, selectedItem, selectedFind, selectedRec } = selections;
@@ -158,6 +169,10 @@ export function GlossaryBuilder({
   const masterRecsSource = Array.isArray(masterRecommendations) ? masterRecommendations : [];
   const [selectedGlossarySetId, setSelectedGlossarySetId] = useState<string>('');
   const [libraryGlossaryContextMismatch, setLibraryGlossaryContextMismatch] = useState(false);
+
+  useEffect(() => {
+    onGlossarySetIdChange?.(String(selectedGlossarySetId || '').trim());
+  }, [selectedGlossarySetId, onGlossarySetIdChange]);
 
   const normalizeStringArray = (value: any): string[] => {
     if (!value) return [];
@@ -988,6 +1003,55 @@ export function GlossaryBuilder({
     return filtered;
   }, [masterRecsSource, glossary, selectedItem]);
 
+  /** Rec IDs (lowercased) that already have a glossary row for cat + item + find + current glossary set (5-tuple without rec dimension = all recs paired for this context). */
+  const pairedRecIdsForCurrentSet = useMemo(() => {
+    const out = new Set<string>();
+    if (!selectedCat || !selectedItem || !selectedFind) return out;
+    const setKey = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
+    for (const g of glossary || []) {
+      if (!isActiveGlossaryRow(g)) continue;
+      if (
+        String(g.fldCat || '').toLowerCase().trim() !== String(selectedCat || '').toLowerCase().trim()
+      ) {
+        continue;
+      }
+      if (
+        String(g.fldItem || '').toLowerCase().trim() !== String(selectedItem || '').toLowerCase().trim()
+      ) {
+        continue;
+      }
+      if (
+        String(g.fldFind || '').toLowerCase().trim() !== String(selectedFind || '').toLowerCase().trim()
+      ) {
+        continue;
+      }
+      if (normalizeGlossaryRecordSetKey(g.fldGlossarySetId) !== setKey) continue;
+      const rid = String(g.fldRec || g.fldRecID || '').toLowerCase().trim();
+      if (rid) out.add(rid);
+    }
+    return out;
+  }, [glossary, selectedCat, selectedItem, selectedFind, selectedGlossarySetId]);
+
+  const pairedRecRowsForDropdown = useMemo(() => {
+    const set = pairedRecIdsForCurrentSet;
+    if (set.size === 0) {
+      return { masters: [] as MasterRecommendation[], orphanLowerIds: [] as string[] };
+    }
+    const masters = masterRecsSource.filter((r) =>
+      set.has(String(r.id || r.fldRecID || '').toLowerCase().trim())
+    );
+    const mastersSorted = sortEntities([...masters], 'fldRecShort');
+    const seen = new Set(
+      mastersSorted.map((r) => String(r.id || r.fldRecID || '').toLowerCase().trim())
+    );
+    const orphanLowerIds: string[] = [];
+    set.forEach((low) => {
+      if (!seen.has(low)) orphanLowerIds.push(low);
+    });
+    orphanLowerIds.sort();
+    return { masters: mastersSorted, orphanLowerIds };
+  }, [masterRecsSource, pairedRecIdsForCurrentSet]);
+
   const glossaryWorkflowStatus = useMemo(() => {
     if (!selectedCat || !selectedItem || !selectedFind || !selectedRec) {
       return { kind: 'incomplete' as const };
@@ -1239,9 +1303,43 @@ export function GlossaryBuilder({
                       return [{ label: "⏳ Hydrating Library...", value: "loading", disabled: true }];
                     }
                     const allOptions: any[] = [];
-                    const addedIds = new Set();
+                    const addedIds = new Set<string>();
 
-                    // 1. Suggested Section
+                    const pushPairedLabel = (short: string, long: string) => {
+                      const tail = `${long.substring(0, 60)}${long.length > 60 ? '...' : ''}`;
+                      return `★ Existing | ${short} | ${tail}`;
+                    };
+
+                    // 0. Already in glossary for this set (5-tuple context: cat + item + find + set + rec)
+                    const { masters: pairedMasters, orphanLowerIds: pairedOrphans } = pairedRecRowsForDropdown;
+                    if (pairedMasters.length > 0 || pairedOrphans.length > 0) {
+                      allOptions.push({
+                        label: '--- Already in glossary for this set ---',
+                        value: 'header-paired-set',
+                        disabled: true,
+                      });
+                      pairedMasters.forEach((r) => {
+                        const rid = String(r.id || r.fldRecID || '').toLowerCase().trim();
+                        if (!rid || addedIds.has(rid)) return;
+                        const short = r.fldRecShort || 'No Title';
+                        const long = r.fldRecLong || '';
+                        allOptions.push({
+                          value: r.id || r.fldRecID,
+                          label: pushPairedLabel(short, long),
+                        });
+                        addedIds.add(rid);
+                      });
+                      pairedOrphans.forEach((low) => {
+                        if (addedIds.has(low)) return;
+                        allOptions.push({
+                          value: low,
+                          label: `★ Existing | ⚠️ ORPHANED: ${low} (Not in Master)`,
+                        });
+                        addedIds.add(low);
+                      });
+                    }
+
+                    // 1. Suggested Section (skip ids already listed as paired-in-set)
                     if (selectedFind) {
                       const finding = findings?.find(f => 
                         String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim()

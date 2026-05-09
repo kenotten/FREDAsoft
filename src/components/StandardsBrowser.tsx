@@ -257,6 +257,12 @@ interface StandardsBrowserProps {
   persistUiStateKey?: string | null;
   /** Session-scoped sessionStorage key for selectedType/selectedVersion only (e.g. Data Entry). */
   standardSelectionPersistKey?: string;
+  /** Optional external nudge to sync type/version once per syncToken change (manual edits remain allowed after sync). */
+  preferredStandardContext?: {
+    type?: string;
+    version?: string;
+    syncToken?: string;
+  };
   enableAutoExpand502?: boolean;
 }
 
@@ -271,6 +277,7 @@ export function StandardsBrowser({
   uiResetKey,
   persistUiStateKey,
   standardSelectionPersistKey,
+  preferredStandardContext,
   enableAutoExpand502 = true,
 }: StandardsBrowserProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -305,6 +312,8 @@ export function StandardsBrowser({
 
   /** Prevents session selection writer from overwriting storage with initializer defaults before restore runs. */
   const selectionWriterGateOpenRef = useRef(!standardSelectionPersistKey);
+  /** Tracks one-time preferred-context syncs so we do not continuously enforce external defaults. */
+  const lastAppliedPreferredSyncTokenRef = useRef<string>('');
 
   const standardTypes = useMemo(() => {
     const types = new Set(standards.map(s => s.fldStandardType).filter(Boolean));
@@ -389,6 +398,38 @@ export function StandardsBrowser({
     if (!standardsRef.current.length) return;
     writePersistedStandardSelection(standardSelectionPersistKey, selectedType, selectedVersion);
   }, [standardSelectionPersistKey, selectedType, selectedVersion, standardsSelectionFingerprint]);
+
+  useEffect(() => {
+    const token = String(preferredStandardContext?.syncToken || '').trim();
+    if (!token) return;
+    if (!standards.length) return;
+    if (lastAppliedPreferredSyncTokenRef.current === token) return;
+
+    const canonicalType = resolveCanonicalStoredType(preferredStandardContext?.type, standards);
+    // If no valid concrete type is supplied, do not force a change.
+    if (!canonicalType || canonicalType === 'ALL') return;
+
+    const canonicalVersion = resolveCanonicalStoredVersionForType(
+      canonicalType,
+      preferredStandardContext?.version,
+      standards
+    );
+    const nextVersion = canonicalVersion && canonicalVersion !== 'ALL' ? canonicalVersion : 'ALL';
+
+    setSelectedType(canonicalType);
+    setSelectedVersion(nextVersion);
+    if (standardSelectionPersistKey) {
+      writePersistedStandardSelection(standardSelectionPersistKey, canonicalType, nextVersion);
+    }
+    lastAppliedPreferredSyncTokenRef.current = token;
+  }, [
+    preferredStandardContext?.syncToken,
+    preferredStandardContext?.type,
+    preferredStandardContext?.version,
+    standards,
+    standardsSelectionFingerprint,
+    standardSelectionPersistKey,
+  ]);
 
   const toggleChapter = (chapter: string) => {
     if (accordion) {
