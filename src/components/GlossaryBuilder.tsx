@@ -146,6 +146,7 @@ interface GlossaryBuilderProps {
   stagedGlosStds?: string[];
   onReplaceStagedStandards?: (next: { finding: string[]; rec: string[]; glossary: string[] }) => void;
   onGlossarySetIdChange?: (setId: string) => void;
+  onTemplateModeChange?: (isTemplateMode: boolean) => void;
 }
 
 export function GlossaryBuilder({
@@ -176,7 +177,8 @@ export function GlossaryBuilder({
   stagedRecStds = [],
   stagedGlosStds = [],
   onReplaceStagedStandards,
-  onGlossarySetIdChange
+  onGlossarySetIdChange,
+  onTemplateModeChange
 }: GlossaryBuilderProps) {
   // Base UI should always render to prevent layout shifts.
   const { selectedCat, selectedItem, selectedFind, selectedRec } = selections;
@@ -197,6 +199,10 @@ export function GlossaryBuilder({
   useEffect(() => {
     onGlossarySetIdChange?.(String(selectedGlossarySetId || '').trim());
   }, [selectedGlossarySetId, onGlossarySetIdChange]);
+
+  useEffect(() => {
+    onTemplateModeChange?.(!!templateSourceSnapshot);
+  }, [templateSourceSnapshot, onTemplateModeChange]);
 
   useEffect(() => {
     if (!templateSourceSnapshot) return;
@@ -340,6 +346,9 @@ export function GlossaryBuilder({
     );
 
     if (exact) {
+      if (templateSourceSnapshot) {
+        setTemplateSourceSnapshot(null);
+      }
       setLibraryGlossaryContextMismatch(false);
       setSelectedGlossarySetId(normalizeGlossaryRecordSetKey(exact.fldGlossarySetId));
 

@@ -29,6 +29,7 @@ export function GlossaryView({
   const [stagedFindingStds, setStagedFindingStds] = useState<string[]>([]);
   const [stagedRecStds, setStagedRecStds] = useState<string[]>([]);
   const [stagedGlosStds, setStagedGlosStds] = useState<string[]>([]);
+  const [isGlossaryTemplateMode, setIsGlossaryTemplateMode] = useState(false);
   const [selectedGlossarySetIdForStandardsSync, setSelectedGlossarySetIdForStandardsSync] = useState('');
 
   const preferredStandardContext = React.useMemo(() => {
@@ -107,6 +108,7 @@ const safeArray = (v: any): string[] => {
 const lastIdentity = React.useRef('');
 
 React.useEffect(() => {
+  if (isGlossaryTemplateMode) return;
   const { selectedFind, selectedRec, editingGlossaryId } = selections;
 
   const currentIdentity = `${selectedFind}-${selectedRec}-${editingGlossaryId}`;
@@ -142,6 +144,7 @@ React.useEffect(() => {
     }
   }
 }, [
+  isGlossaryTemplateMode,
   selections.selectedFind,
   selections.selectedRec,
   selections.editingGlossaryId,
@@ -266,6 +269,7 @@ React.useEffect(() => {
             stagedGlosStds={stagedGlosStds}
             onReplaceStagedStandards={handleReplaceStagedStandards}
             onGlossarySetIdChange={setSelectedGlossarySetIdForStandardsSync}
+            onTemplateModeChange={setIsGlossaryTemplateMode}
           />
         </div>
 
