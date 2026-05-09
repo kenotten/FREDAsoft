@@ -351,9 +351,13 @@ export function GlossaryBuilder({
       }
       setLibraryGlossaryContextMismatch(false);
       setSelectedGlossarySetId(normalizeGlossaryRecordSetKey(exact.fldGlossarySetId));
+      const exactFindId = String(exact.fldFind || '').trim();
+      const exactRecId = String(exact.fldRec || exact.fldRecID || '').trim();
 
       onSelectionChange({
         ...selections,
+        selectedFind: exactFindId || selections.selectedFind,
+        selectedRec: exactRecId || selections.selectedRec,
         fldUnitCost: exact.fldUnitCost ?? undefined,
         fldUnitType: exact.fldUnitType ?? undefined,
         stagedFindShort: matchedFinding?.fldFindShort || '',
