@@ -1184,7 +1184,7 @@ export function GlossaryBuilder({
 
           {hasMinimumContext && glossaryWorkflowStatus.kind === 'existing' && (
             <div
-              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] leading-snug text-emerald-950"
+              className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] leading-snug text-blue-900"
               title={glossaryWorkflowStatus.glosId}
             >
               <span className="font-bold">Existing Glossary Record</span>
