@@ -221,6 +221,12 @@ React.useEffect(() => {
     }
   };
 
+  const handleReplaceStagedStandards = (next: { finding: string[]; rec: string[]; glossary: string[] }) => {
+    setStagedFindingStds(Array.isArray(next.finding) ? [...next.finding] : []);
+    setStagedRecStds(Array.isArray(next.rec) ? [...next.rec] : []);
+    setStagedGlosStds(Array.isArray(next.glossary) ? [...next.glossary] : []);
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-8 py-8 space-y-8">
       {/* Header */}
@@ -258,6 +264,7 @@ React.useEffect(() => {
             stagedFindingStds={stagedFindingStds}
             stagedRecStds={stagedRecStds}
             stagedGlosStds={stagedGlosStds}
+            onReplaceStagedStandards={handleReplaceStagedStandards}
             onGlossarySetIdChange={setSelectedGlossarySetIdForStandardsSync}
           />
         </div>

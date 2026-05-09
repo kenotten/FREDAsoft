@@ -103,6 +103,20 @@ function isActiveGlossaryRow(g: any): boolean {
   );
 }
 
+function glossaryIdentityKey(
+  selectedCat: string,
+  selectedItem: string,
+  selectedFind: string,
+  selectedRec: string
+): string {
+  return [
+    String(selectedCat || '').toLowerCase().trim(),
+    String(selectedItem || '').toLowerCase().trim(),
+    String(selectedFind || '').toLowerCase().trim(),
+    String(selectedRec || '').toLowerCase().trim(),
+  ].join('|');
+}
+
 interface GlossaryBuilderProps {
   categories: Category[];
   items: Item[];
@@ -130,6 +144,7 @@ interface GlossaryBuilderProps {
   stagedFindingStds?: string[];
   stagedRecStds?: string[];
   stagedGlosStds?: string[];
+  onReplaceStagedStandards?: (next: { finding: string[]; rec: string[]; glossary: string[] }) => void;
   onGlossarySetIdChange?: (setId: string) => void;
 }
 
@@ -160,6 +175,7 @@ export function GlossaryBuilder({
   stagedFindingStds = [],
   stagedRecStds = [],
   stagedGlosStds = [],
+  onReplaceStagedStandards,
   onGlossarySetIdChange
 }: GlossaryBuilderProps) {
   // Base UI should always render to prevent layout shifts.
@@ -169,10 +185,42 @@ export function GlossaryBuilder({
   const masterRecsSource = Array.isArray(masterRecommendations) ? masterRecommendations : [];
   const [selectedGlossarySetId, setSelectedGlossarySetId] = useState<string>('');
   const [libraryGlossaryContextMismatch, setLibraryGlossaryContextMismatch] = useState(false);
+  const [templateSourceSnapshot, setTemplateSourceSnapshot] = useState<{
+    sourceGlossarySetId: string;
+    sourceEditingGlossaryId: string;
+    sourceFindingStds: string[];
+    sourceRecStds: string[];
+    sourceGlosStds: string[];
+    sourceIdentityKey: string;
+  } | null>(null);
 
   useEffect(() => {
     onGlossarySetIdChange?.(String(selectedGlossarySetId || '').trim());
   }, [selectedGlossarySetId, onGlossarySetIdChange]);
+
+  useEffect(() => {
+    if (!templateSourceSnapshot) return;
+    const currentIdentity = glossaryIdentityKey(selectedCat, selectedItem, selectedFind, selectedRec);
+    if (currentIdentity !== templateSourceSnapshot.sourceIdentityKey) {
+      setTemplateSourceSnapshot(null);
+    }
+  }, [templateSourceSnapshot, selectedCat, selectedItem, selectedFind, selectedRec]);
+
+  const handleRevertTemplateSource = () => {
+    if (!templateSourceSnapshot) return;
+    setSelectedGlossarySetId(templateSourceSnapshot.sourceGlossarySetId);
+    onReplaceStagedStandards?.({
+      finding: [...templateSourceSnapshot.sourceFindingStds],
+      rec: [...templateSourceSnapshot.sourceRecStds],
+      glossary: [...templateSourceSnapshot.sourceGlosStds],
+    });
+    onSelectionChange({
+      ...selections,
+      editingGlossaryId: templateSourceSnapshot.sourceEditingGlossaryId || '',
+    });
+    setTemplateSourceSnapshot(null);
+    setLibraryGlossaryContextMismatch(false);
+  };
 
   const normalizeStringArray = (value: any): string[] => {
     if (!value) return [];
@@ -1162,7 +1210,38 @@ export function GlossaryBuilder({
               label="Glossary Set"
               value={selectedGlossarySetId}
               onChange={(e: any) => {
-                setSelectedGlossarySetId(e.target.value || '');
+                const nextRaw = e.target.value || '';
+                const currentSetKey = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
+                const nextSetKey = normalizeGlossaryRecordSetKey(nextRaw);
+                if (
+                  !templateSourceSnapshot &&
+                  currentSetKey !== nextSetKey &&
+                  selectedCat &&
+                  selectedItem &&
+                  selectedFind &&
+                  selectedRec
+                ) {
+                  const exactCurrent = findExactGlossaryByFiveTuple(
+                    glossary || [],
+                    selectedCat,
+                    selectedItem,
+                    selectedFind,
+                    selectedRec,
+                    currentSetKey
+                  );
+                  if (exactCurrent) {
+                    setTemplateSourceSnapshot({
+                      sourceGlossarySetId: currentSetKey,
+                      sourceEditingGlossaryId: String(exactCurrent.fldGlosId || exactCurrent.id || '').trim(),
+                      sourceFindingStds: normalizeStringArray(stagedFindingStds),
+                      sourceRecStds: normalizeStringArray(stagedRecStds),
+                      sourceGlosStds: normalizeStringArray(stagedGlosStds),
+                      sourceIdentityKey: glossaryIdentityKey(selectedCat, selectedItem, selectedFind, selectedRec),
+                    });
+                    onReplaceStagedStandards?.({ finding: [], rec: [], glossary: [] });
+                  }
+                }
+                setSelectedGlossarySetId(nextRaw);
                 setLibraryGlossaryContextMismatch(false);
               }}
               options={GLOSSARY_SET_DEFS.map((s) => ({
@@ -1201,9 +1280,24 @@ export function GlossaryBuilder({
           )}
           {hasMinimumContext && glossaryWorkflowStatus.kind === 'template' && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-950">
-              <span className="font-bold">Template:</span> Using{' '}
-              <span className="font-bold">{glossaryWorkflowStatus.sourceLabel}</span> glossary as a reference for{' '}
-              <span className="font-bold">{glossaryWorkflowStatus.targetLabel}</span>. Save will create a new glossary record for the target set (the source row will not be moved).
+              <div className="flex items-start justify-between gap-3">
+                <p>
+                  <span className="font-bold">Template:</span> Using{' '}
+                  <span className="font-bold">{glossaryWorkflowStatus.sourceLabel}</span> glossary as a reference for{' '}
+                  <span className="font-bold">{glossaryWorkflowStatus.targetLabel}</span>. Save will create a new glossary record for the target set (the source row will not be moved).
+                </p>
+                {templateSourceSnapshot && (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="secondary"
+                    className="h-6 px-2 text-[10px] whitespace-nowrap"
+                    onClick={handleRevertTemplateSource}
+                  >
+                    Revert
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 
