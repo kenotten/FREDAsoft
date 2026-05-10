@@ -23,8 +23,10 @@ import { db, storage } from '../firebase';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { firestoreService } from '../services/firestoreService';
 import { buildProjectDataCloneSeed, type ProjectDataCloneSeed } from '../lib/cloneProjectData';
+import type { MasterStandard } from '../types';
 import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { ImagePreviewModal } from './ui/ImagePreviewModal';
+import { StandardCitationPreviewModal } from './ui/StandardCitationPreviewModal';
 import { Input } from './ui/input';
 import { Select } from './ui/select';
 import { Card } from './ui/card';
@@ -553,6 +555,10 @@ export default function ProjectDataEntry({
   const [savedDraft, setSavedDraft] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [citationPreview, setCitationPreview] = useState<{
+    id: string;
+    standard: MasterStandard | null;
+  } | null>(null);
 
   // Workspace / record guard: clear stale Data Entry when project/facility/client changes, record is ghosted,
   // or the loaded record does not belong to the current project/facility.
@@ -2846,9 +2852,19 @@ export default function ProjectDataEntry({
                             key={id}
                             className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs"
                           >
-                            <span className="font-medium text-zinc-800 truncate" title={label}>
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 truncate text-left font-medium text-zinc-800 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 rounded px-0.5 -mx-0.5"
+                              title={label}
+                              onClick={() =>
+                                setCitationPreview({
+                                  id,
+                                  standard: s ?? null
+                                })
+                              }
+                            >
                               {label}
-                            </span>
+                            </button>
                             <button
                               type="button"
                               className="shrink-0 p-1 rounded-md text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-colors"
@@ -3181,6 +3197,14 @@ export default function ProjectDataEntry({
         title="Image preview"
         onClose={() => setImagePreviewUrl(null)}
       />
+
+      {citationPreview ? (
+        <StandardCitationPreviewModal
+          standard={citationPreview.standard}
+          storedId={citationPreview.id}
+          onClose={() => setCitationPreview(null)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { Button, Input, Select, Card } from './ui/core';
 import { ImagePreviewModal } from './ui/ImagePreviewModal';
+import { StandardCitationPreviewModal } from './ui/StandardCitationPreviewModal';
+import type { MasterStandard } from '../types';
 import { cn, sortEntities, compareEntities } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
@@ -61,7 +63,7 @@ function explorerCitationTitle(standard: any | undefined, chipText: string): str
 function explorerSortedCitationDisplay(
   fldStandards: unknown,
   standardsList: any[]
-): { id: string; chip: string; title: string }[] {
+): { id: string; chip: string; title: string; standard: any | undefined }[] {
   const ids = explorerSafeStandardsIds(fldStandards);
   const list = Array.isArray(standardsList) ? standardsList : [];
   const withIndex = ids.map((id, index) => ({
@@ -77,7 +79,7 @@ function explorerSortedCitationDisplay(
     })
     .map(({ id, standard }) => {
       const chip = explorerCitationChipText(standard, id);
-      return { id, chip, title: explorerCitationTitle(standard, chip) };
+      return { id, chip, title: explorerCitationTitle(standard, chip), standard };
     });
 }
 
@@ -112,6 +114,10 @@ export function DataExplorer({
   const [cloneLocationId, setCloneLocationId] = useState('');
   const [isCloning, setIsCloning] = useState(false);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [citationPreview, setCitationPreview] = useState<{
+    id: string;
+    standard: MasterStandard | null;
+  } | null>(null);
   const { user } = useAuth();
   const preSearchExpandedRef = React.useRef<Record<string, boolean>>({});
   const isSearchingRef = React.useRef(false);
@@ -739,18 +745,29 @@ export function DataExplorer({
                                                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1.5">
                                                     Citations
                                                   </span>
-                                                  <div className="flex flex-wrap gap-1.5" role="list" aria-label="Record citations">
-                                                    {citationDisplayRows.map(({ id, chip, title }) => (
-                                                      <span
-                                                        key={`${d.fldPDataID}-cit-${id}`}
-                                                        title={title}
-                                                        role="listitem"
-                                                        className="max-w-full truncate rounded-md border border-zinc-200/90 bg-white/80 px-2 py-0.5 text-[10px] font-medium text-zinc-500"
-                                                      >
-                                                        {chip}
-                                                      </span>
+                                                  <ul
+                                                    className="m-0 flex list-none flex-wrap gap-1.5 p-0"
+                                                    aria-label="Record citations"
+                                                  >
+                                                    {citationDisplayRows.map(({ id, chip, title, standard }) => (
+                                                      <li key={`${d.fldPDataID}-cit-${id}`} className="max-w-full">
+                                                        <button
+                                                          type="button"
+                                                          title={title}
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setCitationPreview({
+                                                              id,
+                                                              standard: standard ?? null
+                                                            });
+                                                          }}
+                                                          className="max-w-full truncate rounded-md border border-zinc-200/90 bg-white/80 px-2 py-0.5 text-left text-[10px] font-medium text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-white hover:text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                                                        >
+                                                          {chip}
+                                                        </button>
+                                                      </li>
                                                     ))}
-                                                  </div>
+                                                  </ul>
                                                 </div>
                                               ) : null}
                                             </div>
@@ -972,6 +989,14 @@ export function DataExplorer({
         title="Photo preview"
         onClose={() => setImagePreviewUrl(null)}
       />
+
+      {citationPreview ? (
+        <StandardCitationPreviewModal
+          standard={citationPreview.standard}
+          storedId={citationPreview.id}
+          onClose={() => setCitationPreview(null)}
+        />
+      ) : null}
     </div>
   );
 }
