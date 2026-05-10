@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 import { firestoreService, OperationType, handleFirestoreError } from '../services/firestoreService';
 import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
 import { normalizeForDeterministicMatch } from '../lib/textNormalize';
+import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { 
   Category, 
   Item, 
@@ -148,6 +149,21 @@ interface GlossaryBuilderProps {
   onReplaceStagedStandards?: (next: { finding: string[]; rec: string[]; glossary: string[] }) => void;
   onGlossarySetIdChange?: (setId: string) => void;
   onTemplateModeChange?: (isTemplateMode: boolean) => void;
+}
+
+function normStagedStandardId(v: string | undefined | null): string {
+  return String(v ?? '').toLowerCase().trim();
+}
+
+/** Display order for staged citation id lists (does not mutate stored arrays). */
+function sortStagedStandardIds(ids: string[], standardsList: MasterStandard[]): string[] {
+  return [...ids].sort((idA, idB) => {
+    const sa = standardsList.find((st) => normStagedStandardId(st.id) === normStagedStandardId(idA));
+    const sb = standardsList.find((st) => normStagedStandardId(st.id) === normStagedStandardId(idB));
+    const c = compareStandardCitations(sa, sb);
+    if (c !== 0) return c;
+    return String(idA).localeCompare(String(idB), undefined, { sensitivity: 'base' });
+  });
 }
 
 export function GlossaryBuilder({
@@ -2028,11 +2044,14 @@ export function GlossaryBuilder({
           <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
             {selectedFind ? (() => {
               if (!Array.isArray(stagedFindingStds) || stagedFindingStds.length === 0) return <p className="text-[10px] text-zinc-400 italic text-center py-2">No Finding Standards</p>;
-              return stagedFindingStds.map((sid, idx) => {
+              return sortStagedStandardIds(stagedFindingStds, standards).map((sid, idx) => {
                 const s = standards?.find(st => (st.id || "").toLowerCase().trim() === (sid || "").toLowerCase().trim());
+                const cite = formatStandardCitationLabel(s) ?? (String(sid || '').trim() || '—');
+                const name = String(s?.citation_name ?? '').trim();
+                const line = name ? `${cite} — ${name}` : cite;
                 return (
                   <div key={`find-std-${sid}-${idx}`} className="flex items-center justify-between p-2 bg-white border border-zinc-200 rounded-lg group hover:border-indigo-300 transition-colors">
-                    <span className="text-[10px] font-medium text-zinc-600 truncate">{s?.citation_num} - {s?.citation_name}</span>
+                    <span className="text-[10px] font-medium text-zinc-600 truncate" title={line}>{line}</span>
                     <button 
                       onClick={(e) => { e.stopPropagation(); removeStandard('finding', sid); }} 
                       className="p-1 px-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
@@ -2074,11 +2093,14 @@ export function GlossaryBuilder({
           <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
             {selectedRec ? (() => {
               if (!Array.isArray(stagedRecStds) || stagedRecStds.length === 0) return <p className="text-[10px] text-zinc-400 italic text-center py-2">No Rec Standards</p>;
-              return stagedRecStds.map((sid, idx) => {
+              return sortStagedStandardIds(stagedRecStds, standards).map((sid, idx) => {
                 const s = standards?.find(st => (st.id || "").toLowerCase().trim() === (sid || "").toLowerCase().trim());
+                const cite = formatStandardCitationLabel(s) ?? (String(sid || '').trim() || '—');
+                const name = String(s?.citation_name ?? '').trim();
+                const line = name ? `${cite} — ${name}` : cite;
                 return (
                   <div key={`rec-std-${sid}-${idx}`} className="flex items-center justify-between p-2 bg-white border border-zinc-200 rounded-lg group hover:border-indigo-300 transition-colors">
-                    <span className="text-[10px] font-medium text-zinc-600 truncate">{s?.citation_num} - {s?.citation_name}</span>
+                    <span className="text-[10px] font-medium text-zinc-600 truncate" title={line}>{line}</span>
                     <button 
                       onClick={(e) => { e.stopPropagation(); removeStandard('recommendation', sid); }} 
                       className="p-1 px-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
@@ -2134,11 +2156,14 @@ export function GlossaryBuilder({
           <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
             {hasMinimumContext ? (() => {
               if (!Array.isArray(stagedGlosStds) || stagedGlosStds.length === 0) return <p className="text-[10px] text-rose-400 italic text-center py-2">No Glossary Overrides</p>;
-              return stagedGlosStds.map((sid, idx) => {
+              return sortStagedStandardIds(stagedGlosStds, standards).map((sid, idx) => {
                 const s = standards?.find(st => (st.id || "").toLowerCase().trim() === (sid || "").toLowerCase().trim());
+                const cite = formatStandardCitationLabel(s) ?? (String(sid || '').trim() || '—');
+                const name = String(s?.citation_name ?? '').trim();
+                const line = name ? `${cite} — ${name}` : cite;
                 return (
                   <div key={`glos-std-${sid}-${idx}`} className="flex items-center justify-between p-2 bg-white border border-rose-100 rounded-lg group hover:border-rose-300 transition-colors">
-                    <span className="text-[10px] font-medium text-zinc-600 truncate">{s?.citation_num} - {s?.citation_name}</span>
+                    <span className="text-[10px] font-medium text-zinc-600 truncate" title={line}>{line}</span>
                     <button 
                       onClick={(e) => { e.stopPropagation(); removeStandard('glossary', sid); }} 
                       className="p-1 px-1.5 text-rose-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"

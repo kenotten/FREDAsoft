@@ -17,6 +17,11 @@ import {
   Recommendation
 } from '../types';
 import { cn, formatMeasurement, formatCurrency } from '../lib/utils';
+import {
+  compareStandardCitations,
+  formatStandardCitationLabel,
+  type StandardCitationSortInput
+} from '../lib/standardCitationLabel';
 import { Printer, Download, X, ChevronLeft, ChevronRight, FileText, Menu, ExternalLink, FlaskConical, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
@@ -66,6 +71,9 @@ interface StandardSnapshot {
   fldContentText: string;
   fldStandardId: string;
   fldImageUrl?: string;
+  fldRelationType?: MasterStandard['relation_type'];
+  fldOrder?: number;
+  fldSubSequence?: number;
 }
 
 type AddendumEntry =
@@ -110,8 +118,15 @@ function standardTypeKey(std: { fldStandardType?: string }): string {
   return String(t).trim();
 }
 
-function compareCitationNum(a: string, b: string): number {
-  return (a || '').trim().localeCompare((b || '').trim(), undefined, { numeric: true });
+function addendumSnapshotSortInput(s: StandardSnapshot): StandardCitationSortInput {
+  return {
+    order: s.fldOrder,
+    fldStandardType: s.fldStandardType,
+    citation_num: s.fldCitationNum,
+    relation_type: s.fldRelationType,
+    sub_sequence: s.fldSubSequence,
+    id: s.fldStandardId
+  };
 }
 
 function formatGroupedStandardCitations(ids: string[], standards: MasterStandard[]): string {
@@ -135,9 +150,11 @@ function formatGroupedStandardCitations(ids: string[], standards: MasterStandard
   const parts: string[] = [];
   for (const t of types) {
     const arr = byType.get(t)!;
-    arr.sort((a, b) => compareCitationNum(a.citation_num || '', b.citation_num || ''));
+    arr.sort((a, b) => compareStandardCitations(a, b));
     for (const s of arr) {
-      parts.push(`${t} ${(s.citation_num || '').trim()}`);
+      const label =
+        formatStandardCitationLabel(s) ?? `${t} ${(s.citation_num || '').trim()}`.trim();
+      if (label) parts.push(label);
     }
   }
   return parts.join('; ');
@@ -165,7 +182,10 @@ function buildReferencedAddendumEntries(
         fldCitationName: std.citation_name,
         fldContentText: std.content_text,
         fldStandardId: id,
-        fldImageUrl: std.image_url
+        fldImageUrl: std.image_url,
+        fldRelationType: std.relation_type,
+        fldOrder: std.order,
+        fldSubSequence: std.sub_sequence
       });
     });
   });
@@ -181,7 +201,7 @@ function buildReferencedAddendumEntries(
   for (const t of types) {
     entries.push({ kind: 'header', standardType: t, key: `__addendum_header__${t}` });
     const arr = byType.get(t)!;
-    arr.sort((a, b) => compareCitationNum(a.fldCitationNum || '', b.fldCitationNum || ''));
+    arr.sort((a, b) => compareStandardCitations(addendumSnapshotSortInput(a), addendumSnapshotSortInput(b)));
     for (const s of arr) entries.push({ kind: 'standard', standard: s });
   }
   return entries;
@@ -202,17 +222,25 @@ function AddendumRows({ entries }: { entries: AddendumEntry[] }) {
         }
         const standard = entry.standard;
         const prefix = standard.fldStandardType || 'Unknown';
+        const citeLabel =
+          formatStandardCitationLabel({
+            id: standard.fldStandardId,
+            fldStandardType: standard.fldStandardType,
+            citation_num: standard.fldCitationNum,
+            relation_type: standard.fldRelationType
+          }) ?? `${prefix} ${standard.fldCitationNum}`.trim();
+        const citeTitle = `${citeLabel}${standard.fldCitationName ? ` ${standard.fldCitationName}` : ''}`.trim();
         return (
           <div key={standard.fldStandardId} data-measure-type="addendum" data-id={standard.fldStandardId} className="mb-6 space-y-2 break-inside-avoid">
-            <h3 className="font-bold text-zinc-900 text-sm">
-              {prefix} {standard.fldCitationNum} {standard.fldCitationName}
+            <h3 className="font-bold text-zinc-900 text-sm" title={citeTitle}>
+              {citeLabel}{standard.fldCitationName ? ` ${standard.fldCitationName}` : ''}
             </h3>
             <p className="text-xs text-zinc-700 leading-relaxed">{standard.fldContentText}</p>
             {standard.fldImageUrl && (
               <div className="my-2">
                 <img
                   src={standard.fldImageUrl}
-                  alt={`${prefix} ${standard.fldCitationNum}`}
+                  alt={citeTitle}
                   className="max-h-64 object-contain border border-zinc-200 rounded-lg"
                   referrerPolicy="no-referrer"
                 />

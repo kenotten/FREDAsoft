@@ -19,6 +19,7 @@ import { db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'sonner';
+import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 
 function explorerNormId(value: unknown): string {
   return String(value ?? '')
@@ -34,14 +35,8 @@ function explorerSafeStandardsIds(value: unknown): string[] {
 }
 
 function explorerCitationChipText(standard: any | undefined, idFallback: string): string {
-  if (standard) {
-    const t = String(standard.fldStandardType ?? '').trim();
-    const n = String(standard.citation_num ?? '').trim();
-    if (t !== '' && n !== '') return `${t} ${n}`;
-    if (n !== '') return n;
-    const sid = String(standard.id ?? '').trim();
-    if (sid !== '') return sid;
-  }
+  const formatted = formatStandardCitationLabel(standard);
+  if (formatted !== undefined && formatted !== '') return formatted;
   const fb = String(idFallback ?? '').trim();
   return fb || '—';
 }
@@ -75,18 +70,8 @@ function explorerSortedCitationDisplay(
   }));
   return withIndex
     .sort((a, b) => {
-      const aOrder = Number(a.standard?.order);
-      const bOrder = Number(b.standard?.order);
-      const aHas = Number.isFinite(aOrder);
-      const bHas = Number.isFinite(bOrder);
-      if (aHas && bHas && aOrder !== bOrder) return aOrder - bOrder;
-      if (aHas !== bHas) return aHas ? -1 : 1;
-      const aC = String(a.standard?.citation_num || '').trim();
-      const bC = String(b.standard?.citation_num || '').trim();
-      if (aC || bC) {
-        const cmp = aC.localeCompare(bC, undefined, { numeric: true, sensitivity: 'base' });
-        if (cmp !== 0) return cmp;
-      }
+      const c = compareStandardCitations(a.standard, b.standard);
+      if (c !== 0) return c;
       return a.index - b.index;
     })
     .map(({ id, standard }) => {

@@ -23,6 +23,7 @@ import { db, storage } from '../firebase';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { firestoreService } from '../services/firestoreService';
 import { buildProjectDataCloneSeed, type ProjectDataCloneSeed } from '../lib/cloneProjectData';
+import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { Input } from './ui/input';
 import { Select } from './ui/select';
 import { Card } from './ui/card';
@@ -82,14 +83,8 @@ function glossaryRecommendationMatches(g: any, recId: string): boolean {
 }
 
 function recordCitationDisplayLabel(standard: any | undefined, idFallback: string): string {
-  if (standard) {
-    const t = String(standard.fldStandardType ?? '').trim();
-    const n = String(standard.citation_num ?? '').trim();
-    if (t !== '' && n !== '') return `${t} ${n}`;
-    if (n !== '') return n;
-    const sid = String(standard.id ?? '').trim();
-    if (sid !== '') return sid;
-  }
+  const formatted = formatStandardCitationLabel(standard);
+  if (formatted !== undefined && formatted !== '') return formatted;
   const fb = String(idFallback ?? '').trim();
   if (fb !== '') return fb;
   return 'Citation';
@@ -1722,23 +1717,8 @@ export default function ProjectDataEntry({
 
     return withIndex
       .sort((a, b) => {
-        const aOrder = Number(a.standard?.order);
-        const bOrder = Number(b.standard?.order);
-        const aHasOrder = Number.isFinite(aOrder);
-        const bHasOrder = Number.isFinite(bOrder);
-        if (aHasOrder && bHasOrder && aOrder !== bOrder) return aOrder - bOrder;
-        if (aHasOrder !== bHasOrder) return aHasOrder ? -1 : 1;
-
-        const aCitation = String(a.standard?.citation_num || '').trim();
-        const bCitation = String(b.standard?.citation_num || '').trim();
-        if (aCitation || bCitation) {
-          const citationCompare = aCitation.localeCompare(bCitation, undefined, {
-            numeric: true,
-            sensitivity: 'base'
-          });
-          if (citationCompare !== 0) return citationCompare;
-        }
-
+        const c = compareStandardCitations(a.standard, b.standard);
+        if (c !== 0) return c;
         return a.index - b.index;
       })
       .map((entry) => entry.id);
@@ -1925,6 +1905,77 @@ export default function ProjectDataEntry({
       (x: any) => normalizeId(x.fldFindID || x.id) === id
     );
   }, [customMasterFindId, activeFindingsList]);
+
+  /** Library Finding used to backfill fldMeasurementType / fldMeasurementUnit (not glossary cost fldUnitType). */
+  const libraryFindingForMeasurementSync = useMemo(() => {
+    if (!activeRecord) return undefined;
+    const findingsList = Array.isArray(findings) ? findings : [];
+
+    const fldDataBlank = !String(activeRecord.fldData || '').trim();
+    const hasPDataCatItem =
+      !!String(activeRecord.fldPDataCategoryID || '').trim() &&
+      !!String(activeRecord.fldPDataItemID || '').trim();
+    const isCustomRecord =
+      activeRecord.fldRecordSource === 'custom' || (fldDataBlank && hasPDataCatItem);
+
+    if (isCustomRecord) {
+      const mid =
+        normalizeId(activeRecord.fldPDataMasterFindID) || normalizeId(customMasterFindId);
+      if (!mid) return undefined;
+      return findingsList.find((f: any) => normalizeId(f?.fldFindID || f?.id) === mid);
+    }
+
+    const dataKey = normalizeId(activeRecord.fldData);
+    if (!dataKey) return undefined;
+    const gRow = (glossary || []).find((g: any) => {
+      const gid = normalizeId(g?.fldGlosId || g?.id);
+      return gid === dataKey;
+    });
+    if (!gRow) return undefined;
+    const findFk = normalizeId(gRow.fldFind);
+    if (!findFk) return undefined;
+    return findingsList.find((f: any) => normalizeId(f?.fldFindID || f?.id) === findFk);
+  }, [activeRecord, glossary, findings, customMasterFindId]);
+
+  const showSyncMeasurementFromLibrary = useMemo(() => {
+    if (!activeRecord) return false;
+    const typeBlank = !String(fldMeasurementType || '').trim();
+    const unitBlank = !String(fldMeasurementUnit || '').trim();
+    if (!typeBlank && !unitBlank) return false;
+    const src = libraryFindingForMeasurementSync;
+    if (!src) return false;
+    const canType = typeBlank && !!String(src.fldMeasurementType || '').trim();
+    const canUnit = unitBlank && !!String(src.fldUnitType || '').trim();
+    return canType || canUnit;
+  }, [
+    activeRecord,
+    fldMeasurementType,
+    fldMeasurementUnit,
+    libraryFindingForMeasurementSync
+  ]);
+
+  const handleSyncMeasurementFromLibrary = () => {
+    const src = libraryFindingForMeasurementSync;
+    if (!src || !activeRecord) {
+      toast.info('No library finding available to sync measurement metadata.');
+      return;
+    }
+    let did = false;
+    if (!String(fldMeasurementType || '').trim() && String(src.fldMeasurementType || '').trim()) {
+      setFldMeasurementType(String(src.fldMeasurementType).trim());
+      did = true;
+    }
+    if (!String(fldMeasurementUnit || '').trim() && String(src.fldUnitType || '').trim()) {
+      setFldMeasurementUnit(String(src.fldUnitType).trim());
+      did = true;
+    }
+    if (!did) {
+      toast.info('No measurement metadata available from the library finding.');
+      return;
+    }
+    setIsDirty(true);
+    toast.success('Measurement fields updated from library finding. Save to persist.');
+  };
 
   const displayMeasurementTypeReadonly = useMemo(() => {
     const trimmed = (fldMeasurementType || '').trim();
@@ -2581,18 +2632,31 @@ export default function ProjectDataEntry({
                   className={focusClasses}
                   placeholder="Actual recorded value"
                 />
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Type</label>
-                  <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
-                    {displayMeasurementTypeReadonly}
+                <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Type</label>
+                    <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
+                      {displayMeasurementTypeReadonly}
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Unit</label>
-                  <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
-                    {/* ENFORCE CONTROLLED VOCABULARY */}
-                    {MEASUREMENT_UNITS.includes(fldMeasurementUnit) ? fldMeasurementUnit : (fldMeasurementUnit || 'None')}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Unit</label>
+                    <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
+                      {/* ENFORCE CONTROLLED VOCABULARY */}
+                      {MEASUREMENT_UNITS.includes(fldMeasurementUnit) ? fldMeasurementUnit : (fldMeasurementUnit || 'None')}
+                    </div>
                   </div>
+                  {showSyncMeasurementFromLibrary ? (
+                    <div className="pt-1 md:col-span-2">
+                      <button
+                        type="button"
+                        onClick={handleSyncMeasurementFromLibrary}
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        Sync from library finding
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

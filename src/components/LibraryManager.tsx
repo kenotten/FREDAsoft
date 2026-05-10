@@ -27,6 +27,7 @@ import { cn, sortEntities, MEASUREMENT_UNITS } from '../lib/utils';
 import { doc, writeBatch, deleteField } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'sonner';
+import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { Category, Item, Finding, MasterRecommendation, MasterStandard } from '../types';
 import { UnsavedChangesModal } from './modals/UnsavedChangesModal';
 import { StandardsBrowser } from './StandardsBrowser';
@@ -64,7 +65,7 @@ function libraryCitationDisplayLabel(standard: MasterStandard | undefined, idFal
   return fb ? `Unknown standard (${fb})` : 'Unknown standard';
 }
 
-/** Same ordering as modal selected list: order → citation_num → stable index */
+/** Same ordering as modal selected list: order → type → citation_num → relation → stable index */
 function sortLibraryStandardIds(ids: string[], standardsList: MasterStandard[]): string[] {
   const withIndex = ids.map((id, index) => ({
     id,
@@ -73,26 +74,14 @@ function sortLibraryStandardIds(ids: string[], standardsList: MasterStandard[]):
   }));
   return withIndex
     .sort((a, b) => {
-      const aOrder = Number(a.standard?.order);
-      const bOrder = Number(b.standard?.order);
-      const aHas = Number.isFinite(aOrder);
-      const bHas = Number.isFinite(bOrder);
-      if (aHas && bHas && aOrder !== bOrder) return aOrder - bOrder;
-      if (aHas !== bHas) return aHas ? -1 : 1;
-      const aC = String(a.standard?.citation_num || '').trim();
-      const bC = String(b.standard?.citation_num || '').trim();
-      if (aC || bC) {
-        const cmp = aC.localeCompare(bC, undefined, { numeric: true, sensitivity: 'base' });
-        if (cmp !== 0) return cmp;
-      }
+      const c = compareStandardCitations(a.standard, b.standard);
+      if (c !== 0) return c;
       return a.index - b.index;
     })
     .map((e) => e.id);
 }
 
 function inlineLibraryCitationChipText(standard: MasterStandard | undefined, idFallback: string): string {
-  const num = String(standard?.citation_num ?? '').trim();
-  if (num) return num;
   const full = libraryCitationDisplayLabel(standard, idFallback);
   return full.length > 22 ? `${full.slice(0, 20)}…` : full;
 }
