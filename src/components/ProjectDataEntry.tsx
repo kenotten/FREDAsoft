@@ -16,7 +16,10 @@ import {
   Edit2,
   ChevronLeft,
   ChevronRight,
-  Copy
+  ChevronUp,
+  ChevronDown,
+  Copy,
+  GripVertical
 } from 'lucide-react';
 import { doc, writeBatch } from 'firebase/firestore';
 import { db, storage } from '../firebase';
@@ -555,6 +558,11 @@ export default function ProjectDataEntry({
   const [savedDraft, setSavedDraft] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  /** Native DnD for fldImages reorder (indices only; URLs unchanged). */
+  const [imageDragState, setImageDragState] = useState<{
+    dragIndex: number | null;
+    overIndex: number | null;
+  }>({ dragIndex: null, overIndex: null });
   const [citationPreview, setCitationPreview] = useState<{
     id: string;
     standard: MasterStandard | null;
@@ -1707,6 +1715,45 @@ export default function ProjectDataEntry({
 
   const handleRemoveImage = (url: string) => {
     setFldImages((prev) => prev.filter((u) => u !== url));
+    setIsDirty(true);
+  };
+
+  const moveFldImageEarlier = (index: number) => {
+    if (index <= 0) return;
+    setFldImages((prev) => {
+      const next = [...prev];
+      const t = next[index - 1];
+      next[index - 1] = next[index];
+      next[index] = t;
+      return next;
+    });
+    setIsDirty(true);
+  };
+
+  const moveFldImageLater = (index: number) => {
+    if (index >= fldImages.length - 1) return;
+    setFldImages((prev) => {
+      if (index >= prev.length - 1) return prev;
+      const next = [...prev];
+      const t = next[index + 1];
+      next[index + 1] = next[index];
+      next[index] = t;
+      return next;
+    });
+    setIsDirty(true);
+  };
+
+  const DND_IMG_MIME = 'application/x-fredasoft-pd-img-index';
+
+  const reorderFldImagesDrag = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    setFldImages((prev) => {
+      if (fromIndex < 0 || fromIndex >= prev.length || toIndex < 0 || toIndex >= prev.length) return prev;
+      const next = [...prev];
+      const [el] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, el);
+      return next;
+    });
     setIsDirty(true);
   };
 
@@ -2931,32 +2978,171 @@ export default function ProjectDataEntry({
               <p className="text-sm text-zinc-400 italic text-center py-6">No images attached.</p>
             ) : (
               <div className="flex flex-wrap gap-3">
-                {fldImages.map((url) => (
+                {fldImages.map((url, imgIndex) => {
+                  const canReorder = fldImages.length > 1;
+                  const isDragSource = canReorder && imageDragState.dragIndex === imgIndex;
+                  const isDropTarget =
+                    canReorder &&
+                    imageDragState.overIndex === imgIndex &&
+                    imageDragState.dragIndex !== null &&
+                    imageDragState.dragIndex !== imgIndex;
+                  return (
                   <div
                     key={url}
-                    className="relative w-24 h-24 rounded-xl border border-zinc-200 overflow-hidden bg-zinc-50 shrink-0 group"
+                    draggable={canReorder}
+                    onDragStart={(e) => {
+                      if (!canReorder) return;
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData(DND_IMG_MIME, String(imgIndex));
+                      e.dataTransfer.setData('text/plain', String(imgIndex));
+                      setImageDragState({ dragIndex: imgIndex, overIndex: null });
+                    }}
+                    onDragEnd={() => {
+                      setImageDragState({ dragIndex: null, overIndex: null });
+                    }}
+                    onDragOver={(e) => {
+                      if (!canReorder) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      setImageDragState((prev) =>
+                        prev.overIndex === imgIndex ? prev : { ...prev, overIndex: imgIndex }
+                      );
+                    }}
+                    onDragLeave={(e) => {
+                      if (!canReorder) return;
+                      const next = e.relatedTarget;
+                      if (next instanceof Node && e.currentTarget.contains(next)) return;
+                      setImageDragState((prev) =>
+                        prev.overIndex === imgIndex ? { ...prev, overIndex: null } : prev
+                      );
+                    }}
+                    onDrop={(e) => {
+                      if (!canReorder) return;
+                      e.preventDefault();
+                      const raw =
+                        e.dataTransfer.getData(DND_IMG_MIME) || e.dataTransfer.getData('text/plain');
+                      const from = Number.parseInt(String(raw).trim(), 10);
+                      if (!Number.isFinite(from) || from < 0 || from >= fldImages.length) {
+                        setImageDragState({ dragIndex: null, overIndex: null });
+                        return;
+                      }
+                      reorderFldImagesDrag(from, imgIndex);
+                      setImageDragState({ dragIndex: null, overIndex: null });
+                    }}
+                    className={cn(
+                      'relative h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 group',
+                      canReorder && 'cursor-grab active:cursor-grabbing',
+                      isDragSource && 'opacity-60 ring-2 ring-blue-500/70 ring-offset-1 ring-offset-zinc-100',
+                      isDropTarget && 'ring-2 ring-dashed ring-blue-500 ring-offset-1 ring-offset-zinc-100'
+                    )}
                   >
                     <button
                       type="button"
+                      draggable={false}
                       onClick={() => setImagePreviewUrl(url)}
-                      className="block h-full w-full cursor-pointer rounded-xl text-left ring-offset-2 transition-shadow hover:ring-2 hover:ring-blue-400/60 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={cn(
+                        'absolute top-0 bottom-0 z-0 block cursor-pointer text-left ring-offset-2 transition-shadow hover:ring-2 hover:ring-blue-400/60 focus:outline-none focus:ring-2 focus:ring-blue-500',
+                        canReorder ? 'left-6 right-0 rounded-r-xl' : 'inset-0 rounded-xl'
+                      )}
                       aria-label="View image larger"
                     >
-                      <img src={url} alt="" className="h-full w-full object-cover pointer-events-none" />
+                      <img
+                        src={url}
+                        alt=""
+                        draggable={false}
+                        className={cn(
+                          'h-full w-full object-cover pointer-events-none',
+                          canReorder ? 'rounded-r-xl' : 'rounded-xl'
+                        )}
+                      />
                     </button>
+                    <div
+                      className={cn(
+                        'pointer-events-none absolute top-0 bottom-0 bg-gradient-to-t from-black/35 to-transparent',
+                        canReorder ? 'left-6 right-0 rounded-r-xl' : 'inset-0 rounded-xl'
+                      )}
+                    />
+                    <div
+                      className={cn(
+                        'pointer-events-none absolute bottom-0.5 z-[5] text-center leading-none',
+                        canReorder ? 'left-7 right-1' : 'left-1 right-1'
+                      )}
+                    >
+                      <span className="inline-block rounded bg-black/55 px-1 py-px text-[7px] font-semibold uppercase tracking-wide text-white/95">
+                        {imgIndex < 2 ? 'Report image' : 'Additional'}
+                      </span>
+                    </div>
+                    <div
+                      className={cn(
+                        'pointer-events-none absolute top-1 z-[5] flex h-5 min-w-[1.25rem] items-center justify-center rounded bg-black/55 px-1 text-[10px] font-bold text-white',
+                        canReorder ? 'left-7' : 'left-1'
+                      )}
+                    >
+                      {imgIndex + 1}
+                    </div>
+                    {canReorder ? (
+                      <div className="absolute bottom-0 left-0 top-0 z-20 flex w-6 flex-col items-stretch justify-center gap-0.5 border-r border-white/10 bg-black/45 py-1">
+                        {imgIndex > 0 ? (
+                          <button
+                            type="button"
+                            draggable={false}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              moveFldImageEarlier(imgIndex);
+                            }}
+                            className="flex h-7 w-full shrink-0 items-center justify-center rounded text-white/90 transition-colors hover:bg-white/15 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/60"
+                            aria-label="Move image earlier in list"
+                            title="Move earlier"
+                          >
+                            <ChevronUp size={14} strokeWidth={2.5} />
+                          </button>
+                        ) : (
+                          <span className="h-7 shrink-0" aria-hidden />
+                        )}
+                        {imgIndex < fldImages.length - 1 ? (
+                          <button
+                            type="button"
+                            draggable={false}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              moveFldImageLater(imgIndex);
+                            }}
+                            className="flex h-7 w-full shrink-0 items-center justify-center rounded text-white/90 transition-colors hover:bg-white/15 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/60"
+                            aria-label="Move image later in list"
+                            title="Move later"
+                          >
+                            <ChevronDown size={14} strokeWidth={2.5} />
+                          </button>
+                        ) : (
+                          <span className="h-7 shrink-0" aria-hidden />
+                        )}
+                        <span
+                          className="pointer-events-none mt-0.5 flex h-5 w-full shrink-0 items-center justify-center text-white/50"
+                          title="Drag thumbnail to reorder"
+                          aria-hidden
+                        >
+                          <GripVertical size={12} strokeWidth={2} />
+                        </span>
+                      </div>
+                    ) : null}
                     <button
                       type="button"
+                      draggable={false}
                       onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
                         handleRemoveImage(url);
                       }}
-                      className="absolute top-1 right-1 z-10 p-1 rounded-full bg-black/50 text-white hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      className="absolute top-1 right-1 z-30 p-1 rounded-full bg-black/50 text-white hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                       aria-label="Remove image"
                     >
                       <X size={14} />
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </Card>
