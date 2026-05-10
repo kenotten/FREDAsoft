@@ -15,12 +15,14 @@ import {
   DollarSign,
   Edit2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Copy
 } from 'lucide-react';
 import { doc, writeBatch } from 'firebase/firestore';
 import { db, storage } from '../firebase';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { firestoreService } from '../services/firestoreService';
+import { buildProjectDataCloneSeed, type ProjectDataCloneSeed } from '../lib/cloneProjectData';
 import { Input } from './ui/input';
 import { Select } from './ui/select';
 import { Card } from './ui/card';
@@ -218,7 +220,9 @@ export default function ProjectDataEntry({
   project = {}, facility = {}, inspector = {}, glossary = [], standards = [], projectData = [],
   onSave, onReset, items = [], findings = [], recommendations = [], masterRecommendations = [],
   unitTypes = [], mergedCategories = [], locations = [], selections = {}, onSelectionChange, onDirtyChange,
-  onDeleteRecord
+  onDeleteRecord,
+  pendingCloneSeed = null,
+  onPendingCloneSeedConsumed
 }: any) {
   // Localized state management for the active record
   const activeRecord = useMemo(() => {
@@ -246,6 +250,12 @@ export default function ProjectDataEntry({
   const skipHydrationAfterDraftRef = useRef(false);
   const isFormDirtyRef = useRef(false);
   const isSavingRef = useRef(false);
+  const clonePersistRef = useRef<{
+    provenance: Record<string, unknown>;
+    saveContext: ProjectDataCloneSeed['saveContext'];
+  } | null>(null);
+  const pendingCloneConsumeRef = useRef<(() => void) | undefined>(undefined);
+  pendingCloneConsumeRef.current = onPendingCloneSeedConsumed;
   const buildDraftPayloadRef = useRef<() => Record<string, unknown>>(() => ({}));
   /** Avoid re-opening the same draft recovery modal when projectData refreshes without context change. */
   const draftRecoveryOfferedSigRef = useRef('');
@@ -437,13 +447,14 @@ export default function ProjectDataEntry({
         fldMeasurement !== '' ||
         fldUnitType !== 'Decimal' ||
         fldImages.length > 0 ||
-        safeArray(fldStandards).length > 0
+        safeArray(fldStandards).length > 0 ||
+        (Number(fldUnitCost) || 0) !== 0
       );
     }
   }, [
     activeRecord, selections.categoryId, selections.itemId, selections.findId, selections.recId,
     fldFindShort, fldFindLong, fldRecShort, fldRecLong,
-    fldQTY, fldMeasurement, fldMeasurementType, fldMeasurementUnit, fldUnitType, fldLocation, fldImages, fldStandards
+    fldQTY, fldMeasurement, fldMeasurementType, fldMeasurementUnit, fldUnitType, fldUnitCost, fldLocation, fldImages, fldStandards
   ]);
 
   useEffect(() => {
@@ -586,6 +597,7 @@ export default function ProjectDataEntry({
     draftRecoveryOfferedSigRef.current = '';
     setShowRecoveryModal(false);
     setSavedDraft(null);
+    clonePersistRef.current = null;
     isFormDirtyRef.current = false;
     setIsDirty(false);
     initialSelectionRef.current = {
@@ -840,6 +852,71 @@ export default function ProjectDataEntry({
     },
     [glossary]
   );
+
+  const applyCloneFromSeed = useCallback(
+    (seed: ProjectDataCloneSeed) => {
+      skipHydrationAfterDraftRef.current = true;
+      try {
+        localStorage.removeItem('fredasoft_draft');
+      } catch {
+        /* ignore */
+      }
+      draftRecoveryOfferedSigRef.current = '';
+      setShowRecoveryModal(false);
+      setSavedDraft(null);
+
+      clonePersistRef.current = {
+        provenance: { ...seed.provenance },
+        saveContext: { ...seed.saveContext }
+      };
+
+      setCustomMasterFindId(seed.customMasterFindId);
+      setCustomMasterRecId(seed.customMasterRecId);
+
+      const mergedSel = {
+        ...selections,
+        ...seed.selections,
+        editingRecordId: null,
+        locationId: '',
+        locationName: '',
+        images: [],
+        standards: [...seed.form.fldStandards],
+        isDirty: true
+      };
+      onSelectionChange(mergedSel);
+
+      initialSelectionRef.current = {
+        categoryId: seed.selections.categoryId || '',
+        itemId: seed.selections.itemId || '',
+        findId: seed.selections.findId || '',
+        recId: seed.selections.recId || '',
+        glosId: seed.selections.glosId || ''
+      };
+
+      setFldFindShort(seed.form.fldFindShort);
+      setFldFindLong(seed.form.fldFindLong);
+      setFldRecShort(seed.form.fldRecShort);
+      setFldRecLong(seed.form.fldRecLong);
+      setFldQTY(0);
+      setFldMeasurement('');
+      setFldMeasurementType('');
+      setFldMeasurementUnit('');
+      setFldUnitType(seed.form.fldUnitType);
+      setFldUnitCost(seed.form.fldUnitCost);
+      setFldTotalCost(0);
+      setFldLocation('');
+      setFldImages([]);
+      setFldStandards([...seed.form.fldStandards]);
+      setIsDirty(true);
+    },
+    [onSelectionChange, selections]
+  );
+
+  useEffect(() => {
+    if (!pendingCloneSeed) return;
+    applyCloneFromSeed(pendingCloneSeed);
+    pendingCloneConsumeRef.current?.();
+  }, [pendingCloneSeed, applyCloneFromSeed]);
 
   // Recovery: when workspace is known, validate draft context before offering recovery.
   useEffect(() => {
@@ -1207,7 +1284,22 @@ export default function ProjectDataEntry({
         fldTimestamp: new Date().toISOString()
       };
 
+      const cp = clonePersistRef.current;
+      if (!wasExisting && cp?.saveContext) {
+        const facFromCtx = facility?.fldFacID || cp.saveContext.fldFacility;
+        if (facFromCtx) {
+          basePayload.fldFacility = facFromCtx;
+        }
+        if (!isCustomMode && !String(basePayload.fldData || '').trim() && cp.saveContext.fldData) {
+          basePayload.fldData = cp.saveContext.fldData;
+        }
+      }
+      if (!wasExisting && cp?.provenance && Object.keys(cp.provenance).length > 0) {
+        Object.assign(basePayload, cp.provenance);
+      }
+
       await onSave(basePayload);
+      clonePersistRef.current = null;
     } catch {
       isSavingRef.current = false;
       return;
@@ -1353,7 +1445,8 @@ export default function ProjectDataEntry({
         setShowRecoveryModal(false);
         setSavedDraft(null);
         draftRecoveryOfferedSigRef.current = '';
-        
+        clonePersistRef.current = null;
+
         // 3. Update global selections to drop identity and downstream links
         // Retain: projectId, facilityId, categoryId, locationId, inspectorId
         onSelectionChange({
@@ -1482,6 +1575,18 @@ export default function ProjectDataEntry({
     draftRecoveryOfferedSigRef.current = '';
     onReset();
     onSelectionChange((prev: any) => ({ ...prev, standards: [] }));
+  };
+
+  const handleCloneActiveRecord = () => {
+    if (!activeRecord) return;
+    const seed = buildProjectDataCloneSeed(activeRecord, glossary);
+    confirmAction(
+      'Clone record',
+      'Start a new unsaved record as a copy of this one? Unsaved edits to the current form will be discarded.',
+      () => {
+        applyCloneFromSeed(seed);
+      }
+    );
   };
 
   const handleRequestDeleteRecord = () => {
@@ -2771,14 +2876,25 @@ export default function ProjectDataEntry({
             )}
           >
             {activeRecord && String(editingRecordId || '').trim() ? (
-              <Button
-                type="button"
-                variant="danger"
-                onClick={handleRequestDeleteRecord}
-                className="px-6 h-11 min-w-[140px]"
-              >
-                Delete Record
-              </Button>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCloneActiveRecord}
+                  className="px-6 h-11 min-w-[140px]"
+                >
+                  <Copy size={16} className="mr-2 inline-block" />
+                  Clone
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  onClick={handleRequestDeleteRecord}
+                  className="px-6 h-11 min-w-[140px]"
+                >
+                  Delete Record
+                </Button>
+              </div>
             ) : null}
             <div className="flex flex-wrap justify-end gap-3">
              {editingRecordId ? (

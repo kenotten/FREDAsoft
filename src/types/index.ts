@@ -235,6 +235,16 @@ export interface ProjectData {
   fldTimestamp: string;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
+  /** Lineage: source projectData id this row was cloned from */
+  fldSourcePDataID?: string;
+  /** Lineage: when the row was cloned (ISO string or server timestamp) */
+  fldSourceClonedAt?: string | unknown;
+  /** Lineage: source location id at clone time */
+  fldSourceClonedFromLocationId?: string;
+  /** Lineage: optional finding / recommendation / glossary ids at clone time */
+  fldSourceFindingId?: string;
+  fldSourceRecommendationId?: string;
+  fldSourceGlossaryId?: string;
 }
 
 export interface StandardSnapshot {

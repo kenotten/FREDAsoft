@@ -110,6 +110,7 @@ export function DataExplorer({
   standards = [],
   selections,
   onEditRecord,
+  onCloneRecord,
   onDeleteRecord
 }: any) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -693,6 +694,20 @@ export function DataExplorer({
                                         >
                                           Edit Record
                                         </Button>
+                                        {typeof onCloneRecord === 'function' ? (
+                                          <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            type="button"
+                                            className="h-8 px-2.5 text-[11px] font-semibold whitespace-nowrap"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onCloneRecord(d);
+                                            }}
+                                          >
+                                            Clone
+                                          </Button>
+                                        ) : null}
                                         <Button
                                           variant="ghost"
                                           size="sm"
