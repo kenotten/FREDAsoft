@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useLayoutEffect, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
 import metadata from '../../metadata.json';
 // @ts-ignore
 import ocgLogoNew from '../Assets/ocglogonew.jpg';
@@ -253,6 +253,169 @@ function AddendumRows({ entries }: { entries: AddendumEntry[] }) {
   );
 }
 
+/** Supplemental project-data photos (fldImages index >= 2); chunked for fixed-height PageContainer pages. */
+const PHOTO_ADDENDUM_IMAGES_PER_PAGE = 8;
+
+interface PhotoAddendumRow {
+  url: string;
+  recordId: string;
+  imageIndex: number;
+  locationLabel: string;
+  categoryLabel: string;
+  itemLabel: string;
+  recordSortIndex: number;
+}
+
+function resolveRecordLocationLabelForPhotoAddendum(record: ProjectData, locations: Location[]): string {
+  const loc = locations.find(l => l.fldLocID === record.fldLocation);
+  const name = loc?.fldLocName?.trim();
+  return name || 'Unknown location';
+}
+
+/** Same glossary/custom → category/item resolution as DocumentationCard. */
+function resolveRecordCategoryItemLabelsForPhotoAddendum(
+  record: ProjectData,
+  glossary: Glossary[],
+  categories: Category[],
+  items: Item[]
+): { categoryLabel: string; itemLabel: string } {
+  const cleanKey = (record.fldData || '').trim().toLowerCase();
+  const glos = glossary.find(g => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
+  const isCustom = record?.fldRecordSource === 'custom' && !glos;
+  const catId = glos?.fldCat || (isCustom ? (record?.fldPDataCategoryID || '') : '');
+  const itemId = glos?.fldItem || (isCustom ? (record?.fldPDataItemID || '') : '');
+  const cat = categories.find(c => c.fldCategoryID === catId);
+  const item = items.find(i => i.fldItemID === itemId);
+  const categoryName = cat?.fldCategoryName?.trim();
+  const itemName = item?.fldItemName?.trim();
+  return {
+    categoryLabel: categoryName || '—',
+    itemLabel: itemName || '—',
+  };
+}
+
+function buildSupplementalPhotoRows(
+  filteredData: ProjectData[],
+  locations: Location[],
+  glossary: Glossary[],
+  categories: Category[],
+  items: Item[]
+): PhotoAddendumRow[] {
+  const rows: PhotoAddendumRow[] = [];
+  filteredData.forEach((record, recordSortIndex) => {
+    const imgs = record.fldImages;
+    if (!Array.isArray(imgs) || imgs.length <= 2) return;
+    const locationLabel = resolveRecordLocationLabelForPhotoAddendum(record, locations);
+    const { categoryLabel, itemLabel } = resolveRecordCategoryItemLabelsForPhotoAddendum(
+      record,
+      glossary,
+      categories,
+      items
+    );
+    for (let i = 2; i < imgs.length; i++) {
+      const url = imgs[i];
+      if (url === undefined || url === null || String(url).trim() === '') continue;
+      rows.push({
+        url: String(url).trim(),
+        recordId: record.fldPDataID,
+        imageIndex: i,
+        locationLabel,
+        categoryLabel,
+        itemLabel,
+        recordSortIndex,
+      });
+    }
+  });
+  rows.sort((a, b) => {
+    const loc = a.locationLabel.localeCompare(b.locationLabel, undefined, { sensitivity: 'base' });
+    if (loc !== 0) return loc;
+    if (a.recordSortIndex !== b.recordSortIndex) return a.recordSortIndex - b.recordSortIndex;
+    return a.imageIndex - b.imageIndex;
+  });
+  return rows;
+}
+
+function chunkPhotoAddendumRows(rows: PhotoAddendumRow[]): PhotoAddendumRow[][] {
+  if (rows.length === 0) return [];
+  const chunks: PhotoAddendumRow[][] = [];
+  for (let i = 0; i < rows.length; i += PHOTO_ADDENDUM_IMAGES_PER_PAGE) {
+    chunks.push(rows.slice(i, i + PHOTO_ADDENDUM_IMAGES_PER_PAGE));
+  }
+  return chunks;
+}
+
+function PhotoAddendumCell({ row }: { row: PhotoAddendumRow }) {
+  const [broken, setBroken] = useState(false);
+  const caption = `${row.categoryLabel} | ${row.itemLabel}`;
+  return (
+    <div className="flex min-w-0 flex-col break-inside-avoid">
+      <div className="aspect-square w-full max-h-[132px] overflow-hidden rounded border border-zinc-200 bg-white">
+        {broken ? (
+          <div className="flex h-full min-h-[100px] w-full items-center justify-center bg-zinc-100 px-1">
+            <span className="text-center text-[9px] leading-tight text-zinc-500">Image unavailable</span>
+          </div>
+        ) : (
+          <img
+            src={row.url}
+            alt=""
+            className="h-full w-full object-cover"
+            referrerPolicy="no-referrer"
+            onError={() => setBroken(true)}
+          />
+        )}
+      </div>
+      <p
+        className="mt-0.5 w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-0.5 text-center text-[10px] font-medium leading-snug text-zinc-700"
+        title={caption}
+      >
+        {caption}
+      </p>
+    </div>
+  );
+}
+
+function PhotoAddendumPageBody({
+  rows,
+  showSectionTitle,
+}: {
+  rows: PhotoAddendumRow[];
+  showSectionTitle: boolean;
+}) {
+  const sections: { label: string; items: PhotoAddendumRow[] }[] = [];
+  for (const row of rows) {
+    const last = sections[sections.length - 1];
+    if (last && last.label === row.locationLabel) {
+      last.items.push(row);
+    } else {
+      sections.push({ label: row.locationLabel, items: [row] });
+    }
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+      {showSectionTitle ? (
+        <h2 className="shrink-0 border-b-2 border-zinc-900 pb-2 text-xl font-bold uppercase tracking-widest text-zinc-900">
+          Photo Addendum
+        </h2>
+      ) : null}
+      <div className="min-h-0 flex-1 space-y-5 overflow-hidden">
+        {sections.map((sec, si) => (
+          <div key={`${sec.label}-${si}`} className="space-y-1.5 break-inside-avoid">
+            <h3 className="border-b border-zinc-200 pb-0.5 text-xs font-black uppercase tracking-wide text-zinc-600">
+              {sec.label}
+            </h3>
+            <div className="grid grid-cols-4 gap-x-2 gap-y-2">
+              {sec.items.map((row) => (
+                <PhotoAddendumCell key={`${row.recordId}-${row.imageIndex}`} row={row} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ReportPreview({
   project,
   client,
@@ -348,6 +511,16 @@ export function ReportPreview({
   const referencedStandards = useMemo(
     () => buildReferencedAddendumEntries(filteredData, glossary, standards),
     [filteredData, glossary, standards]
+  );
+
+  const supplementalPhotoRows = useMemo(
+    () => buildSupplementalPhotoRows(filteredData, locations, glossary, categories, items),
+    [filteredData, locations, glossary, categories, items]
+  );
+
+  const photoAddendumPages = useMemo(
+    () => chunkPhotoAddendumRows(supplementalPhotoRows),
+    [supplementalPhotoRows]
   );
 
   const financialData = useMemo(() => {
@@ -856,6 +1029,22 @@ export function ReportPreview({
                   </div>
                 </PageContainer>
               )}
+
+              {/* Photo Addendum (fldImages index 2+ only; main cards unchanged at slice(0,2)) */}
+              {photoAddendumPages.length > 0
+                ? photoAddendumPages.map((photoPageRows, phIdx) => (
+                    <PageContainer
+                      key={`photo-add-${phIdx}`}
+                      pageNumber={`D${phIdx + 1}`}
+                      facilityName={facility.fldFacName}
+                    >
+                      <PhotoAddendumPageBody
+                        rows={photoPageRows}
+                        showSectionTitle={phIdx === 0}
+                      />
+                    </PageContainer>
+                  ))
+                : null}
             </div>
           </div>
         )}
