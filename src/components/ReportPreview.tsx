@@ -1131,10 +1131,22 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
           <div className="flex-1 bg-black text-white px-2 py-1 text-[10px] font-bold uppercase truncate">{item?.fldItemName || 'N/A'}</div>
         </div>
         
-        {/* Location Row */}
-        <div className="flex border-b border-zinc-300">
-          <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Location</div>
-          <div className="flex-1 px-2 py-2 text-xs font-medium">{location?.fldLocName || 'N/A'}</div>
+        {/* Location row: single continuous value band; cost right-aligned */}
+        <div className="flex min-w-0 border-b border-zinc-300">
+          <div className="w-32 shrink-0 border-r border-zinc-300 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase">
+            Location
+          </div>
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-3 bg-white px-2 py-2">
+            <span
+              className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-900"
+              title={location?.fldLocName || 'N/A'}
+            >
+              {location?.fldLocName || 'N/A'}
+            </span>
+            <span className="shrink-0 whitespace-nowrap text-xs font-bold text-blue-600">
+              Estimated Cost: ${record.totalCost?.toLocaleString()}
+            </span>
+          </div>
         </div>
 
         {/* Finding Row */}
@@ -1181,10 +1193,7 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
         {/* Reference Row */}
         <div className="flex border-t border-zinc-300">
           <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Reference</div>
-          <div className="flex-1 px-2 py-2 text-xs font-bold flex justify-between items-center gap-4">
-            <span className="flex-1">{refs}</span>
-            <span className="text-blue-600 shrink-0">Estimated Cost: ${record.totalCost?.toLocaleString()}</span>
-          </div>
+          <div className="flex-1 px-2 py-2 text-xs font-bold">{refs}</div>
         </div>
       </div>
 
