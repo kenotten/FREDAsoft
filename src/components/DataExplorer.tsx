@@ -12,6 +12,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { Button, Input, Select, Card } from './ui/core';
+import { ImagePreviewModal } from './ui/ImagePreviewModal';
 import { cn, sortEntities, compareEntities } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
@@ -110,6 +111,7 @@ export function DataExplorer({
   const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
   const [cloneLocationId, setCloneLocationId] = useState('');
   const [isCloning, setIsCloning] = useState(false);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const { user } = useAuth();
   const preSearchExpandedRef = React.useRef<Record<string, boolean>>({});
   const isSearchingRef = React.useRef(false);
@@ -765,7 +767,20 @@ export function DataExplorer({
                                                 <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2">Photos ({d.fldImages.length})</label>
                                                 <div className="flex gap-2 overflow-x-auto pb-2">
                                                   {d.fldImages.map((img: string, idx: number) => (
-                                                    <img key={idx} src={img} className="w-24 h-24 object-cover rounded-lg border border-zinc-200 shrink-0" referrerPolicy="no-referrer" />
+                                                    <button
+                                                      key={`${d.fldPDataID}-photo-${idx}`}
+                                                      type="button"
+                                                      onClick={() => setImagePreviewUrl(img)}
+                                                      className="h-24 w-24 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-zinc-200 ring-offset-2 transition-shadow hover:ring-2 hover:ring-blue-400/60 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                      aria-label="View photo larger"
+                                                    >
+                                                      <img
+                                                        src={img}
+                                                        alt=""
+                                                        className="h-full w-full object-cover pointer-events-none"
+                                                        referrerPolicy="no-referrer"
+                                                      />
+                                                    </button>
                                                   ))}
                                                 </div>
                                               </div>
@@ -950,6 +965,13 @@ export function DataExplorer({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ImagePreviewModal
+        src={imagePreviewUrl}
+        alt="Record photo"
+        title="Photo preview"
+        onClose={() => setImagePreviewUrl(null)}
+      />
     </div>
   );
 }

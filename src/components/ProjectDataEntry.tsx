@@ -24,6 +24,7 @@ import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { firestoreService } from '../services/firestoreService';
 import { buildProjectDataCloneSeed, type ProjectDataCloneSeed } from '../lib/cloneProjectData';
 import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
+import { ImagePreviewModal } from './ui/ImagePreviewModal';
 import { Input } from './ui/input';
 import { Select } from './ui/select';
 import { Card } from './ui/card';
@@ -551,6 +552,7 @@ export default function ProjectDataEntry({
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [savedDraft, setSavedDraft] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
 
   // Workspace / record guard: clear stale Data Entry when project/facility/client changes, record is ghosted,
   // or the loaded record does not belong to the current project/facility.
@@ -2918,11 +2920,21 @@ export default function ProjectDataEntry({
                     key={url}
                     className="relative w-24 h-24 rounded-xl border border-zinc-200 overflow-hidden bg-zinc-50 shrink-0 group"
                   >
-                    <img src={url} alt="" className="w-full h-full object-cover" />
                     <button
                       type="button"
-                      onClick={() => handleRemoveImage(url)}
-                      className="absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      onClick={() => setImagePreviewUrl(url)}
+                      className="block h-full w-full cursor-pointer rounded-xl text-left ring-offset-2 transition-shadow hover:ring-2 hover:ring-blue-400/60 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      aria-label="View image larger"
+                    >
+                      <img src={url} alt="" className="h-full w-full object-cover pointer-events-none" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveImage(url);
+                      }}
+                      className="absolute top-1 right-1 z-10 p-1 rounded-full bg-black/50 text-white hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                       aria-label="Remove image"
                     >
                       <X size={14} />
@@ -3162,6 +3174,13 @@ export default function ProjectDataEntry({
           </Modal>
         )}
       </AnimatePresence>
+
+      <ImagePreviewModal
+        src={imagePreviewUrl}
+        alt="Project data image"
+        title="Image preview"
+        onClose={() => setImagePreviewUrl(null)}
+      />
     </div>
   );
 }
