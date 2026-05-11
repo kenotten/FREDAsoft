@@ -25,8 +25,11 @@ import {
   buildReferencedAddendumEntries,
   filterReportProjectForPreview,
   getRecordStandardIds,
+  getReportRecordSortKeys,
+  compareReportRecordSortKeysLocationFirst,
   standardTypeKey,
-  type AddendumEntry
+  type AddendumEntry,
+  type ReportRecordSortOrder
 } from '../lib/reportPreviewShared';
 import type { ReportSectionSelection } from './ReportSectionSelectionDialog';
 
@@ -148,6 +151,156 @@ function AddendumRows({ entries }: { entries: AddendumEntry[] }) {
 
 /** Supplemental project-data photos (fldImages index >= 2); chunked for fixed-height PageContainer pages. */
 const PHOTO_ADDENDUM_IMAGES_PER_PAGE = 8;
+
+/** Financial pagination: tbody heights are measured; each printed page adds thead (py-2 + text-[10px] row). */
+const FIN_PAGINATION_THEAD_OVERHEAD_PX = 32;
+/** Small slack per row for divide-y / subpixel layout — keep low so budgets stay close to measured sums. */
+const FIN_PAGINATION_ROW_GAP_PX = 2;
+/** Reserve space on the last financial page(s) for Grand Total tfoot (py-4 row + border). */
+const FIN_PAGINATION_GRAND_TOTAL_RESERVE_PX = 42;
+
+/** Mirrors visible Financial Summary tbody rows so measured heights match printed rows (both sort modes). */
+function FinancialMeasurementBodyRow({
+  row,
+  recordSortOrder
+}: {
+  row: { type: string; content?: unknown; groupHeading?: string; subtotal?: number };
+  recordSortOrder: ReportRecordSortOrder;
+}) {
+  if (row.type === 'header') {
+    return (
+      <tr data-measure-type="fin" className="bg-zinc-100 break-inside-avoid">
+        <td colSpan={5} className="py-2 px-3 text-xs font-black text-zinc-900 uppercase tracking-tight">
+          {String(row.content ?? '')}
+        </td>
+      </tr>
+    );
+  }
+  if (row.type === 'record') {
+    const rec = row.content as {
+      categoryName?: string;
+      itemName?: string;
+      locationName?: string;
+      fldQTY?: number;
+      displayUnitType?: string;
+      displayUnitCost?: number;
+      totalCost?: number;
+    };
+    if (recordSortOrder === 'location_category_item') {
+      return (
+        <tr data-measure-type="fin" className="text-xs break-inside-avoid">
+          <td className="py-2 px-3 text-zinc-700">{rec.categoryName ?? ''}</td>
+          <td className="py-2 px-3 text-zinc-700">{rec.itemName ?? ''}</td>
+          <td className="py-2 px-3 text-right text-zinc-700">
+            {rec.fldQTY ?? 0} {rec.displayUnitType ?? ''}
+          </td>
+          <td className="py-2 px-3 text-right text-zinc-700">{formatCurrency(rec.displayUnitCost ?? 0)}</td>
+          <td className="py-2 px-3 text-right font-bold text-zinc-900">{formatCurrency(rec.totalCost ?? 0)}</td>
+        </tr>
+      );
+    }
+    return (
+      <tr data-measure-type="fin" className="text-xs break-inside-avoid">
+        <td className="py-2 px-3 text-zinc-700">{rec.itemName ?? ''}</td>
+        <td className="py-2 px-3 text-zinc-500 italic">{rec.locationName ?? ''}</td>
+        <td className="py-2 px-3 text-right text-zinc-700">
+          {rec.fldQTY ?? 0} {rec.displayUnitType ?? ''}
+        </td>
+        <td className="py-2 px-3 text-right text-zinc-700">{formatCurrency(rec.displayUnitCost ?? 0)}</td>
+        <td className="py-2 px-3 text-right font-bold text-zinc-900">{formatCurrency(rec.totalCost ?? 0)}</td>
+      </tr>
+    );
+  }
+  if (row.type === 'subtotal') {
+    return (
+      <tr data-measure-type="fin" className="bg-zinc-50 break-inside-avoid">
+        <td colSpan={4} className="py-2 px-3 text-right text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+          Subtotal {row.groupHeading ?? ''}:
+        </td>
+        <td className="py-2 px-3 text-right font-black text-zinc-900 border-t border-zinc-200">
+          {formatCurrency(row.subtotal ?? 0)}
+        </td>
+      </tr>
+    );
+  }
+  return null;
+}
+
+/** Padding below group header text (inside measured box so `getBoundingClientRect` includes it). */
+const DOC_HEADER_SPACE_AFTER_PX = 14;
+/** Margin below each DocumentationCard wrapper (outside border box; added in pagination after measured card height). */
+const DOC_CARD_GAP_PX = 22;
+
+type DocumentationPageItem =
+  | { kind: 'groupHeader'; groupKey: string; label: string; continued: boolean }
+  | { kind: 'record'; record: ProjectData };
+
+function resolveDocumentationGroup(
+  record: ProjectData,
+  recordSortOrder: ReportRecordSortOrder,
+  glossary: Glossary[],
+  categories: Category[],
+  locations: Location[]
+): { groupKey: string; label: string } {
+  const cleanKey = (record.fldData || '').trim().toLowerCase();
+  const glos = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
+  const isCustom = record?.fldRecordSource === 'custom' && !glos;
+  const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
+  const cat = categories.find((c) => c.fldCategoryID === catId);
+
+  if (recordSortOrder === 'location_category_item') {
+    const loc = locations.find((l) => l.fldLocID === record.fldLocation);
+    const id = (loc?.fldLocID || record.fldLocation || '__none__').trim();
+    const name = (loc?.fldLocName || '').trim();
+    const label = name !== '' ? name : 'Unknown location';
+    return { groupKey: `loc:${id}`, label };
+  }
+
+  const label = (cat?.fldCategoryName || '').trim() !== '' ? cat!.fldCategoryName!.trim() : 'Uncategorized';
+  return { groupKey: `cat:${catId || '__none__'}`, label };
+}
+
+function buildDocumentationFlatStream(
+  filteredData: ProjectData[],
+  recordSortOrder: ReportRecordSortOrder,
+  glossary: Glossary[],
+  categories: Category[],
+  locations: Location[]
+): DocumentationPageItem[] {
+  const order = recordSortOrder ?? 'category_location_item';
+  const out: DocumentationPageItem[] = [];
+  let prevKey: string | null = null;
+  for (const record of filteredData) {
+    const { groupKey, label } = resolveDocumentationGroup(record, order, glossary, categories, locations);
+    if (groupKey !== prevKey) {
+      out.push({ kind: 'groupHeader', groupKey, label, continued: false });
+      prevKey = groupKey;
+    }
+    out.push({ kind: 'record', record });
+  }
+  return out;
+}
+
+function getLastRecordFromDocumentationPage(page: DocumentationPageItem[]): ProjectData | null {
+  for (let j = page.length - 1; j >= 0; j--) {
+    const it = page[j];
+    if (it.kind === 'record') return it.record;
+  }
+  return null;
+}
+
+function DocumentationGroupHeader({ label, continued }: { label: string; continued: boolean }) {
+  const display = continued ? `${label} (cont.)` : label;
+  return (
+    <div
+      className="shrink-0 border-b border-zinc-200 text-base font-bold leading-tight text-zinc-900"
+      style={{ paddingBottom: DOC_HEADER_SPACE_AFTER_PX }}
+      title={display}
+    >
+      <span className="block truncate">{display}</span>
+    </div>
+  );
+}
 
 interface PhotoAddendumRow {
   url: string;
@@ -287,8 +440,9 @@ function PhotoAddendumPageBody({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       {showSectionTitle ? (
-        <h2 className="shrink-0 border-b-2 border-zinc-900 pb-2 text-xl font-bold uppercase tracking-widest text-zinc-900">
-          Photo Addendum
+        <h2 className="shrink-0 border-b-2 border-zinc-900 pb-2 text-xl font-bold text-zinc-900">
+          <span className="uppercase tracking-widest">Photo Addendum</span>
+          <span className="font-bold normal-case tracking-normal"> (extra photos)</span>
         </h2>
       ) : null}
       <div className="min-h-0 flex-1 space-y-5 overflow-hidden">
@@ -333,6 +487,8 @@ export function ReportPreview({
   
   // State for measured heights
   const [measuredDocHeights, setMeasuredDocHeights] = useState<Record<string, number>>({});
+  /** Measured height of `DocumentationGroupHeader` probe in measurementRef (single-line). */
+  const [measuredDocHeaderHeight, setMeasuredDocHeaderHeight] = useState(32);
   const [measuredFinHeights, setMeasuredFinHeights] = useState<number[]>([]);
   const [measuredAddendumHeights, setMeasuredAddendumHeights] = useState<Record<string, number>>({});
   const [isMeasuring, setIsMeasuring] = useState(true);
@@ -344,7 +500,8 @@ export function ReportPreview({
       documentation: sectionSelection?.documentation ?? true,
       financial: sectionSelection?.financial ?? true,
       referencedStandards: sectionSelection?.referencedStandards ?? true,
-      photoAddendum: sectionSelection?.photoAddendum ?? true
+      photoAddendum: sectionSelection?.photoAddendum ?? true,
+      recordSortOrder: sectionSelection?.recordSortOrder ?? 'category_location_item'
     }),
     [sectionSelection]
   );
@@ -359,9 +516,20 @@ export function ReportPreview({
         categories,
         items,
         locations,
-        findings
+        findings,
+        sectionSel.recordSortOrder
       ),
-    [projectData, project, facility, glossary, categories, items, locations, findings]
+    [
+      projectData,
+      project,
+      facility,
+      glossary,
+      categories,
+      items,
+      locations,
+      findings,
+      sectionSel.recordSortOrder
+    ]
   );
 
   const referencedStandards = useMemo(() => {
@@ -381,45 +549,96 @@ export function ReportPreview({
 
   const financialData = useMemo(() => {
     if (!sectionSel.financial) return [];
-    const groups: Record<string, { category: string, records: any[], subtotal: number }> = {};
-    filteredData.forEach(record => {
-      const cleanKey = (record.fldData || "").trim().toLowerCase();
-      const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
+
+    const enrichFinancialRecord = (record: ProjectData) => {
+      const cleanKey = (record.fldData || '').trim().toLowerCase();
+      const glos = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
       const isCustom = record?.fldRecordSource === 'custom' && !glos;
-      const catId = glos?.fldCat || (isCustom ? (record?.fldPDataCategoryID || '') : '');
-      const itemId = glos?.fldItem || (isCustom ? (record?.fldPDataItemID || '') : '');
-      const cat = categories.find(c => c.fldCategoryID === catId);
+      const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
+      const itemId = glos?.fldItem || (isCustom ? record?.fldPDataItemID || '' : '');
+      const cat = categories.find((c) => c.fldCategoryID === catId);
       const catName = cat?.fldCategoryName || 'Uncategorized';
-      if (!groups[catName]) {
-        groups[catName] = { category: catName, records: [], subtotal: 0 };
-      }
-      const location = locations.find(l => l.fldLocID === record.fldLocation);
-      groups[catName].records.push({
+      const location = locations.find((l) => l.fldLocID === record.fldLocation);
+      const locationName = location?.fldLocName || 'N/A';
+      return {
         ...record,
-        itemName: items.find(i => i.fldItemID === itemId)?.fldItemName || 'N/A',
-        locationName: location?.fldLocName || 'N/A'
+        itemName: items.find((i) => i.fldItemID === itemId)?.fldItemName || 'N/A',
+        locationName,
+        categoryName: catName
+      };
+    };
+
+    if (sectionSel.recordSortOrder !== 'location_category_item') {
+      const groups: Record<string, { heading: string; records: any[]; subtotal: number }> = {};
+      filteredData.forEach((record) => {
+        const cleanKey = (record.fldData || '').trim().toLowerCase();
+        const glos = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
+        const isCustom = record?.fldRecordSource === 'custom' && !glos;
+        const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
+        const cat = categories.find((c) => c.fldCategoryID === catId);
+        const catName = cat?.fldCategoryName || 'Uncategorized';
+        if (!groups[catName]) {
+          groups[catName] = { heading: catName, records: [], subtotal: 0 };
+        }
+        groups[catName].records.push(enrichFinancialRecord(record));
+        groups[catName].subtotal += (record as any).totalCost;
       });
-      groups[catName].subtotal += (record as any).totalCost;
+      return Object.values(groups).sort((a, b) => {
+        const catA = categories.find((c) => c.fldCategoryName === a.heading);
+        const catB = categories.find((c) => c.fldCategoryName === b.heading);
+        const orderA = catA?.fldOrder ?? 999;
+        const orderB = catB?.fldOrder ?? 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.heading.localeCompare(b.heading);
+      });
+    }
+
+    const groups: Record<string, { heading: string; records: any[]; subtotal: number }> = {};
+    filteredData.forEach((record) => {
+      const location = locations.find((l) => l.fldLocID === record.fldLocation);
+      const locationKey =
+        (location?.fldLocName || '').trim() !== ''
+          ? (location?.fldLocName || '').trim()
+          : 'Unknown location';
+      if (!groups[locationKey]) {
+        groups[locationKey] = { heading: locationKey, records: [], subtotal: 0 };
+      }
+      groups[locationKey].records.push(enrichFinancialRecord(record));
+      groups[locationKey].subtotal += (record as any).totalCost;
     });
-    return Object.values(groups).sort((a, b) => {
-      const catA = categories.find(c => c.fldCategoryName === a.category);
-      const catB = categories.find(c => c.fldCategoryName === b.category);
-      const orderA = catA?.fldOrder ?? 999;
-      const orderB = catB?.fldOrder ?? 999;
-      if (orderA !== orderB) return orderA - orderB;
-      return a.category.localeCompare(b.category);
+
+    const list = Object.values(groups);
+    list.forEach((g) => {
+      g.records.sort((a, b) =>
+        compareReportRecordSortKeysLocationFirst(
+          getReportRecordSortKeys(a, glossary, categories, items, locations, findings),
+          getReportRecordSortKeys(b, glossary, categories, items, locations, findings)
+        )
+      );
     });
-  }, [sectionSel.financial, filteredData, glossary, categories, items, locations, project.fldCostMultiplier]);
+    list.sort((a, b) => a.heading.localeCompare(b.heading, undefined, { sensitivity: 'base' }));
+    return list;
+  }, [
+    sectionSel.financial,
+    sectionSel.recordSortOrder,
+    filteredData,
+    glossary,
+    categories,
+    items,
+    locations,
+    findings,
+    project.fldCostMultiplier
+  ]);
 
   const financialRows = useMemo(() => {
     if (!sectionSel.financial) return [];
     const rows: any[] = [];
-    financialData.forEach(group => {
-      rows.push({ type: 'header', content: group.category });
-      group.records.forEach(rec => {
+    financialData.forEach((group) => {
+      rows.push({ type: 'header', content: group.heading });
+      group.records.forEach((rec) => {
         rows.push({ type: 'record', content: rec });
       });
-      rows.push({ type: 'subtotal', category: group.category, subtotal: group.subtotal });
+      rows.push({ type: 'subtotal', groupHeading: group.heading, subtotal: group.subtotal });
     });
     return rows;
   }, [sectionSel.financial, financialData]);
@@ -460,6 +679,13 @@ export function ReportPreview({
         if (id) docHeights[id] = el.getBoundingClientRect().height;
       });
 
+      const docHeaderProbe = measurementRef.current?.querySelector('[data-measure-type="doc-header"]');
+      let docHeaderH = 32;
+      if (docHeaderProbe) {
+        docHeaderH = Math.ceil(docHeaderProbe.getBoundingClientRect().height);
+        if (docHeaderH < 24) docHeaderH = 24;
+      }
+
       const finElements = measurementRef.current?.querySelectorAll('[data-measure-type="fin"]');
       finElements?.forEach(el => {
         finHeights.push(el.getBoundingClientRect().height);
@@ -472,6 +698,7 @@ export function ReportPreview({
       });
 
       setMeasuredDocHeights(docHeights);
+      setMeasuredDocHeaderHeight(docHeaderH);
       setMeasuredFinHeights(finHeights);
       setMeasuredAddendumHeights(addendumHeights);
       setIsMeasuring(false);
@@ -484,7 +711,8 @@ export function ReportPreview({
     referencedStandards,
     sectionSel.documentation,
     sectionSel.financial,
-    sectionSel.referencedStandards
+    sectionSel.referencedStandards,
+    sectionSel.recordSortOrder
   ]);
 
   // Pagination Chunks using measured heights
@@ -496,44 +724,158 @@ export function ReportPreview({
   const documentationPages = useMemo(() => {
     if (!sectionSel.documentation) return [];
     if (isMeasuring) return [];
-    const chunks: ProjectData[][] = [];
-    let currentChunk: ProjectData[] = [];
-    let currentHeight = 0;
-    const standardLimit = 660; // Reduced further for extra safety buffer
-    const firstPageLimit = 595; // 660 - 65
 
-    for (const item of filteredData) {
-      const height = (measuredDocHeights[item.fldPDataID] || 200) + 32; // +32 for gap
-      const limit = chunks.length === 0 ? firstPageLimit : standardLimit;
-      
-      if (currentHeight + height > limit && currentChunk.length > 0) {
-        chunks.push(currentChunk);
-        currentChunk = [item];
-        currentHeight = height;
-      } else {
-        currentChunk.push(item);
-        currentHeight += height;
+    const flat = buildDocumentationFlatStream(
+      filteredData,
+      sectionSel.recordSortOrder,
+      glossary,
+      categories,
+      locations
+    );
+
+    /** Includes `DocumentationGroupHeader` padding below title (see `DOC_HEADER_SPACE_AFTER_PX`). */
+    const headerUnitCost = measuredDocHeaderHeight;
+    const recordHeight = (r: ProjectData) => (measuredDocHeights[r.fldPDataID] || 200) + DOC_CARD_GAP_PX;
+
+    // Body-height budget per doc page (section title only on first printed doc page). Values are
+    // heuristic; group headers consume space that was not in the original 660 / (660−65) split.
+    const standardLimit = 682;
+    const firstPageLimit = 628;
+    const limit = () => (pages.length === 0 ? firstPageLimit : standardLimit);
+
+    const pages: DocumentationPageItem[][] = [];
+    let current: DocumentationPageItem[] = [];
+    let currentHeight = 0;
+
+    let i = 0;
+    while (i < flat.length) {
+      const item = flat[i];
+
+      if (current.length === 0 && pages.length > 0 && item.kind === 'record') {
+        const prevLast = getLastRecordFromDocumentationPage(pages[pages.length - 1]!);
+        if (prevLast) {
+          const gPrev = resolveDocumentationGroup(
+            prevLast,
+            sectionSel.recordSortOrder,
+            glossary,
+            categories,
+            locations
+          );
+          const gCur = resolveDocumentationGroup(
+            item.record,
+            sectionSel.recordSortOrder,
+            glossary,
+            categories,
+            locations
+          );
+          if (gPrev.groupKey === gCur.groupKey) {
+            const cont: DocumentationPageItem = {
+              kind: 'groupHeader',
+              groupKey: gCur.groupKey,
+              label: gCur.label,
+              continued: true
+            };
+            if (currentHeight + headerUnitCost <= limit()) {
+              current.push(cont);
+              currentHeight += headerUnitCost;
+            }
+          }
+        }
       }
+
+      if (item.kind === 'groupHeader') {
+        const next = flat[i + 1];
+        const hCost = headerUnitCost;
+        const pairCost =
+          next?.kind === 'record' ? hCost + recordHeight(next.record) : hCost;
+
+        if (current.length > 0 && currentHeight + pairCost > limit()) {
+          pages.push(current);
+          current = [];
+          currentHeight = 0;
+          continue;
+        }
+        if (current.length > 0 && currentHeight + hCost > limit()) {
+          pages.push(current);
+          current = [];
+          currentHeight = 0;
+          continue;
+        }
+
+        current.push(item);
+        currentHeight += hCost;
+        i += 1;
+        continue;
+      }
+
+      const rec = item.record;
+      const h = recordHeight(rec);
+      if (current.length > 0 && currentHeight + h > limit()) {
+        pages.push(current);
+        current = [];
+        currentHeight = 0;
+        continue;
+      }
+
+      current.push(item);
+      currentHeight += h;
+      i += 1;
     }
-    if (currentChunk.length > 0) chunks.push(currentChunk);
-    return chunks;
-  }, [sectionSel.documentation, filteredData, measuredDocHeights, isMeasuring]);
+
+    if (current.length > 0) pages.push(current);
+    return pages;
+  }, [
+    sectionSel.documentation,
+    sectionSel.recordSortOrder,
+    filteredData,
+    measuredDocHeights,
+    measuredDocHeaderHeight,
+    glossary,
+    categories,
+    locations,
+    isMeasuring
+  ]);
 
   const financialPages = useMemo(() => {
     if (!sectionSel.financial) return [];
     if (isMeasuring) return [];
+
+    // Match legacy body budgets (630 / 565 minus title slack on first page), minus thead only.
+    const baseFirstLimit = 565 - FIN_PAGINATION_THEAD_OVERHEAD_PX;
+    const baseStdLimit = 630 - FIN_PAGINATION_THEAD_OVERHEAD_PX;
+
     const chunks: any[][] = [];
     let currentChunk: any[] = [];
     let currentHeight = 0;
-    const standardLimit = 630; // Reduced further for extra safety buffer
-    const firstPageLimit = 565; // 630 - 65
 
     for (let i = 0; i < financialRows.length; i++) {
       const row = financialRows[i];
-      const height = measuredFinHeights[i] || 32;
-      let limit = chunks.length === 0 ? firstPageLimit : standardLimit;
-      
-      if (i > financialRows.length - 3) limit -= 60; // Grand total space
+      const height = (measuredFinHeights[i] || 32) + FIN_PAGINATION_ROW_GAP_PX;
+
+      let limit = chunks.length === 0 ? baseFirstLimit : baseStdLimit;
+      if (i > financialRows.length - 3) limit -= FIN_PAGINATION_GRAND_TOTAL_RESERVE_PX;
+
+      if (
+        row.type === 'header' &&
+        currentChunk.length > 0 &&
+        i + 1 < financialRows.length
+      ) {
+        const next = financialRows[i + 1];
+        if (next.type === 'record' || next.type === 'subtotal') {
+          const nextH = (measuredFinHeights[i + 1] || 32) + FIN_PAGINATION_ROW_GAP_PX;
+          if (
+            currentHeight + height + nextH > limit &&
+            currentHeight + height <= limit
+          ) {
+            chunks.push(currentChunk);
+            currentChunk = [];
+            currentHeight = 0;
+          }
+        }
+      }
+
+      limit = chunks.length === 0 ? baseFirstLimit : baseStdLimit;
+      if (i > financialRows.length - 3) limit -= FIN_PAGINATION_GRAND_TOTAL_RESERVE_PX;
 
       if (currentHeight + height > limit && currentChunk.length > 0) {
         chunks.push(currentChunk);
@@ -607,33 +949,61 @@ export function ReportPreview({
         className="absolute top-0 left-0 w-[1056px] opacity-0 pointer-events-none overflow-hidden h-0"
         style={{ paddingLeft: '48px', paddingRight: '48px' }}
       >
-        {sectionSel.documentation &&
-          filteredData.map(record => (
-            <div key={record.fldPDataID} data-measure-type="doc" data-id={record.fldPDataID} className="mb-8">
-              <DocumentationCard 
-                record={record} 
-                index={0} 
-                glossary={glossary} 
-                standards={standards} 
-                locations={locations}
-                categories={categories}
-                items={items}
-              />
+        {sectionSel.documentation && (
+          <>
+            <div data-measure-type="doc-header" className="w-full">
+              <DocumentationGroupHeader label="Category / Location header probe" continued={false} />
             </div>
-          ))}
+            {filteredData.map(record => (
+              <div
+                key={record.fldPDataID}
+                data-measure-type="doc"
+                data-id={record.fldPDataID}
+                style={{ marginBottom: DOC_CARD_GAP_PX }}
+              >
+                <DocumentationCard 
+                  record={record} 
+                  index={0} 
+                  glossary={glossary} 
+                  standards={standards} 
+                  locations={locations}
+                  categories={categories}
+                  items={items}
+                />
+              </div>
+            ))}
+          </>
+        )}
         {sectionSel.financial && financialRows.length > 0 ? (
-          <table className="w-full border-collapse">
-            <tbody>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-zinc-100 border-y border-zinc-200">
+                {sectionSel.recordSortOrder === 'location_category_item' ? (
+                  <>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Category</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Item</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">QTY</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">UNIT COST</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">TOTAL</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Item</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Location</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">QTY</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">UNIT COST</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">TOTAL</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
               {financialRows.map((row, idx) => (
-                <tr key={idx} data-measure-type="fin" className="text-xs">
-                  {row.type === 'header' ? (
-                    <td className="py-2 px-3 font-black uppercase">{row.content}</td>
-                  ) : row.type === 'record' ? (
-                    <td className="py-2 px-3">{row.content.itemName}</td>
-                  ) : (
-                    <td className="py-2 px-3 font-bold">Subtotal</td>
-                  )}
-                </tr>
+                <FinancialMeasurementBodyRow
+                  key={idx}
+                  row={row}
+                  recordSortOrder={sectionSel.recordSortOrder}
+                />
               ))}
             </tbody>
           </table>
@@ -766,7 +1136,7 @@ export function ReportPreview({
               {/* Documentation Section */}
               {sectionSel.documentation ? (
                 documentationPages.length > 0 ? (
-                  documentationPages.map((pageRecords, pIdx) => (
+                  documentationPages.map((pageItems, pIdx) => (
                     <PageContainer key={`doc-${pIdx}`} pageNumber={(pIdx + 1).toString()} facilityName={facility.fldFacName}>
                       <div className="flex flex-col">
                         {pIdx === 0 && (
@@ -774,19 +1144,41 @@ export function ReportPreview({
                             Documentation Section
                           </h2>
                         )}
-                        <div className="space-y-8">
-                          {pageRecords.map((record, rIdx) => (
-                            <DocumentationCard 
-                              key={record.fldPDataID} 
-                              record={record} 
-                              index={documentationPages.slice(0, pIdx).reduce((sum, p) => sum + p.length, 0) + rIdx + 1} 
-                              glossary={glossary} 
-                              standards={standards} 
-                              locations={locations}
-                              categories={categories}
-                              items={items}
-                            />
-                          ))}
+                        <div className="flex flex-col">
+                          {pageItems.map((entry, ii) => {
+                            if (entry.kind === 'groupHeader') {
+                              return (
+                                <DocumentationGroupHeader
+                                  key={`doc-${pIdx}-gh-${entry.groupKey}-${ii}-${entry.continued ? 'c' : 'n'}`}
+                                  label={entry.label}
+                                  continued={entry.continued}
+                                />
+                              );
+                            }
+                            const priorRecordsOnPage = pageItems
+                              .slice(0, ii)
+                              .filter((e): e is { kind: 'record'; record: ProjectData } => e.kind === 'record').length;
+                            const priorRecordsOnPriorPages = documentationPages
+                              .slice(0, pIdx)
+                              .reduce((sum, p) => sum + p.filter((e) => e.kind === 'record').length, 0);
+                            const globalIndex = priorRecordsOnPriorPages + priorRecordsOnPage + 1;
+                            return (
+                              <div
+                                key={entry.record.fldPDataID}
+                                style={{ marginBottom: DOC_CARD_GAP_PX }}
+                              >
+                                <DocumentationCard
+                                  record={entry.record}
+                                  index={globalIndex}
+                                  glossary={glossary}
+                                  standards={standards}
+                                  locations={locations}
+                                  categories={categories}
+                                  items={items}
+                                />
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </PageContainer>
@@ -817,11 +1209,23 @@ export function ReportPreview({
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-zinc-100 border-y border-zinc-200">
-                            <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Item</th>
-                            <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Location</th>
-                            <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">QTY</th>
-                            <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">UNIT COST</th>
-                            <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">TOTAL</th>
+                            {sectionSel.recordSortOrder === 'location_category_item' ? (
+                              <>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Category</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Item</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">QTY</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">UNIT COST</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">TOTAL</th>
+                              </>
+                            ) : (
+                              <>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Item</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Location</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">QTY</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">UNIT COST</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">TOTAL</th>
+                              </>
+                            )}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
@@ -837,6 +1241,17 @@ export function ReportPreview({
                             }
                             if (row.type === 'record') {
                               const rec = row.content;
+                              if (sectionSel.recordSortOrder === 'location_category_item') {
+                                return (
+                                  <tr key={rIdx} className="text-xs break-inside-avoid">
+                                    <td className="py-2 px-3 text-zinc-700">{rec.categoryName}</td>
+                                    <td className="py-2 px-3 text-zinc-700">{rec.itemName}</td>
+                                    <td className="py-2 px-3 text-right text-zinc-700">{rec.fldQTY} {rec.displayUnitType}</td>
+                                    <td className="py-2 px-3 text-right text-zinc-700">{formatCurrency(rec.displayUnitCost)}</td>
+                                    <td className="py-2 px-3 text-right font-bold text-zinc-900">{formatCurrency(rec.totalCost)}</td>
+                                  </tr>
+                                );
+                              }
                               return (
                                 <tr key={rIdx} className="text-xs break-inside-avoid">
                                   <td className="py-2 px-3 text-zinc-700">{rec.itemName}</td>
@@ -851,7 +1266,7 @@ export function ReportPreview({
                               return (
                                 <tr key={rIdx} className="bg-zinc-50 break-inside-avoid">
                                   <td colSpan={4} className="py-2 px-3 text-right text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                                    Subtotal {row.category}:
+                                    Subtotal {row.groupHeading}:
                                   </td>
                                   <td className="py-2 px-3 text-right font-black text-zinc-900 border-t border-zinc-200">
                                     {formatCurrency(row.subtotal)}

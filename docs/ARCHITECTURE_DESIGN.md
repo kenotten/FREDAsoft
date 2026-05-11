@@ -1021,6 +1021,8 @@ This prevents removed record-level citations from reappearing in reports.
 
 ✅ DECIDED (report UI v1): **View Report** opens a section-selection dialog before `ReportPreview`. The cover page is always included; other sections default to on for the current open only (no `localStorage`). **Referenced standards** and **Photo addendum** rows are omitted when `getReportSectionAvailability` reports no content. Deselected sections are not rendered (no empty placeholders). Page labels keep fixed prefixes (narrative Roman numerals, documentation `1,2,…`, financial `A*`, standards `B*`, photo `D*`); gaps when a section is omitted are acceptable.
 
+✅ DECIDED (report preview): The same dialog offers **report record sort** (default **Category → Location → Item**; optional **Location → Category → Item**). It drives **`filterReportProjectForPreview`** (Documentation order). **Financial Summary** follows the same choice: default mode groups by category with columns Item \| Location \| …; location-first mode groups by location with columns Category \| Item \| …. It is not persisted. **Referenced standards** addendum ordering stays citation-driven. **Photo addendum** keeps location-first display; `filteredData` order may only affect tie-breaks within the same location label.
+
 ---
 
 ## 28. Future Citation Drift / Refresh Workflow

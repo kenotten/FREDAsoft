@@ -28,6 +28,61 @@ export type AddendumEntry =
   | { kind: 'header'; standardType: string; key: string }
   | { kind: 'standard'; standard: StandardSnapshot };
 
+export type ReportRecordSortOrder = 'category_location_item' | 'location_category_item';
+
+export type ReportRecordSortKeys = {
+  catOrder: number;
+  locName: string;
+  itemOrder: number;
+  findOrder: number;
+  itemName: string;
+};
+
+export function getReportRecordSortKeys(
+  record: ProjectData,
+  glossary: Glossary[],
+  categories: Category[],
+  items: Item[],
+  locations: Location[],
+  findings: Finding[]
+): ReportRecordSortKeys {
+  const key = (record.fldData || '').trim().toLowerCase();
+  const glos = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === key);
+  const isCustom = record?.fldRecordSource === 'custom' && !glos;
+  const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
+  const itemId = glos?.fldItem || (isCustom ? record?.fldPDataItemID || '' : '');
+  const findId = glos?.fldFind || '';
+  const cat = categories.find((c) => c.fldCategoryID === catId);
+  const item = items.find((i) => i.fldItemID === itemId);
+  const find = findings.find((f) => f.fldFindID === findId);
+  const locName = locations.find((l) => l.fldLocID === record.fldLocation)?.fldLocName || '';
+  return {
+    catOrder: cat?.fldOrder ?? 999,
+    locName,
+    itemOrder: item?.fldOrder ?? 999,
+    findOrder: find?.fldOrder ?? 999,
+    itemName: item?.fldItemName || ''
+  };
+}
+
+export function compareReportRecordSortKeys(a: ReportRecordSortKeys, b: ReportRecordSortKeys): number {
+  if (a.catOrder !== b.catOrder) return a.catOrder - b.catOrder;
+  const loc = a.locName.localeCompare(b.locName);
+  if (loc !== 0) return loc;
+  if (a.itemOrder !== b.itemOrder) return a.itemOrder - b.itemOrder;
+  if (a.findOrder !== b.findOrder) return a.findOrder - b.findOrder;
+  return a.itemName.localeCompare(b.itemName);
+}
+
+export function compareReportRecordSortKeysLocationFirst(a: ReportRecordSortKeys, b: ReportRecordSortKeys): number {
+  const loc = a.locName.localeCompare(b.locName);
+  if (loc !== 0) return loc;
+  if (a.catOrder !== b.catOrder) return a.catOrder - b.catOrder;
+  if (a.itemOrder !== b.itemOrder) return a.itemOrder - b.itemOrder;
+  if (a.findOrder !== b.findOrder) return a.findOrder - b.findOrder;
+  return a.itemName.localeCompare(b.itemName);
+}
+
 function normalizeStandardIds(raw: unknown): string[] {
   if (raw === undefined || raw === null) return [];
   const arr = Array.isArray(raw) ? raw : typeof raw === 'string' && raw ? [raw] : [];
@@ -125,7 +180,8 @@ export function filterReportProjectForPreview(
   categories: Category[],
   items: Item[],
   locations: Location[],
-  findings: Finding[]
+  findings: Finding[],
+  recordSortOrder?: ReportRecordSortOrder
 ): ProjectData[] {
   const rawData = projectData.filter(
     (d) =>
@@ -155,40 +211,14 @@ export function filterReportProjectForPreview(
     };
   });
 
-  return enriched.sort((a, b) => {
-    const keyA = (a.fldData || '').trim().toLowerCase();
-    const keyB = (b.fldData || '').trim().toLowerCase();
-    const glosA = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === keyA);
-    const glosB = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === keyB);
-    const isCustomA = a?.fldRecordSource === 'custom' && !glosA;
-    const isCustomB = b?.fldRecordSource === 'custom' && !glosB;
-    const catIdA = glosA?.fldCat || (isCustomA ? a?.fldPDataCategoryID || '' : '');
-    const catIdB = glosB?.fldCat || (isCustomB ? b?.fldPDataCategoryID || '' : '');
-    const itemIdA = glosA?.fldItem || (isCustomA ? a?.fldPDataItemID || '' : '');
-    const itemIdB = glosB?.fldItem || (isCustomB ? b?.fldPDataItemID || '' : '');
-    const findIdA = glosA?.fldFind || '';
-    const findIdB = glosB?.fldFind || '';
+  const order = recordSortOrder ?? 'category_location_item';
+  const compare =
+    order === 'location_category_item' ? compareReportRecordSortKeysLocationFirst : compareReportRecordSortKeys;
 
-    const catA = categories.find((c) => c.fldCategoryID === catIdA);
-    const catB = categories.find((c) => c.fldCategoryID === catIdB);
-    const catOrderA = catA?.fldOrder ?? 999;
-    const catOrderB = catB?.fldOrder ?? 999;
-    if (catOrderA !== catOrderB) return catOrderA - catOrderB;
-    const locA = locations.find((l) => l.fldLocID === a.fldLocation)?.fldLocName || '';
-    const locB = locations.find((l) => l.fldLocID === b.fldLocation)?.fldLocName || '';
-    const locCompare = locA.localeCompare(locB);
-    if (locCompare !== 0) return locCompare;
-    const itemA = items.find((i) => i.fldItemID === itemIdA);
-    const itemB = items.find((i) => i.fldItemID === itemIdB);
-    const itemOrderA = itemA?.fldOrder ?? 999;
-    const itemOrderB = itemB?.fldOrder ?? 999;
-    if (itemOrderA !== itemOrderB) return itemOrderA - itemOrderB;
-    const findA = findings.find((f) => f.fldFindID === findIdA);
-    const findB = findings.find((f) => f.fldFindID === findIdB);
-    const findOrderA = findA?.fldOrder ?? 999;
-    const findOrderB = findB?.fldOrder ?? 999;
-    if (findOrderA !== findOrderB) return findOrderA - findOrderB;
-    return (itemA?.fldItemName || '').localeCompare(itemB?.fldItemName || '');
+  return enriched.sort((a, b) => {
+    const ka = getReportRecordSortKeys(a, glossary, categories, items, locations, findings);
+    const kb = getReportRecordSortKeys(b, glossary, categories, items, locations, findings);
+    return compare(ka, kb);
   });
 }
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Modal } from './ui/modal';
 import { Button } from './ui/button';
+import type { ReportRecordSortOrder } from '../lib/reportPreviewShared';
 
 export type ReportSectionSelection = {
   cover: true;
@@ -9,6 +10,7 @@ export type ReportSectionSelection = {
   financial: boolean;
   referencedStandards: boolean;
   photoAddendum: boolean;
+  recordSortOrder: ReportRecordSortOrder;
 };
 
 export const DEFAULT_REPORT_SECTION_SELECTION: ReportSectionSelection = {
@@ -17,7 +19,8 @@ export const DEFAULT_REPORT_SECTION_SELECTION: ReportSectionSelection = {
   documentation: true,
   financial: true,
   referencedStandards: true,
-  photoAddendum: true
+  photoAddendum: true,
+  recordSortOrder: 'category_location_item'
 };
 
 export interface ReportSectionSelectionDialogProps {
@@ -40,6 +43,7 @@ export function ReportSectionSelectionDialog({
   const [financial, setFinancial] = useState(true);
   const [referencedStandards, setReferencedStandards] = useState(true);
   const [photoAddendum, setPhotoAddendum] = useState(true);
+  const [recordSortOrder, setRecordSortOrder] = useState<ReportRecordSortOrder>('category_location_item');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -48,6 +52,7 @@ export function ReportSectionSelectionDialog({
     setFinancial(true);
     setReferencedStandards(hasReferencedStandards);
     setPhotoAddendum(hasPhotoAddendum);
+    setRecordSortOrder('category_location_item');
   }, [isOpen, hasReferencedStandards, hasPhotoAddendum]);
 
   const handleConfirm = () => {
@@ -57,7 +62,8 @@ export function ReportSectionSelectionDialog({
       documentation,
       financial,
       referencedStandards: hasReferencedStandards ? referencedStandards : false,
-      photoAddendum: hasPhotoAddendum ? photoAddendum : false
+      photoAddendum: hasPhotoAddendum ? photoAddendum : false,
+      recordSortOrder
     });
   };
 
@@ -163,6 +169,32 @@ export function ReportSectionSelectionDialog({
             </li>
           ) : null}
         </ul>
+
+        <div className="mt-6 border-t border-zinc-100 pt-5">
+          <h3 className="text-sm font-semibold text-zinc-900">Sort records by</h3>
+          <div className="mt-3 space-y-2">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="radio"
+                name="report-record-sort"
+                className="mt-1 h-4 w-4 shrink-0 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
+                checked={recordSortOrder === 'category_location_item'}
+                onChange={() => setRecordSortOrder('category_location_item')}
+              />
+              <span className="text-sm text-zinc-800">Category → Location → Item</span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="radio"
+                name="report-record-sort"
+                className="mt-1 h-4 w-4 shrink-0 border-zinc-300 text-blue-600 focus:ring-blue-500/30"
+                checked={recordSortOrder === 'location_category_item'}
+                onChange={() => setRecordSortOrder('location_category_item')}
+              />
+              <span className="text-sm text-zinc-800">Location → Category → Item</span>
+            </label>
+          </div>
+        </div>
       </Modal>
   );
 }
