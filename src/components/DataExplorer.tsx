@@ -164,7 +164,7 @@ export function DataExplorer({
     };
   }, [getGlossaryContext]);
 
-  /** Locations for the active workspace only (dropdown options). */
+  /** Locations for the selected project and facility only (filter + batch clone dropdowns). */
   const explorerLocationOptions = useMemo(() => {
     const pid = String(selections?.projectId || '').trim();
     const fid = String(selections?.facilityId || '').trim();
@@ -172,11 +172,9 @@ export function DataExplorer({
     return sortEntities(
       (locations || []).filter((l: any) => {
         if (!l?.fldLocID) return false;
-        if (l.fldIsDeleted) return false;
-        const lp = String(l.fldProjectID || '').trim();
-        const lfac = String(l.fldFacID || '').trim();
-        if (pid && lp && lp !== pid) return false;
-        if (fid && lfac && lfac !== fid) return false;
+        if (l.fldDeleted || l.fldIsDeleted || l.fldIsArchived) return false;
+        if (String(l.fldProjectID || '').trim() !== pid) return false;
+        if (String(l.fldFacID || '').trim() !== fid) return false;
         return true;
       }),
       'fldLocName'
@@ -898,7 +896,7 @@ export function DataExplorer({
                       onChange={(e) => setCloneLocationId(e.target.value)}
                     >
                       <option value="">Choose Destination...</option>
-                      {locations.filter((l: any) => !l.fldIsDeleted).map((l: any) => (
+                      {explorerLocationOptions.map((l: any) => (
                         <option key={l.fldLocID} value={l.fldLocID}>{l.fldLocName}</option>
                       ))}
                     </select>

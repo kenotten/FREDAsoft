@@ -1619,11 +1619,15 @@ export default function ProjectDataEntry({
       toast.error('Project context is required to add locations.');
       return;
     }
+    if (!selections.facilityId || !String(selections.facilityId).trim()) {
+      toast.error('Select a facility before adding a location.');
+      return;
+    }
     try {
       const newLoc = {
         fldLocID: uuidv4(),
         fldLocName: name,
-        fldFacID: selections.facilityId || '',
+        fldFacID: String(selections.facilityId).trim(),
         fldProjectID: selections.projectId
       };
       
@@ -1649,15 +1653,22 @@ export default function ProjectDataEntry({
       const batch = writeBatch(db);
       batch.update(doc(db, 'locations', locId), { fldLocName: newName });
       
-      // Cascade update to projectData records for this project
-      projectData.forEach(d => {
-        if (d.fldLocation === locId) {
-          batch.update(doc(db, 'projectData', d.fldPDataID), { 
+      // Scoped rename propagation: locations are facility-scoped in the UI, so prevent cross-facility updates.
+      const pid = String(selections.projectId || '').trim();
+      const fid = String(selections.facilityId || '').trim();
+      if (pid && fid) {
+        projectData.forEach((d: any) => {
+          if (String(d?.fldLocation || '').trim() !== String(locId || '').trim()) return;
+          if (String(d?.fldPDataProject || '').trim() !== pid) return;
+          if (String(d?.fldFacility || '').trim() !== fid) return;
+          if (d?.fldDeleted || d?.fldIsDeleted || d?.fldIsArchived) return;
+
+          batch.update(doc(db, 'projectData', d.fldPDataID), {
             fldLocation: locId,
             fldLocationName: newName // Ensure denormalized name is updated for exports
           });
-        }
-      });
+        });
+      }
       
       await batch.commit();
       toast.success('Location updated');
@@ -1667,6 +1678,21 @@ export default function ProjectDataEntry({
   };
 
   const handleDeleteLocation = async (locId: string) => {
+    const pid = String(selections.projectId || '').trim();
+    const fid = String(selections.facilityId || '').trim();
+    const activeRefCount = (projectData || []).filter((d: any) => {
+      if (String(d?.fldLocation || '').trim() !== String(locId || '').trim()) return false;
+      if (d?.fldDeleted || d?.fldIsDeleted || d?.fldIsArchived) return false;
+      if (pid && String(d?.fldPDataProject || '').trim() !== pid) return false;
+      if (fid && String(d?.fldFacility || '').trim() !== fid) return false;
+      return true;
+    }).length;
+    if (activeRefCount > 0) {
+      toast.error(
+        `This location is used by ${activeRefCount} inspection record${activeRefCount === 1 ? '' : 's'} and cannot be deleted.`
+      );
+      return;
+    }
     try {
       await firestoreService.softDelete('locations', locId);
       if (fldLocation === locId) setFldLocation('');
@@ -1757,9 +1783,46 @@ export default function ProjectDataEntry({
     setIsDirty(true);
   };
 
-  const facilityLocations = (Array.isArray(locations) ? locations : [])
-    .filter(l => (l.fldProjectID === selections.projectId || (l.fldFacID && l.fldFacID === selections.facilityId)) && !l.fldIsDeleted)
-    .sort((a, b) => a.fldLocName.localeCompare(b.fldLocName));
+  const facilityLocations = useMemo(() => {
+    const list = Array.isArray(locations) ? locations : [];
+    const pid = String(selections.projectId || '').trim();
+    const fid = String(selections.facilityId || '').trim();
+    if (!pid || !fid) return [];
+    return list
+      .filter((l: any) => {
+        if (!l?.fldLocID) return false;
+        if (l.fldDeleted || l.fldIsDeleted || l.fldIsArchived) return false;
+        if (String(l.fldProjectID || '').trim() !== pid) return false;
+        if (String(l.fldFacID || '').trim() !== fid) return false;
+        return true;
+      })
+      .sort((a: any, b: any) =>
+        String(a.fldLocName || '').localeCompare(String(b.fldLocName || ''))
+      );
+  }, [locations, selections.projectId, selections.facilityId]);
+
+  /** Strict facility list plus optional orphan row so legacy fldLocation values do not break the select. */
+  const locationSelectOptions = useMemo(() => {
+    const base = facilityLocations.map((l: any) => ({
+      value: l.fldLocID,
+      label: l.fldLocName,
+      key: l.fldLocID
+    }));
+    const cur = String(fldLocation || '').trim();
+    if (!cur) return base;
+    if (base.some((o) => String(o.value) === cur)) return base;
+    const full = Array.isArray(locations) ? locations : [];
+    const hit = full.find(
+      (l: any) =>
+        String(l?.fldLocID || l?.id || '')
+          .trim()
+          .toLowerCase() === cur.toLowerCase()
+    );
+    const orphanLabel = hit?.fldLocName
+      ? `${String(hit.fldLocName)} (not in this facility)`
+      : 'Unknown location (not in this facility)';
+    return [{ value: cur, label: orphanLabel, key: `orphan-loc-${cur}` }, ...base];
+  }, [facilityLocations, fldLocation, locations]);
 
   const displayFldStandards = useMemo(() => {
     const ids = safeArray(fldStandards);
@@ -2411,11 +2474,7 @@ export default function ProjectDataEntry({
                             setIsDirty(true);
                           }}
                           selectClassName={cn(focusClasses, '!py-1.5')}
-                          options={facilityLocations.map((l) => ({
-                            value: l.fldLocID,
-                            label: l.fldLocName,
-                            key: l.fldLocID
-                          }))}
+                          options={locationSelectOptions}
                         />
                         {fldLocation && (
                           <button
@@ -2515,11 +2574,7 @@ export default function ProjectDataEntry({
                           setIsDirty(true);
                         }}
                         selectClassName={cn(focusClasses, '!py-1.5')}
-                        options={facilityLocations.map((l) => ({
-                          value: l.fldLocID,
-                          label: l.fldLocName,
-                          key: l.fldLocID
-                        }))}
+                        options={locationSelectOptions}
                       />
                       {fldLocation && (
                         <button
@@ -3237,7 +3292,15 @@ export default function ProjectDataEntry({
                   <div>
                     <label className="text-[10px] font-bold text-zinc-400 uppercase">Location</label>
                     <p className="text-sm font-medium truncate">
-                      {(facilityLocations || []).find(l => (l.id || l.fldLocID || "").toLowerCase() === (savedDraft.fldLocation || "").toLowerCase())?.fldLocName || 'Unknown'}
+                      {(locations || []).find(
+                        (l: any) =>
+                          String(l?.fldLocID || l?.id || '')
+                            .trim()
+                            .toLowerCase() ===
+                          String(savedDraft.fldLocation || '')
+                            .trim()
+                            .toLowerCase()
+                      )?.fldLocName || 'Unknown'}
                     </p>
                   </div>
                   <div>
@@ -3318,7 +3381,11 @@ export default function ProjectDataEntry({
 
               <div className="max-h-64 overflow-y-auto border border-zinc-200 rounded-xl divide-y divide-zinc-100">
                 {facilityLocations.length === 0 ? (
-                  <div className="p-8 text-center text-zinc-400 italic text-sm">No locations defined for this facility.</div>
+                  <div className="p-8 text-center text-zinc-400 italic text-sm">
+                    {!String(selections.facilityId || '').trim()
+                      ? 'Select a facility before adding or managing locations.'
+                      : 'No locations defined for this facility.'}
+                  </div>
                 ) : (
                   facilityLocations.map(loc => (
                     <div key={loc.fldLocID} className="p-3 flex items-center justify-between hover:bg-zinc-50 transition-colors group">

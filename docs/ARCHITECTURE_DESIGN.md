@@ -1738,6 +1738,8 @@ Facilities are the working entity for buildings and other built-environment area
 
 Locations remain a flexible project-defined label for now. Structured location fields may be added later, but current workflows should support disciplined naming conventions.
 
+✅ DECIDED: Locations are **facility-scoped** in the app (`fldProjectID` + `fldFacID`). Data Entry and Data Explorer location pickers list only locations for the **selected project and facility**. **Deleting** a location is **blocked** when **active** (non-deleted, non-archived) `projectData` in the same project/facility scope references that location; there is **no cascade delete** of inspection records. Location removal remains **soft delete** only.
+
 Hard delete is reserved for admin cleanup of erroneous entries and should require strict proof that no active dependent records exist.
 
 Facility:
