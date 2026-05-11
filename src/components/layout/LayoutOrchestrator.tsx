@@ -20,6 +20,11 @@ import { cn } from '../../lib/utils';
 import { Button, Select, Card } from '../ui/core';
 import { MainContent } from './MainContent';
 import { ReportPreview } from '../ReportPreview';
+import {
+  ReportSectionSelectionDialog,
+  type ReportSectionSelection
+} from '../ReportSectionSelectionDialog';
+import { getReportSectionAvailability } from '../../lib/reportPreviewShared';
 import { 
   ClientModal, 
   FacilityModal, 
@@ -219,6 +224,35 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
   const [isDataEntryDirty, setIsDataEntryDirty] = React.useState(false);
   const [pendingDataAction, setPendingDataAction] = React.useState<'logout' | null>(null);
   const libRef = React.useRef<LibraryManagerHandle>(null);
+  const [showReportSectionDialog, setShowReportSectionDialog] = React.useState(false);
+  const [reportSectionSelection, setReportSectionSelection] = React.useState<ReportSectionSelection | null>(null);
+
+  const reportSectionAvailability = React.useMemo(() => {
+    if (!selectedProject || !selectedFacility) {
+      return { hasReferencedStandards: false, hasPhotoAddendum: false };
+    }
+    return getReportSectionAvailability(
+      projectData,
+      selectedProject,
+      selectedFacility,
+      glossary,
+      standards,
+      categories,
+      items,
+      locations,
+      findings
+    );
+  }, [
+    projectData,
+    selectedProject,
+    selectedFacility,
+    glossary,
+    standards,
+    categories,
+    items,
+    locations,
+    findings
+  ]);
 
   const handleGuardedTabSwitch = (newTab: string) => {
     if (activeTab === 'library_manager' && isLibraryDirty && newTab !== activeTab) {
@@ -363,7 +397,7 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
                 <Button 
                   variant="secondary" 
                   size="sm" 
-                  onClick={() => setShowReportPreview(true)}
+                  onClick={() => setShowReportSectionDialog(true)}
                   className="bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100"
                 >
                   <FileText size={14} className="mr-2" /> View Report
@@ -429,6 +463,18 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
         </div>
       )}
 
+      <ReportSectionSelectionDialog
+        isOpen={showReportSectionDialog}
+        hasReferencedStandards={reportSectionAvailability.hasReferencedStandards}
+        hasPhotoAddendum={reportSectionAvailability.hasPhotoAddendum}
+        onClose={() => setShowReportSectionDialog(false)}
+        onConfirm={(sel) => {
+          setReportSectionSelection(sel);
+          setShowReportSectionDialog(false);
+          setShowReportPreview(true);
+        }}
+      />
+
       {showReportPreview && selectedProject && selectedClient && selectedFacility && selectedInspector && (
         <ReportPreview 
           project={selectedProject}
@@ -443,7 +489,11 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
           locations={locations}
           recommendations={recommendations as any}
           findings={findings}
-          onClose={() => setShowReportPreview(false)}
+          sectionSelection={reportSectionSelection ?? undefined}
+          onClose={() => {
+            setShowReportPreview(false);
+            setReportSectionSelection(null);
+          }}
           isSidebarOpen={isSidebarOpen}
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />

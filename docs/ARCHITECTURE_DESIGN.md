@@ -1019,6 +1019,8 @@ Do not union record citations with glossary citations at report time.
 
 This prevents removed record-level citations from reappearing in reports.
 
+✅ DECIDED (report UI v1): **View Report** opens a section-selection dialog before `ReportPreview`. The cover page is always included; other sections default to on for the current open only (no `localStorage`). **Referenced standards** and **Photo addendum** rows are omitted when `getReportSectionAvailability` reports no content. Deselected sections are not rendered (no empty placeholders). Page labels keep fixed prefixes (narrative Roman numerals, documentation `1,2,…`, financial `A*`, standards `B*`, photo `D*`); gaps when a section is omitted are acceptable.
+
 ---
 
 ## 28. Future Citation Drift / Refresh Workflow

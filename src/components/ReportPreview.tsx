@@ -17,14 +17,18 @@ import {
   Recommendation
 } from '../types';
 import { cn, formatMeasurement, formatCurrency } from '../lib/utils';
-import {
-  compareStandardCitations,
-  formatStandardCitationLabel,
-  type StandardCitationSortInput
-} from '../lib/standardCitationLabel';
+import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { Printer, Download, X, ChevronLeft, ChevronRight, FileText, Menu, ExternalLink, FlaskConical, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
+import {
+  buildReferencedAddendumEntries,
+  filterReportProjectForPreview,
+  getRecordStandardIds,
+  standardTypeKey,
+  type AddendumEntry
+} from '../lib/reportPreviewShared';
+import type { ReportSectionSelection } from './ReportSectionSelectionDialog';
 
 interface ReportPreviewProps {
   project: Project;
@@ -42,6 +46,8 @@ interface ReportPreviewProps {
   onClose: () => void;
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
+  /** When omitted, all sections render (legacy full report). */
+  sectionSelection?: ReportSectionSelection;
 }
 
 // Helper functions for pagination
@@ -62,72 +68,6 @@ const toRoman = (num: number, uppercase = false) => {
   }
   return uppercase ? roman : roman.toLowerCase();
 };
-
-interface StandardSnapshot {
-  fldStandardType: string;
-  fldStandardVersion: string;
-  fldCitationNum: string;
-  fldCitationName: string;
-  fldContentText: string;
-  fldStandardId: string;
-  fldImageUrl?: string;
-  fldRelationType?: MasterStandard['relation_type'];
-  fldOrder?: number;
-  fldSubSequence?: number;
-}
-
-type AddendumEntry =
-  | { kind: 'header'; standardType: string; key: string }
-  | { kind: 'standard'; standard: StandardSnapshot };
-
-function normalizeStandardIds(raw: unknown): string[] {
-  if (raw === undefined || raw === null) return [];
-  const arr = Array.isArray(raw) ? raw : typeof raw === 'string' && raw ? [raw] : [];
-  return arr.map(id => String(id).trim()).filter(Boolean);
-}
-
-/**
- * Final record-level citation IDs for reports (no union with glossary).
- * - Array `record.fldStandards` (including []) is authoritative.
- * - Firestore map/object on the record is treated as an explicit snapshot.
- * - Legacy fallback: when fldStandards is missing/null/undefined and the row is glossary-linked
- *   (non-empty fldData + matching glossary row), use glos.fldStandards.
- * - Custom / non-linked rows (empty fldData): never fall back to glossary.
- */
-function getRecordStandardIds(record: any, glos: Glossary | undefined): string[] {
-  const raw = record?.fldStandards;
-  if (Array.isArray(raw)) {
-    return normalizeStandardIds(raw);
-  }
-  if (raw !== undefined && raw !== null && typeof raw === 'object') {
-    return Object.values(raw as Record<string, unknown>)
-      .filter(Boolean)
-      .map(v => String(v).trim())
-      .filter(Boolean);
-  }
-  const fldData = (record?.fldData || '').trim();
-  if (fldData !== '' && glos) {
-    return normalizeStandardIds(glos.fldStandards);
-  }
-  return [];
-}
-
-function standardTypeKey(std: { fldStandardType?: string }): string {
-  const t = std.fldStandardType;
-  if (t === undefined || t === null || String(t).trim() === '') return 'Unknown';
-  return String(t).trim();
-}
-
-function addendumSnapshotSortInput(s: StandardSnapshot): StandardCitationSortInput {
-  return {
-    order: s.fldOrder,
-    fldStandardType: s.fldStandardType,
-    citation_num: s.fldCitationNum,
-    relation_type: s.fldRelationType,
-    sub_sequence: s.fldSubSequence,
-    id: s.fldStandardId
-  };
-}
 
 function formatGroupedStandardCitations(ids: string[], standards: MasterStandard[]): string {
   const seen = new Set<string>();
@@ -158,53 +98,6 @@ function formatGroupedStandardCitations(ids: string[], standards: MasterStandard
     }
   }
   return parts.join('; ');
-}
-
-function buildReferencedAddendumEntries(
-  filteredData: ProjectData[],
-  glossary: Glossary[],
-  standards: MasterStandard[]
-): AddendumEntry[] {
-  const standardsMap = new Map<string, StandardSnapshot>();
-  filteredData.forEach(d => {
-    const cleanKey = (d.fldData || "").trim().toLowerCase();
-    const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
-    const ids = getRecordStandardIds(d, glos);
-    ids.forEach(id => {
-      if (standardsMap.has(id)) return;
-      const std = standards.find(s => s.id === id);
-      if (!std) return;
-      const tKey = standardTypeKey(std);
-      standardsMap.set(id, {
-        fldStandardType: tKey,
-        fldStandardVersion: std.fldStandardVersion ?? '',
-        fldCitationNum: std.citation_num,
-        fldCitationName: std.citation_name,
-        fldContentText: std.content_text,
-        fldStandardId: id,
-        fldImageUrl: std.image_url,
-        fldRelationType: std.relation_type,
-        fldOrder: std.order,
-        fldSubSequence: std.sub_sequence
-      });
-    });
-  });
-  const snapshots = Array.from(standardsMap.values());
-  const byType = new Map<string, StandardSnapshot[]>();
-  for (const snap of snapshots) {
-    const t = standardTypeKey(snap);
-    if (!byType.has(t)) byType.set(t, []);
-    byType.get(t)!.push({ ...snap, fldStandardType: t });
-  }
-  const types = Array.from(byType.keys()).sort((a, b) => a.localeCompare(b));
-  const entries: AddendumEntry[] = [];
-  for (const t of types) {
-    entries.push({ kind: 'header', standardType: t, key: `__addendum_header__${t}` });
-    const arr = byType.get(t)!;
-    arr.sort((a, b) => compareStandardCitations(addendumSnapshotSortInput(a), addendumSnapshotSortInput(b)));
-    for (const s of arr) entries.push({ kind: 'standard', standard: s });
-  }
-  return entries;
 }
 
 function AddendumRows({ entries }: { entries: AddendumEntry[] }) {
@@ -431,7 +324,8 @@ export function ReportPreview({
   findings,
   onClose,
   isSidebarOpen,
-  toggleSidebar
+  toggleSidebar,
+  sectionSelection
 }: ReportPreviewProps) {
   
   const reportRef = useRef<HTMLDivElement>(null);
@@ -443,80 +337,42 @@ export function ReportPreview({
   const [measuredAddendumHeights, setMeasuredAddendumHeights] = useState<Record<string, number>>({});
   const [isMeasuring, setIsMeasuring] = useState(true);
 
-  // Filter and sort project data for this specific project
-  const filteredData = useMemo(() => {
-  const rawData = projectData.filter(d =>
-  String(d.fldPDataProject || '').trim().toLowerCase() === String(project.fldProjID || '').trim().toLowerCase() &&
-  String(d.fldFacility || '').trim().toLowerCase() === String(facility.fldFacID || facility.id || '').trim().toLowerCase()
-);
-    
-    // Ensure uniqueness by fldPDataID
-    const uniqueMap = new Map();
-    rawData.forEach(d => uniqueMap.set(d.fldPDataID, d));
-    const data = Array.from(uniqueMap.values());
-
-    const multiplier = project.fldCostMultiplier || 1;
-
-    const enriched = data.map(record => {
-      const multiplier = project.fldCostMultiplier || 1;
-      const unitCost = record.fldUnitCost || 0;
-      const baseTotal = record.fldTotalCost || (unitCost * (record.fldQTY || 0));
-      const cost = baseTotal * multiplier;
-      return { 
-        ...record, 
-        totalCost: cost, 
-        displayUnitCost: unitCost * multiplier,
-        // Ensure unit type is passed through or fallback
-        displayUnitType: record.fldUnitType || 'N/A'
-      };
-    });
-    
-    return enriched.sort((a, b) => {
-      const keyA = (a.fldData || "").trim().toLowerCase();
-      const keyB = (b.fldData || "").trim().toLowerCase();
-      const glosA = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === keyA);
-      const glosB = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === keyB);
-      const isCustomA = a?.fldRecordSource === 'custom' && !glosA;
-      const isCustomB = b?.fldRecordSource === 'custom' && !glosB;
-      const catIdA = glosA?.fldCat || (isCustomA ? (a?.fldPDataCategoryID || '') : '');
-      const catIdB = glosB?.fldCat || (isCustomB ? (b?.fldPDataCategoryID || '') : '');
-      const itemIdA = glosA?.fldItem || (isCustomA ? (a?.fldPDataItemID || '') : '');
-      const itemIdB = glosB?.fldItem || (isCustomB ? (b?.fldPDataItemID || '') : '');
-      const findIdA = glosA?.fldFind || '';
-      const findIdB = glosB?.fldFind || '';
-
-      const catA = categories.find(c => c.fldCategoryID === catIdA);
-      const catB = categories.find(c => c.fldCategoryID === catIdB);
-      const catOrderA = catA?.fldOrder ?? 999;
-      const catOrderB = catB?.fldOrder ?? 999;
-      if (catOrderA !== catOrderB) return catOrderA - catOrderB;
-      const locA = locations.find(l => l.fldLocID === a.fldLocation)?.fldLocName || '';
-      const locB = locations.find(l => l.fldLocID === b.fldLocation)?.fldLocName || '';
-      const locCompare = locA.localeCompare(locB);
-      if (locCompare !== 0) return locCompare;
-      const itemA = items.find(i => i.fldItemID === itemIdA);
-      const itemB = items.find(i => i.fldItemID === itemIdB);
-      const itemOrderA = itemA?.fldOrder ?? 999;
-      const itemOrderB = itemB?.fldOrder ?? 999;
-      if (itemOrderA !== itemOrderB) return itemOrderA - itemOrderB;
-      const findA = findings.find(f => f.fldFindID === findIdA);
-      const findB = findings.find(f => f.fldFindID === findIdB);
-      const findOrderA = findA?.fldOrder ?? 999;
-      const findOrderB = findB?.fldOrder ?? 999;
-      if (findOrderA !== findOrderB) return findOrderA - findOrderB;
-      return (itemA?.fldItemName || '').localeCompare(itemB?.fldItemName || '');
-    });
-  }, [projectData, project.fldProjID, facility.fldFacID, facility.id, glossary, categories, items, locations, findings]);
-
-  const referencedStandards = useMemo(
-    () => buildReferencedAddendumEntries(filteredData, glossary, standards),
-    [filteredData, glossary, standards]
+  const sectionSel = useMemo<ReportSectionSelection>(
+    () => ({
+      cover: true,
+      narrative: sectionSelection?.narrative ?? true,
+      documentation: sectionSelection?.documentation ?? true,
+      financial: sectionSelection?.financial ?? true,
+      referencedStandards: sectionSelection?.referencedStandards ?? true,
+      photoAddendum: sectionSelection?.photoAddendum ?? true
+    }),
+    [sectionSelection]
   );
 
-  const supplementalPhotoRows = useMemo(
-    () => buildSupplementalPhotoRows(filteredData, locations, glossary, categories, items),
-    [filteredData, locations, glossary, categories, items]
+  const filteredData = useMemo(
+    () =>
+      filterReportProjectForPreview(
+        projectData,
+        project,
+        facility,
+        glossary,
+        categories,
+        items,
+        locations,
+        findings
+      ),
+    [projectData, project, facility, glossary, categories, items, locations, findings]
   );
+
+  const referencedStandards = useMemo(() => {
+    if (!sectionSel.referencedStandards) return [];
+    return buildReferencedAddendumEntries(filteredData, glossary, standards);
+  }, [sectionSel.referencedStandards, filteredData, glossary, standards]);
+
+  const supplementalPhotoRows = useMemo(() => {
+    if (!sectionSel.photoAddendum) return [];
+    return buildSupplementalPhotoRows(filteredData, locations, glossary, categories, items);
+  }, [sectionSel.photoAddendum, filteredData, locations, glossary, categories, items]);
 
   const photoAddendumPages = useMemo(
     () => chunkPhotoAddendumRows(supplementalPhotoRows),
@@ -524,6 +380,7 @@ export function ReportPreview({
   );
 
   const financialData = useMemo(() => {
+    if (!sectionSel.financial) return [];
     const groups: Record<string, { category: string, records: any[], subtotal: number }> = {};
     filteredData.forEach(record => {
       const cleanKey = (record.fldData || "").trim().toLowerCase();
@@ -552,9 +409,10 @@ export function ReportPreview({
       if (orderA !== orderB) return orderA - orderB;
       return a.category.localeCompare(b.category);
     });
-  }, [filteredData, glossary, categories, items, locations, project.fldCostMultiplier]);
+  }, [sectionSel.financial, filteredData, glossary, categories, items, locations, project.fldCostMultiplier]);
 
   const financialRows = useMemo(() => {
+    if (!sectionSel.financial) return [];
     const rows: any[] = [];
     financialData.forEach(group => {
       rows.push({ type: 'header', content: group.category });
@@ -564,7 +422,7 @@ export function ReportPreview({
       rows.push({ type: 'subtotal', category: group.category, subtotal: group.subtotal });
     });
     return rows;
-  }, [financialData]);
+  }, [sectionSel.financial, financialData]);
 
   // Measurement Pass
   useLayoutEffect(() => {
@@ -620,7 +478,14 @@ export function ReportPreview({
     };
 
     measure();
-  }, [filteredData, financialRows, referencedStandards]);
+  }, [
+    filteredData,
+    financialRows,
+    referencedStandards,
+    sectionSel.documentation,
+    sectionSel.financial,
+    sectionSel.referencedStandards
+  ]);
 
   // Pagination Chunks using measured heights
   const narrativePages = useMemo(() => {
@@ -629,6 +494,7 @@ export function ReportPreview({
   }, [project.fldNarrative]);
 
   const documentationPages = useMemo(() => {
+    if (!sectionSel.documentation) return [];
     if (isMeasuring) return [];
     const chunks: ProjectData[][] = [];
     let currentChunk: ProjectData[] = [];
@@ -651,9 +517,10 @@ export function ReportPreview({
     }
     if (currentChunk.length > 0) chunks.push(currentChunk);
     return chunks;
-  }, [filteredData, measuredDocHeights, isMeasuring]);
+  }, [sectionSel.documentation, filteredData, measuredDocHeights, isMeasuring]);
 
   const financialPages = useMemo(() => {
+    if (!sectionSel.financial) return [];
     if (isMeasuring) return [];
     const chunks: any[][] = [];
     let currentChunk: any[] = [];
@@ -679,9 +546,10 @@ export function ReportPreview({
     }
     if (currentChunk.length > 0) chunks.push(currentChunk);
     return chunks;
-  }, [financialRows, measuredFinHeights, isMeasuring]);
+  }, [sectionSel.financial, financialRows, measuredFinHeights, isMeasuring]);
 
   const addendumPages = useMemo(() => {
+    if (!sectionSel.referencedStandards) return [];
     if (isMeasuring) return [];
     const chunks: AddendumEntry[][] = [];
     let currentChunk: AddendumEntry[] = [];
@@ -706,7 +574,7 @@ export function ReportPreview({
     }
     if (currentChunk.length > 0) chunks.push(currentChunk);
     return chunks;
-  }, [referencedStandards, measuredAddendumHeights, isMeasuring]);
+  }, [sectionSel.referencedStandards, referencedStandards, measuredAddendumHeights, isMeasuring]);
 
   const handlePrint = () => {
     // Current-window print flow consolidation (Task 125.D)
@@ -739,35 +607,40 @@ export function ReportPreview({
         className="absolute top-0 left-0 w-[1056px] opacity-0 pointer-events-none overflow-hidden h-0"
         style={{ paddingLeft: '48px', paddingRight: '48px' }}
       >
-        {filteredData.map(record => (
-          <div key={record.fldPDataID} data-measure-type="doc" data-id={record.fldPDataID} className="mb-8">
-            <DocumentationCard 
-              record={record} 
-              index={0} 
-              glossary={glossary} 
-              standards={standards} 
-              locations={locations}
-              categories={categories}
-              items={items}
-            />
-          </div>
-        ))}
-        <table className="w-full border-collapse">
-          <tbody>
-            {financialRows.map((row, idx) => (
-              <tr key={idx} data-measure-type="fin" className="text-xs">
-                {row.type === 'header' ? (
-                  <td className="py-2 px-3 font-black uppercase">{row.content}</td>
-                ) : row.type === 'record' ? (
-                  <td className="py-2 px-3">{row.content.itemName}</td>
-                ) : (
-                  <td className="py-2 px-3 font-bold">Subtotal</td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <AddendumRows entries={referencedStandards} />
+        {sectionSel.documentation &&
+          filteredData.map(record => (
+            <div key={record.fldPDataID} data-measure-type="doc" data-id={record.fldPDataID} className="mb-8">
+              <DocumentationCard 
+                record={record} 
+                index={0} 
+                glossary={glossary} 
+                standards={standards} 
+                locations={locations}
+                categories={categories}
+                items={items}
+              />
+            </div>
+          ))}
+        {sectionSel.financial && financialRows.length > 0 ? (
+          <table className="w-full border-collapse">
+            <tbody>
+              {financialRows.map((row, idx) => (
+                <tr key={idx} data-measure-type="fin" className="text-xs">
+                  {row.type === 'header' ? (
+                    <td className="py-2 px-3 font-black uppercase">{row.content}</td>
+                  ) : row.type === 'record' ? (
+                    <td className="py-2 px-3">{row.content.itemName}</td>
+                  ) : (
+                    <td className="py-2 px-3 font-bold">Subtotal</td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+        {sectionSel.referencedStandards && referencedStandards.length > 0 ? (
+          <AddendumRows entries={referencedStandards} />
+        ) : null}
       </div>
 
       {/* Header / Controls */}
@@ -878,57 +751,61 @@ export function ReportPreview({
               </PageContainer>
 
               {/* Narrative Pages */}
-              {narrativePages.map((content, pIdx) => (
-                <PageContainer key={`narrative-${pIdx}`} pageNumber={toRoman(pIdx + 1, false)} facilityName={facility.fldFacName}>
-                  <div className="flex flex-col">
-                    <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">Narrative:</h2>
-                    <div className="text-sm text-zinc-800 leading-relaxed space-y-6 whitespace-pre-wrap">
-                      {content}
-                    </div>
-                  </div>
-                </PageContainer>
-              ))}
-
-              {/* Documentation Section */}
-              {documentationPages.length > 0 ? (
-                documentationPages.map((pageRecords, pIdx) => (
-                  <PageContainer key={`doc-${pIdx}`} pageNumber={(pIdx + 1).toString()} facilityName={facility.fldFacName}>
+              {sectionSel.narrative &&
+                narrativePages.map((content, pIdx) => (
+                  <PageContainer key={`narrative-${pIdx}`} pageNumber={toRoman(pIdx + 1, false)} facilityName={facility.fldFacName}>
                     <div className="flex flex-col">
-                      {pIdx === 0 && (
-                        <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
-                          Documentation Section
-                        </h2>
-                      )}
-                      <div className="space-y-8">
-                        {pageRecords.map((record, rIdx) => (
-                          <DocumentationCard 
-                            key={record.fldPDataID} 
-                            record={record} 
-                            index={documentationPages.slice(0, pIdx).reduce((sum, p) => sum + p.length, 0) + rIdx + 1} 
-                            glossary={glossary} 
-                            standards={standards} 
-                            locations={locations}
-                            categories={categories}
-                            items={items}
-                          />
-                        ))}
+                      <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">Narrative:</h2>
+                      <div className="text-sm text-zinc-800 leading-relaxed space-y-6 whitespace-pre-wrap">
+                        {content}
                       </div>
                     </div>
                   </PageContainer>
-                ))
-              ) : (
-                <PageContainer facilityName={facility.fldFacName} pageNumber="1">
-                  <div className="flex flex-col">
-                    <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
-                      Documentation Section
-                    </h2>
-                    <p className="text-sm text-zinc-500 italic">No documentation records found for this project.</p>
-                  </div>
-                </PageContainer>
-              )}
+                ))}
+
+              {/* Documentation Section */}
+              {sectionSel.documentation ? (
+                documentationPages.length > 0 ? (
+                  documentationPages.map((pageRecords, pIdx) => (
+                    <PageContainer key={`doc-${pIdx}`} pageNumber={(pIdx + 1).toString()} facilityName={facility.fldFacName}>
+                      <div className="flex flex-col">
+                        {pIdx === 0 && (
+                          <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
+                            Documentation Section
+                          </h2>
+                        )}
+                        <div className="space-y-8">
+                          {pageRecords.map((record, rIdx) => (
+                            <DocumentationCard 
+                              key={record.fldPDataID} 
+                              record={record} 
+                              index={documentationPages.slice(0, pIdx).reduce((sum, p) => sum + p.length, 0) + rIdx + 1} 
+                              glossary={glossary} 
+                              standards={standards} 
+                              locations={locations}
+                              categories={categories}
+                              items={items}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </PageContainer>
+                  ))
+                ) : (
+                  <PageContainer facilityName={facility.fldFacName} pageNumber="1">
+                    <div className="flex flex-col">
+                      <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
+                        Documentation Section
+                      </h2>
+                      <p className="text-sm text-zinc-500 italic">No documentation records found for this project.</p>
+                    </div>
+                  </PageContainer>
+                )
+              ) : null}
 
               {/* Financial Section */}
-              {financialPages.map((pageRows, pIdx) => (
+              {sectionSel.financial &&
+                financialPages.map((pageRows, pIdx) => (
                 <PageContainer key={`fin-${pIdx}`} pageNumber={`A${pIdx + 1}`} facilityName={facility.fldFacName}>
                   <div className="flex flex-col h-full">
                     {pIdx === 0 && (
@@ -1004,34 +881,36 @@ export function ReportPreview({
               ))}
 
               {/* Addendum Section */}
-              {addendumPages.length > 0 ? (
-                addendumPages.map((pageRecords, pIdx) => (
-                  <PageContainer key={`add-${pIdx}`} pageNumber={`B${pIdx + 1}`} facilityName={facility.fldFacName}>
-                    <div className="flex flex-col">
-                      {pIdx === 0 && (
-                        <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
-                          Addendum: Referenced Standards
-                        </h2>
-                      )}
-                      <div className="space-y-6">
-                        <AddendumRows entries={pageRecords} />
+              {sectionSel.referencedStandards ? (
+                addendumPages.length > 0 ? (
+                  addendumPages.map((pageRecords, pIdx) => (
+                    <PageContainer key={`add-${pIdx}`} pageNumber={`B${pIdx + 1}`} facilityName={facility.fldFacName}>
+                      <div className="flex flex-col">
+                        {pIdx === 0 && (
+                          <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
+                            Addendum: Referenced Standards
+                          </h2>
+                        )}
+                        <div className="space-y-6">
+                          <AddendumRows entries={pageRecords} />
+                        </div>
                       </div>
+                    </PageContainer>
+                  ))
+                ) : (
+                  <PageContainer facilityName={facility.fldFacName} pageNumber="C1">
+                    <div className="flex flex-col">
+                      <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
+                        Addendum: Referenced Standards
+                      </h2>
+                      <p className="text-sm text-zinc-500 italic">No standards citations referenced in this report.</p>
                     </div>
                   </PageContainer>
-                ))
-              ) : (
-                <PageContainer facilityName={facility.fldFacName} pageNumber="C1">
-                  <div className="flex flex-col">
-                    <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
-                      Addendum: Referenced Standards
-                    </h2>
-                    <p className="text-sm text-zinc-500 italic">No standards citations referenced in this report.</p>
-                  </div>
-                </PageContainer>
-              )}
+                )
+              ) : null}
 
               {/* Photo Addendum (fldImages index 2+ only; main cards unchanged at slice(0,2)) */}
-              {photoAddendumPages.length > 0
+              {sectionSel.photoAddendum && photoAddendumPages.length > 0
                 ? photoAddendumPages.map((photoPageRows, phIdx) => (
                     <PageContainer
                       key={`photo-add-${phIdx}`}
