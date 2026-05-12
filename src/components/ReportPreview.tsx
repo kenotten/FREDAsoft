@@ -1719,23 +1719,9 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
         {/* Finding Row */}
         <div className="flex border-b border-zinc-300">
           <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Finding</div>
+          {/* Glossary images are intentionally not rendered in formal report finding text (record.fldImages only in column / addendum). */}
           <div className="flex-1 px-2 py-2 text-[11px] leading-snug border-r border-zinc-300 whitespace-pre-line">
             {record.fldFindLong}
-            
-            {/* Glossary Reference Images */}
-            {Array.isArray(glos?.fldImages) && glos.fldImages.length > 0 && (
-              <div className="flex gap-1 mt-2 flex-wrap">
-                {glos.fldImages.map((img: string, i: number) => (
-                  <img 
-                    key={i} 
-                    src={img} 
-                    className="w-16 h-16 object-cover border border-zinc-200 rounded" 
-                    alt="Glossary Ref" 
-                    referrerPolicy="no-referrer" 
-                  />
-                ))}
-              </div>
-            )}
           </div>
           <div className="w-32 flex flex-col shrink-0">
             <div className="bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase border-b border-zinc-300">Measurement</div>
