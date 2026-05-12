@@ -161,7 +161,13 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
         setSelectedCatId(value);
         setSelectedItemId('');
         break;
-      case 'item': setSelectedItemId(value); break;
+      case 'item': {
+        setSelectedItemId(value);
+        const it = items.find((i) => libNormId(i.fldItemID || (i as any).id) === libNormId(value));
+        const catFromItem = String(it?.fldCatID ?? '').trim();
+        if (catFromItem) setSelectedCatId(catFromItem);
+        break;
+      }
       case 'away': onNavigateAway?.(value); break;
     }
     setPendingAction(null);
@@ -478,16 +484,58 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     [citationTargetId, activeTab]
   );
 
+  /**
+   * Nudge modal StandardsBrowser type/version from the citation target row: glossary set def is
+   * authoritative when fldGlossarySetId is set (avoids stale fldStandardType vs sessionStorage).
+   */
+  const libraryCitationPreferredStandardContext = useMemo(() => {
+    if (!citationTargetEntity || !citationTargetId) return undefined;
+
+    const gid = String(getValue(citationTargetEntity, 'fldGlossarySetId') ?? '').trim();
+    const def = gid ? glossarySetById(gid) : undefined;
+
+    let type: string;
+    let version: string | undefined;
+
+    if (def) {
+      type = String(def.standardType ?? '').trim();
+      const v = String(def.standardVersion ?? '').trim();
+      version = v || undefined;
+    } else {
+      type = String(getValue(citationTargetEntity, 'fldStandardType') ?? '').trim();
+      const v = String(getValue(citationTargetEntity, 'fldStandardVersion') ?? '').trim();
+      version = v || undefined;
+    }
+
+    if (!type) return undefined;
+
+    return {
+      type,
+      version,
+      syncToken: `lib-cit-ctx:${citationTargetId}:${libraryCitationsUiKey}:${type}:${version ?? ''}`,
+    };
+  }, [citationTargetEntity, citationTargetId, libraryCitationsUiKey, edits]);
+
   const citationModalBadges = useMemo(() => {
     if (!citationTargetEntity) return [] as { key: string; text: string }[];
     const badges: { key: string; text: string }[] = [];
     if (activeTab === 'findings') {
-      const cat = navigationCategories.find((c) => (c.fldCategoryID || (c as any).id) === selectedCatId);
-      if (cat?.fldCategoryName) badges.push({ key: 'cat', text: `Category: ${cat.fldCategoryName}` });
-      const itemId = selectedItemId || (citationTargetEntity.parentId as string) || '';
-      if (itemId) {
-        const it = navigationItems.find((i) => (i.fldItemID || (i as any).id) === itemId);
-        if (it?.fldItemName) badges.push({ key: 'item', text: `Item: ${it.fldItemName}` });
+      const itemFk = String(
+        citationTargetEntity.fldItem ?? citationTargetEntity.parentId ?? ''
+      ).trim();
+      if (itemFk) {
+        const it = navigationItems.find(
+          (i) => libNormId(i.fldItemID || (i as any).id) === libNormId(itemFk)
+        );
+        if (it) {
+          const catId = String(it.fldCatID ?? '').trim();
+          const cat = navigationCategories.find(
+            (c) => libNormId(c.fldCategoryID || (c as any).id) === libNormId(catId)
+          );
+          if (cat?.fldCategoryName) badges.push({ key: 'cat', text: `Category: ${cat.fldCategoryName}` });
+          const iname = String(it.fldItemName || '').trim();
+          if (iname) badges.push({ key: 'item', text: `Item: ${iname}` });
+        }
       }
       const findLabel = String(
         citationTargetEntity.displayName || getValue(citationTargetEntity, 'fldFindShort') || ''
@@ -514,8 +562,6 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   }, [
     citationTargetEntity,
     activeTab,
-    selectedCatId,
-    selectedItemId,
     navigationCategories,
     navigationItems,
     items,
@@ -1341,6 +1387,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                     enableAutoExpand502={false}
                     uiResetKey={libraryCitationsUiKey}
                     persistUiStateKey={libraryCitationsUiKey}
+                    standardSelectionPersistKey="library-citations-standards"
+                    preferredStandardContext={libraryCitationPreferredStandardContext}
                   />
                 </div>
               </div>
