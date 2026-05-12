@@ -1458,49 +1458,72 @@ export default function ProjectDataEntry({
     navigateToRecord(next.fldPDataID);
   };
 
+  /** Full wipe to a new unsaved row: keep workspace (client/project/facility/inspector/category/location/mode). */
+  const applyNewBlankRecord = useCallback(() => {
+    setFldFindShort('');
+    setFldFindLong('');
+    setFldRecShort('');
+    setFldRecLong('');
+    setFldQTY(0);
+    setFldMeasurement('');
+    setFldMeasurementType('');
+    setFldMeasurementUnit('');
+    setFldUnitType('Decimal');
+    setFldUnitCost(0);
+    setFldTotalCost(0);
+    setFldImages([]);
+    setFldStandards([]);
+    isFormDirtyRef.current = false;
+    setIsDirty(false);
+    try {
+      localStorage.removeItem('fredasoft_draft');
+    } catch {
+      /* ignore */
+    }
+    setShowRecoveryModal(false);
+    setSavedDraft(null);
+    draftRecoveryOfferedSigRef.current = '';
+    clonePersistRef.current = null;
+    setCustomMasterRecId('');
+    setCustomMasterFindId('');
+    onSelectionChange({
+      ...selections,
+      editingRecordId: null,
+      itemId: '',
+      findId: '',
+      recId: '',
+      glosId: '',
+      standards: [],
+      images: [],
+      isDirty: false
+    });
+    try {
+      pendingCloneConsumeRef.current?.();
+    } catch {
+      /* ignore */
+    }
+  }, [onSelectionChange, selections]);
+
   const handleClearForm = () => {
     confirmAction(
       "Clear Form",
       "You have unsaved changes. Are you sure you want to discard them and clear the form?",
       () => {
-        // 1. Wipe all record-specific local state
-        setFldFindShort('');
-        setFldFindLong('');
-        setFldRecShort('');
-        setFldRecLong('');
-        setFldQTY(0);
-        setFldMeasurement('');
-        setFldMeasurementType('');
-        setFldMeasurementUnit('');
-        setFldUnitType('Decimal');
-        setFldUnitCost(0);
-        setFldTotalCost(0);
-        setFldImages([]);
-        setFldStandards([]);
-        
-        // 2. Reset baseline for unsaved changes baseline
-        isFormDirtyRef.current = false;
-        setIsDirty(false);
-        localStorage.removeItem('fredasoft_draft');
-        setShowRecoveryModal(false);
-        setSavedDraft(null);
-        draftRecoveryOfferedSigRef.current = '';
-        clonePersistRef.current = null;
-
-        // 3. Update global selections to drop identity and downstream links
-        // Retain: projectId, facilityId, categoryId, locationId, inspectorId
-        onSelectionChange({
-          ...selections,
-          editingRecordId: '', // Drops the link to the existing record
-          itemId: '', 
-          findId: '', 
-          recId: '',
-          standards: [],
-          images: [],
-          isDirty: false
-        });
-        
+        applyNewBlankRecord();
         toast.info('Form reset to brand-new record state');
+      }
+    );
+  };
+
+  const handleNewRecord = () => {
+    const rid = String(editingRecordId ?? '').trim();
+    if (!rid && !isFormDirty) return;
+    confirmAction(
+      'Start new record',
+      'You have unsaved changes. Discard them and start a new blank record?',
+      () => {
+        applyNewBlankRecord();
+        toast.info('New blank record');
       }
     );
   };
@@ -2368,6 +2391,8 @@ export default function ProjectDataEntry({
       ? editingRecordIdNorm
       : '';
 
+  const newRecordDisabled = !hasNavContext || (isBlankRecordNav && !isFormDirty);
+
   const draftRecoveryFindingPreview = useMemo(() => {
     const d = savedDraft;
     if (!d) return '';
@@ -2492,6 +2517,18 @@ export default function ProjectDataEntry({
                     selectClassName={cn(focusClasses, '!py-1.5', '!text-xs')}
                   />
                 </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-9 shrink-0 gap-1 px-2.5 text-xs font-bold uppercase tracking-tight"
+                  disabled={newRecordDisabled}
+                  onClick={handleNewRecord}
+                  title="Start a new blank inspection record"
+                >
+                  <Plus size={14} />
+                  New
+                </Button>
                 <Card className="flex-1 min-w-0 border-zinc-200 shadow-sm !bg-blue-100 p-3 py-2">
                   <div className="flex flex-wrap gap-3">
                     <div className="flex-1 min-w-[180px] relative group">
