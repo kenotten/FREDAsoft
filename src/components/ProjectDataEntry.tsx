@@ -332,6 +332,17 @@ export default function ProjectDataEntry({
     return navRecords.findIndex((d: any) => d.fldPDataID === editingRecordId);
   }, [navRecords, editingRecordId]);
 
+  /** Dropdown options: same order as `navRecords` (project/facility scope; excludes soft-deleted via upstream `projectData`). */
+  const jumpNavOptions = useMemo(() => {
+    return navRecords.map((d: any, i: number) => {
+      const locName =
+        (locations || []).find((l: any) => l.fldLocID === d.fldLocation)?.fldLocName || '—';
+      const short = String(d.fldFindShort || '').trim() || 'Untitled';
+      const label = `#${i + 1} · ${short} · ${locName}`;
+      return { value: d.fldPDataID, label: label.length > 140 ? `${label.slice(0, 137)}…` : label, key: d.fldPDataID };
+    });
+  }, [navRecords, locations]);
+
   const hasRequiredContext = Boolean(selections.projectId && inspector?.fldInspID);
   
   /** Single source of truth: parent `selections.dataEntryMode` (persists across ProjectDataEntry remounts). */
@@ -1418,6 +1429,14 @@ export default function ProjectDataEntry({
     );
   };
 
+  const handleJumpToRecordSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const v = String(e.target.value || '').trim();
+    if (!v) return;
+    const cur = String(editingRecordId ?? '').trim();
+    if (v === cur) return;
+    navigateToRecord(v);
+  };
+
   const handleNavPrev = () => {
     if (navIndex <= 0) return;
     const prev = navRecords[navIndex - 1];
@@ -1426,6 +1445,13 @@ export default function ProjectDataEntry({
   };
 
   const handleNavNext = () => {
+    const rid = String(editingRecordId ?? '').trim();
+    if (!rid) {
+      const first = navRecords[0];
+      if (!first?.fldPDataID) return;
+      navigateToRecord(first.fldPDataID);
+      return;
+    }
     if (navIndex < 0 || navIndex >= navRecords.length - 1) return;
     const next = navRecords[navIndex + 1];
     if (!next?.fldPDataID) return;
@@ -2329,10 +2355,18 @@ export default function ProjectDataEntry({
         ? `Record ${navIndex + 1} of ${navCount}`
         : `Record not in list — ${navCount} in facility`
       : `New Record — ${navCount} existing records`;
-  const canNavStep =
-    Boolean(editingRecordId && String(editingRecordId).trim()) && navIndex >= 0 && navCount > 0;
-  const prevNavDisabled = !canNavStep || navIndex <= 0;
-  const nextNavDisabled = !canNavStep || navIndex < 0 || navIndex >= navCount - 1;
+  const editingRecordIdNorm = String(editingRecordId ?? '').trim();
+  const isBlankRecordNav = !editingRecordIdNorm;
+  const canNavStep = Boolean(editingRecordIdNorm) && navIndex >= 0 && navCount > 0;
+  const prevNavDisabled = isBlankRecordNav || !canNavStep || navIndex <= 0;
+  const nextNavDisabled = isBlankRecordNav
+    ? navCount === 0
+    : !canNavStep || navIndex < 0 || navIndex >= navCount - 1;
+
+  const jumpSelectValue =
+    editingRecordIdNorm && navRecords.some((d: any) => d.fldPDataID === editingRecordIdNorm)
+      ? editingRecordIdNorm
+      : '';
 
   const draftRecoveryFindingPreview = useMemo(() => {
     const d = savedDraft;
@@ -2447,6 +2481,17 @@ export default function ProjectDataEntry({
                 >
                   <ChevronLeft size={18} />
                 </Button>
+                <div className="min-w-0 max-w-[min(100%,18rem)] shrink flex-[1_1_10rem]">
+                  <Select
+                    label="Jump to record"
+                    placeholder={navCount === 0 ? 'No records in facility' : 'Select record…'}
+                    value={jumpSelectValue}
+                    onChange={handleJumpToRecordSelect}
+                    disabled={navCount === 0}
+                    options={jumpNavOptions}
+                    selectClassName={cn(focusClasses, '!py-1.5', '!text-xs')}
+                  />
+                </div>
                 <Card className="flex-1 min-w-0 border-zinc-200 shadow-sm !bg-blue-100 p-3 py-2">
                   <div className="flex flex-wrap gap-3">
                     <div className="flex-1 min-w-[180px] relative group">
