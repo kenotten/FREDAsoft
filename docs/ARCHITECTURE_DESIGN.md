@@ -212,6 +212,8 @@ Libraries define reusable professional content:
 
 Libraries are the origin of structured content.
 
+✅ DECIDED: **Active Glossary** (glossary set chosen in Data Entry) filters which approved glossary rows drive Category / Item / Finding / Recommendation path options. **Standards Library Type** is separate and only scopes standards/citation browsing (e.g. Standards Browser). Active Glossary is user-selected and persisted locally in the browser for v1 (not derived from project or facility type).
+
 Library Findings and Recommendations support direct citation associations.
 
 Examples:

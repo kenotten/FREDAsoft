@@ -40,6 +40,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { resizeImage } from '../lib/imageUtils';
 import { toFraction, fromFraction } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { GLOSSARY_SET_DEFS } from '../lib/glossarySets';
 
 const safeArray = (value: any): string[] => {
   if (Array.isArray(value)) return value;
@@ -48,6 +49,11 @@ const safeArray = (value: any): string[] => {
 };
 
 const DATA_ENTRY_DRAFT_VERSION = 2;
+
+/** Browser persistence for Data Entry glossary-mode path filter (not Standards Library). */
+const ACTIVE_GLOSSARY_STORAGE_KEY = 'fredasoft_data_entry_active_glossary_set_v1';
+/** Matches Library "Unassigned / Legacy" semantics for glossary rows missing fldGlossarySetId. */
+const ACTIVE_GLOSSARY_UNASSIGNED = 'UNASSIGNED';
 
 /** Firestore batch write limit is 500; keep chunks safely under for projectData propagation only. */
 const LOCATION_RENAME_PROJECTDATA_CHUNK = 450;
@@ -282,14 +288,158 @@ export default function ProjectDataEntry({
     });
   }, [glossary]);
 
+  const hasLegacyGlossaryWithoutSet = useMemo(() => {
+    return activeGlossaryRows.some((g: any) => !String(g?.fldGlossarySetId ?? '').trim());
+  }, [activeGlossaryRows]);
+
+  const [activeGlossarySetId, setActiveGlossarySetId] = useState<string>('');
+
+  const rowsExistForGlossarySet = useCallback(
+    (setId: string) => {
+      if (setId === ACTIVE_GLOSSARY_UNASSIGNED) {
+        return activeGlossaryRows.some((g: any) => !String(g?.fldGlossarySetId ?? '').trim());
+      }
+      const want = normalizeId(setId);
+      if (!want) return false;
+      return activeGlossaryRows.some((g: any) => normalizeId(g.fldGlossarySetId) === want);
+    },
+    [activeGlossaryRows]
+  );
+
+  const pickDefaultActiveGlossarySetId = useCallback((): string => {
+    let stored = '';
+    try {
+      stored = String(localStorage.getItem(ACTIVE_GLOSSARY_STORAGE_KEY) || '').trim();
+      if (!stored) {
+        const legacy = String(sessionStorage.getItem(ACTIVE_GLOSSARY_STORAGE_KEY) || '').trim();
+        if (legacy) {
+          localStorage.setItem(ACTIVE_GLOSSARY_STORAGE_KEY, legacy);
+          sessionStorage.removeItem(ACTIVE_GLOSSARY_STORAGE_KEY);
+          stored = legacy;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    if (stored === ACTIVE_GLOSSARY_UNASSIGNED && hasLegacyGlossaryWithoutSet) {
+      return ACTIVE_GLOSSARY_UNASSIGNED;
+    }
+    if (stored && GLOSSARY_SET_DEFS.some((d) => d.id === stored) && rowsExistForGlossarySet(stored)) {
+      return stored;
+    }
+    if (rowsExistForGlossarySet('TAS_2012')) return 'TAS_2012';
+    for (const d of GLOSSARY_SET_DEFS) {
+      if (rowsExistForGlossarySet(d.id)) return d.id;
+    }
+    if (hasLegacyGlossaryWithoutSet) return ACTIVE_GLOSSARY_UNASSIGNED;
+    return '';
+  }, [hasLegacyGlossaryWithoutSet, rowsExistForGlossarySet]);
+
+  useEffect(() => {
+    if (selections.dataEntryMode === 'custom') return;
+    setActiveGlossarySetId((prev) => {
+      const valid = (id: string) => {
+        if (!id) return false;
+        if (id === ACTIVE_GLOSSARY_UNASSIGNED) return hasLegacyGlossaryWithoutSet;
+        if (!GLOSSARY_SET_DEFS.some((d) => d.id === id)) return false;
+        return rowsExistForGlossarySet(id);
+      };
+      if (valid(prev)) return prev;
+      return pickDefaultActiveGlossarySetId();
+    });
+  }, [
+    selections.dataEntryMode,
+    glossary,
+    activeGlossaryRows,
+    hasLegacyGlossaryWithoutSet,
+    rowsExistForGlossarySet,
+    pickDefaultActiveGlossarySetId,
+  ]);
+
+  useEffect(() => {
+    if (selections.dataEntryMode === 'custom') return;
+    if (!activeGlossarySetId) return;
+    try {
+      localStorage.setItem(ACTIVE_GLOSSARY_STORAGE_KEY, activeGlossarySetId);
+    } catch {
+      /* ignore */
+    }
+  }, [selections.dataEntryMode, activeGlossarySetId]);
+
+  const activeGlossaryRowsForSelection = useMemo(() => {
+    if (selections.dataEntryMode === 'custom') return activeGlossaryRows;
+    if (!activeGlossarySetId) return [];
+    if (activeGlossarySetId === ACTIVE_GLOSSARY_UNASSIGNED) {
+      return activeGlossaryRows.filter((g: any) => !String(g?.fldGlossarySetId ?? '').trim());
+    }
+    const want = normalizeId(activeGlossarySetId);
+    return activeGlossaryRows.filter((g: any) => normalizeId(g.fldGlossarySetId) === want);
+  }, [activeGlossaryRows, activeGlossarySetId, selections.dataEntryMode]);
+
+  const recordGlossaryContextRow = useMemo(() => {
+    if (selections.dataEntryMode === 'custom' || !activeRecord) return null;
+    const targetId = String(activeRecord.fldData || '').trim().toLowerCase();
+    if (!targetId) return null;
+    return (
+      (glossary || []).find(
+        (g: any) => String(g.id || g.fldGlosId || '').trim().toLowerCase() === targetId
+      ) || null
+    );
+  }, [selections.dataEntryMode, activeRecord, glossary]);
+
+  const glossaryRowInSelectionList = (g: any, list: any[]) => {
+    const k = normalizeId(g?.fldGlosId || g?.id);
+    return list.some((r: any) => normalizeId(r.fldGlosId || r.id) === k);
+  };
+
+  const glossaryRowsForDataEntry = useMemo(() => {
+    const base = activeGlossaryRowsForSelection;
+    const r = recordGlossaryContextRow;
+    if (!r || glossaryRowInSelectionList(r, base)) return base;
+    if (r?.fldDeleted || r?.fldIsDeleted) return base;
+    const cat = normalizeId(r.fldCat);
+    const item = normalizeId(r.fldItem);
+    const find = normalizeId(r.fldFind);
+    const recA = normalizeId(r.fldRec);
+    const recB = normalizeId(r.fldRecID);
+    if (!cat || !item || !find || (!recA && !recB)) return base;
+    return [...base, r];
+  }, [activeGlossaryRowsForSelection, recordGlossaryContextRow]);
+
+  /** Open record's glossary row is outside the current Active Glossary filter (selections still valid via context merge). */
+  const recordGlossaryOutOfActiveFilter = useMemo(() => {
+    if (selections.dataEntryMode === 'custom' || !recordGlossaryContextRow) return false;
+    return !glossaryRowInSelectionList(recordGlossaryContextRow, activeGlossaryRowsForSelection);
+  }, [selections.dataEntryMode, recordGlossaryContextRow, activeGlossaryRowsForSelection]);
+
+  const activeGlossarySelectorOptions = useMemo(() => {
+    const opts: { value: string; label: string; key: string }[] = [];
+    for (const d of GLOSSARY_SET_DEFS) {
+      if (!rowsExistForGlossarySet(d.id)) continue;
+      opts.push({
+        value: d.id,
+        label: d.name,
+        key: `ag-${d.id}`,
+      });
+    }
+    if (hasLegacyGlossaryWithoutSet) {
+      opts.push({
+        value: ACTIVE_GLOSSARY_UNASSIGNED,
+        label: 'Unassigned / Legacy',
+        key: 'ag-unassigned',
+      });
+    }
+    return opts;
+  }, [hasLegacyGlossaryWithoutSet, rowsExistForGlossarySet]);
+
   const approvedCategoryIds = useMemo(() => {
     const s = new Set<string>();
-    activeGlossaryRows.forEach((g: any) => {
+    glossaryRowsForDataEntry.forEach((g: any) => {
       const id = normalizeId(g.fldCat);
       if (id) s.add(id);
     });
     return s;
-  }, [activeGlossaryRows]);
+  }, [glossaryRowsForDataEntry]);
 
   const navRecords = useMemo(() => {
     const list = projectData || [];
@@ -408,6 +558,36 @@ export default function ProjectDataEntry({
   const [fldLocation, setFldLocation] = useState(selections.locationId || '');
   const [isDirty, setIsDirty] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  const handleActiveGlossaryChange = useCallback(
+    (nextId: string) => {
+      setActiveGlossarySetId(nextId);
+      try {
+        localStorage.setItem(ACTIVE_GLOSSARY_STORAGE_KEY, nextId);
+      } catch {
+        /* ignore */
+      }
+      setFldFindShort('');
+      setFldFindLong('');
+      setFldRecShort('');
+      setFldRecLong('');
+      setFldMeasurementType('');
+      setFldStandards([]);
+      onSelectionChange({
+        ...selections,
+        categoryId: '',
+        itemId: '',
+        findId: '',
+        recId: '',
+        glosId: '',
+        standards: [],
+        isDirty: true,
+      });
+      setCustomMasterRecId('');
+      setCustomMasterFindId('');
+    },
+    [onSelectionChange, selections]
+  );
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -733,7 +913,7 @@ export default function ProjectDataEntry({
     const recRaw = recIdOverride !== undefined ? recIdOverride : selections.recId;
     const rec = normalizeId(recRaw);
     if (!cat || !item || !find || !rec) return undefined;
-    return (activeGlossaryRows || []).find((g: any) =>
+    return (glossaryRowsForDataEntry || []).find((g: any) =>
       normalizeId(g.fldCat) === cat &&
       normalizeId(g.fldItem) === item &&
       normalizeId(g.fldFind) === find &&
@@ -1961,16 +2141,16 @@ export default function ProjectDataEntry({
     addRecordCitation(standard.id);
   };
 
-  /** Glossary rows matching current Cat + Item + Finding (approved set only). */
+  /** Glossary rows matching current Cat + Item + Finding (filtered by Active Glossary + optional record context row). */
   const rowsForPath = useMemo(() => {
     if (!selections.findId || !selections.itemId || !selections.categoryId) return [];
-    return activeGlossaryRows.filter(
+    return glossaryRowsForDataEntry.filter(
       (g: any) =>
         normalizeId(g.fldCat) === normalizeId(selections.categoryId) &&
         normalizeId(g.fldItem) === normalizeId(selections.itemId) &&
         normalizeId(g.fldFind) === normalizeId(selections.findId)
     );
-  }, [activeGlossaryRows, selections.findId, selections.itemId, selections.categoryId]);
+  }, [glossaryRowsForDataEntry, selections.findId, selections.itemId, selections.categoryId]);
 
   /** One option per glossary row; value = fldGlosId || doc id for stable selection + fldData. */
   const recommendationOptions = useMemo(() => {
@@ -1989,8 +2169,27 @@ export default function ProjectDataEntry({
         key: `rec-gl-${glosKey}`
       });
     }
-    return out.sort((a, b) => a.label.localeCompare(b.label));
-  }, [rowsForPath, masterRecommendations]);
+    const result = [...out].sort((a, b) => a.label.localeCompare(b.label));
+    const gid = normalizeId(selections.glosId);
+    if (
+      selections.dataEntryMode !== 'custom' &&
+      gid &&
+      !result.some((o) => normalizeId(o.value) === gid) &&
+      recordGlossaryContextRow &&
+      normalizeId(recordGlossaryContextRow.fldGlosId || recordGlossaryContextRow.id) === gid
+    ) {
+      const g = recordGlossaryContextRow;
+      const recRaw = g.fldRec || g.fldRecID;
+      const rec = (masterRecommendations || []).find((r: any) => recommendationMatches(r, recRaw));
+      result.push({
+        value: g.fldGlosId || g.id,
+        label: `${rec?.fldRecShort || 'Recommendation'} (record glossary)`,
+        key: `rec-gl-out-${gid}`,
+      });
+      result.sort((a, b) => a.label.localeCompare(b.label));
+    }
+    return result;
+  }, [rowsForPath, masterRecommendations, selections.glosId, selections.dataEntryMode, recordGlossaryContextRow]);
 
   const recommendationSelectValue = useMemo(() => {
     const opts = recommendationOptions;
@@ -2029,7 +2228,7 @@ export default function ProjectDataEntry({
   const sortedItems = useMemo(() => {
     if (!selectedCat) return [];
     const approvedItemIds = new Set(
-      activeGlossaryRows
+      glossaryRowsForDataEntry
         .filter((g: any) => normalizeId(g.fldCat) === normalizeId(selectedCat))
         .map((g: any) => normalizeId(g.fldItem))
         .filter(Boolean)
@@ -2040,12 +2239,12 @@ export default function ProjectDataEntry({
       ),
       'fldItemName'
     );
-  }, [items, selectedCat, activeGlossaryRows]);
+  }, [items, selectedCat, glossaryRowsForDataEntry]);
 
   const sortedFindings = useMemo(() => {
     if (!selectedItem || !selectedCat) return [];
     const approvedFindIds = new Set(
-      activeGlossaryRows
+      glossaryRowsForDataEntry
         .filter(
           (g: any) =>
             normalizeId(g.fldCat) === normalizeId(selectedCat) &&
@@ -2062,7 +2261,38 @@ export default function ProjectDataEntry({
       }),
       'fldFindShort'
     );
-  }, [findings, selectedItem, selectedCat, activeGlossaryRows]);
+  }, [findings, selectedItem, selectedCat, glossaryRowsForDataEntry]);
+
+  const sortedCategoriesWithContext = useMemo(() => {
+    if (selections.dataEntryMode === 'custom' || !selections.categoryId) return sortedCategories;
+    const cid = normalizeId(selections.categoryId);
+    if (sortedCategories.some((c: any) => normalizeId(c.fldCategoryID || c.fldCatID) === cid)) {
+      return sortedCategories;
+    }
+    const add = (mergedCategories || []).find(
+      (c: any) => normalizeId(c.fldCategoryID || c.fldCatID) === cid
+    );
+    if (!add) return sortedCategories;
+    return sortEntities([...sortedCategories, add], 'fldCategoryName');
+  }, [sortedCategories, selections.categoryId, selections.dataEntryMode, mergedCategories]);
+
+  const sortedItemsWithContext = useMemo(() => {
+    if (selections.dataEntryMode === 'custom' || !selections.itemId) return sortedItems;
+    const iid = normalizeId(selections.itemId);
+    if (sortedItems.some((i: any) => normalizeId(i.fldItemID || i.id) === iid)) return sortedItems;
+    const add = (items || []).find((i: any) => normalizeId(i.fldItemID || i.id) === iid);
+    if (!add) return sortedItems;
+    return sortEntities([...sortedItems, add], 'fldItemName');
+  }, [sortedItems, selections.itemId, selections.dataEntryMode, items]);
+
+  const sortedFindingsWithContext = useMemo(() => {
+    if (selections.dataEntryMode === 'custom' || !selections.findId) return sortedFindings;
+    const fid = normalizeId(selections.findId);
+    if (sortedFindings.some((f: any) => normalizeId(f.fldFindID || f.id) === fid)) return sortedFindings;
+    const add = (findings || []).find((f: any) => normalizeId(f.fldFindID || f.id) === fid);
+    if (!add) return sortedFindings;
+    return sortEntities([...sortedFindings, add], 'fldFindShort');
+  }, [sortedFindings, selections.findId, selections.dataEntryMode, findings]);
 
   const selectedFinding = useMemo(() => {
     const id = (selections.findId || '').toLowerCase().trim();
@@ -2541,6 +2771,46 @@ export default function ProjectDataEntry({
                 </div>
                 <Card className="flex-1 min-w-0 border-zinc-200 shadow-sm !bg-blue-100 p-3 py-2">
                   <div className="flex flex-wrap gap-3">
+                    {dataEntryMode === 'glossary' && hasRequiredContext && (
+                      <>
+                        {activeGlossarySelectorOptions.length > 0 ? (
+                          <div className="w-full min-w-[200px] max-w-md">
+                            <Select
+                              label="Active Glossary"
+                              value={activeGlossarySetId}
+                              onChange={(e: any) =>
+                                handleActiveGlossaryChange(String(e?.target?.value ?? ''))
+                              }
+                              disabled={activeGlossarySelectorOptions.length === 0}
+                              selectClassName={cn(focusClasses, '!py-1.5')}
+                              options={activeGlossarySelectorOptions}
+                            />
+                          </div>
+                        ) : null}
+                        {recordGlossaryOutOfActiveFilter ? (
+                          <div className="w-full rounded-lg border border-indigo-200 bg-indigo-50/80 px-3 py-2 text-[11px] leading-snug text-indigo-900">
+                            <span className="font-bold uppercase tracking-wide text-[10px] text-indigo-700">
+                              Record glossary set
+                            </span>
+                            <span className="mt-1 block">
+                              This record uses a different glossary set than the Active Glossary filter. Path
+                              controls include this row so saved values stay intact. Switch Active Glossary to match
+                              your work context.
+                            </span>
+                          </div>
+                        ) : null}
+                        {dataEntryMode === 'glossary' &&
+                        activeGlossaryRows.length > 0 &&
+                        activeGlossarySetId &&
+                        activeGlossaryRowsForSelection.length === 0 &&
+                        !recordGlossaryContextRow ? (
+                          <div className="w-full rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-[11px] text-amber-950">
+                            No glossary rows for the selected Active Glossary. Choose another set or add rows in
+                            Glossary Builder.
+                          </div>
+                        ) : null}
+                      </>
+                    )}
                     <div className="flex-1 min-w-[180px] relative group">
                       <Select
                         label="Category"
@@ -2550,7 +2820,7 @@ export default function ProjectDataEntry({
                         selectClassName={cn(focusClasses, '!py-1.5')}
                         options={(dataEntryMode === 'custom'
                           ? sortEntities(mergedCategories || [], 'fldCategoryName')
-                          : sortedCategories
+                          : sortedCategoriesWithContext
                         ).map((c: any, index: number) => ({
                           value: c.fldCategoryID || c.fldCatID || `missing-${index}`,
                           label: c.fldCategoryName || c.fldCatName || 'Select Category',
@@ -2579,7 +2849,7 @@ export default function ProjectDataEntry({
                               (items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat),
                               'fldItemName'
                             )
-                          : sortedItems
+                          : sortedItemsWithContext
                         ).map((i: any, index: number) => ({
                           value: i.fldItemID || `missing-item-${index}`,
                           label: i.fldItemName || 'Select Item',
@@ -2641,6 +2911,46 @@ export default function ProjectDataEntry({
             ) : (
               <Card className="border-zinc-200 shadow-sm !bg-blue-100 p-3 py-2">
                 <div className="flex flex-wrap gap-3">
+                  {dataEntryMode === 'glossary' && hasRequiredContext && (
+                    <>
+                      {activeGlossarySelectorOptions.length > 0 ? (
+                        <div className="w-full min-w-[200px] max-w-md">
+                          <Select
+                            label="Active Glossary"
+                            value={activeGlossarySetId}
+                            onChange={(e: any) =>
+                              handleActiveGlossaryChange(String(e?.target?.value ?? ''))
+                            }
+                            disabled={activeGlossarySelectorOptions.length === 0}
+                            selectClassName={cn(focusClasses, '!py-1.5')}
+                            options={activeGlossarySelectorOptions}
+                          />
+                        </div>
+                      ) : null}
+                      {recordGlossaryOutOfActiveFilter ? (
+                        <div className="w-full rounded-lg border border-indigo-200 bg-indigo-50/80 px-3 py-2 text-[11px] leading-snug text-indigo-900">
+                          <span className="font-bold uppercase tracking-wide text-[10px] text-indigo-700">
+                            Record glossary set
+                          </span>
+                          <span className="mt-1 block">
+                            This record uses a different glossary set than the Active Glossary filter. Path controls
+                            include this row so saved values stay intact. Switch Active Glossary to match your work
+                            context.
+                          </span>
+                        </div>
+                      ) : null}
+                      {dataEntryMode === 'glossary' &&
+                      activeGlossaryRows.length > 0 &&
+                      activeGlossarySetId &&
+                      activeGlossaryRowsForSelection.length === 0 &&
+                      !recordGlossaryContextRow ? (
+                        <div className="w-full rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-[11px] text-amber-950">
+                          No glossary rows for the selected Active Glossary. Choose another set or add rows in
+                          Glossary Builder.
+                        </div>
+                      ) : null}
+                    </>
+                  )}
                   <div className="flex-1 min-w-[180px] relative group">
                     <Select
                       label="Category"
@@ -2650,7 +2960,7 @@ export default function ProjectDataEntry({
                       selectClassName={cn(focusClasses, '!py-1.5')}
                       options={(dataEntryMode === 'custom'
                         ? sortEntities(mergedCategories || [], 'fldCategoryName')
-                        : sortedCategories
+                        : sortedCategoriesWithContext
                       ).map((c: any, index: number) => ({
                         value: c.fldCategoryID || c.fldCatID || `missing-${index}`,
                         label: c.fldCategoryName || c.fldCatName || 'Select Category',
@@ -2679,7 +2989,7 @@ export default function ProjectDataEntry({
                             (items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat),
                             'fldItemName'
                           )
-                        : sortedItems
+                        : sortedItemsWithContext
                       ).map((i: any, index: number) => ({
                         value: i.fldItemID || `missing-item-${index}`,
                         label: i.fldItemName || 'Select Item',
@@ -2772,7 +3082,7 @@ export default function ProjectDataEntry({
                    onSelectionChange({...selections, findId: e.target.value, recId: '', glosId: '', isDirty: true});
                 }}
                 selectClassName={cn('!bg-yellow-50', focusClasses)}
-                options={sortedFindings.map((f, index) => ({ 
+                options={sortedFindingsWithContext.map((f, index) => ({ 
                   value: f.fldFindID || `missing-find-${index}`, 
                   label: f.fldFindShort || 'Select Finding', 
                   key: `find-${f.fldFindID || index}-${index}` 
