@@ -21,7 +21,7 @@ import {
   Copy,
   GripVertical
 } from 'lucide-react';
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc, writeBatch, updateDoc } from 'firebase/firestore';
 import { db, storage } from '../firebase';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { firestoreService } from '../services/firestoreService';
@@ -48,6 +48,9 @@ const safeArray = (value: any): string[] => {
 };
 
 const DATA_ENTRY_DRAFT_VERSION = 2;
+
+/** Firestore batch write limit is 500; keep chunks safely under for projectData propagation only. */
+const LOCATION_RENAME_PROJECTDATA_CHUNK = 450;
 
 function Modal({ title, children, onClose }: any) {
   return (
@@ -1649,31 +1652,60 @@ export default function ProjectDataEntry({
   };
 
   const handleUpdateLocation = async (locId: string, newName: string) => {
-    try {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'locations', locId), { fldLocName: newName });
-      
-      // Scoped rename propagation: locations are facility-scoped in the UI, so prevent cross-facility updates.
-      const pid = String(selections.projectId || '').trim();
-      const fid = String(selections.facilityId || '').trim();
-      if (pid && fid) {
-        projectData.forEach((d: any) => {
-          if (String(d?.fldLocation || '').trim() !== String(locId || '').trim()) return;
-          if (String(d?.fldPDataProject || '').trim() !== pid) return;
-          if (String(d?.fldFacility || '').trim() !== fid) return;
-          if (d?.fldDeleted || d?.fldIsDeleted || d?.fldIsArchived) return;
+    const trimmedName = String(newName ?? '').trim();
+    if (!trimmedName) {
+      toast.error('Location name is required.');
+      return;
+    }
 
+    try {
+      await updateDoc(doc(db, 'locations', locId), { fldLocName: trimmedName });
+    } catch (error) {
+      console.error('[handleUpdateLocation] Location document update failed:', error);
+      toast.error('Failed to update location');
+      return;
+    }
+
+    const pid = String(selections.projectId || '').trim();
+    const fid = String(selections.facilityId || '').trim();
+    if (!pid || !fid) {
+      toast.success('Location updated');
+      return;
+    }
+
+    const matching = (projectData || []).filter((d: any) => {
+      if (String(d?.fldLocation || '').trim() !== String(locId || '').trim()) return false;
+      if (String(d?.fldPDataProject || '').trim() !== pid) return false;
+      if (String(d?.fldFacility || '').trim() !== fid) return false;
+      if (d?.fldDeleted || d?.fldIsDeleted || d?.fldIsArchived) return false;
+      if (!String(d?.fldPDataID || '').trim()) return false;
+      return true;
+    });
+
+    let propagationFailed = false;
+    for (let i = 0; i < matching.length; i += LOCATION_RENAME_PROJECTDATA_CHUNK) {
+      const slice = matching.slice(i, i + LOCATION_RENAME_PROJECTDATA_CHUNK);
+      try {
+        const batch = writeBatch(db);
+        slice.forEach((d: any) => {
           batch.update(doc(db, 'projectData', d.fldPDataID), {
             fldLocation: locId,
-            fldLocationName: newName // Ensure denormalized name is updated for exports
+            fldLocationName: trimmedName
           });
         });
+        await batch.commit();
+      } catch (error) {
+        propagationFailed = true;
+        console.error('[handleUpdateLocation] projectData denormalized propagation chunk failed:', error);
       }
-      
-      await batch.commit();
+    }
+
+    if (propagationFailed) {
+      toast.warning(
+        'Location updated, but some inspection records could not be refreshed.'
+      );
+    } else {
       toast.success('Location updated');
-    } catch (error) {
-      toast.error('Failed to update location');
     }
   };
 
@@ -3397,14 +3429,20 @@ export default function ProjectDataEntry({
                             className="h-8 text-sm"
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
-                                handleUpdateLocation(loc.fldLocID, e.currentTarget.value);
+                                const v =
+                                  (e.currentTarget as HTMLInputElement)?.value ??
+                                  (e.target as HTMLInputElement)?.value ??
+                                  '';
+                                handleUpdateLocation(loc.fldLocID, v);
                                 setEditingLoc(null);
                               }
                             }}
                           />
                           <Button size="sm" onClick={(e) => {
-                            const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                            handleUpdateLocation(loc.fldLocID, input.value);
+                            // Input wraps the native <input> in a div; previousElementSibling is that wrapper, not the input.
+                            const row = (e.currentTarget as HTMLElement).parentElement;
+                            const nativeInput = row?.querySelector('input');
+                            handleUpdateLocation(loc.fldLocID, nativeInput?.value ?? '');
                             setEditingLoc(null);
                           }}>Save</Button>
                           <Button size="sm" variant="ghost" onClick={() => setEditingLoc(null)}>Cancel</Button>
