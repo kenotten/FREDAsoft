@@ -29,7 +29,8 @@ import {
   compareReportRecordSortKeysLocationFirst,
   standardTypeKey,
   type AddendumEntry,
-  type ReportRecordSortOrder
+  type ReportRecordSortOrder,
+  type StandardSnapshot
 } from '../lib/reportPreviewShared';
 import type { ReportSectionSelection } from './ReportSectionSelectionDialog';
 
@@ -103,48 +104,188 @@ function formatGroupedStandardCitations(ids: string[], standards: MasterStandard
   return parts.join('; ');
 }
 
-function AddendumRows({ entries }: { entries: AddendumEntry[] }) {
+/** Referenced Standards addendum: vertical budget for row stacking (content area inside PageContainer). */
+const ADDENDUM_SUBSEQUENT_PAGE_BODY_PX = 660;
+const ADDENDUM_FIRST_PAGE_BODY_BASE_PX = 595;
+/** Buffer after subtracting measured first-page section title. */
+const ADDENDUM_FIRST_PAGE_LAYOUT_FUDGE_PX = 8;
+/** Slack per entry when summing measured heights (borders / subpixel). */
+const ADDENDUM_ROW_PAGINATION_SLACK_PX = 18;
+/** Tighter slack for image rows (measured box is more predictable). */
+const ADDENDUM_IMAGE_ROW_SLACK_PX = 12;
+/** Fallback body padding when `__img` height is missing (image + chrome, not continuation). */
+const ADDENDUM_IMAGE_DEFAULT_EXTRA_PX = 36;
+/** Fallback if section title probe has not laid out yet. */
+const ADDENDUM_SECTION_TITLE_FALLBACK_PX = 104;
+/** Standards figure: max height within 180–220px guidance; width capped for predictable pagination. */
+const ADDENDUM_STANDARD_IMAGE_MAX_HEIGHT_PX = 200;
+
+/** Pagination/measurement slice: image-bearing standards split into text + image units. */
+type AddendumPaginateUnit =
+  | { kind: 'header'; key: string; standardType: string }
+  | { kind: 'standardText'; standard: StandardSnapshot }
+  | { kind: 'standardImage'; standard: StandardSnapshot };
+
+function expandAddendumForPagination(entries: AddendumEntry[]): AddendumPaginateUnit[] {
+  const out: AddendumPaginateUnit[] = [];
+  for (const e of entries) {
+    if (e.kind === 'header') {
+      out.push({ kind: 'header', key: e.key, standardType: e.standardType });
+      continue;
+    }
+    const s = e.standard;
+    const img = s.fldImageUrl && String(s.fldImageUrl).trim();
+    out.push({ kind: 'standardText', standard: s });
+    if (img) out.push({ kind: 'standardImage', standard: s });
+  }
+  return out;
+}
+
+function addendumPaginateMeasureId(unit: AddendumPaginateUnit): string {
+  if (unit.kind === 'header') return unit.key;
+  const id = unit.standard.fldStandardId;
+  const hasImg = unit.standard.fldImageUrl && String(unit.standard.fldImageUrl).trim();
+  if (unit.kind === 'standardText') return hasImg ? `${id}::__text` : id;
+  return `${id}::__img`;
+}
+
+function addendumSnapshotCiteLabels(standard: StandardSnapshot): { citeLabel: string; citeTitle: string } {
+  const prefix = standard.fldStandardType || 'Unknown';
+  const citeLabel =
+    formatStandardCitationLabel({
+      id: standard.fldStandardId,
+      fldStandardType: standard.fldStandardType,
+      citation_num: standard.fldCitationNum,
+      relation_type: standard.fldRelationType
+    }) ?? `${prefix} ${standard.fldCitationNum}`.trim();
+  const citeTitle = `${citeLabel}${standard.fldCitationName ? ` ${standard.fldCitationName}` : ''}`.trim();
+  return { citeLabel, citeTitle };
+}
+
+function addendumIsTextImagePair(
+  u: AddendumPaginateUnit | undefined,
+  v: AddendumPaginateUnit | undefined
+): boolean {
+  if (!u || !v) return false;
+  return (
+    u.kind === 'standardText' &&
+    Boolean(u.standard.fldImageUrl && String(u.standard.fldImageUrl).trim()) &&
+    v.kind === 'standardImage' &&
+    v.standard.fldStandardId === u.standard.fldStandardId
+  );
+}
+
+function addendumImageIsOrphanOnPage(page: AddendumPaginateUnit[], idx: number): boolean {
+  const unit = page[idx];
+  if (!unit || unit.kind !== 'standardImage') return false;
+  if (idx === 0) return true;
+  const prev = page[idx - 1];
+  return !(
+    prev.kind === 'standardText' &&
+    prev.standard.fldStandardId === unit.standard.fldStandardId
+  );
+}
+
+function AddendumPaginateRow({
+  unit,
+  forMeasurement,
+  showImageContinuation
+}: {
+  unit: AddendumPaginateUnit;
+  forMeasurement?: boolean;
+  /** When the figure starts a page without its citation/text block above it. */
+  showImageContinuation?: boolean;
+}) {
+  const wrapMeasured = (measureId: string, className: string, children: React.ReactNode) =>
+    forMeasurement ? (
+      <div data-measure-type="addendum" data-id={measureId} className={className}>
+        {children}
+      </div>
+    ) : (
+      <div className={className}>{children}</div>
+    );
+
+  if (unit.kind === 'header') {
+    return wrapMeasured(
+      unit.key,
+      'mb-4',
+      <h2 className="text-lg font-black text-zinc-900 border-b-2 border-zinc-900 pb-2 tracking-tight">
+        {unit.standardType}
+      </h2>
+    );
+  }
+
+  if (unit.kind === 'standardText') {
+    const s = unit.standard;
+    const { citeLabel, citeTitle } = addendumSnapshotCiteLabels(s);
+    const hasImg = s.fldImageUrl && String(s.fldImageUrl).trim();
+    const measureId = hasImg ? `${s.fldStandardId}::__text` : s.fldStandardId;
+    return wrapMeasured(
+      measureId,
+      hasImg ? 'mb-2' : 'mb-6',
+      <div className="space-y-2 break-inside-avoid">
+        <h3 className="font-bold text-zinc-900 text-sm" title={citeTitle}>
+          {citeLabel}
+          {s.fldCitationName ? ` ${s.fldCitationName}` : ''}
+        </h3>
+        <p className="text-xs text-zinc-700 leading-relaxed">{s.fldContentText}</p>
+      </div>
+    );
+  }
+
+  const s = unit.standard;
+  const { citeLabel, citeTitle } = addendumSnapshotCiteLabels(s);
+  const url = s.fldImageUrl && String(s.fldImageUrl).trim();
+  if (!url) return null;
+  const measureId = `${s.fldStandardId}::__img`;
+  const rel = String(s.fldRelationType || '').trim();
+  const contLine =
+    rel.toLowerCase() === 'figure'
+      ? `${citeLabel}${s.fldCitationName ? ` ${s.fldCitationName}` : ''} — Figure`
+      : `${citeLabel}${s.fldCitationName ? ` ${s.fldCitationName}` : ''} (continued figure)`;
+  return wrapMeasured(
+    measureId,
+    'mb-6',
+    <>
+      {showImageContinuation ? (
+        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-tight text-zinc-800 leading-tight">
+          {contLine}
+        </p>
+      ) : null}
+      <div className="flex justify-center">
+        <div className="w-full max-w-2xl mx-auto">
+          <img
+            src={url}
+            alt={citeTitle}
+            className="mx-auto block max-w-full border border-zinc-200 rounded-lg object-contain"
+            style={{ maxHeight: ADDENDUM_STANDARD_IMAGE_MAX_HEIGHT_PX }}
+            referrerPolicy="no-referrer"
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function AddendumPaginatedContent({
+  units,
+  forMeasurement,
+  imageContinuationFlags
+}: {
+  units: AddendumPaginateUnit[];
+  forMeasurement?: boolean;
+  imageContinuationFlags?: boolean[];
+}) {
   return (
     <>
-      {entries.map(entry => {
-        if (entry.kind === 'header') {
-          return (
-            <div key={entry.key} data-measure-type="addendum" data-id={entry.key} className="mb-4">
-              <h2 className="text-lg font-black text-zinc-900 border-b-2 border-zinc-900 pb-2 tracking-tight">
-                {entry.standardType}
-              </h2>
-            </div>
-          );
-        }
-        const standard = entry.standard;
-        const prefix = standard.fldStandardType || 'Unknown';
-        const citeLabel =
-          formatStandardCitationLabel({
-            id: standard.fldStandardId,
-            fldStandardType: standard.fldStandardType,
-            citation_num: standard.fldCitationNum,
-            relation_type: standard.fldRelationType
-          }) ?? `${prefix} ${standard.fldCitationNum}`.trim();
-        const citeTitle = `${citeLabel}${standard.fldCitationName ? ` ${standard.fldCitationName}` : ''}`.trim();
-        return (
-          <div key={standard.fldStandardId} data-measure-type="addendum" data-id={standard.fldStandardId} className="mb-6 space-y-2 break-inside-avoid">
-            <h3 className="font-bold text-zinc-900 text-sm" title={citeTitle}>
-              {citeLabel}{standard.fldCitationName ? ` ${standard.fldCitationName}` : ''}
-            </h3>
-            <p className="text-xs text-zinc-700 leading-relaxed">{standard.fldContentText}</p>
-            {standard.fldImageUrl && (
-              <div className="my-2">
-                <img
-                  src={standard.fldImageUrl}
-                  alt={citeTitle}
-                  className="max-h-64 object-contain border border-zinc-200 rounded-lg"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {units.map((unit, idx) => (
+        <AddendumPaginateRow
+          key={`${addendumPaginateMeasureId(unit)}-${idx}`}
+          unit={unit}
+          forMeasurement={forMeasurement}
+          showImageContinuation={Boolean(imageContinuationFlags?.[idx])}
+        />
+      ))}
     </>
   );
 }
@@ -491,6 +632,13 @@ export function ReportPreview({
   const [measuredDocHeaderHeight, setMeasuredDocHeaderHeight] = useState(32);
   const [measuredFinHeights, setMeasuredFinHeights] = useState<number[]>([]);
   const [measuredAddendumHeights, setMeasuredAddendumHeights] = useState<Record<string, number>>({});
+  /** Height of first-page “Addendum: Referenced Standards” block (measured in measurementRef). */
+  const [measuredAddendumSectionTitleHeight, setMeasuredAddendumSectionTitleHeight] = useState(
+    ADDENDUM_SECTION_TITLE_FALLBACK_PX
+  );
+  /** Measured height of compact “continued figure” line above orphan addendum images. */
+  const [measuredAddendumImageContinuationLinePx, setMeasuredAddendumImageContinuationLinePx] =
+    useState(26);
   const [isMeasuring, setIsMeasuring] = useState(true);
 
   const sectionSel = useMemo<ReportSectionSelection>(
@@ -536,6 +684,11 @@ export function ReportPreview({
     if (!sectionSel.referencedStandards) return [];
     return buildReferencedAddendumEntries(filteredData, glossary, standards);
   }, [sectionSel.referencedStandards, filteredData, glossary, standards]);
+
+  const addendumLayoutUnits = useMemo(
+    () => expandAddendumForPagination(referencedStandards),
+    [referencedStandards]
+  );
 
   const supplementalPhotoRows = useMemo(() => {
     if (!sectionSel.photoAddendum) return [];
@@ -697,10 +850,30 @@ export function ReportPreview({
         if (id) addendumHeights[id] = el.getBoundingClientRect().height;
       });
 
+      const addendumTitleProbe = measurementRef.current?.querySelector(
+        '[data-measure-type="addendum-section-title"]'
+      );
+      let addendumTitleH = ADDENDUM_SECTION_TITLE_FALLBACK_PX;
+      if (addendumTitleProbe) {
+        addendumTitleH = Math.ceil(addendumTitleProbe.getBoundingClientRect().height);
+        if (addendumTitleH < 48) addendumTitleH = ADDENDUM_SECTION_TITLE_FALLBACK_PX;
+      }
+
+      const contProbe = measurementRef.current?.querySelector(
+        '[data-measure-type="addendum-image-continuation-probe"]'
+      );
+      let contLineH = 26;
+      if (contProbe) {
+        contLineH = Math.ceil(contProbe.getBoundingClientRect().height);
+        if (contLineH < 10) contLineH = 26;
+      }
+
       setMeasuredDocHeights(docHeights);
       setMeasuredDocHeaderHeight(docHeaderH);
       setMeasuredFinHeights(finHeights);
       setMeasuredAddendumHeights(addendumHeights);
+      setMeasuredAddendumSectionTitleHeight(addendumTitleH);
+      setMeasuredAddendumImageContinuationLinePx(contLineH);
       setIsMeasuring(false);
     };
 
@@ -708,7 +881,7 @@ export function ReportPreview({
   }, [
     filteredData,
     financialRows,
-    referencedStandards,
+    addendumLayoutUnits,
     sectionSel.documentation,
     sectionSel.financial,
     sectionSel.referencedStandards,
@@ -893,30 +1066,114 @@ export function ReportPreview({
   const addendumPages = useMemo(() => {
     if (!sectionSel.referencedStandards) return [];
     if (isMeasuring) return [];
-    const chunks: AddendumEntry[][] = [];
-    let currentChunk: AddendumEntry[] = [];
+    const units = addendumLayoutUnits;
+    const chunks: AddendumPaginateUnit[][] = [];
+    let currentChunk: AddendumPaginateUnit[] = [];
     let currentHeight = 0;
-    const standardLimit = 660; // Reduced further for extra safety buffer
-    const firstPageLimit = 595; // 660 - 65
+    const titleReserve =
+      measuredAddendumSectionTitleHeight > 0
+        ? measuredAddendumSectionTitleHeight
+        : ADDENDUM_SECTION_TITLE_FALLBACK_PX;
+    const firstPageRowBudget =
+      ADDENDUM_FIRST_PAGE_BODY_BASE_PX -
+      titleReserve -
+      ADDENDUM_FIRST_PAGE_LAYOUT_FUDGE_PX;
 
-    for (const entry of referencedStandards) {
-      const measureKey = entry.kind === 'header' ? entry.key : entry.standard.fldStandardId;
-      const defaultH = entry.kind === 'header' ? 56 : 100;
-      const height = (measuredAddendumHeights[measureKey] || defaultH) + 24;
-      const limit = chunks.length === 0 ? firstPageLimit : standardLimit;
+    const contLineReserve =
+      measuredAddendumImageContinuationLinePx > 0
+        ? measuredAddendumImageContinuationLinePx
+        : 26;
 
-      if (currentHeight + height > limit && currentChunk.length > 0) {
-        chunks.push(currentChunk);
-        currentChunk = [entry];
-        currentHeight = height;
-      } else {
-        currentChunk.push(entry);
-        currentHeight += height;
+    const pageLimit = () =>
+      chunks.length === 0 ? firstPageRowBudget : ADDENDUM_SUBSEQUENT_PAGE_BODY_PX;
+
+    const defaultUnitH = (unit: AddendumPaginateUnit) => {
+      if (unit.kind === 'header') return 56;
+      if (unit.kind === 'standardImage')
+        return ADDENDUM_STANDARD_IMAGE_MAX_HEIGHT_PX + ADDENDUM_IMAGE_DEFAULT_EXTRA_PX;
+      return 100;
+    };
+
+    const heightFor = (unit: AddendumPaginateUnit, opts?: { imageOrphan?: boolean }) => {
+      const key = addendumPaginateMeasureId(unit);
+      const slack =
+        unit.kind === 'standardImage' ? ADDENDUM_IMAGE_ROW_SLACK_PX : ADDENDUM_ROW_PAGINATION_SLACK_PX;
+      let h = (measuredAddendumHeights[key] || defaultUnitH(unit)) + slack;
+      if (unit.kind === 'standardImage' && opts?.imageOrphan) h += contLineReserve;
+      return h;
+    };
+
+    let i = 0;
+    while (i < units.length) {
+      const u = units[i];
+      const next = units[i + 1];
+
+      if (addendumIsTextImagePair(u, next)) {
+        const h1 = heightFor(u);
+        const h2 = heightFor(next!, {});
+        const pairH = h1 + h2;
+
+        while (currentChunk.length > 0 && currentHeight + pairH > pageLimit()) {
+          chunks.push(currentChunk);
+          currentChunk = [];
+          currentHeight = 0;
+        }
+
+        if (currentHeight + pairH <= pageLimit()) {
+          currentChunk.push(u, next!);
+          currentHeight += pairH;
+          i += 2;
+          continue;
+        }
+
+        if (currentChunk.length === 0 && pairH > pageLimit()) {
+          if (h1 <= pageLimit()) {
+            currentChunk.push(u);
+            currentHeight += h1;
+            i += 1;
+            continue;
+          }
+          currentChunk.push(u);
+          currentHeight += h1;
+          i += 1;
+          continue;
+        }
       }
+
+      const lim = pageLimit();
+      let h = heightFor(u);
+      if (u.kind === 'standardImage') {
+        const prev = currentChunk[currentChunk.length - 1];
+        const orphan =
+          !prev ||
+          prev.kind !== 'standardText' ||
+          prev.standard.fldStandardId !== u.standard.fldStandardId;
+        if (orphan) h = heightFor(u, { imageOrphan: true });
+      }
+
+      if (currentHeight + h > lim && currentChunk.length > 0) {
+        chunks.push(currentChunk);
+        currentChunk = [u];
+        currentHeight = h;
+        i += 1;
+        continue;
+      }
+
+      currentChunk.push(u);
+      currentHeight += h;
+      i += 1;
     }
+
     if (currentChunk.length > 0) chunks.push(currentChunk);
     return chunks;
-  }, [sectionSel.referencedStandards, referencedStandards, measuredAddendumHeights, isMeasuring]);
+  }, [
+    sectionSel.referencedStandards,
+    addendumLayoutUnits,
+    measuredAddendumHeights,
+    measuredAddendumSectionTitleHeight,
+    measuredAddendumImageContinuationLinePx,
+    isMeasuring
+  ]);
 
   const handlePrint = () => {
     // Current-window print flow consolidation (Task 125.D)
@@ -1009,7 +1266,20 @@ export function ReportPreview({
           </table>
         ) : null}
         {sectionSel.referencedStandards && referencedStandards.length > 0 ? (
-          <AddendumRows entries={referencedStandards} />
+          <div className="flex w-full flex-col">
+            <div data-measure-type="addendum-section-title">
+              <h2 className="mb-8 border-b-2 border-zinc-900 pb-2 text-xl font-bold uppercase tracking-widest text-zinc-900">
+                Addendum: Referenced Standards
+              </h2>
+            </div>
+            <p
+              data-measure-type="addendum-image-continuation-probe"
+              className="mb-1.5 text-[10px] font-bold uppercase tracking-tight text-zinc-800 leading-tight"
+            >
+              TAS 502.2 Vehicle Spaces (continued figure)
+            </p>
+            <AddendumPaginatedContent units={addendumLayoutUnits} forMeasurement />
+          </div>
         ) : null}
       </div>
 
@@ -1302,13 +1572,16 @@ export function ReportPreview({
                     <PageContainer key={`add-${pIdx}`} pageNumber={`B${pIdx + 1}`} facilityName={facility.fldFacName}>
                       <div className="flex flex-col">
                         {pIdx === 0 && (
-                          <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
+                          <h2 className="mb-8 border-b-2 border-zinc-900 pb-2 text-xl font-bold uppercase tracking-widest text-zinc-900">
                             Addendum: Referenced Standards
                           </h2>
                         )}
-                        <div className="space-y-6">
-                          <AddendumRows entries={pageRecords} />
-                        </div>
+                        <AddendumPaginatedContent
+                          units={pageRecords}
+                          imageContinuationFlags={pageRecords.map((_, idx) =>
+                            addendumImageIsOrphanOnPage(pageRecords, idx)
+                          )}
+                        />
                       </div>
                     </PageContainer>
                   ))
