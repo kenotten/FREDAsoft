@@ -2506,29 +2506,39 @@ export default function ProjectDataEntry({
                 >
                   <ChevronLeft size={18} />
                 </Button>
-                <div className="min-w-0 max-w-[min(100%,18rem)] shrink flex-[1_1_10rem]">
-                  <Select
-                    label="Jump to record"
-                    placeholder={navCount === 0 ? 'No records in facility' : 'Select record…'}
-                    value={jumpSelectValue}
-                    onChange={handleJumpToRecordSelect}
-                    disabled={navCount === 0}
-                    options={jumpNavOptions}
-                    selectClassName={cn(focusClasses, '!py-1.5', '!text-xs')}
-                  />
+                <div className="flex min-w-0 max-w-[min(100%,18rem)] shrink flex-[1_1_10rem] flex-col gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    Jump to record
+                  </span>
+                  <div className="flex min-h-0 items-stretch gap-2">
+                    <div className="min-w-0 flex-1">
+                      <Select
+                        placeholder={navCount === 0 ? 'No records in facility' : 'Select record…'}
+                        value={jumpSelectValue}
+                        onChange={handleJumpToRecordSelect}
+                        disabled={navCount === 0}
+                        options={jumpNavOptions}
+                        selectClassName={cn(focusClasses, '!py-1.5', '!text-xs')}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className={cn(
+                        'flex shrink-0 items-center justify-center gap-1 self-stretch px-2.5 text-xs font-bold uppercase tracking-tight',
+                        !newRecordDisabled &&
+                          '!border-orange-600 !bg-orange-500 !text-white hover:!border-orange-700 hover:!bg-orange-600'
+                      )}
+                      disabled={newRecordDisabled}
+                      onClick={handleNewRecord}
+                      title="Start a new blank inspection record"
+                    >
+                      <Plus size={14} />
+                      New
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="h-9 shrink-0 gap-1 px-2.5 text-xs font-bold uppercase tracking-tight"
-                  disabled={newRecordDisabled}
-                  onClick={handleNewRecord}
-                  title="Start a new blank inspection record"
-                >
-                  <Plus size={14} />
-                  New
-                </Button>
                 <Card className="flex-1 min-w-0 border-zinc-200 shadow-sm !bg-blue-100 p-3 py-2">
                   <div className="flex flex-wrap gap-3">
                     <div className="flex-1 min-w-[180px] relative group">
