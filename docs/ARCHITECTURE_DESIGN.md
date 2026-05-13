@@ -292,6 +292,16 @@ The system follows a snapshot inheritance model:
 Library → Glossary Record → Project Data Record
 ```
 
+✅ DECIDED: **Library / Glossary / ProjectData snapshot model**
+
+- **Master Finding** and **Master Recommendation** rows are reusable **source / template** records in the library (edited centrally, referenced by many workflows).
+- **Categories** own **Items**; **Items** own reusable **Findings** and **Recommendations** in the catalog (FKs and editorial ownership), not as one-off project text.
+- **Recommendations** are **not** strict hierarchical children of **Findings**; the library does not model a single mandatory parent-child chain from finding to recommendation.
+- **Finding-to-recommendation relevance** is expressed through **association metadata** (e.g. suggested-recommendation lists on findings, builder/Data Entry UX, and **approved glossary pairings**).
+- A **glossary row** approves a specific **Category + Item + Finding + Recommendation** pairing **for a Glossary Set** and holds **set-specific snapshot values** (e.g. default citations, unit/cost overrides, and other fields snapshotted at authoring time per this document’s inheritance rules).
+- A **ProjectData** row **snapshots** the **selected glossary row** (and related captured fields) at inspection time rather than treating the library as a live, always-current join for historical rows.
+- **Later** edits to masters or glossary rows **must not silently rewrite** existing **ProjectData**; updates flow **forward** only through **explicit** create, copy, or refresh / re-hydrate actions where the product intentionally implements them.
+
 Rules:
 
 - data is copied downward
