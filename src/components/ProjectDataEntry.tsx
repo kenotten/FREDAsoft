@@ -9,7 +9,6 @@ import {
   Plus,
   Hash,
   Loader2,
-  Book,
   AlertCircle,
   Undo,
   DollarSign,
@@ -2647,13 +2646,50 @@ export default function ProjectDataEntry({
         {/* LAYER 1: STICKY HEADER - Opaque background to mask scrolling content */}
         <div className="sticky top-0 z-30 bg-zinc-50 border-b border-zinc-200 shadow-sm">
           <div className="max-w-6xl mx-auto px-6 pt-2 pb-2 space-y-2">
-            {/* Header: title | record nav | mode + inspector */}
+            {/* Header: Active Glossary (glossary mode) | record nav | mode + inspector */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-white py-2 px-3 rounded-xl border border-zinc-200 shadow-sm">
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-white shadow-md shadow-amber-200">
-                  <Book size={18} />
-                </div>
-                <h2 className="text-base font-bold text-zinc-900 leading-tight">Data Entry</h2>
+              <div
+                className={cn(
+                  'flex shrink-0 flex-col gap-1.5',
+                  dataEntryMode === 'glossary' &&
+                    hasRequiredContext &&
+                    'w-full max-w-[min(100%,22rem)] sm:max-w-xs md:max-w-sm'
+                )}
+              >
+                {dataEntryMode === 'glossary' && hasRequiredContext && (
+                  <>
+                    {activeGlossarySelectorOptions.length > 0 ? (
+                      <Select
+                        label="Active Glossary"
+                        labelClassName="!text-[9px] !font-bold !text-zinc-500"
+                        value={activeGlossarySetId}
+                        onChange={(e: any) =>
+                          handleActiveGlossaryChange(String(e?.target?.value ?? ''))
+                        }
+                        disabled={activeGlossarySelectorOptions.length === 0}
+                        selectClassName={cn(focusClasses, '!py-1.5', '!text-xs')}
+                        options={activeGlossarySelectorOptions}
+                      />
+                    ) : null}
+                    {recordGlossaryOutOfActiveFilter ? (
+                      <div className="rounded-lg border border-indigo-200 bg-indigo-50/90 px-2 py-1.5 text-[10px] leading-snug text-indigo-900">
+                        <span className="font-bold uppercase tracking-wide text-indigo-700">Record glossary set</span>
+                        <span className="mt-0.5 block">
+                          Different set than Active Glossary; path kept for saved values. Switch set to match.
+                        </span>
+                      </div>
+                    ) : null}
+                    {dataEntryMode === 'glossary' &&
+                    activeGlossaryRows.length > 0 &&
+                    activeGlossarySetId &&
+                    activeGlossaryRowsForSelection.length === 0 &&
+                    !recordGlossaryContextRow ? (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-2 py-1.5 text-[10px] text-amber-950">
+                        No glossary rows for this Active Glossary. Pick another set or add rows in Glossary Builder.
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </div>
 
               {hasNavContext ? (
@@ -2771,46 +2807,6 @@ export default function ProjectDataEntry({
                 </div>
                 <Card className="flex-1 min-w-0 border-zinc-200 shadow-sm !bg-blue-100 p-3 py-2">
                   <div className="flex flex-wrap gap-3">
-                    {dataEntryMode === 'glossary' && hasRequiredContext && (
-                      <>
-                        {activeGlossarySelectorOptions.length > 0 ? (
-                          <div className="w-full min-w-[200px] max-w-md">
-                            <Select
-                              label="Active Glossary"
-                              value={activeGlossarySetId}
-                              onChange={(e: any) =>
-                                handleActiveGlossaryChange(String(e?.target?.value ?? ''))
-                              }
-                              disabled={activeGlossarySelectorOptions.length === 0}
-                              selectClassName={cn(focusClasses, '!py-1.5')}
-                              options={activeGlossarySelectorOptions}
-                            />
-                          </div>
-                        ) : null}
-                        {recordGlossaryOutOfActiveFilter ? (
-                          <div className="w-full rounded-lg border border-indigo-200 bg-indigo-50/80 px-3 py-2 text-[11px] leading-snug text-indigo-900">
-                            <span className="font-bold uppercase tracking-wide text-[10px] text-indigo-700">
-                              Record glossary set
-                            </span>
-                            <span className="mt-1 block">
-                              This record uses a different glossary set than the Active Glossary filter. Path
-                              controls include this row so saved values stay intact. Switch Active Glossary to match
-                              your work context.
-                            </span>
-                          </div>
-                        ) : null}
-                        {dataEntryMode === 'glossary' &&
-                        activeGlossaryRows.length > 0 &&
-                        activeGlossarySetId &&
-                        activeGlossaryRowsForSelection.length === 0 &&
-                        !recordGlossaryContextRow ? (
-                          <div className="w-full rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-[11px] text-amber-950">
-                            No glossary rows for the selected Active Glossary. Choose another set or add rows in
-                            Glossary Builder.
-                          </div>
-                        ) : null}
-                      </>
-                    )}
                     <div className="flex-1 min-w-[180px] relative group">
                       <Select
                         label="Category"
@@ -2911,46 +2907,6 @@ export default function ProjectDataEntry({
             ) : (
               <Card className="border-zinc-200 shadow-sm !bg-blue-100 p-3 py-2">
                 <div className="flex flex-wrap gap-3">
-                  {dataEntryMode === 'glossary' && hasRequiredContext && (
-                    <>
-                      {activeGlossarySelectorOptions.length > 0 ? (
-                        <div className="w-full min-w-[200px] max-w-md">
-                          <Select
-                            label="Active Glossary"
-                            value={activeGlossarySetId}
-                            onChange={(e: any) =>
-                              handleActiveGlossaryChange(String(e?.target?.value ?? ''))
-                            }
-                            disabled={activeGlossarySelectorOptions.length === 0}
-                            selectClassName={cn(focusClasses, '!py-1.5')}
-                            options={activeGlossarySelectorOptions}
-                          />
-                        </div>
-                      ) : null}
-                      {recordGlossaryOutOfActiveFilter ? (
-                        <div className="w-full rounded-lg border border-indigo-200 bg-indigo-50/80 px-3 py-2 text-[11px] leading-snug text-indigo-900">
-                          <span className="font-bold uppercase tracking-wide text-[10px] text-indigo-700">
-                            Record glossary set
-                          </span>
-                          <span className="mt-1 block">
-                            This record uses a different glossary set than the Active Glossary filter. Path controls
-                            include this row so saved values stay intact. Switch Active Glossary to match your work
-                            context.
-                          </span>
-                        </div>
-                      ) : null}
-                      {dataEntryMode === 'glossary' &&
-                      activeGlossaryRows.length > 0 &&
-                      activeGlossarySetId &&
-                      activeGlossaryRowsForSelection.length === 0 &&
-                      !recordGlossaryContextRow ? (
-                        <div className="w-full rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-[11px] text-amber-950">
-                          No glossary rows for the selected Active Glossary. Choose another set or add rows in
-                          Glossary Builder.
-                        </div>
-                      ) : null}
-                    </>
-                  )}
                   <div className="flex-1 min-w-[180px] relative group">
                     <Select
                       label="Category"

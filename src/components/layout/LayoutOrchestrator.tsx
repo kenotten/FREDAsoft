@@ -6,6 +6,7 @@ import {
   Search, 
   ShieldCheck, 
   ClipboardList, 
+  Book,
   Table, 
   FileText, 
   Settings, 
@@ -379,18 +380,27 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
         </aside>
 
         <main className="flex-1 h-screen overflow-hidden flex flex-col relative">
-          <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-6">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsTrayOpen(true)}>
-                <span className="text-zinc-900 font-bold">
+          <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-6 gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex min-w-0 cursor-pointer items-center gap-2" onClick={() => setIsTrayOpen(true)}>
+                <span className="truncate font-bold text-zinc-900">
                   {(selectedClient?.fldClientName || 'Select Client')}
                   {' / '}
                   {(selectedFacility?.fldFacName || 'Select Facility')}
                   {' / '}
                   {(selectedProject?.fldProjName || 'Select Project')}
                 </span>
-                <ChevronDown size={14} className="text-zinc-400" />
+                <ChevronDown size={14} className="shrink-0 text-zinc-400" />
               </div>
+              {activeTab === 'data' && (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-900 shadow-sm"
+                  title="Project Data Entry"
+                >
+                  <Book size={12} className="shrink-0 text-amber-600" aria-hidden />
+                  Data Entry
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-4">
               {selectedProject && (
