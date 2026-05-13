@@ -39,7 +39,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { resizeImage } from '../lib/imageUtils';
 import { toFraction, fromFraction } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { GLOSSARY_SET_DEFS } from '../lib/glossarySets';
+import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
 
 const safeArray = (value: any): string[] => {
   if (Array.isArray(value)) return value;
@@ -920,20 +920,92 @@ export default function ProjectDataEntry({
     );
   };
 
+  /**
+   * Nudge StandardsBrowser type/version from the resolved glossary row (row metadata or set def).
+   * Not derived from Active Glossary alone. Omitted when the row has no usable standards context.
+   */
+  const dataEntryPreferredStandardContext = useMemo(() => {
+    if (selections.dataEntryMode !== 'glossary') return undefined;
+
+    let gRow: any =
+      resolveGlossaryForSelection() ||
+      (() => {
+        const gid = normalizeId(selections.glosId);
+        if (!gid) return undefined;
+        return (glossary || []).find((g: any) => normalizeId(g.fldGlosId || g.id) === gid);
+      })();
+
+    if (!gRow) return undefined;
+
+    let type = String(gRow.fldGlossaryStandardType ?? '').trim();
+    let version = String(gRow.fldGlossaryStandardVersion ?? '').trim();
+    const setIdRaw = String(gRow.fldGlossarySetId ?? '').trim();
+    if ((!type || !version) && setIdRaw) {
+      const def = glossarySetById(setIdRaw);
+      if (def) {
+        if (!type) type = def.standardType;
+        if (!version) version = def.standardVersion;
+      }
+    }
+
+    if (!type || type.toUpperCase() === 'ALL') return undefined;
+
+    const glosId = String(gRow.fldGlosId || gRow.id || '').trim();
+    if (!glosId) return undefined;
+
+    const verNorm =
+      !version || version.toUpperCase() === 'ALL' ? 'ALL' : version;
+    const syncToken = `${normalizeId(glosId)}:${type}:${verNorm}`;
+
+    return {
+      type,
+      version: verNorm === 'ALL' ? undefined : version,
+      syncToken,
+    };
+  }, [
+    selections.dataEntryMode,
+    selections.categoryId,
+    selections.itemId,
+    selections.findId,
+    selections.recId,
+    selections.glosId,
+    glossaryRowsForDataEntry,
+    glossary,
+  ]);
+
   /** Hydrate from a single approved glossary row (rec master + costs + selections.glosId). */
   const applyGlossaryRecommendationRow = (gRow: any, forceHydrateCosts = false) => {
     if (!gRow) return;
+
+    if (dataEntryMode === 'glossary' && !activeRecord) {
+      setFldStandards(safeArray(gRow.fldStandards));
+    }
+
     const recIdRaw = gRow.fldRec || gRow.fldRecID;
     const rec = (masterRecommendations || []).find((r: any) => recommendationMatches(r, recIdRaw));
-    if (!rec) return;
+    if (!rec) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn(
+          '[ProjectDataEntry] Glossary row has no matching master recommendation; citation defaults applied for new records only.',
+          { glosId: gRow.fldGlosId || gRow.id, recIdRaw }
+        );
+      }
+      if (!activeRecord) {
+        const glos = gRow;
+        const rawRecId = String(recIdRaw || '').trim();
+        onSelectionChange({
+          ...selections,
+          recId: rawRecId || selections.recId,
+          glosId: String(glos?.fldGlosId || glos?.id || '').trim() || selections.glosId,
+          isDirty: true,
+        });
+        setIsDirty(true);
+      }
+      return;
+    }
 
     setFldRecShort(rec.fldRecShort || '');
     setFldRecLong(rec.fldRecLong || '');
-    if (dataEntryMode === 'glossary' && !activeRecord) {
-      // New glossary record: inherit citation snapshot from glossary row
-      setFldStandards(safeArray(gRow.fldStandards));
-    }
-    // Existing records preserve projectData.fldStandards — do not overwrite from glossary row here.
 
     const glos = gRow;
     const shouldHydrateCosts = forceHydrateCosts || !activeRecord;
@@ -960,7 +1032,7 @@ export default function ProjectDataEntry({
       ...selections,
       recId: masterRecId,
       glosId: glos?.fldGlosId || glos?.id || '',
-      isDirty: true
+      isDirty: true,
     });
 
     setIsDirty(true);
@@ -2207,11 +2279,16 @@ export default function ProjectDataEntry({
   useEffect(() => {
     if (!selections.findId || selections.recId || recommendationOptions.length !== 1) return;
     const only = recommendationOptions[0];
-    const gRow = rowsForPath.find(
+    let gRow = rowsForPath.find(
       (g: any) => normalizeId(g.fldGlosId || g.id) === normalizeId(only.value)
     );
+    if (!gRow) {
+      gRow = (glossary || []).find(
+        (g: any) => normalizeId(g.fldGlosId || g.id) === normalizeId(only.value)
+      );
+    }
     if (gRow) applyGlossaryRecommendationRow(gRow, false);
-  }, [selections.findId, selections.recId, recommendationOptions, rowsForPath]);
+  }, [selections.findId, selections.recId, recommendationOptions, rowsForPath, glossary]);
 
   const sortedCategories = useMemo(
     () =>
@@ -3169,9 +3246,14 @@ export default function ProjectDataEntry({
                 value={recommendationSelectValue || ''}
                 onChange={(e: any) => {
                   const gid = e.target.value;
-                  const gRow = rowsForPath.find(
+                  let gRow = rowsForPath.find(
                     (g: any) => normalizeId(g.fldGlosId || g.id) === normalizeId(gid)
                   );
+                  if (!gRow) {
+                    gRow = (glossary || []).find(
+                      (g: any) => normalizeId(g.fldGlosId || g.id) === normalizeId(gid)
+                    );
+                  }
                   applyGlossaryRecommendationRow(gRow, true);
                 }}
                 selectClassName={cn('!bg-yellow-50', focusClasses)}
@@ -3388,6 +3470,7 @@ export default function ProjectDataEntry({
                   uiResetKey={dataEntryStandardsUiKey}
                   persistUiStateKey={dataEntryStandardsUiKey}
                   standardSelectionPersistKey="project-data-entry-standards"
+                  preferredStandardContext={dataEntryPreferredStandardContext}
                 />
               </div>
             </div>
