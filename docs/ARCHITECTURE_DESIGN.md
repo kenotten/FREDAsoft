@@ -214,6 +214,8 @@ Libraries are the origin of structured content.
 
 ✅ DECIDED: **Active Glossary** (glossary set chosen in Data Entry) filters which approved glossary rows drive Category / Item / Finding / Recommendation path options. **Standards Library Type** is separate and only scopes standards/citation browsing (e.g. Standards Browser). Active Glossary is user-selected and persisted locally in the browser for v1 (not derived from project or facility type).
 
+✅ DECIDED: **Glossary Builder** (v1): the **Glossary Set** dropdown scopes **Finding** and **Recommendation** authoring choices to that set (via master `fldGlossarySetId` and active glossary rows on the item). **Category** and **Item** lists remain **shared** across sets in v1 because those master records do not carry glossary set ids.
+
 Library Findings and Recommendations support direct citation associations.
 
 Examples:

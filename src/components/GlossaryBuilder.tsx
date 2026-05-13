@@ -51,6 +51,18 @@ function normalizeGlossaryRecordSetKey(raw: string | undefined | null): string {
   return def ? def.id : t;
 }
 
+/** Canonical set key on a master Finding / Recommendation; empty = legacy / unassigned. */
+function masterLibrarySetKey(entity: any): string {
+  return normalizeGlossaryRecordSetKey(entity?.fldGlossarySetId);
+}
+
+/** Named set: master must carry the same set id. Legacy mode: only masters with no set id. */
+function masterMatchesSelectedGlossarySet(master: any, selectedSetKey: string): boolean {
+  const mk = masterLibrarySetKey(master);
+  if (!selectedSetKey) return mk === '';
+  return mk === selectedSetKey;
+}
+
 function glossarySameFourTuple(
   g: any,
   selectedCat: string,
@@ -1208,34 +1220,97 @@ export function GlossaryBuilder({
     setNewType('glossary_record');
   };
 
+  const glossarySetKeyUi = useMemo(
+    () => normalizeGlossaryRecordSetKey(selectedGlossarySetId),
+    [selectedGlossarySetId]
+  );
+
+  const findingsForSelectedSet = useMemo(() => {
+    if (!selectedItem) return [];
+    const setKey = glossarySetKeyUi;
+    const seen = new Set<string>();
+    const acc: Finding[] = [];
+    for (const f of findings || []) {
+      if (
+        String(f.fldItem || '').toLowerCase().trim() !== String(selectedItem || '').toLowerCase().trim()
+      ) {
+        continue;
+      }
+      const id = f.fldFindID;
+      if (!id || seen.has(id)) continue;
+      if (!masterMatchesSelectedGlossarySet(f, setKey)) continue;
+      seen.add(id);
+      acc.push(f);
+    }
+    return sortEntities(acc, 'fldFindShort');
+  }, [findings, selectedItem, glossarySetKeyUi]);
+
+  const findingsOptionsWithContext = useMemo(() => {
+    const base = findingsForSelectedSet.map((f: any) => ({
+      value: f.fldFindID,
+      label: f.fldFindShort || f.fldFindID,
+    }));
+    if (!selectedFind) return base;
+    const fid = String(selectedFind).toLowerCase().trim();
+    if (base.some((o) => String(o.value).toLowerCase().trim() === fid)) return base;
+    const current = (findings || []).find(
+      (f: any) => String(f.id || f.fldFindID || '').toLowerCase().trim() === fid
+    );
+    if (!current?.fldFindID) return base;
+    const suf = ' (outside selected set)';
+    return [
+      ...base,
+      {
+        value: current.fldFindID,
+        label: `${String(current.fldFindShort || current.fldFindID).trim()}${suf}`,
+      },
+    ];
+  }, [findingsForSelectedSet, findings, selectedFind]);
+
   const filteredMasterRecs = useMemo(() => {
     if (!masterRecsSource || masterRecsSource.length === 0) return [];
+    const setKey = glossarySetKeyUi;
+    const pool = masterRecsSource.filter((r) => masterMatchesSelectedGlossarySet(r, setKey));
     const term = (formData.recShort || '').toLowerCase();
-    
-    if (!term) return masterRecsSource.slice(0, 50);
 
-    return masterRecsSource
-      .filter(r => 
-        (r.fldRecShort?.toLowerCase() || '').includes(term) || 
-        (r.fldRecLong?.toLowerCase() || '').includes(term)
+    if (!term) return pool.slice(0, 50);
+
+    return pool
+      .filter(
+        (r) =>
+          (r.fldRecShort?.toLowerCase() || '').includes(term) ||
+          (r.fldRecLong?.toLowerCase() || '').includes(term)
       )
       .slice(0, 50);
-  }, [masterRecsSource, formData.recShort]);
+  }, [masterRecsSource, formData.recShort, glossarySetKeyUi]);
 
   const itemFilteredMasterRecs = useMemo(() => {
     if (!masterRecsSource || masterRecsSource.length === 0) return [];
-    
-    // 1. Find all glossary records for the selected item
-    const relatedGlossaryRecords = glossary.filter(g => String(g.fldItem || "").toLowerCase().trim() === String(selectedItem || "").toLowerCase().trim());
-    
-    // 2. Extract unique recommendation IDs
-    const recIds = new Set(relatedGlossaryRecords.map(g => String(g.fldRec || "").toLowerCase().trim()));
-    
-    // 3. Filter master recommendations
-    const filtered = masterRecsSource.filter(r => recIds.has(String(r.id || r.fldRecID || "").toLowerCase().trim()));
-    
-    return filtered;
-  }, [masterRecsSource, glossary, selectedItem]);
+    const setKey = glossarySetKeyUi;
+
+    const relatedGlossaryRecords = (glossary || []).filter((g) => {
+      if (!isActiveGlossaryRow(g)) return false;
+      if (
+        String(g.fldItem || '').toLowerCase().trim() !== String(selectedItem || '').toLowerCase().trim()
+      ) {
+        return false;
+      }
+      if (normalizeGlossaryRecordSetKey(g.fldGlossarySetId) !== setKey) return false;
+      return true;
+    });
+
+    const recIds = new Set(
+      relatedGlossaryRecords
+        .map((g) => String(g.fldRec || g.fldRecID || '').toLowerCase().trim())
+        .filter(Boolean)
+    );
+
+    return masterRecsSource.filter((r) => {
+      const rid = String(r.id || r.fldRecID || '').toLowerCase().trim();
+      if (!recIds.has(rid)) return false;
+      return masterMatchesSelectedGlossarySet(r, setKey);
+    });
+  }, [masterRecsSource, glossary, selectedItem, glossarySetKeyUi]);
 
   /** Rec IDs (lowercased) that already have a glossary row for cat + item + find + current glossary set (5-tuple without rec dimension = all recs paired for this context). */
   const pairedRecIdsForCurrentSet = useMemo(() => {
@@ -1347,6 +1422,146 @@ export function GlossaryBuilder({
     selectedGlossarySetId,
     glossary,
     selections.editingGlossaryId
+  ]);
+
+  const recommendationSelectOptions = useMemo(() => {
+    if (!masterRecsSource || masterRecsSource.length === 0) {
+      return [{ label: '⏳ Hydrating Library...', value: 'loading', disabled: true }];
+    }
+    const setKey = glossarySetKeyUi;
+    const allOptions: { label: string; value: string; disabled?: boolean }[] = [];
+    const addedIds = new Set<string>();
+
+    const pushPairedLabel = (short: string, long: string) => {
+      const tail = `${long.substring(0, 60)}${long.length > 60 ? '...' : ''}`;
+      return `★ Existing | ${short} | ${tail}`;
+    };
+
+    const { masters: pairedMasters, orphanLowerIds: pairedOrphans } = pairedRecRowsForDropdown;
+    if (pairedMasters.length > 0 || pairedOrphans.length > 0) {
+      allOptions.push({
+        label: '--- Already in glossary for this set ---',
+        value: 'header-paired-set',
+        disabled: true,
+      });
+      pairedMasters.forEach((r) => {
+        const rid = String(r.id || r.fldRecID || '').toLowerCase().trim();
+        if (!rid || addedIds.has(rid)) return;
+        const short = r.fldRecShort || 'No Title';
+        const long = r.fldRecLong || '';
+        allOptions.push({
+          value: String(r.id || r.fldRecID),
+          label: pushPairedLabel(short, long),
+        });
+        addedIds.add(rid);
+      });
+      pairedOrphans.forEach((low) => {
+        if (addedIds.has(low)) return;
+        allOptions.push({
+          value: low,
+          label: `★ Existing | ⚠️ ORPHANED: ${low} (Not in Master)`,
+        });
+        addedIds.add(low);
+      });
+    }
+
+    if (selectedFind) {
+      const finding = findings?.find(
+        (f) =>
+          String(f.id || f.fldFindID || '').toLowerCase().trim() ===
+          String(selectedFind || '').toLowerCase().trim()
+      );
+      const suggestedIds = (finding?.fldSuggestedRecs || []) as string[];
+
+      if (suggestedIds.length > 0) {
+        allOptions.push({ label: '--- Suggested ---', value: 'header-suggested', disabled: true });
+        suggestedIds.forEach((recId) => {
+          if (!recId) return;
+          const cleanId = String(recId).toLowerCase().trim();
+          if (addedIds.has(cleanId)) return;
+
+          const r = masterRecsSource?.find(
+            (mr) => String(mr.id || mr.fldRecID || '').toLowerCase().trim() === cleanId
+          );
+          if (r) {
+            const inPaired = pairedRecIdsForCurrentSet.has(cleanId);
+            if (!masterMatchesSelectedGlossarySet(r, setKey) && !inPaired) return;
+            const short = r.fldRecShort || 'No Title';
+            const long = r.fldRecLong || '';
+            allOptions.push({
+              value: String(r.id || r.fldRecID),
+              label: `${short} | ${long.substring(0, 60)}${long.length > 60 ? '...' : ''}`,
+            });
+            addedIds.add(cleanId);
+          } else if (!setKey) {
+            allOptions.push({
+              value: recId,
+              label: `⚠️ ORPHANED: ${recId} (Not in Master)`,
+            });
+            addedIds.add(cleanId);
+          }
+        });
+      }
+    }
+
+    const otherRecs = (itemFilteredMasterRecs || []).filter((r) => {
+      const rid = String(r.id || r.fldRecID || '').toLowerCase().trim();
+      return !addedIds.has(rid);
+    });
+
+    if (otherRecs.length > 0) {
+      allOptions.push({ label: '--- Item Recommendations ---', value: 'header-all', disabled: true });
+      sortEntities([...otherRecs], 'fldRecShort')
+        .slice(0, 100)
+        .forEach((r) => {
+          const rid = String(r.id || r.fldRecID || '').toLowerCase().trim();
+          if (addedIds.has(rid)) return;
+
+          const short = r.fldRecShort || 'No Title';
+          const long = r.fldRecLong || '';
+          allOptions.push({
+            value: String(r.id || r.fldRecID),
+            label: `${short} | ${long.substring(0, 60)}${long.length > 60 ? '...' : ''}`,
+          });
+          addedIds.add(rid);
+        });
+    } else if (selectedItem && !selectedFind) {
+      allOptions.push({ label: 'No previous links for this item', value: 'no-links', disabled: true });
+    }
+
+    const selLower = String(selectedRec || '').toLowerCase().trim();
+    if (selLower && !addedIds.has(selLower)) {
+      const cur = masterRecsSource.find(
+        (r) => String(r.id || r.fldRecID || '').toLowerCase().trim() === selLower
+      );
+      if (cur) {
+        const short = cur.fldRecShort || 'No Title';
+        const long = cur.fldRecLong || '';
+        allOptions.push({
+          value: String(cur.id || cur.fldRecID),
+          label: `${short} | ${long.substring(0, 60)}${long.length > 60 ? '...' : ''} (outside selected set)`,
+        });
+        addedIds.add(selLower);
+      } else {
+        allOptions.push({
+          value: String(selectedRec),
+          label: `⚠️ ${String(selectedRec)} (outside selected set / not in Master)`,
+        });
+        addedIds.add(selLower);
+      }
+    }
+
+    return allOptions;
+  }, [
+    masterRecsSource,
+    selectedFind,
+    findings,
+    selectedRec,
+    selectedItem,
+    pairedRecRowsForDropdown,
+    pairedRecIdsForCurrentSet,
+    itemFilteredMasterRecs,
+    glossarySetKeyUi,
   ]);
 
   return (
@@ -1568,19 +1783,7 @@ export function GlossaryBuilder({
               value={selectedFind} 
               highlight={true} 
               onChange={(e: any) => setSelectedFind(e.target.value)} 
-              options={(() => {
-                const seen = new Set();
-                const filtered = (Array.isArray(findings) ? findings : [])
-                  .filter((f: any) => f.fldItem === selectedItem)
-                  .filter(f => {
-                    const id = f.fldFindID;
-                    if (!id || seen.has(id)) return false;
-                    seen.add(id);
-                    return true;
-                  });
-                return sortEntities(filtered, 'fldFindShort')
-                  .map((f: any) => ({ value: f.fldFindID, label: f.fldFindShort }));
-              })() || []} 
+              options={findingsOptionsWithContext || []} 
             />
             <div className="flex gap-1 items-end">
               <Button variant="secondary" size="sm" className="mb-1" disabled={!selectedItem} onClick={() => openNewWithTemplate('finding')}><Plus size={14} /></Button>
@@ -1598,109 +1801,7 @@ export function GlossaryBuilder({
                   value={selectedRec} 
                   highlight={true} 
                   onChange={(e: any) => setSelectedRec(e.target.value)} 
-                  options={(() => {
-                    if (!masterRecsSource || masterRecsSource.length === 0) {
-                      return [{ label: "⏳ Hydrating Library...", value: "loading", disabled: true }];
-                    }
-                    const allOptions: any[] = [];
-                    const addedIds = new Set<string>();
-
-                    const pushPairedLabel = (short: string, long: string) => {
-                      const tail = `${long.substring(0, 60)}${long.length > 60 ? '...' : ''}`;
-                      return `★ Existing | ${short} | ${tail}`;
-                    };
-
-                    // 0. Already in glossary for this set (5-tuple context: cat + item + find + set + rec)
-                    const { masters: pairedMasters, orphanLowerIds: pairedOrphans } = pairedRecRowsForDropdown;
-                    if (pairedMasters.length > 0 || pairedOrphans.length > 0) {
-                      allOptions.push({
-                        label: '--- Already in glossary for this set ---',
-                        value: 'header-paired-set',
-                        disabled: true,
-                      });
-                      pairedMasters.forEach((r) => {
-                        const rid = String(r.id || r.fldRecID || '').toLowerCase().trim();
-                        if (!rid || addedIds.has(rid)) return;
-                        const short = r.fldRecShort || 'No Title';
-                        const long = r.fldRecLong || '';
-                        allOptions.push({
-                          value: r.id || r.fldRecID,
-                          label: pushPairedLabel(short, long),
-                        });
-                        addedIds.add(rid);
-                      });
-                      pairedOrphans.forEach((low) => {
-                        if (addedIds.has(low)) return;
-                        allOptions.push({
-                          value: low,
-                          label: `★ Existing | ⚠️ ORPHANED: ${low} (Not in Master)`,
-                        });
-                        addedIds.add(low);
-                      });
-                    }
-
-                    // 1. Suggested Section (skip ids already listed as paired-in-set)
-                    if (selectedFind) {
-                      const finding = findings?.find(f => 
-                        String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim()
-                      );
-                      const suggestedIds = (finding?.fldSuggestedRecs || []) as string[];
-                      
-                      if (suggestedIds.length > 0) {
-                        allOptions.push({ label: '--- Suggested ---', value: 'header-suggested', disabled: true });
-                        suggestedIds.forEach(recId => {
-                          if (!recId) return;
-                          const cleanId = String(recId).toLowerCase().trim();
-                          if (addedIds.has(cleanId)) return;
-                          
-                          const r = masterRecsSource?.find(mr => String(mr.id || mr.fldRecID || "").toLowerCase().trim() === cleanId);
-                          if (r) {
-                            const short = r.fldRecShort || "No Title";
-                            const long = r.fldRecLong || "";
-                            allOptions.push({ 
-                              value: r.id || r.fldRecID, 
-                              label: `${short} | ${long.substring(0, 60)}${long.length > 60 ? '...' : ''}` 
-                            });
-                            addedIds.add(cleanId);
-                          } else {
-                            allOptions.push({
-                              value: recId,
-                              label: `⚠️ ORPHANED: ${recId} (Not in Master)`
-                            });
-                            addedIds.add(cleanId);
-                          }
-                        });
-                      }
-                    }
-
-                    // 2. Item Recommendations Section (TRUNCATED TO 100 FOR PERFORMANCE)
-                    const otherRecs = (itemFilteredMasterRecs || []).filter(r => {
-                      const rid = String(r.id || r.fldRecID || "").toLowerCase().trim();
-                      return !addedIds.has(rid);
-                    });
-
-                    if (otherRecs.length > 0) {
-                      allOptions.push({ label: '--- Item Recommendations ---', value: 'header-all', disabled: true });
-                      sortEntities([...otherRecs], 'fldRecShort')
-                        .slice(0, 100) 
-                        .forEach(r => {
-                          const rid = String(r.id || r.fldRecID || "").toLowerCase().trim();
-                          if (addedIds.has(rid)) return;
-                          
-                          const short = r.fldRecShort || "No Title";
-                          const long = r.fldRecLong || "";
-                          allOptions.push({ 
-                            value: r.id || r.fldRecID, 
-                            label: `${short} | ${long.substring(0, 60)}${long.length > 60 ? '...' : ''}` 
-                          });
-                          addedIds.add(rid);
-                        });
-                    } else if (selectedItem && !selectedFind) {
-                      allOptions.push({ label: 'No previous links for this item', value: 'no-links', disabled: true });
-                    }
-
-                    return allOptions;
-                  })() || []}
+                  options={recommendationSelectOptions || []}
                 />
                 <Button variant="secondary" size="sm" onClick={() => setNewType('link_recommendation')} disabled={!selectedFind} title="Search Master Library">
                   <Search size={14} />
