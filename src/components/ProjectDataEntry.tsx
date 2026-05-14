@@ -37,6 +37,7 @@ import { StandardsBrowser } from './StandardsBrowser';
 import { cn, sortEntities, formatCurrency, COST_UNIT_TYPES, MEASUREMENT_UNITS, compareEntities } from '../lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { resizeImage } from '../lib/imageUtils';
+import { normalizeId } from '../lib/idUtils';
 import { toFraction, fromFraction } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
@@ -78,10 +79,6 @@ function Modal({ title, children, onClose }: any) {
       </motion.div>
     </div>
   );
-}
-
-function normalizeId(value: any): string {
-  return String(value || '').trim().toLowerCase();
 }
 
 function recommendationMatches(rec: any, targetId: string): boolean {
