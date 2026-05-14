@@ -1681,9 +1681,9 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
   }, [record.fldStandards, record.fldData, glos, standards]);
 
   return (
-    <div className="border-2 border-zinc-900 flex break-inside-avoid">
+    <div className="border-2 border-zinc-900 flex items-start break-inside-avoid">
       {/* Number Column */}
-      <div className="w-12 border-r-2 border-zinc-900 flex flex-col items-center justify-center font-black text-2xl shrink-0">
+      <div className="w-12 border-r-2 border-zinc-900 flex flex-col items-center justify-start shrink-0 pt-2 font-black text-2xl">
         {index}
         <span className="text-[8px] font-mono text-zinc-400 mt-1 print:hidden">{record.fldPDataID?.slice(0, 8)}</span>
       </div>
@@ -1732,15 +1732,9 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
         </div>
 
         {/* Recommendation Row */}
-        <div className="flex">
+        <div className="flex border-b border-zinc-300">
           <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Recommendation</div>
           <div className="flex-1 px-2 py-2 text-[11px] leading-snug whitespace-pre-line">{record.fldRecLong}</div>
-        </div>
-
-        {/* Spacer to push Reference to bottom */}
-        <div className="flex-1 flex">
-          <div className="w-32 bg-zinc-50 border-r border-zinc-300 shrink-0" />
-          <div className="flex-1" />
         </div>
 
         {/* Reference Row */}
@@ -1750,24 +1744,30 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
         </div>
       </div>
 
-      {/* Images Column */}
+      {/* Images column: fixed-height thumbnails, top-aligned (no flex stretch to card height). */}
       <div className={cn(
-        "w-48 border-l-2 border-zinc-900 flex flex-col bg-zinc-900 shrink-0",
+        "w-48 shrink-0 self-start border-l-2 border-zinc-900 flex flex-col bg-zinc-900",
         (!Array.isArray(record.fldImages) || record.fldImages.length === 0) && "hidden"
       )}>
-        {Array.isArray(record.fldImages) && record.fldImages.slice(0, 2).map((img: string, i: number) => (
-          <div key={i} className={cn(
-            "bg-white overflow-hidden p-1 flex-1 min-h-0",
-            i === 0 && record.fldImages.length > 1 && "border-b border-zinc-900"
-          )}>
-            <img 
-              src={img} 
-              className="w-full h-full object-cover rounded-sm" 
-              alt={`Finding ${i + 1}`}
-              referrerPolicy="no-referrer"
-            />
-          </div>
-        ))}
+        {Array.isArray(record.fldImages) && record.fldImages.slice(0, 2).map((img: string, i: number) => {
+          const multi = record.fldImages.length > 1;
+          return (
+            <div
+              key={i}
+              className={cn(
+                'h-32 shrink-0 overflow-hidden bg-white p-1',
+                multi && i === 0 && 'border-b border-zinc-900'
+              )}
+            >
+              <img
+                src={img}
+                className="h-full w-full object-cover rounded-sm"
+                alt={`Finding ${i + 1}`}
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
