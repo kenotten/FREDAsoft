@@ -1744,10 +1744,10 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
         </div>
       </div>
 
-      {/* Images column: fixed-height thumbnails, top-aligned (no flex stretch to card height). */}
+      {/* Images column: fixed h-32 slots at top; column self-stretch + flex filler completes right edge to card bottom. */}
       <div className={cn(
-        "w-48 shrink-0 self-start border-l-2 border-zinc-900 flex flex-col bg-zinc-900",
-        (!Array.isArray(record.fldImages) || record.fldImages.length === 0) && "hidden"
+        'w-48 shrink-0 self-stretch flex min-h-0 flex-col border-l-2 border-zinc-900 bg-zinc-900',
+        (!Array.isArray(record.fldImages) || record.fldImages.length === 0) && 'hidden'
       )}>
         {Array.isArray(record.fldImages) && record.fldImages.slice(0, 2).map((img: string, i: number) => {
           const multi = record.fldImages.length > 1;
@@ -1756,7 +1756,11 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
               key={i}
               className={cn(
                 'h-32 shrink-0 overflow-hidden bg-white p-1',
-                multi && i === 0 && 'border-b border-zinc-900'
+                multi
+                  ? i === 0
+                    ? 'rounded-t-sm border-l border-r border-t border-zinc-900'
+                    : 'border-l border-r border-t border-zinc-900'
+                  : 'rounded-t-sm border-l border-r border-t border-zinc-900'
               )}
             >
               <img
@@ -1768,6 +1772,10 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
             </div>
           );
         })}
+        <div
+          className="min-h-0 flex-1 border-l border-r border-b border-t border-zinc-900 bg-zinc-50"
+          aria-hidden={true}
+        />
       </div>
     </div>
   );
