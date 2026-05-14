@@ -197,6 +197,33 @@ users             → roles and identity
 
 ---
 
+## Persistence and Storage Ownership
+
+FREDAsoft uses more than one persistence mechanism. Each layer **owns** specific kinds of state. Cleanup or refactor work must **not** casually unify Firestore preferences, `localStorage`, and `sessionStorage` into a single approach unless there is an explicit design decision, migration plan, and verification that semantics (lifetime, scope, and authority) stay correct.
+
+**Authoritative data** — including project data, report-relevant record state, glossary data, standards / master library data, and other domain collections — lives in **Firestore** (and the domain records those documents represent). Browser storage is not a substitute for that authority.
+
+### Firestore user preferences
+
+- Owns **durable workspace context** and **user preference restoration** tied to the account (where implemented).
+- Examples include active client, facility, project, and related workspace selections persisted for cross-session use.
+- Intended to survive normal session boundaries and, where supported, browser or device changes for the same user.
+
+### localStorage
+
+- Owns **browser-local sticky selections** and **Data Entry draft recovery**.
+- Data Entry drafts are **intentionally local** to the browser; they are a safety net, not the system of record.
+- Draft restore paths must enforce **context compatibility**: a draft must not be applied when client, facility, project, target record, or mode no longer matches what the draft was saved against. Restores must not resurrect stale tuples into the wrong context.
+- **Future:** centralizing **storage key constants** (e.g. one module of string keys) is allowed for maintainability, but must **not** change key names, lifetimes, or read/write semantics unless explicitly approved.
+
+### sessionStorage
+
+- Owns **temporary UI state** for the tab or session (e.g. Standards Browser UI state).
+- Treat as **session convenience**, not authoritative project or library data.
+- Standards Browser state here is **UI state** for that surface. It is **not** Active Glossary (or broader Data Entry glossary-mode) state; those remain distinct by design.
+
+---
+
 # 🧠 Libraries, Glossary Sets, Glossary Records, and Data Records
 
 ## 3. Libraries Are the Foundation
