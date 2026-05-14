@@ -56,3 +56,14 @@ export function glossarySetById(id: string | undefined | null): GlossarySetDef |
   return GLOSSARY_SET_DEFS.find((s) => s.id.toUpperCase() === key);
 }
 
+export function glossarySetMetadataForId(id: string) {
+  const setDef = glossarySetById(id);
+
+  return {
+    fldGlossarySetId: setDef?.id || null,
+    fldGlossarySetName: setDef?.name || null,
+    fldGlossaryStandardType: setDef?.standardType || null,
+    fldGlossaryStandardVersion: setDef?.standardVersion || null,
+  };
+}
+

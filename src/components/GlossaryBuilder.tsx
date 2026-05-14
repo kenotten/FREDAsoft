@@ -30,7 +30,7 @@ import { cn, sanitizeData, sortEntities, compareEntities } from '../lib/utils';
 import { Button, Select, Card, Input, Modal } from './ui/core';
 import { toast } from 'sonner';
 import { firestoreService, OperationType, handleFirestoreError } from '../services/firestoreService';
-import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
+import { GLOSSARY_SET_DEFS, glossarySetById, glossarySetMetadataForId } from '../lib/glossarySets';
 import { normalizeForDeterministicMatch } from '../lib/textNormalize';
 import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { 
@@ -754,7 +754,6 @@ export function GlossaryBuilder({
     try {
       setIsSynced(false);
       const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
-      const selectedSet = glossarySetById(selectedGlossarySetId);
       
       // COMMIT STAGED CHANGES TO MASTER LIBRARY
       if (selectedFind) {
@@ -786,10 +785,7 @@ export function GlossaryBuilder({
         fldItem: selectedItem,
         fldFind: selectedFind,
         fldRec: selectedRec,
-        fldGlossarySetId: selectedSet?.id || null,
-        fldGlossarySetName: selectedSet?.name || null,
-        fldGlossaryStandardType: selectedSet?.standardType || null,
-        fldGlossaryStandardVersion: selectedSet?.standardVersion || null,
+        ...glossarySetMetadataForId(selectedGlossarySetId),
         fldImages: images,
         fldUnitCost: selections.fldUnitCost !== undefined ? selections.fldUnitCost : null,
         fldUnitType: selections.fldUnitType !== undefined ? selections.fldUnitType : null,
@@ -863,7 +859,6 @@ export function GlossaryBuilder({
 
   const saveNewGlossaryRecord = async () => {
     try {
-      const selectedSet = glossarySetById(selectedGlossarySetId);
       let findId = selectedFind;
       if (!selectedFind || (selectedCat && selectedItem && selectedFind && selectedRec)) {
         findId = uuidv4();
@@ -910,10 +905,7 @@ export function GlossaryBuilder({
 
       const glossaryPayload = sanitizeData({
         fldGlosId: glosId, 
-        fldGlossarySetId: selectedSet?.id || null,
-        fldGlossarySetName: selectedSet?.name || null,
-        fldGlossaryStandardType: selectedSet?.standardType || null,
-        fldGlossaryStandardVersion: selectedSet?.standardVersion || null,
+        ...glossarySetMetadataForId(selectedGlossarySetId),
         fldCat: selectedCat || '', 
         fldItem: selectedItem || '', 
         fldFind: findId || '', 
