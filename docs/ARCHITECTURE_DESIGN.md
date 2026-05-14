@@ -224,6 +224,30 @@ FREDAsoft uses more than one persistence mechanism. Each layer **owns** specific
 
 ---
 
+## Firestore Write Boundaries and Maintenance Script Safety
+
+**Firestore writes are part of the system’s integrity boundary.** Any path that mutates stored documents — whether from the app, a batch API, or a script — can affect compliance data, auditability, and user trust. Treat writes as governed behavior, not implementation detail.
+
+**Normal application writes** should go through the established service layer (e.g. `firestoreService`) unless a narrow exception is explicitly justified and reviewed.
+
+**Direct `writeBatch` / low-level writes** in application code are allowed only when they are **intentional**, **narrowly scoped** (clear transaction intent, bounded document set), and **visible** in review. They must **not** be introduced or expanded under the cover of broad refactors, “cleanup,” or unrelated feature work without an explicit architectural note in this document or an approved task.
+
+**Maintenance and import scripts** that read or write Firestore must be treated as **operational tooling** (run with intent, often against production or shared environments), **not** as casual developer utilities. They belong in the same risk class as migrations.
+
+Scripts that **update** or **backfill** Firestore should **document clearly** in their header or companion README (minimum expectations):
+
+- **Target environment** (e.g. emulator vs named project; how the operator selects it).
+- **Dry-run mode** — whether the script supports a no-write / preview mode and how to invoke it.
+- **Backup / export expectations** — whether an export or backup is required before run.
+- **Operator confirmation** — prompts, flags, or runbooks that prevent mistaken execution.
+- **Scope of mutation** — which **collections** and **fields** may be written, and what invariants must hold afterward.
+
+**UI-triggered denormalization or repair writes** (for example, propagating stored display labels after a rename so historical rows stay readable) must be **explicit in code and documented** here or in a tightly linked maintenance note, so future readers know the write is intentional denormalization, not accidental duplication of business logic.
+
+**Future abstraction** (e.g. consolidating write paths behind a thinner API) is allowed only **after** the intended **write policy** is documented and **existing behavior** is preserved or called out as an intentional breaking change with migration steps.
+
+---
+
 # 🧠 Libraries, Glossary Sets, Glossary Records, and Data Records
 
 ## 3. Libraries Are the Foundation
