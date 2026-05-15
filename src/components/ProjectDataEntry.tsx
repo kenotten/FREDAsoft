@@ -2924,8 +2924,8 @@ export default function ProjectDataEntry({
                       size="sm"
                       className={cn(
                         'flex shrink-0 items-center justify-center gap-1 self-stretch px-2.5 text-xs font-bold uppercase tracking-tight',
-                        !newRecordDisabled &&
-                          '!border-orange-600 !bg-orange-500 !text-white hover:!border-orange-700 hover:!bg-orange-600'
+                        isBlankRecordNav &&
+                          '!border-green-700 !bg-green-600 !text-white hover:!border-green-800 hover:!bg-green-700 disabled:!opacity-70'
                       )}
                       disabled={newRecordDisabled}
                       onClick={handleNewRecord}
