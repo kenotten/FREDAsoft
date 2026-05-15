@@ -25,6 +25,7 @@ import { db, storage } from '../firebase';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { firestoreService } from '../services/firestoreService';
 import { buildProjectDataCloneSeed, type ProjectDataCloneSeed } from '../lib/cloneProjectData';
+import { ACTIVE_GLOSSARY_STORAGE_KEY, FREDASOFT_DRAFT_LOCAL_STORAGE_KEY } from '../lib/storageKeys';
 import type { MasterStandard } from '../types';
 import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { ImagePreviewModal } from './ui/ImagePreviewModal';
@@ -51,7 +52,6 @@ const safeArray = (value: any): string[] => {
 const DATA_ENTRY_DRAFT_VERSION = 2;
 
 /** Browser persistence for Data Entry glossary-mode path filter (not Standards Library). */
-const ACTIVE_GLOSSARY_STORAGE_KEY = 'fredasoft_data_entry_active_glossary_set_v1';
 /** Matches Library "Unassigned / Legacy" semantics for glossary rows missing fldGlossarySetId. */
 const ACTIVE_GLOSSARY_UNASSIGNED = 'UNASSIGNED';
 
@@ -732,7 +732,7 @@ export default function ProjectDataEntry({
       try {
         const payload = buildDraftPayloadRef.current();
         if (!isDraftPayloadPersistable(payload)) return;
-        localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
+        localStorage.setItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY, JSON.stringify(payload));
       } catch {
         /* ignore quota errors */
       }
@@ -791,7 +791,7 @@ export default function ProjectDataEntry({
     const hadRecordOrDirty = Boolean(rid) || isFormDirtyRef.current;
 
     try {
-      localStorage.removeItem('fredasoft_draft');
+      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
     } catch {
       /* ignore */
     }
@@ -1130,7 +1130,7 @@ export default function ProjectDataEntry({
     (seed: ProjectDataCloneSeed) => {
       skipHydrationAfterDraftRef.current = true;
       try {
-        localStorage.removeItem('fredasoft_draft');
+        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
       } catch {
         /* ignore */
       }
@@ -1198,7 +1198,7 @@ export default function ProjectDataEntry({
     if (!proj || !fac) return;
     if (isSavingRef.current) return;
 
-    const draft = localStorage.getItem('fredasoft_draft');
+    const draft = localStorage.getItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
     if (!draft) {
       draftRecoveryOfferedSigRef.current = '';
       return;
@@ -1206,7 +1206,7 @@ export default function ProjectDataEntry({
     try {
       const parsed = JSON.parse(draft);
       if (!isRecoverableDataEntryDraft(parsed)) {
-        localStorage.removeItem('fredasoft_draft');
+        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
         draftRecoveryOfferedSigRef.current = '';
         return;
       }
@@ -1215,13 +1215,13 @@ export default function ProjectDataEntry({
         return;
       }
       if (!isDraftContextCompatible(parsed, selections, projectData)) {
-        localStorage.removeItem('fredasoft_draft');
+        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
         draftRecoveryOfferedSigRef.current = '';
         toast.info('Old draft discarded because it belonged to another context or is outdated.');
         return;
       }
       if (parsed.dataEntryMode !== 'custom' && !isGlossaryDraftLinkageSafe(parsed)) {
-        localStorage.removeItem('fredasoft_draft');
+        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
         draftRecoveryOfferedSigRef.current = '';
         setShowRecoveryModal(false);
         setSavedDraft(null);
@@ -1234,7 +1234,7 @@ export default function ProjectDataEntry({
       setSavedDraft(parsed);
       setShowRecoveryModal(true);
     } catch {
-      localStorage.removeItem('fredasoft_draft');
+      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
       draftRecoveryOfferedSigRef.current = '';
     }
   }, [
@@ -1260,7 +1260,7 @@ export default function ProjectDataEntry({
         if (isSavingRef.current) return;
         const payload = buildDraftPayload();
         if (!isDraftPayloadPersistable(payload)) return;
-        localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
+        localStorage.setItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY, JSON.stringify(payload));
       } catch {
         /* quota */
       }
@@ -1277,7 +1277,7 @@ export default function ProjectDataEntry({
         if (isSavingRef.current) return;
         const payload = buildDraftPayload();
         if (!isDraftPayloadPersistable(payload)) return;
-        localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
+        localStorage.setItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY, JSON.stringify(payload));
       } catch {
         /* quota */
       }
@@ -1289,7 +1289,7 @@ export default function ProjectDataEntry({
     if (!savedDraft) return;
     const d: any = savedDraft;
     if (!isRecoverableDataEntryDraft(d)) {
-      localStorage.removeItem('fredasoft_draft');
+      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
       setShowRecoveryModal(false);
       setSavedDraft(null);
       draftRecoveryOfferedSigRef.current = '';
@@ -1297,7 +1297,7 @@ export default function ProjectDataEntry({
       return;
     }
     if (!isDraftContextCompatible(d, selections, projectData)) {
-      localStorage.removeItem('fredasoft_draft');
+      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
       setShowRecoveryModal(false);
       setSavedDraft(null);
       draftRecoveryOfferedSigRef.current = '';
@@ -1305,7 +1305,7 @@ export default function ProjectDataEntry({
       return;
     }
     if (d.dataEntryMode !== 'custom' && !isGlossaryDraftLinkageSafe(d)) {
-      localStorage.removeItem('fredasoft_draft');
+      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
       setShowRecoveryModal(false);
       setSavedDraft(null);
       draftRecoveryOfferedSigRef.current = '';
@@ -1360,7 +1360,7 @@ export default function ProjectDataEntry({
         : null;
     syncInitialSelectionRefFromRecord(rec);
 
-    localStorage.removeItem('fredasoft_draft');
+    localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
     setShowRecoveryModal(false);
     setSavedDraft(null);
     setIsDirty(true);
@@ -1368,7 +1368,7 @@ export default function ProjectDataEntry({
   };
 
   const handleDiscardDraft = () => {
-    localStorage.removeItem('fredasoft_draft');
+    localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
     draftRecoveryOfferedSigRef.current = '';
     setShowRecoveryModal(false);
     setSavedDraft(null);
@@ -1580,7 +1580,7 @@ export default function ProjectDataEntry({
 
     try {
       try {
-        localStorage.removeItem('fredasoft_draft');
+        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
       } catch {
         /* ignore */
       }
@@ -1724,7 +1724,7 @@ export default function ProjectDataEntry({
     isFormDirtyRef.current = false;
     setIsDirty(false);
     try {
-      localStorage.removeItem('fredasoft_draft');
+      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
     } catch {
       /* ignore */
     }
@@ -1817,7 +1817,7 @@ export default function ProjectDataEntry({
         setFldLocation(activeRecord.fldLocation || '');
         setFldImages(Array.isArray(activeRecord.fldImages) ? activeRecord.fldImages : []);
         setFldStandards(safeArray(activeRecord.fldStandards));
-        localStorage.removeItem('fredasoft_draft');
+        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
         setShowRecoveryModal(false);
         setSavedDraft(null);
         draftRecoveryOfferedSigRef.current = '';
@@ -1848,7 +1848,7 @@ export default function ProjectDataEntry({
         setFldImages([]);
         setFldStandards([]);
         setIsDirty(false);
-        localStorage.removeItem('fredasoft_draft');
+        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
         setShowRecoveryModal(false);
         setSavedDraft(null);
         draftRecoveryOfferedSigRef.current = '';
@@ -1877,7 +1877,7 @@ export default function ProjectDataEntry({
     setCustomMasterFindId('');
     setIsDirty(false);
     try {
-      localStorage.removeItem('fredasoft_draft');
+      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
     } catch {
       /* ignore */
     }

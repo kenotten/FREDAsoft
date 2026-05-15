@@ -18,6 +18,7 @@ import {
   Hash
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { FREDASOFT_DRAFT_LOCAL_STORAGE_KEY } from '../../lib/storageKeys';
 import { Button, Select, Card } from '../ui/core';
 import { MainContent } from './MainContent';
 import { ReportPreview } from '../ReportPreview';
@@ -272,7 +273,7 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
   };
 
   const handleDataDiscardAndContinue = () => {
-    localStorage.removeItem('fredasoft_draft');
+    localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
     setIsDataEntryDirty(false);
     setPendingDataAction(null);
     handleLogout();
