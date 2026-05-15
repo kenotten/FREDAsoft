@@ -49,21 +49,23 @@ export function GlossaryView({
     const { selectedFind, selectedRec, editingGlossaryId } = selections;
 
     const norm = (v: any) => String(v ?? '').toLowerCase().trim();
-const safeArray = (v: any): string[] => {
-  if (!v) return [];
+    const safeArray = (v: any): string[] => {
+      if (!v) return [];
 
-  // Already an array
-  if (Array.isArray(v)) {
-    return Array.from(new Set(v.filter(Boolean)));
-  }
+      const source = Array.isArray(v)
+        ? v
+        : typeof v === 'object'
+          ? Object.values(v)
+          : [];
 
-  // Firestore map/object → convert to array
-  if (typeof v === 'object') {
-    return Array.from(new Set(Object.values(v).filter(Boolean)));
-  }
-
-  return [];
-};
+      return Array.from(
+        new Set(
+          source
+            .map((value) => String(value ?? '').trim())
+            .filter((value) => value.length > 0)
+        )
+      );
+    };
 
     // Finding
     const f = findings.find((f: Finding) =>
