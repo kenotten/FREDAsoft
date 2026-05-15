@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import {
   buildReferencedAddendumEntries,
   filterReportProjectForPreview,
+  formatGroupedStandardCitations,
   getRecordStandardIds,
   getReportRecordSortKeys,
   compareReportRecordSortKeysLocationFirst,
@@ -72,37 +73,6 @@ const toRoman = (num: number, uppercase = false) => {
   }
   return uppercase ? roman : roman.toLowerCase();
 };
-
-function formatGroupedStandardCitations(ids: string[], standards: MasterStandard[]): string {
-  const seen = new Set<string>();
-  const list: MasterStandard[] = [];
-  for (const rawId of ids) {
-    const id = String(rawId).trim();
-    if (!id || seen.has(id)) continue;
-    const std = standards.find(s => s.id === id);
-    if (!std) continue;
-    seen.add(id);
-    list.push(std);
-  }
-  const byType = new Map<string, MasterStandard[]>();
-  for (const std of list) {
-    const t = standardTypeKey(std);
-    if (!byType.has(t)) byType.set(t, []);
-    byType.get(t)!.push(std);
-  }
-  const types = Array.from(byType.keys()).sort((a, b) => a.localeCompare(b));
-  const parts: string[] = [];
-  for (const t of types) {
-    const arr = byType.get(t)!;
-    arr.sort((a, b) => compareStandardCitations(a, b));
-    for (const s of arr) {
-      const label =
-        formatStandardCitationLabel(s) ?? `${t} ${(s.citation_num || '').trim()}`.trim();
-      if (label) parts.push(label);
-    }
-  }
-  return parts.join('; ');
-}
 
 /** Referenced Standards addendum: vertical budget for row stacking (content area inside PageContainer). */
 const ADDENDUM_SUBSEQUENT_PAGE_BODY_PX = 660;
