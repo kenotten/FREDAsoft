@@ -631,6 +631,115 @@ Future copy tools may help create equivalent records across standards, but copyi
 
 ---
 
+## Glossary Builder Related Record Workflow
+
+✅ DECIDED: The legacy Glossary Builder **COPY & EDIT** control was removed (Phase 1 safety). It is replaced by explicit workflows—eventually a **Create Related Glossary Record** flow—and by existing safe controls (+ Finding, + Recommendation, Search/link, **SAVE RECORD**, Glossary Set template, **Prepare Target Set Records**).
+
+### Master library vs glossary records
+
+| Layer | What it is | Shared across glossary rows? |
+|-------|------------|------------------------------|
+| **Master Finding** (`findings`) | Library finding text, measurement type, suggested recs, finding-level standards | One finding id can appear in multiple glossary rows (same item, different rec or set). |
+| **Master Recommendation** (`master_recommendations`) | Library recommendation text, unit/cost defaults, rec-level standards | One rec id can be linked from multiple findings / glossary rows. |
+| **Glossary record** (`glossary`) | Approved **five-tuple** snapshot: Category + Item + Finding + Recommendation + **Glossary Set**, plus glossary-level citations, images, unit/cost overrides | One row per exact five-tuple; independently editable from library after snapshot. |
+
+The UI must always make clear which action the user is taking:
+
+1. **Edit/reuse** an existing shared master finding or recommendation (same id).
+2. **Create** a new independent master finding or recommendation (new id).
+3. **Change only** the glossary record snapshot (new or updated five-tuple, possibly reusing existing master ids).
+
+Data Entry path dropdowns key findings by **master finding id** but display **short text** (`fldFindShort`). Recommendation options are keyed by **glossary row** (`fldGlosId`) with labels from **rec short text**. Silent creation of new master ids with unchanged short labels produces duplicate-looking options and is a product defect.
+
+### Product model: five-tuple
+
+A glossary record is uniquely identified in the UI by:
+
+```text
+Category + Item + Finding (master id) + Recommendation (master id) + Glossary Set
+```
+
+Supported product intents:
+
+1. Create a brand-new glossary record from scratch (greenfield).
+2. Edit an existing glossary record (same five-tuple; **SAVE RECORD** updates snapshot and staged master text/citations).
+3. Create a **related** glossary record from an existing selection (new five-tuple, explicit reuse/create choices).
+4. Reuse an existing finding with a new recommendation (same `fldFind`, new `fldRec`, new glossary row).
+5. Create a new finding and reuse an existing recommendation (new `fldFind`, same `fldRec`, new glossary row).
+6. Create a new finding and new recommendation from selected text (new both, new glossary row).
+7. Avoid duplicate-looking findings/recommendations in Data Entry (same set + item + normalized short label must not silently fork masters).
+
+### Why COPY & EDIT was unsafe
+
+The former **COPY & EDIT** button (shown when all four path fields were selected) opened the same modal as **ADD FINDING/REC** but, on save (`saveNewGlossaryRecord`), **always minted new finding and recommendation ids** even when the user had already selected existing masters. It prefilled short/long text **without** a required ` (Copy)` suffix or disambiguator. That produced:
+
+- Multiple master records with identical `fldFindShort` / `fldRecShort` under the same item and glossary set context.
+- Confusing Data Entry dropdowns (same label, different ids).
+- Unnecessary library duplication when the user only wanted another glossary pairing or a cross-set variant.
+
+Phase 1 safety (implemented): hide **COPY & EDIT**, keep **ADD FINDING/REC** for greenfield (category + item, full finding/rec path not both selected), and block full-path bulk copy in `saveNewGlossaryRecord` with a directed error message.
+
+### Intended “Create Related Glossary Record” workflow (Phase 2)
+
+Single explicit entry point when category, item, finding, and recommendation are selected (and optionally when branching from an existing glossary row). The user chooses a **relationship type** before any Firestore write:
+
+| Scenario | Finding master | Recommendation master | Glossary row | Primary existing safe path until modal ships |
+|----------|----------------|----------------------|--------------|-----------------------------------------------|
+| **A. Same finding + new recommendation** | Reuse `selectedFind` | Create new or pick unpaired rec | Create new five-tuple | + Recommendation, then **SAVE RECORD** |
+| **B. New finding + same recommendation** | Create new or pick | Reuse `selectedRec` | Create new five-tuple | + Finding, select existing rec, **SAVE RECORD** |
+| **C. New finding + new recommendation** | Create new | Create new | Create new five-tuple | + Finding / + Recommendation with edited or ` (Copy)` text, **SAVE RECORD** |
+| **D. Cross-set related record** | Reuse or create per target set | Reuse or create per target set | Create for target set | Change **Glossary Set** → template banner → **Prepare Target Set Records** → **SAVE RECORD** |
+
+The modal must not perform silent triple-create (finding + rec + glossary) without labeled user choices. Glossary persistence should follow existing **SAVE RECORD** semantics (`handleAddNew` five-tuple upsert); master creates/links should be explicit side effects.
+
+### Duplicate-prevention rules
+
+✅ DECIDED:
+
+- **Same glossary set + same item + same normalized short label** must not **silently** create a new master finding or recommendation id. Require edited short title, auto-suffix (e.g. ` (Copy)`), or explicit “fork master” confirmation.
+- **Identical short text across different glossary sets** may be valid (controlled duplication per standard/version context; see §10 above).
+- Before creating a glossary row, if `findExactGlossaryByFiveTuple` matches, direct the user to **edit existing** / **SAVE RECORD**, not create.
+- Reuse deterministic text match helpers (e.g. `normalizeForDeterministicMatch`) for same-set collision checks, aligned with **Prepare Target Set Records** reuse behavior.
+- Optional future: Data Entry label disambiguation (set name or truncated id) when multiple masters share short text—out of scope for Phase 2 modal.
+
+### Citation and snapshot behavior (related records)
+
+When branching from a source glossary row or selection:
+
+| Field | Default | Notes |
+|-------|---------|--------|
+| Finding/rec long text (staged) | Copy from source masters | User edits in Glossary Builder before **SAVE RECORD**. |
+| Glossary citations (`fldStandards`) | Copy from **source glossary row** when branching from that row; else union of source masters | Glossary snapshot is authoritative for Data Entry inheritance. |
+| Unit/cost overrides on glossary | Copy from source glossary when present | Matches template hydration behavior. |
+| Measurement metadata | Copy from source **finding** | Data Entry aligns measurement fields to selected finding. |
+| Images (`fldImages`) | **Opt-in** (unchecked by default) | Do not silently share image sets across related rows. |
+
+### Implementation phases and guardrails
+
+**Phase 1 (done):** Remove **COPY & EDIT** UI; guard `saveNewGlossaryRecord` against full-path silent duplicate masters; preserve greenfield **ADD FINDING/REC**.
+
+**Phase 2A:** Modal scaffolding only—relationship type selection, copy defaults UI, **no writes** or a single read-only preview path.
+
+**Phase 2B:** Implement scenario **A** (same finding + new recommendation) end-to-end through one orchestrated save path.
+
+**Phase 2C:** Implement scenario **B** (new finding + same recommendation).
+
+**Phase 2D:** Implement scenario **C** (new finding + new recommendation) with short-label collision checks.
+
+Scenario **D** remains on existing template + **Prepare Target Set Records** + **SAVE RECORD**; the Phase 2 modal may link to that flow rather than reimplementing it.
+
+**Phase 3:** Duplicate reporting/cleanup (admin): list masters with same normalized short text + same `fldItem` + same `fldGlossarySetId` but different ids; no automatic deletion without review.
+
+**Guardrails for all implementation work:**
+
+- No silent duplicate master creation.
+- No broad Glossary Builder rewrite; extend existing handlers where possible.
+- Prefer **one scenario per implementation branch/PR** (2B → 2C → 2D).
+- Do not change **SAVE RECORD** five-tuple upsert semantics without explicit product approval.
+- Do not change Data Entry or Report Preview as part of Phase 2 modal work unless separately specified (e.g. label disambiguation).
+
+---
+
 ## 11. Immediate Phase 1 Glossary Set Implementation
 
 ✅ DECIDED: Phase 1 adds Glossary Set metadata directly to glossary records.
