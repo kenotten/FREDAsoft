@@ -499,12 +499,13 @@ export default function App() {
     clients: rawClients.filter(c => c.fldIsDeleted),
     facilities: rawFacilities.filter(f => f.fldIsDeleted),
     projects: rawProjects.filter(p => p.fldIsDeleted),
-    projectData: rawProjectData.filter(d => d.fldIsDeleted)
+    projectData: rawProjectData.filter(d => d.fldIsDeleted || d.fldDeleted)
   }), [rawClients, rawFacilities, rawProjects, rawProjectData]);
 
   const onRestoreClient = (id: string) => firestoreService.restore('clients', id);
   const onRestoreFacility = (id: string) => firestoreService.restore('facilities', id);
   const onRestoreProject = (id: string) => firestoreService.restore('projects', id);
+  const onRestoreProjectData = (id: string) => firestoreService.restore('projectData', id);
 
   const onCleanupOrphans = async () => {
     try {
@@ -643,14 +644,16 @@ export default function App() {
     const title = options?.title ?? 'Delete Record';
     const message =
       options?.message ??
-      'Are you sure you want to delete this inspection record? This action cannot be undone.';
+      'This record will be moved to deleted records and hidden from active views. You can restore it later from the dashboard Trash Bin (admin).';
     setDeleteConfirmation({
       title,
       message,
       onConfirm: async () => {
         try {
-          await firestoreService.data.delete(id);
-          toast.success('Record deleted');
+          const deletedBy =
+            auth.currentUser?.email || auth.currentUser?.uid || undefined;
+          await firestoreService.softDelete('projectData', id, deletedBy);
+          toast.success('Record moved to deleted');
           if (afterDelete) afterDelete();
         } catch (error) {
           toast.error('Failed to delete record');
@@ -762,8 +765,17 @@ export default function App() {
     onRestoreClient,
     onRestoreFacility,
     onRestoreProject,
+    onRestoreProjectData,
     onCleanupOrphans,
-    deletedRecords
+    deletedRecords,
+    trashInspectionLookup: {
+      clients: rawClients,
+      facilities: rawFacilities,
+      projects: rawProjects,
+      locations: rawLocations,
+      categories: rawCategories,
+      items: rawItems
+    }
   };
 
   const projectProps = {

@@ -6,6 +6,7 @@ import {
   Search, 
   ShieldCheck, 
   ClipboardList, 
+  Book,
   Table, 
   FileText, 
   Settings, 
@@ -20,6 +21,11 @@ import { cn } from '../../lib/utils';
 import { Button, Select, Card } from '../ui/core';
 import { MainContent } from './MainContent';
 import { ReportPreview } from '../ReportPreview';
+import {
+  ReportSectionSelectionDialog,
+  type ReportSectionSelection
+} from '../ReportSectionSelectionDialog';
+import { getReportSectionAvailability } from '../../lib/reportPreviewShared';
 import { 
   ClientModal, 
   FacilityModal, 
@@ -120,8 +126,18 @@ export interface EntityManagementProps {
   onRestoreClient: (id: string) => void;
   onRestoreFacility: (id: string) => void;
   onRestoreProject: (id: string) => void;
+  onRestoreProjectData: (id: string) => void;
   onCleanupOrphans: () => Promise<void>;
   deletedRecords: any;
+  /** Raw portfolio + library rows for resolving deleted inspection record labels in Trash Bin */
+  trashInspectionLookup: {
+    clients: any[];
+    facilities: any[];
+    projects: any[];
+    locations: any[];
+    categories: any[];
+    items: any[];
+  };
 }
 
 export interface ProjectContextProps {
@@ -209,6 +225,35 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
   const [isDataEntryDirty, setIsDataEntryDirty] = React.useState(false);
   const [pendingDataAction, setPendingDataAction] = React.useState<'logout' | null>(null);
   const libRef = React.useRef<LibraryManagerHandle>(null);
+  const [showReportSectionDialog, setShowReportSectionDialog] = React.useState(false);
+  const [reportSectionSelection, setReportSectionSelection] = React.useState<ReportSectionSelection | null>(null);
+
+  const reportSectionAvailability = React.useMemo(() => {
+    if (!selectedProject || !selectedFacility) {
+      return { hasReferencedStandards: false, hasPhotoAddendum: false };
+    }
+    return getReportSectionAvailability(
+      projectData,
+      selectedProject,
+      selectedFacility,
+      glossary,
+      standards,
+      categories,
+      items,
+      locations,
+      findings
+    );
+  }, [
+    projectData,
+    selectedProject,
+    selectedFacility,
+    glossary,
+    standards,
+    categories,
+    items,
+    locations,
+    findings
+  ]);
 
   const handleGuardedTabSwitch = (newTab: string) => {
     if (activeTab === 'library_manager' && isLibraryDirty && newTab !== activeTab) {
@@ -335,25 +380,34 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
         </aside>
 
         <main className="flex-1 h-screen overflow-hidden flex flex-col relative">
-          <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-6">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsTrayOpen(true)}>
-                <span className="text-zinc-900 font-bold">
+          <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-6 gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex min-w-0 cursor-pointer items-center gap-2" onClick={() => setIsTrayOpen(true)}>
+                <span className="truncate font-bold text-zinc-900">
                   {(selectedClient?.fldClientName || 'Select Client')}
                   {' / '}
                   {(selectedFacility?.fldFacName || 'Select Facility')}
                   {' / '}
                   {(selectedProject?.fldProjName || 'Select Project')}
                 </span>
-                <ChevronDown size={14} className="text-zinc-400" />
+                <ChevronDown size={14} className="shrink-0 text-zinc-400" />
               </div>
+              {activeTab === 'data' && (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-900 shadow-sm"
+                  title="Project Data Entry"
+                >
+                  <Book size={12} className="shrink-0 text-amber-600" aria-hidden />
+                  Data Entry
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-4">
               {selectedProject && (
                 <Button 
                   variant="secondary" 
                   size="sm" 
-                  onClick={() => setShowReportPreview(true)}
+                  onClick={() => setShowReportSectionDialog(true)}
                   className="bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100"
                 >
                   <FileText size={14} className="mr-2" /> View Report
@@ -419,6 +473,18 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
         </div>
       )}
 
+      <ReportSectionSelectionDialog
+        isOpen={showReportSectionDialog}
+        hasReferencedStandards={reportSectionAvailability.hasReferencedStandards}
+        hasPhotoAddendum={reportSectionAvailability.hasPhotoAddendum}
+        onClose={() => setShowReportSectionDialog(false)}
+        onConfirm={(sel) => {
+          setReportSectionSelection(sel);
+          setShowReportSectionDialog(false);
+          setShowReportPreview(true);
+        }}
+      />
+
       {showReportPreview && selectedProject && selectedClient && selectedFacility && selectedInspector && (
         <ReportPreview 
           project={selectedProject}
@@ -433,7 +499,11 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
           locations={locations}
           recommendations={recommendations as any}
           findings={findings}
-          onClose={() => setShowReportPreview(false)}
+          sectionSelection={reportSectionSelection ?? undefined}
+          onClose={() => {
+            setShowReportPreview(false);
+            setReportSectionSelection(null);
+          }}
           isSidebarOpen={isSidebarOpen}
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />

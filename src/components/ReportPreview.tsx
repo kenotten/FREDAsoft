@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useLayoutEffect, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
 import metadata from '../../metadata.json';
 // @ts-ignore
 import ocgLogoNew from '../Assets/ocglogonew.jpg';
@@ -17,9 +17,22 @@ import {
   Recommendation
 } from '../types';
 import { cn, formatMeasurement, formatCurrency } from '../lib/utils';
+import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { Printer, Download, X, ChevronLeft, ChevronRight, FileText, Menu, ExternalLink, FlaskConical, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
+import {
+  buildReferencedAddendumEntries,
+  filterReportProjectForPreview,
+  getRecordStandardIds,
+  getReportRecordSortKeys,
+  compareReportRecordSortKeysLocationFirst,
+  standardTypeKey,
+  type AddendumEntry,
+  type ReportRecordSortOrder,
+  type StandardSnapshot
+} from '../lib/reportPreviewShared';
+import type { ReportSectionSelection } from './ReportSectionSelectionDialog';
 
 interface ReportPreviewProps {
   project: Project;
@@ -37,6 +50,8 @@ interface ReportPreviewProps {
   onClose: () => void;
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
+  /** When omitted, all sections render (legacy full report). */
+  sectionSelection?: ReportSectionSelection;
 }
 
 // Helper functions for pagination
@@ -57,62 +72,6 @@ const toRoman = (num: number, uppercase = false) => {
   }
   return uppercase ? roman : roman.toLowerCase();
 };
-
-interface StandardSnapshot {
-  fldStandardType: string;
-  fldStandardVersion: string;
-  fldCitationNum: string;
-  fldCitationName: string;
-  fldContentText: string;
-  fldStandardId: string;
-  fldImageUrl?: string;
-}
-
-type AddendumEntry =
-  | { kind: 'header'; standardType: string; key: string }
-  | { kind: 'standard'; standard: StandardSnapshot };
-
-function normalizeStandardIds(raw: unknown): string[] {
-  if (raw === undefined || raw === null) return [];
-  const arr = Array.isArray(raw) ? raw : typeof raw === 'string' && raw ? [raw] : [];
-  return arr.map(id => String(id).trim()).filter(Boolean);
-}
-
-/**
- * Final record-level citation IDs for reports (no union with glossary).
- * - Array `record.fldStandards` (including []) is authoritative.
- * - Firestore map/object on the record is treated as an explicit snapshot.
- * - Legacy fallback: when fldStandards is missing/null/undefined and the row is glossary-linked
- *   (non-empty fldData + matching glossary row), use glos.fldStandards.
- * - Custom / non-linked rows (empty fldData): never fall back to glossary.
- */
-function getRecordStandardIds(record: any, glos: Glossary | undefined): string[] {
-  const raw = record?.fldStandards;
-  if (Array.isArray(raw)) {
-    return normalizeStandardIds(raw);
-  }
-  if (raw !== undefined && raw !== null && typeof raw === 'object') {
-    return Object.values(raw as Record<string, unknown>)
-      .filter(Boolean)
-      .map(v => String(v).trim())
-      .filter(Boolean);
-  }
-  const fldData = (record?.fldData || '').trim();
-  if (fldData !== '' && glos) {
-    return normalizeStandardIds(glos.fldStandards);
-  }
-  return [];
-}
-
-function standardTypeKey(std: { fldStandardType?: string }): string {
-  const t = std.fldStandardType;
-  if (t === undefined || t === null || String(t).trim() === '') return 'Unknown';
-  return String(t).trim();
-}
-
-function compareCitationNum(a: string, b: string): number {
-  return (a || '').trim().localeCompare((b || '').trim(), undefined, { numeric: true });
-}
 
 function formatGroupedStandardCitations(ids: string[], standards: MasterStandard[]): string {
   const seen = new Set<string>();
@@ -135,93 +94,513 @@ function formatGroupedStandardCitations(ids: string[], standards: MasterStandard
   const parts: string[] = [];
   for (const t of types) {
     const arr = byType.get(t)!;
-    arr.sort((a, b) => compareCitationNum(a.citation_num || '', b.citation_num || ''));
+    arr.sort((a, b) => compareStandardCitations(a, b));
     for (const s of arr) {
-      parts.push(`${t} ${(s.citation_num || '').trim()}`);
+      const label =
+        formatStandardCitationLabel(s) ?? `${t} ${(s.citation_num || '').trim()}`.trim();
+      if (label) parts.push(label);
     }
   }
   return parts.join('; ');
 }
 
-function buildReferencedAddendumEntries(
-  filteredData: ProjectData[],
-  glossary: Glossary[],
-  standards: MasterStandard[]
-): AddendumEntry[] {
-  const standardsMap = new Map<string, StandardSnapshot>();
-  filteredData.forEach(d => {
-    const cleanKey = (d.fldData || "").trim().toLowerCase();
-    const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
-    const ids = getRecordStandardIds(d, glos);
-    ids.forEach(id => {
-      if (standardsMap.has(id)) return;
-      const std = standards.find(s => s.id === id);
-      if (!std) return;
-      const tKey = standardTypeKey(std);
-      standardsMap.set(id, {
-        fldStandardType: tKey,
-        fldStandardVersion: std.fldStandardVersion ?? '',
-        fldCitationNum: std.citation_num,
-        fldCitationName: std.citation_name,
-        fldContentText: std.content_text,
-        fldStandardId: id,
-        fldImageUrl: std.image_url
-      });
-    });
-  });
-  const snapshots = Array.from(standardsMap.values());
-  const byType = new Map<string, StandardSnapshot[]>();
-  for (const snap of snapshots) {
-    const t = standardTypeKey(snap);
-    if (!byType.has(t)) byType.set(t, []);
-    byType.get(t)!.push({ ...snap, fldStandardType: t });
+/** Referenced Standards addendum: vertical budget for row stacking (content area inside PageContainer). */
+const ADDENDUM_SUBSEQUENT_PAGE_BODY_PX = 660;
+const ADDENDUM_FIRST_PAGE_BODY_BASE_PX = 595;
+/** Buffer after subtracting measured first-page section title. */
+const ADDENDUM_FIRST_PAGE_LAYOUT_FUDGE_PX = 8;
+/** Slack per entry when summing measured heights (borders / subpixel). */
+const ADDENDUM_ROW_PAGINATION_SLACK_PX = 18;
+/** Tighter slack for image rows (measured box is more predictable). */
+const ADDENDUM_IMAGE_ROW_SLACK_PX = 12;
+/** Fallback body padding when `__img` height is missing (image + chrome, not continuation). */
+const ADDENDUM_IMAGE_DEFAULT_EXTRA_PX = 36;
+/** Fallback if section title probe has not laid out yet. */
+const ADDENDUM_SECTION_TITLE_FALLBACK_PX = 104;
+/** Standards figure: max height within 180–220px guidance; width capped for predictable pagination. */
+const ADDENDUM_STANDARD_IMAGE_MAX_HEIGHT_PX = 200;
+
+/** Pagination/measurement slice: image-bearing standards split into text + image units. */
+type AddendumPaginateUnit =
+  | { kind: 'header'; key: string; standardType: string }
+  | { kind: 'standardText'; standard: StandardSnapshot }
+  | { kind: 'standardImage'; standard: StandardSnapshot };
+
+function expandAddendumForPagination(entries: AddendumEntry[]): AddendumPaginateUnit[] {
+  const out: AddendumPaginateUnit[] = [];
+  for (const e of entries) {
+    if (e.kind === 'header') {
+      out.push({ kind: 'header', key: e.key, standardType: e.standardType });
+      continue;
+    }
+    const s = e.standard;
+    const img = s.fldImageUrl && String(s.fldImageUrl).trim();
+    out.push({ kind: 'standardText', standard: s });
+    if (img) out.push({ kind: 'standardImage', standard: s });
   }
-  const types = Array.from(byType.keys()).sort((a, b) => a.localeCompare(b));
-  const entries: AddendumEntry[] = [];
-  for (const t of types) {
-    entries.push({ kind: 'header', standardType: t, key: `__addendum_header__${t}` });
-    const arr = byType.get(t)!;
-    arr.sort((a, b) => compareCitationNum(a.fldCitationNum || '', b.fldCitationNum || ''));
-    for (const s of arr) entries.push({ kind: 'standard', standard: s });
-  }
-  return entries;
+  return out;
 }
 
-function AddendumRows({ entries }: { entries: AddendumEntry[] }) {
+function addendumPaginateMeasureId(unit: AddendumPaginateUnit): string {
+  if (unit.kind === 'header') return unit.key;
+  const id = unit.standard.fldStandardId;
+  const hasImg = unit.standard.fldImageUrl && String(unit.standard.fldImageUrl).trim();
+  if (unit.kind === 'standardText') return hasImg ? `${id}::__text` : id;
+  return `${id}::__img`;
+}
+
+function addendumSnapshotCiteLabels(standard: StandardSnapshot): { citeLabel: string; citeTitle: string } {
+  const prefix = standard.fldStandardType || 'Unknown';
+  const citeLabel =
+    formatStandardCitationLabel({
+      id: standard.fldStandardId,
+      fldStandardType: standard.fldStandardType,
+      citation_num: standard.fldCitationNum,
+      relation_type: standard.fldRelationType
+    }) ?? `${prefix} ${standard.fldCitationNum}`.trim();
+  const citeTitle = `${citeLabel}${standard.fldCitationName ? ` ${standard.fldCitationName}` : ''}`.trim();
+  return { citeLabel, citeTitle };
+}
+
+function addendumIsTextImagePair(
+  u: AddendumPaginateUnit | undefined,
+  v: AddendumPaginateUnit | undefined
+): boolean {
+  if (!u || !v) return false;
+  return (
+    u.kind === 'standardText' &&
+    Boolean(u.standard.fldImageUrl && String(u.standard.fldImageUrl).trim()) &&
+    v.kind === 'standardImage' &&
+    v.standard.fldStandardId === u.standard.fldStandardId
+  );
+}
+
+function addendumImageIsOrphanOnPage(page: AddendumPaginateUnit[], idx: number): boolean {
+  const unit = page[idx];
+  if (!unit || unit.kind !== 'standardImage') return false;
+  if (idx === 0) return true;
+  const prev = page[idx - 1];
+  return !(
+    prev.kind === 'standardText' &&
+    prev.standard.fldStandardId === unit.standard.fldStandardId
+  );
+}
+
+function AddendumPaginateRow({
+  unit,
+  forMeasurement,
+  showImageContinuation
+}: {
+  unit: AddendumPaginateUnit;
+  forMeasurement?: boolean;
+  /** When the figure starts a page without its citation/text block above it. */
+  showImageContinuation?: boolean;
+}) {
+  const wrapMeasured = (measureId: string, className: string, children: React.ReactNode) =>
+    forMeasurement ? (
+      <div data-measure-type="addendum" data-id={measureId} className={className}>
+        {children}
+      </div>
+    ) : (
+      <div className={className}>{children}</div>
+    );
+
+  if (unit.kind === 'header') {
+    return wrapMeasured(
+      unit.key,
+      'mb-4',
+      <h2 className="text-lg font-black text-zinc-900 border-b-2 border-zinc-900 pb-2 tracking-tight">
+        {unit.standardType}
+      </h2>
+    );
+  }
+
+  if (unit.kind === 'standardText') {
+    const s = unit.standard;
+    const { citeLabel, citeTitle } = addendumSnapshotCiteLabels(s);
+    const hasImg = s.fldImageUrl && String(s.fldImageUrl).trim();
+    const measureId = hasImg ? `${s.fldStandardId}::__text` : s.fldStandardId;
+    return wrapMeasured(
+      measureId,
+      hasImg ? 'mb-2' : 'mb-6',
+      <div className="space-y-2 break-inside-avoid">
+        <h3 className="font-bold text-zinc-900 text-sm" title={citeTitle}>
+          {citeLabel}
+          {s.fldCitationName ? ` ${s.fldCitationName}` : ''}
+        </h3>
+        <p className="text-xs text-zinc-700 leading-relaxed">{s.fldContentText}</p>
+      </div>
+    );
+  }
+
+  const s = unit.standard;
+  const { citeLabel, citeTitle } = addendumSnapshotCiteLabels(s);
+  const url = s.fldImageUrl && String(s.fldImageUrl).trim();
+  if (!url) return null;
+  const measureId = `${s.fldStandardId}::__img`;
+  const rel = String(s.fldRelationType || '').trim();
+  const contLine =
+    rel.toLowerCase() === 'figure'
+      ? `${citeLabel}${s.fldCitationName ? ` ${s.fldCitationName}` : ''} — Figure`
+      : `${citeLabel}${s.fldCitationName ? ` ${s.fldCitationName}` : ''} (continued figure)`;
+  return wrapMeasured(
+    measureId,
+    'mb-6',
+    <>
+      {showImageContinuation ? (
+        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-tight text-zinc-800 leading-tight">
+          {contLine}
+        </p>
+      ) : null}
+      <div className="flex justify-center">
+        <div className="w-full max-w-2xl mx-auto">
+          <img
+            src={url}
+            alt={citeTitle}
+            className="mx-auto block max-w-full border border-zinc-200 rounded-lg object-contain"
+            style={{ maxHeight: ADDENDUM_STANDARD_IMAGE_MAX_HEIGHT_PX }}
+            referrerPolicy="no-referrer"
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function AddendumPaginatedContent({
+  units,
+  forMeasurement,
+  imageContinuationFlags
+}: {
+  units: AddendumPaginateUnit[];
+  forMeasurement?: boolean;
+  imageContinuationFlags?: boolean[];
+}) {
   return (
     <>
-      {entries.map(entry => {
-        if (entry.kind === 'header') {
-          return (
-            <div key={entry.key} data-measure-type="addendum" data-id={entry.key} className="mb-4">
-              <h2 className="text-lg font-black text-zinc-900 border-b-2 border-zinc-900 pb-2 tracking-tight">
-                {entry.standardType}
-              </h2>
-            </div>
-          );
-        }
-        const standard = entry.standard;
-        const prefix = standard.fldStandardType || 'Unknown';
-        return (
-          <div key={standard.fldStandardId} data-measure-type="addendum" data-id={standard.fldStandardId} className="mb-6 space-y-2 break-inside-avoid">
-            <h3 className="font-bold text-zinc-900 text-sm">
-              {prefix} {standard.fldCitationNum} {standard.fldCitationName}
-            </h3>
-            <p className="text-xs text-zinc-700 leading-relaxed">{standard.fldContentText}</p>
-            {standard.fldImageUrl && (
-              <div className="my-2">
-                <img
-                  src={standard.fldImageUrl}
-                  alt={`${prefix} ${standard.fldCitationNum}`}
-                  className="max-h-64 object-contain border border-zinc-200 rounded-lg"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {units.map((unit, idx) => (
+        <AddendumPaginateRow
+          key={`${addendumPaginateMeasureId(unit)}-${idx}`}
+          unit={unit}
+          forMeasurement={forMeasurement}
+          showImageContinuation={Boolean(imageContinuationFlags?.[idx])}
+        />
+      ))}
     </>
+  );
+}
+
+/** Supplemental project-data photos (fldImages index >= 2); chunked for fixed-height PageContainer pages. */
+const PHOTO_ADDENDUM_IMAGES_PER_PAGE = 8;
+
+/** Financial pagination: tbody heights are measured; each printed page adds thead (py-2 + text-[10px] row). */
+const FIN_PAGINATION_THEAD_OVERHEAD_PX = 32;
+/** Small slack per row for divide-y / subpixel layout — keep low so budgets stay close to measured sums. */
+const FIN_PAGINATION_ROW_GAP_PX = 2;
+/** Reserve space on the last financial page(s) for Grand Total tfoot (py-4 row + border). */
+const FIN_PAGINATION_GRAND_TOTAL_RESERVE_PX = 42;
+
+/** Mirrors visible Financial Summary tbody rows so measured heights match printed rows (both sort modes). */
+function FinancialMeasurementBodyRow({
+  row,
+  recordSortOrder
+}: {
+  row: { type: string; content?: unknown; groupHeading?: string; subtotal?: number };
+  recordSortOrder: ReportRecordSortOrder;
+}) {
+  if (row.type === 'header') {
+    return (
+      <tr data-measure-type="fin" className="bg-zinc-100 break-inside-avoid">
+        <td colSpan={5} className="py-2 px-3 text-xs font-black text-zinc-900 uppercase tracking-tight">
+          {String(row.content ?? '')}
+        </td>
+      </tr>
+    );
+  }
+  if (row.type === 'record') {
+    const rec = row.content as {
+      categoryName?: string;
+      itemName?: string;
+      locationName?: string;
+      fldQTY?: number;
+      displayUnitType?: string;
+      displayUnitCost?: number;
+      totalCost?: number;
+    };
+    if (recordSortOrder === 'location_category_item') {
+      return (
+        <tr data-measure-type="fin" className="text-xs break-inside-avoid">
+          <td className="py-2 px-3 text-zinc-700">{rec.categoryName ?? ''}</td>
+          <td className="py-2 px-3 text-zinc-700">{rec.itemName ?? ''}</td>
+          <td className="py-2 px-3 text-right text-zinc-700">
+            {rec.fldQTY ?? 0} {rec.displayUnitType ?? ''}
+          </td>
+          <td className="py-2 px-3 text-right text-zinc-700">{formatCurrency(rec.displayUnitCost ?? 0)}</td>
+          <td className="py-2 px-3 text-right font-bold text-zinc-900">{formatCurrency(rec.totalCost ?? 0)}</td>
+        </tr>
+      );
+    }
+    return (
+      <tr data-measure-type="fin" className="text-xs break-inside-avoid">
+        <td className="py-2 px-3 text-zinc-700">{rec.itemName ?? ''}</td>
+        <td className="py-2 px-3 text-zinc-500 italic">{rec.locationName ?? ''}</td>
+        <td className="py-2 px-3 text-right text-zinc-700">
+          {rec.fldQTY ?? 0} {rec.displayUnitType ?? ''}
+        </td>
+        <td className="py-2 px-3 text-right text-zinc-700">{formatCurrency(rec.displayUnitCost ?? 0)}</td>
+        <td className="py-2 px-3 text-right font-bold text-zinc-900">{formatCurrency(rec.totalCost ?? 0)}</td>
+      </tr>
+    );
+  }
+  if (row.type === 'subtotal') {
+    return (
+      <tr data-measure-type="fin" className="bg-zinc-50 break-inside-avoid">
+        <td colSpan={4} className="py-2 px-3 text-right text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+          Subtotal {row.groupHeading ?? ''}:
+        </td>
+        <td className="py-2 px-3 text-right font-black text-zinc-900 border-t border-zinc-200">
+          {formatCurrency(row.subtotal ?? 0)}
+        </td>
+      </tr>
+    );
+  }
+  return null;
+}
+
+/** Padding below group header text (inside measured box so `getBoundingClientRect` includes it). */
+const DOC_HEADER_SPACE_AFTER_PX = 14;
+/** Margin below each DocumentationCard wrapper (outside border box; added in pagination after measured card height). */
+const DOC_CARD_GAP_PX = 22;
+
+type DocumentationPageItem =
+  | { kind: 'groupHeader'; groupKey: string; label: string; continued: boolean }
+  | { kind: 'record'; record: ProjectData };
+
+function resolveDocumentationGroup(
+  record: ProjectData,
+  recordSortOrder: ReportRecordSortOrder,
+  glossary: Glossary[],
+  categories: Category[],
+  locations: Location[]
+): { groupKey: string; label: string } {
+  const cleanKey = (record.fldData || '').trim().toLowerCase();
+  const glos = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
+  const isCustom = record?.fldRecordSource === 'custom' && !glos;
+  const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
+  const cat = categories.find((c) => c.fldCategoryID === catId);
+
+  if (recordSortOrder === 'location_category_item') {
+    const loc = locations.find((l) => l.fldLocID === record.fldLocation);
+    const id = (loc?.fldLocID || record.fldLocation || '__none__').trim();
+    const name = (loc?.fldLocName || '').trim();
+    const label = name !== '' ? name : 'Unknown location';
+    return { groupKey: `loc:${id}`, label };
+  }
+
+  const label = (cat?.fldCategoryName || '').trim() !== '' ? cat!.fldCategoryName!.trim() : 'Uncategorized';
+  return { groupKey: `cat:${catId || '__none__'}`, label };
+}
+
+function buildDocumentationFlatStream(
+  filteredData: ProjectData[],
+  recordSortOrder: ReportRecordSortOrder,
+  glossary: Glossary[],
+  categories: Category[],
+  locations: Location[]
+): DocumentationPageItem[] {
+  const order = recordSortOrder ?? 'category_location_item';
+  const out: DocumentationPageItem[] = [];
+  let prevKey: string | null = null;
+  for (const record of filteredData) {
+    const { groupKey, label } = resolveDocumentationGroup(record, order, glossary, categories, locations);
+    if (groupKey !== prevKey) {
+      out.push({ kind: 'groupHeader', groupKey, label, continued: false });
+      prevKey = groupKey;
+    }
+    out.push({ kind: 'record', record });
+  }
+  return out;
+}
+
+function getLastRecordFromDocumentationPage(page: DocumentationPageItem[]): ProjectData | null {
+  for (let j = page.length - 1; j >= 0; j--) {
+    const it = page[j];
+    if (it.kind === 'record') return it.record;
+  }
+  return null;
+}
+
+function DocumentationGroupHeader({ label, continued }: { label: string; continued: boolean }) {
+  const display = continued ? `${label} (cont.)` : label;
+  return (
+    <div
+      className="shrink-0 border-b border-zinc-200 text-base font-bold leading-tight text-zinc-900"
+      style={{ paddingBottom: DOC_HEADER_SPACE_AFTER_PX }}
+      title={display}
+    >
+      <span className="block truncate">{display}</span>
+    </div>
+  );
+}
+
+interface PhotoAddendumRow {
+  url: string;
+  recordId: string;
+  imageIndex: number;
+  locationLabel: string;
+  categoryLabel: string;
+  itemLabel: string;
+  recordSortIndex: number;
+}
+
+function resolveRecordLocationLabelForPhotoAddendum(record: ProjectData, locations: Location[]): string {
+  const loc = locations.find(l => l.fldLocID === record.fldLocation);
+  const name = loc?.fldLocName?.trim();
+  return name || 'Unknown location';
+}
+
+/** Same glossary/custom → category/item resolution as DocumentationCard. */
+function resolveRecordCategoryItemLabelsForPhotoAddendum(
+  record: ProjectData,
+  glossary: Glossary[],
+  categories: Category[],
+  items: Item[]
+): { categoryLabel: string; itemLabel: string } {
+  const cleanKey = (record.fldData || '').trim().toLowerCase();
+  const glos = glossary.find(g => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
+  const isCustom = record?.fldRecordSource === 'custom' && !glos;
+  const catId = glos?.fldCat || (isCustom ? (record?.fldPDataCategoryID || '') : '');
+  const itemId = glos?.fldItem || (isCustom ? (record?.fldPDataItemID || '') : '');
+  const cat = categories.find(c => c.fldCategoryID === catId);
+  const item = items.find(i => i.fldItemID === itemId);
+  const categoryName = cat?.fldCategoryName?.trim();
+  const itemName = item?.fldItemName?.trim();
+  return {
+    categoryLabel: categoryName || '—',
+    itemLabel: itemName || '—',
+  };
+}
+
+function buildSupplementalPhotoRows(
+  filteredData: ProjectData[],
+  locations: Location[],
+  glossary: Glossary[],
+  categories: Category[],
+  items: Item[]
+): PhotoAddendumRow[] {
+  const rows: PhotoAddendumRow[] = [];
+  filteredData.forEach((record, recordSortIndex) => {
+    const imgs = record.fldImages;
+    if (!Array.isArray(imgs) || imgs.length <= 2) return;
+    const locationLabel = resolveRecordLocationLabelForPhotoAddendum(record, locations);
+    const { categoryLabel, itemLabel } = resolveRecordCategoryItemLabelsForPhotoAddendum(
+      record,
+      glossary,
+      categories,
+      items
+    );
+    for (let i = 2; i < imgs.length; i++) {
+      const url = imgs[i];
+      if (url === undefined || url === null || String(url).trim() === '') continue;
+      rows.push({
+        url: String(url).trim(),
+        recordId: record.fldPDataID,
+        imageIndex: i,
+        locationLabel,
+        categoryLabel,
+        itemLabel,
+        recordSortIndex,
+      });
+    }
+  });
+  rows.sort((a, b) => {
+    const loc = a.locationLabel.localeCompare(b.locationLabel, undefined, { sensitivity: 'base' });
+    if (loc !== 0) return loc;
+    if (a.recordSortIndex !== b.recordSortIndex) return a.recordSortIndex - b.recordSortIndex;
+    return a.imageIndex - b.imageIndex;
+  });
+  return rows;
+}
+
+function chunkPhotoAddendumRows(rows: PhotoAddendumRow[]): PhotoAddendumRow[][] {
+  if (rows.length === 0) return [];
+  const chunks: PhotoAddendumRow[][] = [];
+  for (let i = 0; i < rows.length; i += PHOTO_ADDENDUM_IMAGES_PER_PAGE) {
+    chunks.push(rows.slice(i, i + PHOTO_ADDENDUM_IMAGES_PER_PAGE));
+  }
+  return chunks;
+}
+
+function PhotoAddendumCell({ row }: { row: PhotoAddendumRow }) {
+  const [broken, setBroken] = useState(false);
+  const caption = `${row.categoryLabel} | ${row.itemLabel}`;
+  return (
+    <div className="flex min-w-0 flex-col break-inside-avoid">
+      <div className="aspect-square w-full max-h-[132px] overflow-hidden rounded border border-zinc-200 bg-white">
+        {broken ? (
+          <div className="flex h-full min-h-[100px] w-full items-center justify-center bg-zinc-100 px-1">
+            <span className="text-center text-[9px] leading-tight text-zinc-500">Image unavailable</span>
+          </div>
+        ) : (
+          <img
+            src={row.url}
+            alt=""
+            className="h-full w-full object-cover"
+            referrerPolicy="no-referrer"
+            onError={() => setBroken(true)}
+          />
+        )}
+      </div>
+      <p
+        className="mt-0.5 w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-0.5 text-center text-[10px] font-medium leading-snug text-zinc-700"
+        title={caption}
+      >
+        {caption}
+      </p>
+    </div>
+  );
+}
+
+function PhotoAddendumPageBody({
+  rows,
+  showSectionTitle,
+}: {
+  rows: PhotoAddendumRow[];
+  showSectionTitle: boolean;
+}) {
+  const sections: { label: string; items: PhotoAddendumRow[] }[] = [];
+  for (const row of rows) {
+    const last = sections[sections.length - 1];
+    if (last && last.label === row.locationLabel) {
+      last.items.push(row);
+    } else {
+      sections.push({ label: row.locationLabel, items: [row] });
+    }
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+      {showSectionTitle ? (
+        <h2 className="shrink-0 border-b-2 border-zinc-900 pb-2 text-xl font-bold text-zinc-900">
+          <span className="uppercase tracking-widest">Photo Addendum</span>
+          <span className="font-bold normal-case tracking-normal"> (extra photos)</span>
+        </h2>
+      ) : null}
+      <div className="min-h-0 flex-1 space-y-5 overflow-hidden">
+        {sections.map((sec, si) => (
+          <div key={`${sec.label}-${si}`} className="space-y-1.5 break-inside-avoid">
+            <h3 className="border-b border-zinc-200 pb-0.5 text-xs font-black uppercase tracking-wide text-zinc-600">
+              {sec.label}
+            </h3>
+            <div className="grid grid-cols-4 gap-x-2 gap-y-2">
+              {sec.items.map((row) => (
+                <PhotoAddendumCell key={`${row.recordId}-${row.imageIndex}`} row={row} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -240,7 +619,8 @@ export function ReportPreview({
   findings,
   onClose,
   isSidebarOpen,
-  toggleSidebar
+  toggleSidebar,
+  sectionSelection
 }: ReportPreviewProps) {
   
   const reportRef = useRef<HTMLDivElement>(null);
@@ -248,122 +628,173 @@ export function ReportPreview({
   
   // State for measured heights
   const [measuredDocHeights, setMeasuredDocHeights] = useState<Record<string, number>>({});
+  /** Measured height of `DocumentationGroupHeader` probe in measurementRef (single-line). */
+  const [measuredDocHeaderHeight, setMeasuredDocHeaderHeight] = useState(32);
   const [measuredFinHeights, setMeasuredFinHeights] = useState<number[]>([]);
   const [measuredAddendumHeights, setMeasuredAddendumHeights] = useState<Record<string, number>>({});
+  /** Height of first-page “Addendum: Referenced Standards” block (measured in measurementRef). */
+  const [measuredAddendumSectionTitleHeight, setMeasuredAddendumSectionTitleHeight] = useState(
+    ADDENDUM_SECTION_TITLE_FALLBACK_PX
+  );
+  /** Measured height of compact “continued figure” line above orphan addendum images. */
+  const [measuredAddendumImageContinuationLinePx, setMeasuredAddendumImageContinuationLinePx] =
+    useState(26);
   const [isMeasuring, setIsMeasuring] = useState(true);
 
-  // Filter and sort project data for this specific project
-  const filteredData = useMemo(() => {
-  const rawData = projectData.filter(d =>
-  String(d.fldPDataProject || '').trim().toLowerCase() === String(project.fldProjID || '').trim().toLowerCase() &&
-  String(d.fldFacility || '').trim().toLowerCase() === String(facility.fldFacID || facility.id || '').trim().toLowerCase()
-);
-    
-    // Ensure uniqueness by fldPDataID
-    const uniqueMap = new Map();
-    rawData.forEach(d => uniqueMap.set(d.fldPDataID, d));
-    const data = Array.from(uniqueMap.values());
+  const sectionSel = useMemo<ReportSectionSelection>(
+    () => ({
+      cover: true,
+      narrative: sectionSelection?.narrative ?? true,
+      documentation: sectionSelection?.documentation ?? true,
+      financial: sectionSelection?.financial ?? true,
+      referencedStandards: sectionSelection?.referencedStandards ?? true,
+      photoAddendum: sectionSelection?.photoAddendum ?? true,
+      recordSortOrder: sectionSelection?.recordSortOrder ?? 'category_location_item'
+    }),
+    [sectionSelection]
+  );
 
-    const multiplier = project.fldCostMultiplier || 1;
+  const filteredData = useMemo(
+    () =>
+      filterReportProjectForPreview(
+        projectData,
+        project,
+        facility,
+        glossary,
+        categories,
+        items,
+        locations,
+        findings,
+        sectionSel.recordSortOrder
+      ),
+    [
+      projectData,
+      project,
+      facility,
+      glossary,
+      categories,
+      items,
+      locations,
+      findings,
+      sectionSel.recordSortOrder
+    ]
+  );
 
-    const enriched = data.map(record => {
-      const multiplier = project.fldCostMultiplier || 1;
-      const unitCost = record.fldUnitCost || 0;
-      const baseTotal = record.fldTotalCost || (unitCost * (record.fldQTY || 0));
-      const cost = baseTotal * multiplier;
-      return { 
-        ...record, 
-        totalCost: cost, 
-        displayUnitCost: unitCost * multiplier,
-        // Ensure unit type is passed through or fallback
-        displayUnitType: record.fldUnitType || 'N/A'
-      };
-    });
-    
-    return enriched.sort((a, b) => {
-      const keyA = (a.fldData || "").trim().toLowerCase();
-      const keyB = (b.fldData || "").trim().toLowerCase();
-      const glosA = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === keyA);
-      const glosB = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === keyB);
-      const isCustomA = a?.fldRecordSource === 'custom' && !glosA;
-      const isCustomB = b?.fldRecordSource === 'custom' && !glosB;
-      const catIdA = glosA?.fldCat || (isCustomA ? (a?.fldPDataCategoryID || '') : '');
-      const catIdB = glosB?.fldCat || (isCustomB ? (b?.fldPDataCategoryID || '') : '');
-      const itemIdA = glosA?.fldItem || (isCustomA ? (a?.fldPDataItemID || '') : '');
-      const itemIdB = glosB?.fldItem || (isCustomB ? (b?.fldPDataItemID || '') : '');
-      const findIdA = glosA?.fldFind || '';
-      const findIdB = glosB?.fldFind || '';
+  const referencedStandards = useMemo(() => {
+    if (!sectionSel.referencedStandards) return [];
+    return buildReferencedAddendumEntries(filteredData, glossary, standards);
+  }, [sectionSel.referencedStandards, filteredData, glossary, standards]);
 
-      const catA = categories.find(c => c.fldCategoryID === catIdA);
-      const catB = categories.find(c => c.fldCategoryID === catIdB);
-      const catOrderA = catA?.fldOrder ?? 999;
-      const catOrderB = catB?.fldOrder ?? 999;
-      if (catOrderA !== catOrderB) return catOrderA - catOrderB;
-      const locA = locations.find(l => l.fldLocID === a.fldLocation)?.fldLocName || '';
-      const locB = locations.find(l => l.fldLocID === b.fldLocation)?.fldLocName || '';
-      const locCompare = locA.localeCompare(locB);
-      if (locCompare !== 0) return locCompare;
-      const itemA = items.find(i => i.fldItemID === itemIdA);
-      const itemB = items.find(i => i.fldItemID === itemIdB);
-      const itemOrderA = itemA?.fldOrder ?? 999;
-      const itemOrderB = itemB?.fldOrder ?? 999;
-      if (itemOrderA !== itemOrderB) return itemOrderA - itemOrderB;
-      const findA = findings.find(f => f.fldFindID === findIdA);
-      const findB = findings.find(f => f.fldFindID === findIdB);
-      const findOrderA = findA?.fldOrder ?? 999;
-      const findOrderB = findB?.fldOrder ?? 999;
-      if (findOrderA !== findOrderB) return findOrderA - findOrderB;
-      return (itemA?.fldItemName || '').localeCompare(itemB?.fldItemName || '');
-    });
-  }, [projectData, project.fldProjID, facility.fldFacID, facility.id, glossary, categories, items, locations, findings]);
+  const addendumLayoutUnits = useMemo(
+    () => expandAddendumForPagination(referencedStandards),
+    [referencedStandards]
+  );
 
-  const referencedStandards = useMemo(
-    () => buildReferencedAddendumEntries(filteredData, glossary, standards),
-    [filteredData, glossary, standards]
+  const supplementalPhotoRows = useMemo(() => {
+    if (!sectionSel.photoAddendum) return [];
+    return buildSupplementalPhotoRows(filteredData, locations, glossary, categories, items);
+  }, [sectionSel.photoAddendum, filteredData, locations, glossary, categories, items]);
+
+  const photoAddendumPages = useMemo(
+    () => chunkPhotoAddendumRows(supplementalPhotoRows),
+    [supplementalPhotoRows]
   );
 
   const financialData = useMemo(() => {
-    const groups: Record<string, { category: string, records: any[], subtotal: number }> = {};
-    filteredData.forEach(record => {
-      const cleanKey = (record.fldData || "").trim().toLowerCase();
-      const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
+    if (!sectionSel.financial) return [];
+
+    const enrichFinancialRecord = (record: ProjectData) => {
+      const cleanKey = (record.fldData || '').trim().toLowerCase();
+      const glos = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
       const isCustom = record?.fldRecordSource === 'custom' && !glos;
-      const catId = glos?.fldCat || (isCustom ? (record?.fldPDataCategoryID || '') : '');
-      const itemId = glos?.fldItem || (isCustom ? (record?.fldPDataItemID || '') : '');
-      const cat = categories.find(c => c.fldCategoryID === catId);
+      const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
+      const itemId = glos?.fldItem || (isCustom ? record?.fldPDataItemID || '' : '');
+      const cat = categories.find((c) => c.fldCategoryID === catId);
       const catName = cat?.fldCategoryName || 'Uncategorized';
-      if (!groups[catName]) {
-        groups[catName] = { category: catName, records: [], subtotal: 0 };
-      }
-      const location = locations.find(l => l.fldLocID === record.fldLocation);
-      groups[catName].records.push({
+      const location = locations.find((l) => l.fldLocID === record.fldLocation);
+      const locationName = location?.fldLocName || 'N/A';
+      return {
         ...record,
-        itemName: items.find(i => i.fldItemID === itemId)?.fldItemName || 'N/A',
-        locationName: location?.fldLocName || 'N/A'
+        itemName: items.find((i) => i.fldItemID === itemId)?.fldItemName || 'N/A',
+        locationName,
+        categoryName: catName
+      };
+    };
+
+    if (sectionSel.recordSortOrder !== 'location_category_item') {
+      const groups: Record<string, { heading: string; records: any[]; subtotal: number }> = {};
+      filteredData.forEach((record) => {
+        const cleanKey = (record.fldData || '').trim().toLowerCase();
+        const glos = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
+        const isCustom = record?.fldRecordSource === 'custom' && !glos;
+        const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
+        const cat = categories.find((c) => c.fldCategoryID === catId);
+        const catName = cat?.fldCategoryName || 'Uncategorized';
+        if (!groups[catName]) {
+          groups[catName] = { heading: catName, records: [], subtotal: 0 };
+        }
+        groups[catName].records.push(enrichFinancialRecord(record));
+        groups[catName].subtotal += (record as any).totalCost;
       });
-      groups[catName].subtotal += (record as any).totalCost;
+      return Object.values(groups).sort((a, b) => {
+        const catA = categories.find((c) => c.fldCategoryName === a.heading);
+        const catB = categories.find((c) => c.fldCategoryName === b.heading);
+        const orderA = catA?.fldOrder ?? 999;
+        const orderB = catB?.fldOrder ?? 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.heading.localeCompare(b.heading);
+      });
+    }
+
+    const groups: Record<string, { heading: string; records: any[]; subtotal: number }> = {};
+    filteredData.forEach((record) => {
+      const location = locations.find((l) => l.fldLocID === record.fldLocation);
+      const locationKey =
+        (location?.fldLocName || '').trim() !== ''
+          ? (location?.fldLocName || '').trim()
+          : 'Unknown location';
+      if (!groups[locationKey]) {
+        groups[locationKey] = { heading: locationKey, records: [], subtotal: 0 };
+      }
+      groups[locationKey].records.push(enrichFinancialRecord(record));
+      groups[locationKey].subtotal += (record as any).totalCost;
     });
-    return Object.values(groups).sort((a, b) => {
-      const catA = categories.find(c => c.fldCategoryName === a.category);
-      const catB = categories.find(c => c.fldCategoryName === b.category);
-      const orderA = catA?.fldOrder ?? 999;
-      const orderB = catB?.fldOrder ?? 999;
-      if (orderA !== orderB) return orderA - orderB;
-      return a.category.localeCompare(b.category);
+
+    const list = Object.values(groups);
+    list.forEach((g) => {
+      g.records.sort((a, b) =>
+        compareReportRecordSortKeysLocationFirst(
+          getReportRecordSortKeys(a, glossary, categories, items, locations, findings),
+          getReportRecordSortKeys(b, glossary, categories, items, locations, findings)
+        )
+      );
     });
-  }, [filteredData, glossary, categories, items, locations, project.fldCostMultiplier]);
+    list.sort((a, b) => a.heading.localeCompare(b.heading, undefined, { sensitivity: 'base' }));
+    return list;
+  }, [
+    sectionSel.financial,
+    sectionSel.recordSortOrder,
+    filteredData,
+    glossary,
+    categories,
+    items,
+    locations,
+    findings,
+    project.fldCostMultiplier
+  ]);
 
   const financialRows = useMemo(() => {
+    if (!sectionSel.financial) return [];
     const rows: any[] = [];
-    financialData.forEach(group => {
-      rows.push({ type: 'header', content: group.category });
-      group.records.forEach(rec => {
+    financialData.forEach((group) => {
+      rows.push({ type: 'header', content: group.heading });
+      group.records.forEach((rec) => {
         rows.push({ type: 'record', content: rec });
       });
-      rows.push({ type: 'subtotal', category: group.category, subtotal: group.subtotal });
+      rows.push({ type: 'subtotal', groupHeading: group.heading, subtotal: group.subtotal });
     });
     return rows;
-  }, [financialData]);
+  }, [sectionSel.financial, financialData]);
 
   // Measurement Pass
   useLayoutEffect(() => {
@@ -401,6 +832,13 @@ export function ReportPreview({
         if (id) docHeights[id] = el.getBoundingClientRect().height;
       });
 
+      const docHeaderProbe = measurementRef.current?.querySelector('[data-measure-type="doc-header"]');
+      let docHeaderH = 32;
+      if (docHeaderProbe) {
+        docHeaderH = Math.ceil(docHeaderProbe.getBoundingClientRect().height);
+        if (docHeaderH < 24) docHeaderH = 24;
+      }
+
       const finElements = measurementRef.current?.querySelectorAll('[data-measure-type="fin"]');
       finElements?.forEach(el => {
         finHeights.push(el.getBoundingClientRect().height);
@@ -412,14 +850,43 @@ export function ReportPreview({
         if (id) addendumHeights[id] = el.getBoundingClientRect().height;
       });
 
+      const addendumTitleProbe = measurementRef.current?.querySelector(
+        '[data-measure-type="addendum-section-title"]'
+      );
+      let addendumTitleH = ADDENDUM_SECTION_TITLE_FALLBACK_PX;
+      if (addendumTitleProbe) {
+        addendumTitleH = Math.ceil(addendumTitleProbe.getBoundingClientRect().height);
+        if (addendumTitleH < 48) addendumTitleH = ADDENDUM_SECTION_TITLE_FALLBACK_PX;
+      }
+
+      const contProbe = measurementRef.current?.querySelector(
+        '[data-measure-type="addendum-image-continuation-probe"]'
+      );
+      let contLineH = 26;
+      if (contProbe) {
+        contLineH = Math.ceil(contProbe.getBoundingClientRect().height);
+        if (contLineH < 10) contLineH = 26;
+      }
+
       setMeasuredDocHeights(docHeights);
+      setMeasuredDocHeaderHeight(docHeaderH);
       setMeasuredFinHeights(finHeights);
       setMeasuredAddendumHeights(addendumHeights);
+      setMeasuredAddendumSectionTitleHeight(addendumTitleH);
+      setMeasuredAddendumImageContinuationLinePx(contLineH);
       setIsMeasuring(false);
     };
 
     measure();
-  }, [filteredData, financialRows, referencedStandards]);
+  }, [
+    filteredData,
+    financialRows,
+    addendumLayoutUnits,
+    sectionSel.documentation,
+    sectionSel.financial,
+    sectionSel.referencedStandards,
+    sectionSel.recordSortOrder
+  ]);
 
   // Pagination Chunks using measured heights
   const narrativePages = useMemo(() => {
@@ -428,44 +895,160 @@ export function ReportPreview({
   }, [project.fldNarrative]);
 
   const documentationPages = useMemo(() => {
+    if (!sectionSel.documentation) return [];
     if (isMeasuring) return [];
-    const chunks: ProjectData[][] = [];
-    let currentChunk: ProjectData[] = [];
-    let currentHeight = 0;
-    const standardLimit = 660; // Reduced further for extra safety buffer
-    const firstPageLimit = 595; // 660 - 65
 
-    for (const item of filteredData) {
-      const height = (measuredDocHeights[item.fldPDataID] || 200) + 32; // +32 for gap
-      const limit = chunks.length === 0 ? firstPageLimit : standardLimit;
-      
-      if (currentHeight + height > limit && currentChunk.length > 0) {
-        chunks.push(currentChunk);
-        currentChunk = [item];
-        currentHeight = height;
-      } else {
-        currentChunk.push(item);
-        currentHeight += height;
+    const flat = buildDocumentationFlatStream(
+      filteredData,
+      sectionSel.recordSortOrder,
+      glossary,
+      categories,
+      locations
+    );
+
+    /** Includes `DocumentationGroupHeader` padding below title (see `DOC_HEADER_SPACE_AFTER_PX`). */
+    const headerUnitCost = measuredDocHeaderHeight;
+    const recordHeight = (r: ProjectData) => (measuredDocHeights[r.fldPDataID] || 200) + DOC_CARD_GAP_PX;
+
+    // Body-height budget per doc page (section title only on first printed doc page). Values are
+    // heuristic; group headers consume space that was not in the original 660 / (660−65) split.
+    const standardLimit = 682;
+    const firstPageLimit = 628;
+    const limit = () => (pages.length === 0 ? firstPageLimit : standardLimit);
+
+    const pages: DocumentationPageItem[][] = [];
+    let current: DocumentationPageItem[] = [];
+    let currentHeight = 0;
+
+    let i = 0;
+    while (i < flat.length) {
+      const item = flat[i];
+
+      if (current.length === 0 && pages.length > 0 && item.kind === 'record') {
+        const prevLast = getLastRecordFromDocumentationPage(pages[pages.length - 1]!);
+        if (prevLast) {
+          const gPrev = resolveDocumentationGroup(
+            prevLast,
+            sectionSel.recordSortOrder,
+            glossary,
+            categories,
+            locations
+          );
+          const gCur = resolveDocumentationGroup(
+            item.record,
+            sectionSel.recordSortOrder,
+            glossary,
+            categories,
+            locations
+          );
+          if (gPrev.groupKey === gCur.groupKey) {
+            const cont: DocumentationPageItem = {
+              kind: 'groupHeader',
+              groupKey: gCur.groupKey,
+              label: gCur.label,
+              continued: true
+            };
+            if (currentHeight + headerUnitCost <= limit()) {
+              current.push(cont);
+              currentHeight += headerUnitCost;
+            }
+          }
+        }
       }
+
+      if (item.kind === 'groupHeader') {
+        const next = flat[i + 1];
+        const hCost = headerUnitCost;
+        const pairCost =
+          next?.kind === 'record' ? hCost + recordHeight(next.record) : hCost;
+
+        if (current.length > 0 && currentHeight + pairCost > limit()) {
+          pages.push(current);
+          current = [];
+          currentHeight = 0;
+          continue;
+        }
+        if (current.length > 0 && currentHeight + hCost > limit()) {
+          pages.push(current);
+          current = [];
+          currentHeight = 0;
+          continue;
+        }
+
+        current.push(item);
+        currentHeight += hCost;
+        i += 1;
+        continue;
+      }
+
+      const rec = item.record;
+      const h = recordHeight(rec);
+      if (current.length > 0 && currentHeight + h > limit()) {
+        pages.push(current);
+        current = [];
+        currentHeight = 0;
+        continue;
+      }
+
+      current.push(item);
+      currentHeight += h;
+      i += 1;
     }
-    if (currentChunk.length > 0) chunks.push(currentChunk);
-    return chunks;
-  }, [filteredData, measuredDocHeights, isMeasuring]);
+
+    if (current.length > 0) pages.push(current);
+    return pages;
+  }, [
+    sectionSel.documentation,
+    sectionSel.recordSortOrder,
+    filteredData,
+    measuredDocHeights,
+    measuredDocHeaderHeight,
+    glossary,
+    categories,
+    locations,
+    isMeasuring
+  ]);
 
   const financialPages = useMemo(() => {
+    if (!sectionSel.financial) return [];
     if (isMeasuring) return [];
+
+    // Match legacy body budgets (630 / 565 minus title slack on first page), minus thead only.
+    const baseFirstLimit = 565 - FIN_PAGINATION_THEAD_OVERHEAD_PX;
+    const baseStdLimit = 630 - FIN_PAGINATION_THEAD_OVERHEAD_PX;
+
     const chunks: any[][] = [];
     let currentChunk: any[] = [];
     let currentHeight = 0;
-    const standardLimit = 630; // Reduced further for extra safety buffer
-    const firstPageLimit = 565; // 630 - 65
 
     for (let i = 0; i < financialRows.length; i++) {
       const row = financialRows[i];
-      const height = measuredFinHeights[i] || 32;
-      let limit = chunks.length === 0 ? firstPageLimit : standardLimit;
-      
-      if (i > financialRows.length - 3) limit -= 60; // Grand total space
+      const height = (measuredFinHeights[i] || 32) + FIN_PAGINATION_ROW_GAP_PX;
+
+      let limit = chunks.length === 0 ? baseFirstLimit : baseStdLimit;
+      if (i > financialRows.length - 3) limit -= FIN_PAGINATION_GRAND_TOTAL_RESERVE_PX;
+
+      if (
+        row.type === 'header' &&
+        currentChunk.length > 0 &&
+        i + 1 < financialRows.length
+      ) {
+        const next = financialRows[i + 1];
+        if (next.type === 'record' || next.type === 'subtotal') {
+          const nextH = (measuredFinHeights[i + 1] || 32) + FIN_PAGINATION_ROW_GAP_PX;
+          if (
+            currentHeight + height + nextH > limit &&
+            currentHeight + height <= limit
+          ) {
+            chunks.push(currentChunk);
+            currentChunk = [];
+            currentHeight = 0;
+          }
+        }
+      }
+
+      limit = chunks.length === 0 ? baseFirstLimit : baseStdLimit;
+      if (i > financialRows.length - 3) limit -= FIN_PAGINATION_GRAND_TOTAL_RESERVE_PX;
 
       if (currentHeight + height > limit && currentChunk.length > 0) {
         chunks.push(currentChunk);
@@ -478,34 +1061,119 @@ export function ReportPreview({
     }
     if (currentChunk.length > 0) chunks.push(currentChunk);
     return chunks;
-  }, [financialRows, measuredFinHeights, isMeasuring]);
+  }, [sectionSel.financial, financialRows, measuredFinHeights, isMeasuring]);
 
   const addendumPages = useMemo(() => {
+    if (!sectionSel.referencedStandards) return [];
     if (isMeasuring) return [];
-    const chunks: AddendumEntry[][] = [];
-    let currentChunk: AddendumEntry[] = [];
+    const units = addendumLayoutUnits;
+    const chunks: AddendumPaginateUnit[][] = [];
+    let currentChunk: AddendumPaginateUnit[] = [];
     let currentHeight = 0;
-    const standardLimit = 660; // Reduced further for extra safety buffer
-    const firstPageLimit = 595; // 660 - 65
+    const titleReserve =
+      measuredAddendumSectionTitleHeight > 0
+        ? measuredAddendumSectionTitleHeight
+        : ADDENDUM_SECTION_TITLE_FALLBACK_PX;
+    const firstPageRowBudget =
+      ADDENDUM_FIRST_PAGE_BODY_BASE_PX -
+      titleReserve -
+      ADDENDUM_FIRST_PAGE_LAYOUT_FUDGE_PX;
 
-    for (const entry of referencedStandards) {
-      const measureKey = entry.kind === 'header' ? entry.key : entry.standard.fldStandardId;
-      const defaultH = entry.kind === 'header' ? 56 : 100;
-      const height = (measuredAddendumHeights[measureKey] || defaultH) + 24;
-      const limit = chunks.length === 0 ? firstPageLimit : standardLimit;
+    const contLineReserve =
+      measuredAddendumImageContinuationLinePx > 0
+        ? measuredAddendumImageContinuationLinePx
+        : 26;
 
-      if (currentHeight + height > limit && currentChunk.length > 0) {
-        chunks.push(currentChunk);
-        currentChunk = [entry];
-        currentHeight = height;
-      } else {
-        currentChunk.push(entry);
-        currentHeight += height;
+    const pageLimit = () =>
+      chunks.length === 0 ? firstPageRowBudget : ADDENDUM_SUBSEQUENT_PAGE_BODY_PX;
+
+    const defaultUnitH = (unit: AddendumPaginateUnit) => {
+      if (unit.kind === 'header') return 56;
+      if (unit.kind === 'standardImage')
+        return ADDENDUM_STANDARD_IMAGE_MAX_HEIGHT_PX + ADDENDUM_IMAGE_DEFAULT_EXTRA_PX;
+      return 100;
+    };
+
+    const heightFor = (unit: AddendumPaginateUnit, opts?: { imageOrphan?: boolean }) => {
+      const key = addendumPaginateMeasureId(unit);
+      const slack =
+        unit.kind === 'standardImage' ? ADDENDUM_IMAGE_ROW_SLACK_PX : ADDENDUM_ROW_PAGINATION_SLACK_PX;
+      let h = (measuredAddendumHeights[key] || defaultUnitH(unit)) + slack;
+      if (unit.kind === 'standardImage' && opts?.imageOrphan) h += contLineReserve;
+      return h;
+    };
+
+    let i = 0;
+    while (i < units.length) {
+      const u = units[i];
+      const next = units[i + 1];
+
+      if (addendumIsTextImagePair(u, next)) {
+        const h1 = heightFor(u);
+        const h2 = heightFor(next!, {});
+        const pairH = h1 + h2;
+
+        while (currentChunk.length > 0 && currentHeight + pairH > pageLimit()) {
+          chunks.push(currentChunk);
+          currentChunk = [];
+          currentHeight = 0;
+        }
+
+        if (currentHeight + pairH <= pageLimit()) {
+          currentChunk.push(u, next!);
+          currentHeight += pairH;
+          i += 2;
+          continue;
+        }
+
+        if (currentChunk.length === 0 && pairH > pageLimit()) {
+          if (h1 <= pageLimit()) {
+            currentChunk.push(u);
+            currentHeight += h1;
+            i += 1;
+            continue;
+          }
+          currentChunk.push(u);
+          currentHeight += h1;
+          i += 1;
+          continue;
+        }
       }
+
+      const lim = pageLimit();
+      let h = heightFor(u);
+      if (u.kind === 'standardImage') {
+        const prev = currentChunk[currentChunk.length - 1];
+        const orphan =
+          !prev ||
+          prev.kind !== 'standardText' ||
+          prev.standard.fldStandardId !== u.standard.fldStandardId;
+        if (orphan) h = heightFor(u, { imageOrphan: true });
+      }
+
+      if (currentHeight + h > lim && currentChunk.length > 0) {
+        chunks.push(currentChunk);
+        currentChunk = [u];
+        currentHeight = h;
+        i += 1;
+        continue;
+      }
+
+      currentChunk.push(u);
+      currentHeight += h;
+      i += 1;
     }
+
     if (currentChunk.length > 0) chunks.push(currentChunk);
     return chunks;
-  }, [referencedStandards, measuredAddendumHeights, isMeasuring]);
+  }, [
+    sectionSel.referencedStandards,
+    addendumLayoutUnits,
+    measuredAddendumHeights,
+    measuredAddendumSectionTitleHeight,
+    measuredAddendumImageContinuationLinePx,
+    isMeasuring
+  ]);
 
   const handlePrint = () => {
     // Current-window print flow consolidation (Task 125.D)
@@ -538,35 +1206,81 @@ export function ReportPreview({
         className="absolute top-0 left-0 w-[1056px] opacity-0 pointer-events-none overflow-hidden h-0"
         style={{ paddingLeft: '48px', paddingRight: '48px' }}
       >
-        {filteredData.map(record => (
-          <div key={record.fldPDataID} data-measure-type="doc" data-id={record.fldPDataID} className="mb-8">
-            <DocumentationCard 
-              record={record} 
-              index={0} 
-              glossary={glossary} 
-              standards={standards} 
-              locations={locations}
-              categories={categories}
-              items={items}
-            />
-          </div>
-        ))}
-        <table className="w-full border-collapse">
-          <tbody>
-            {financialRows.map((row, idx) => (
-              <tr key={idx} data-measure-type="fin" className="text-xs">
-                {row.type === 'header' ? (
-                  <td className="py-2 px-3 font-black uppercase">{row.content}</td>
-                ) : row.type === 'record' ? (
-                  <td className="py-2 px-3">{row.content.itemName}</td>
+        {sectionSel.documentation && (
+          <>
+            <div data-measure-type="doc-header" className="w-full">
+              <DocumentationGroupHeader label="Category / Location header probe" continued={false} />
+            </div>
+            {filteredData.map(record => (
+              <div
+                key={record.fldPDataID}
+                data-measure-type="doc"
+                data-id={record.fldPDataID}
+                style={{ marginBottom: DOC_CARD_GAP_PX }}
+              >
+                <DocumentationCard 
+                  record={record} 
+                  index={0} 
+                  glossary={glossary} 
+                  standards={standards} 
+                  locations={locations}
+                  categories={categories}
+                  items={items}
+                />
+              </div>
+            ))}
+          </>
+        )}
+        {sectionSel.financial && financialRows.length > 0 ? (
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-zinc-100 border-y border-zinc-200">
+                {sectionSel.recordSortOrder === 'location_category_item' ? (
+                  <>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Category</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Item</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">QTY</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">UNIT COST</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">TOTAL</th>
+                  </>
                 ) : (
-                  <td className="py-2 px-3 font-bold">Subtotal</td>
+                  <>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Item</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Location</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">QTY</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">UNIT COST</th>
+                    <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">TOTAL</th>
+                  </>
                 )}
               </tr>
-            ))}
-          </tbody>
-        </table>
-        <AddendumRows entries={referencedStandards} />
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {financialRows.map((row, idx) => (
+                <FinancialMeasurementBodyRow
+                  key={idx}
+                  row={row}
+                  recordSortOrder={sectionSel.recordSortOrder}
+                />
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+        {sectionSel.referencedStandards && referencedStandards.length > 0 ? (
+          <div className="flex w-full flex-col">
+            <div data-measure-type="addendum-section-title">
+              <h2 className="mb-8 border-b-2 border-zinc-900 pb-2 text-xl font-bold uppercase tracking-widest text-zinc-900">
+                Addendum: Referenced Standards
+              </h2>
+            </div>
+            <p
+              data-measure-type="addendum-image-continuation-probe"
+              className="mb-1.5 text-[10px] font-bold uppercase tracking-tight text-zinc-800 leading-tight"
+            >
+              TAS 502.2 Vehicle Spaces (continued figure)
+            </p>
+            <AddendumPaginatedContent units={addendumLayoutUnits} forMeasurement />
+          </div>
+        ) : null}
       </div>
 
       {/* Header / Controls */}
@@ -677,57 +1391,83 @@ export function ReportPreview({
               </PageContainer>
 
               {/* Narrative Pages */}
-              {narrativePages.map((content, pIdx) => (
-                <PageContainer key={`narrative-${pIdx}`} pageNumber={toRoman(pIdx + 1, false)} facilityName={facility.fldFacName}>
-                  <div className="flex flex-col">
-                    <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">Narrative:</h2>
-                    <div className="text-sm text-zinc-800 leading-relaxed space-y-6 whitespace-pre-wrap">
-                      {content}
-                    </div>
-                  </div>
-                </PageContainer>
-              ))}
-
-              {/* Documentation Section */}
-              {documentationPages.length > 0 ? (
-                documentationPages.map((pageRecords, pIdx) => (
-                  <PageContainer key={`doc-${pIdx}`} pageNumber={(pIdx + 1).toString()} facilityName={facility.fldFacName}>
+              {sectionSel.narrative &&
+                narrativePages.map((content, pIdx) => (
+                  <PageContainer key={`narrative-${pIdx}`} pageNumber={toRoman(pIdx + 1, false)} facilityName={facility.fldFacName}>
                     <div className="flex flex-col">
-                      {pIdx === 0 && (
-                        <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
-                          Documentation Section
-                        </h2>
-                      )}
-                      <div className="space-y-8">
-                        {pageRecords.map((record, rIdx) => (
-                          <DocumentationCard 
-                            key={record.fldPDataID} 
-                            record={record} 
-                            index={documentationPages.slice(0, pIdx).reduce((sum, p) => sum + p.length, 0) + rIdx + 1} 
-                            glossary={glossary} 
-                            standards={standards} 
-                            locations={locations}
-                            categories={categories}
-                            items={items}
-                          />
-                        ))}
+                      <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">Narrative:</h2>
+                      <div className="text-sm text-zinc-800 leading-relaxed space-y-6 whitespace-pre-wrap">
+                        {content}
                       </div>
                     </div>
                   </PageContainer>
-                ))
-              ) : (
-                <PageContainer facilityName={facility.fldFacName} pageNumber="1">
-                  <div className="flex flex-col">
-                    <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
-                      Documentation Section
-                    </h2>
-                    <p className="text-sm text-zinc-500 italic">No documentation records found for this project.</p>
-                  </div>
-                </PageContainer>
-              )}
+                ))}
+
+              {/* Documentation Section */}
+              {sectionSel.documentation ? (
+                documentationPages.length > 0 ? (
+                  documentationPages.map((pageItems, pIdx) => (
+                    <PageContainer key={`doc-${pIdx}`} pageNumber={(pIdx + 1).toString()} facilityName={facility.fldFacName}>
+                      <div className="flex flex-col">
+                        {pIdx === 0 && (
+                          <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
+                            Documentation Section
+                          </h2>
+                        )}
+                        <div className="flex flex-col">
+                          {pageItems.map((entry, ii) => {
+                            if (entry.kind === 'groupHeader') {
+                              return (
+                                <DocumentationGroupHeader
+                                  key={`doc-${pIdx}-gh-${entry.groupKey}-${ii}-${entry.continued ? 'c' : 'n'}`}
+                                  label={entry.label}
+                                  continued={entry.continued}
+                                />
+                              );
+                            }
+                            const priorRecordsOnPage = pageItems
+                              .slice(0, ii)
+                              .filter((e): e is { kind: 'record'; record: ProjectData } => e.kind === 'record').length;
+                            const priorRecordsOnPriorPages = documentationPages
+                              .slice(0, pIdx)
+                              .reduce((sum, p) => sum + p.filter((e) => e.kind === 'record').length, 0);
+                            const globalIndex = priorRecordsOnPriorPages + priorRecordsOnPage + 1;
+                            return (
+                              <div
+                                key={entry.record.fldPDataID}
+                                style={{ marginBottom: DOC_CARD_GAP_PX }}
+                              >
+                                <DocumentationCard
+                                  record={entry.record}
+                                  index={globalIndex}
+                                  glossary={glossary}
+                                  standards={standards}
+                                  locations={locations}
+                                  categories={categories}
+                                  items={items}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </PageContainer>
+                  ))
+                ) : (
+                  <PageContainer facilityName={facility.fldFacName} pageNumber="1">
+                    <div className="flex flex-col">
+                      <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
+                        Documentation Section
+                      </h2>
+                      <p className="text-sm text-zinc-500 italic">No documentation records found for this project.</p>
+                    </div>
+                  </PageContainer>
+                )
+              ) : null}
 
               {/* Financial Section */}
-              {financialPages.map((pageRows, pIdx) => (
+              {sectionSel.financial &&
+                financialPages.map((pageRows, pIdx) => (
                 <PageContainer key={`fin-${pIdx}`} pageNumber={`A${pIdx + 1}`} facilityName={facility.fldFacName}>
                   <div className="flex flex-col h-full">
                     {pIdx === 0 && (
@@ -739,11 +1479,23 @@ export function ReportPreview({
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-zinc-100 border-y border-zinc-200">
-                            <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Item</th>
-                            <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Location</th>
-                            <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">QTY</th>
-                            <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">UNIT COST</th>
-                            <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">TOTAL</th>
+                            {sectionSel.recordSortOrder === 'location_category_item' ? (
+                              <>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Category</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Item</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">QTY</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">UNIT COST</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">TOTAL</th>
+                              </>
+                            ) : (
+                              <>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Item</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Location</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">QTY</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">UNIT COST</th>
+                                <th className="py-2 px-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-right">TOTAL</th>
+                              </>
+                            )}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
@@ -759,6 +1511,17 @@ export function ReportPreview({
                             }
                             if (row.type === 'record') {
                               const rec = row.content;
+                              if (sectionSel.recordSortOrder === 'location_category_item') {
+                                return (
+                                  <tr key={rIdx} className="text-xs break-inside-avoid">
+                                    <td className="py-2 px-3 text-zinc-700">{rec.categoryName}</td>
+                                    <td className="py-2 px-3 text-zinc-700">{rec.itemName}</td>
+                                    <td className="py-2 px-3 text-right text-zinc-700">{rec.fldQTY} {rec.displayUnitType}</td>
+                                    <td className="py-2 px-3 text-right text-zinc-700">{formatCurrency(rec.displayUnitCost)}</td>
+                                    <td className="py-2 px-3 text-right font-bold text-zinc-900">{formatCurrency(rec.totalCost)}</td>
+                                  </tr>
+                                );
+                              }
                               return (
                                 <tr key={rIdx} className="text-xs break-inside-avoid">
                                   <td className="py-2 px-3 text-zinc-700">{rec.itemName}</td>
@@ -773,7 +1536,7 @@ export function ReportPreview({
                               return (
                                 <tr key={rIdx} className="bg-zinc-50 break-inside-avoid">
                                   <td colSpan={4} className="py-2 px-3 text-right text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                                    Subtotal {row.category}:
+                                    Subtotal {row.groupHeading}:
                                   </td>
                                   <td className="py-2 px-3 text-right font-black text-zinc-900 border-t border-zinc-200">
                                     {formatCurrency(row.subtotal)}
@@ -803,31 +1566,52 @@ export function ReportPreview({
               ))}
 
               {/* Addendum Section */}
-              {addendumPages.length > 0 ? (
-                addendumPages.map((pageRecords, pIdx) => (
-                  <PageContainer key={`add-${pIdx}`} pageNumber={`B${pIdx + 1}`} facilityName={facility.fldFacName}>
-                    <div className="flex flex-col">
-                      {pIdx === 0 && (
-                        <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
-                          Addendum: Referenced Standards
-                        </h2>
-                      )}
-                      <div className="space-y-6">
-                        <AddendumRows entries={pageRecords} />
+              {sectionSel.referencedStandards ? (
+                addendumPages.length > 0 ? (
+                  addendumPages.map((pageRecords, pIdx) => (
+                    <PageContainer key={`add-${pIdx}`} pageNumber={`B${pIdx + 1}`} facilityName={facility.fldFacName}>
+                      <div className="flex flex-col">
+                        {pIdx === 0 && (
+                          <h2 className="mb-8 border-b-2 border-zinc-900 pb-2 text-xl font-bold uppercase tracking-widest text-zinc-900">
+                            Addendum: Referenced Standards
+                          </h2>
+                        )}
+                        <AddendumPaginatedContent
+                          units={pageRecords}
+                          imageContinuationFlags={pageRecords.map((_, idx) =>
+                            addendumImageIsOrphanOnPage(pageRecords, idx)
+                          )}
+                        />
                       </div>
+                    </PageContainer>
+                  ))
+                ) : (
+                  <PageContainer facilityName={facility.fldFacName} pageNumber="C1">
+                    <div className="flex flex-col">
+                      <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
+                        Addendum: Referenced Standards
+                      </h2>
+                      <p className="text-sm text-zinc-500 italic">No standards citations referenced in this report.</p>
                     </div>
                   </PageContainer>
-                ))
-              ) : (
-                <PageContainer facilityName={facility.fldFacName} pageNumber="C1">
-                  <div className="flex flex-col">
-                    <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
-                      Addendum: Referenced Standards
-                    </h2>
-                    <p className="text-sm text-zinc-500 italic">No standards citations referenced in this report.</p>
-                  </div>
-                </PageContainer>
-              )}
+                )
+              ) : null}
+
+              {/* Photo Addendum (fldImages index 2+ only; main cards unchanged at slice(0,2)) */}
+              {sectionSel.photoAddendum && photoAddendumPages.length > 0
+                ? photoAddendumPages.map((photoPageRows, phIdx) => (
+                    <PageContainer
+                      key={`photo-add-${phIdx}`}
+                      pageNumber={`D${phIdx + 1}`}
+                      facilityName={facility.fldFacName}
+                    >
+                      <PhotoAddendumPageBody
+                        rows={photoPageRows}
+                        showSectionTitle={phIdx === 0}
+                      />
+                    </PageContainer>
+                  ))
+                : null}
             </div>
           </div>
         )}
@@ -897,9 +1681,9 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
   }, [record.fldStandards, record.fldData, glos, standards]);
 
   return (
-    <div className="border-2 border-zinc-900 flex break-inside-avoid">
+    <div className="border-2 border-zinc-900 flex items-start break-inside-avoid">
       {/* Number Column */}
-      <div className="w-12 border-r-2 border-zinc-900 flex flex-col items-center justify-center font-black text-2xl shrink-0">
+      <div className="w-12 border-r-2 border-zinc-900 flex flex-col items-center justify-start shrink-0 pt-2 font-black text-2xl">
         {index}
         <span className="text-[8px] font-mono text-zinc-400 mt-1 print:hidden">{record.fldPDataID?.slice(0, 8)}</span>
       </div>
@@ -914,32 +1698,30 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
           <div className="flex-1 bg-black text-white px-2 py-1 text-[10px] font-bold uppercase truncate">{item?.fldItemName || 'N/A'}</div>
         </div>
         
-        {/* Location Row */}
-        <div className="flex border-b border-zinc-300">
-          <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Location</div>
-          <div className="flex-1 px-2 py-2 text-xs font-medium">{location?.fldLocName || 'N/A'}</div>
+        {/* Location row: single continuous value band; cost right-aligned */}
+        <div className="flex min-w-0 border-b border-zinc-300">
+          <div className="w-32 shrink-0 border-r border-zinc-300 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase">
+            Location
+          </div>
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-3 bg-white px-2 py-2">
+            <span
+              className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-900"
+              title={location?.fldLocName || 'N/A'}
+            >
+              {location?.fldLocName || 'N/A'}
+            </span>
+            <span className="shrink-0 whitespace-nowrap text-xs font-bold text-blue-600">
+              Estimated Cost: ${record.totalCost?.toLocaleString()}
+            </span>
+          </div>
         </div>
 
         {/* Finding Row */}
         <div className="flex border-b border-zinc-300">
           <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Finding</div>
-          <div className="flex-1 px-2 py-2 text-[11px] leading-snug border-r border-zinc-300">
+          {/* Glossary images are intentionally not rendered in formal report finding text (record.fldImages only in column / addendum). */}
+          <div className="flex-1 px-2 py-2 text-[11px] leading-snug border-r border-zinc-300 whitespace-pre-line">
             {record.fldFindLong}
-            
-            {/* Glossary Reference Images */}
-            {Array.isArray(glos?.fldImages) && glos.fldImages.length > 0 && (
-              <div className="flex gap-1 mt-2 flex-wrap">
-                {glos.fldImages.map((img: string, i: number) => (
-                  <img 
-                    key={i} 
-                    src={img} 
-                    className="w-16 h-16 object-cover border border-zinc-200 rounded" 
-                    alt="Glossary Ref" 
-                    referrerPolicy="no-referrer" 
-                  />
-                ))}
-              </div>
-            )}
           </div>
           <div className="w-32 flex flex-col shrink-0">
             <div className="bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase border-b border-zinc-300">Measurement</div>
@@ -950,45 +1732,50 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
         </div>
 
         {/* Recommendation Row */}
-        <div className="flex">
+        <div className="flex border-b border-zinc-300">
           <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Recommendation</div>
-          <div className="flex-1 px-2 py-2 text-[11px] leading-snug">{record.fldRecLong}</div>
-        </div>
-
-        {/* Spacer to push Reference to bottom */}
-        <div className="flex-1 flex">
-          <div className="w-32 bg-zinc-50 border-r border-zinc-300 shrink-0" />
-          <div className="flex-1" />
+          <div className="flex-1 px-2 py-2 text-[11px] leading-snug whitespace-pre-line">{record.fldRecLong}</div>
         </div>
 
         {/* Reference Row */}
         <div className="flex border-t border-zinc-300">
           <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Reference</div>
-          <div className="flex-1 px-2 py-2 text-xs font-bold flex justify-between items-center gap-4">
-            <span className="flex-1">{refs}</span>
-            <span className="text-blue-600 shrink-0">Estimated Cost: ${record.totalCost?.toLocaleString()}</span>
-          </div>
+          <div className="flex-1 px-2 py-2 text-xs font-bold">{refs}</div>
         </div>
       </div>
 
-      {/* Images Column */}
+      {/* Images column: fixed h-32 slots at top; column self-stretch + flex filler completes right edge to card bottom. */}
       <div className={cn(
-        "w-48 border-l-2 border-zinc-900 flex flex-col bg-zinc-900 shrink-0",
-        (!Array.isArray(record.fldImages) || record.fldImages.length === 0) && "hidden"
+        'w-48 shrink-0 self-stretch flex min-h-0 flex-col border-l-2 border-zinc-900 bg-zinc-900',
+        (!Array.isArray(record.fldImages) || record.fldImages.length === 0) && 'hidden'
       )}>
-        {Array.isArray(record.fldImages) && record.fldImages.slice(0, 2).map((img: string, i: number) => (
-          <div key={i} className={cn(
-            "bg-white overflow-hidden p-1 flex-1 min-h-0",
-            i === 0 && record.fldImages.length > 1 && "border-b border-zinc-900"
-          )}>
-            <img 
-              src={img} 
-              className="w-full h-full object-cover rounded-sm" 
-              alt={`Finding ${i + 1}`}
-              referrerPolicy="no-referrer"
-            />
-          </div>
-        ))}
+        {Array.isArray(record.fldImages) && record.fldImages.slice(0, 2).map((img: string, i: number) => {
+          const multi = record.fldImages.length > 1;
+          return (
+            <div
+              key={i}
+              className={cn(
+                'h-32 shrink-0 overflow-hidden bg-white p-1',
+                multi
+                  ? i === 0
+                    ? 'rounded-t-sm border-l border-r border-t border-zinc-900'
+                    : 'border-l border-r border-t border-zinc-900'
+                  : 'rounded-t-sm border-l border-r border-t border-zinc-900'
+              )}
+            >
+              <img
+                src={img}
+                className="h-full w-full object-cover rounded-sm"
+                alt={`Finding ${i + 1}`}
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          );
+        })}
+        <div
+          className="min-h-0 flex-1 border-l border-r border-b border-t border-zinc-900 bg-zinc-50"
+          aria-hidden={true}
+        />
       </div>
     </div>
   );

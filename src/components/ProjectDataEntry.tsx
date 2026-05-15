@@ -9,18 +9,26 @@ import {
   Plus,
   Hash,
   Loader2,
-  Book,
   AlertCircle,
   Undo,
   DollarSign,
   Edit2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  Copy,
+  GripVertical
 } from 'lucide-react';
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc, writeBatch, updateDoc } from 'firebase/firestore';
 import { db, storage } from '../firebase';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { firestoreService } from '../services/firestoreService';
+import { buildProjectDataCloneSeed, type ProjectDataCloneSeed } from '../lib/cloneProjectData';
+import type { MasterStandard } from '../types';
+import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
+import { ImagePreviewModal } from './ui/ImagePreviewModal';
+import { StandardCitationPreviewModal } from './ui/StandardCitationPreviewModal';
 import { Input } from './ui/input';
 import { Select } from './ui/select';
 import { Card } from './ui/card';
@@ -29,8 +37,10 @@ import { StandardsBrowser } from './StandardsBrowser';
 import { cn, sortEntities, formatCurrency, COST_UNIT_TYPES, MEASUREMENT_UNITS, compareEntities } from '../lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { resizeImage } from '../lib/imageUtils';
+import { normalizeId } from '../lib/idUtils';
 import { toFraction, fromFraction } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
 
 const safeArray = (value: any): string[] => {
   if (Array.isArray(value)) return value;
@@ -39,6 +49,14 @@ const safeArray = (value: any): string[] => {
 };
 
 const DATA_ENTRY_DRAFT_VERSION = 2;
+
+/** Browser persistence for Data Entry glossary-mode path filter (not Standards Library). */
+const ACTIVE_GLOSSARY_STORAGE_KEY = 'fredasoft_data_entry_active_glossary_set_v1';
+/** Matches Library "Unassigned / Legacy" semantics for glossary rows missing fldGlossarySetId. */
+const ACTIVE_GLOSSARY_UNASSIGNED = 'UNASSIGNED';
+
+/** Firestore batch write limit is 500; keep chunks safely under for projectData propagation only. */
+const LOCATION_RENAME_PROJECTDATA_CHUNK = 450;
 
 function Modal({ title, children, onClose }: any) {
   return (
@@ -63,10 +81,6 @@ function Modal({ title, children, onClose }: any) {
   );
 }
 
-function normalizeId(value: any): string {
-  return String(value || '').trim().toLowerCase();
-}
-
 function recommendationMatches(rec: any, targetId: string): boolean {
   const t = normalizeId(targetId);
   if (!t) return false;
@@ -80,14 +94,8 @@ function glossaryRecommendationMatches(g: any, recId: string): boolean {
 }
 
 function recordCitationDisplayLabel(standard: any | undefined, idFallback: string): string {
-  if (standard) {
-    const t = String(standard.fldStandardType ?? '').trim();
-    const n = String(standard.citation_num ?? '').trim();
-    if (t !== '' && n !== '') return `${t} ${n}`;
-    if (n !== '') return n;
-    const sid = String(standard.id ?? '').trim();
-    if (sid !== '') return sid;
-  }
+  const formatted = formatStandardCitationLabel(standard);
+  if (formatted !== undefined && formatted !== '') return formatted;
   const fb = String(idFallback ?? '').trim();
   if (fb !== '') return fb;
   return 'Citation';
@@ -218,7 +226,9 @@ export default function ProjectDataEntry({
   project = {}, facility = {}, inspector = {}, glossary = [], standards = [], projectData = [],
   onSave, onReset, items = [], findings = [], recommendations = [], masterRecommendations = [],
   unitTypes = [], mergedCategories = [], locations = [], selections = {}, onSelectionChange, onDirtyChange,
-  onDeleteRecord
+  onDeleteRecord,
+  pendingCloneSeed = null,
+  onPendingCloneSeedConsumed
 }: any) {
   // Localized state management for the active record
   const activeRecord = useMemo(() => {
@@ -245,6 +255,13 @@ export default function ProjectDataEntry({
   /** After resuming a localStorage draft, skip one activeRecord hydration so form fields are not reset to server state. */
   const skipHydrationAfterDraftRef = useRef(false);
   const isFormDirtyRef = useRef(false);
+  const isSavingRef = useRef(false);
+  const clonePersistRef = useRef<{
+    provenance: Record<string, unknown>;
+    saveContext: ProjectDataCloneSeed['saveContext'];
+  } | null>(null);
+  const pendingCloneConsumeRef = useRef<(() => void) | undefined>(undefined);
+  pendingCloneConsumeRef.current = onPendingCloneSeedConsumed;
   const buildDraftPayloadRef = useRef<() => Record<string, unknown>>(() => ({}));
   /** Avoid re-opening the same draft recovery modal when projectData refreshes without context change. */
   const draftRecoveryOfferedSigRef = useRef('');
@@ -267,14 +284,158 @@ export default function ProjectDataEntry({
     });
   }, [glossary]);
 
+  const hasLegacyGlossaryWithoutSet = useMemo(() => {
+    return activeGlossaryRows.some((g: any) => !String(g?.fldGlossarySetId ?? '').trim());
+  }, [activeGlossaryRows]);
+
+  const [activeGlossarySetId, setActiveGlossarySetId] = useState<string>('');
+
+  const rowsExistForGlossarySet = useCallback(
+    (setId: string) => {
+      if (setId === ACTIVE_GLOSSARY_UNASSIGNED) {
+        return activeGlossaryRows.some((g: any) => !String(g?.fldGlossarySetId ?? '').trim());
+      }
+      const want = normalizeId(setId);
+      if (!want) return false;
+      return activeGlossaryRows.some((g: any) => normalizeId(g.fldGlossarySetId) === want);
+    },
+    [activeGlossaryRows]
+  );
+
+  const pickDefaultActiveGlossarySetId = useCallback((): string => {
+    let stored = '';
+    try {
+      stored = String(localStorage.getItem(ACTIVE_GLOSSARY_STORAGE_KEY) || '').trim();
+      if (!stored) {
+        const legacy = String(sessionStorage.getItem(ACTIVE_GLOSSARY_STORAGE_KEY) || '').trim();
+        if (legacy) {
+          localStorage.setItem(ACTIVE_GLOSSARY_STORAGE_KEY, legacy);
+          sessionStorage.removeItem(ACTIVE_GLOSSARY_STORAGE_KEY);
+          stored = legacy;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    if (stored === ACTIVE_GLOSSARY_UNASSIGNED && hasLegacyGlossaryWithoutSet) {
+      return ACTIVE_GLOSSARY_UNASSIGNED;
+    }
+    if (stored && GLOSSARY_SET_DEFS.some((d) => d.id === stored) && rowsExistForGlossarySet(stored)) {
+      return stored;
+    }
+    if (rowsExistForGlossarySet('TAS_2012')) return 'TAS_2012';
+    for (const d of GLOSSARY_SET_DEFS) {
+      if (rowsExistForGlossarySet(d.id)) return d.id;
+    }
+    if (hasLegacyGlossaryWithoutSet) return ACTIVE_GLOSSARY_UNASSIGNED;
+    return '';
+  }, [hasLegacyGlossaryWithoutSet, rowsExistForGlossarySet]);
+
+  useEffect(() => {
+    if (selections.dataEntryMode === 'custom') return;
+    setActiveGlossarySetId((prev) => {
+      const valid = (id: string) => {
+        if (!id) return false;
+        if (id === ACTIVE_GLOSSARY_UNASSIGNED) return hasLegacyGlossaryWithoutSet;
+        if (!GLOSSARY_SET_DEFS.some((d) => d.id === id)) return false;
+        return rowsExistForGlossarySet(id);
+      };
+      if (valid(prev)) return prev;
+      return pickDefaultActiveGlossarySetId();
+    });
+  }, [
+    selections.dataEntryMode,
+    glossary,
+    activeGlossaryRows,
+    hasLegacyGlossaryWithoutSet,
+    rowsExistForGlossarySet,
+    pickDefaultActiveGlossarySetId,
+  ]);
+
+  useEffect(() => {
+    if (selections.dataEntryMode === 'custom') return;
+    if (!activeGlossarySetId) return;
+    try {
+      localStorage.setItem(ACTIVE_GLOSSARY_STORAGE_KEY, activeGlossarySetId);
+    } catch {
+      /* ignore */
+    }
+  }, [selections.dataEntryMode, activeGlossarySetId]);
+
+  const activeGlossaryRowsForSelection = useMemo(() => {
+    if (selections.dataEntryMode === 'custom') return activeGlossaryRows;
+    if (!activeGlossarySetId) return [];
+    if (activeGlossarySetId === ACTIVE_GLOSSARY_UNASSIGNED) {
+      return activeGlossaryRows.filter((g: any) => !String(g?.fldGlossarySetId ?? '').trim());
+    }
+    const want = normalizeId(activeGlossarySetId);
+    return activeGlossaryRows.filter((g: any) => normalizeId(g.fldGlossarySetId) === want);
+  }, [activeGlossaryRows, activeGlossarySetId, selections.dataEntryMode]);
+
+  const recordGlossaryContextRow = useMemo(() => {
+    if (selections.dataEntryMode === 'custom' || !activeRecord) return null;
+    const targetId = String(activeRecord.fldData || '').trim().toLowerCase();
+    if (!targetId) return null;
+    return (
+      (glossary || []).find(
+        (g: any) => String(g.id || g.fldGlosId || '').trim().toLowerCase() === targetId
+      ) || null
+    );
+  }, [selections.dataEntryMode, activeRecord, glossary]);
+
+  const glossaryRowInSelectionList = (g: any, list: any[]) => {
+    const k = normalizeId(g?.fldGlosId || g?.id);
+    return list.some((r: any) => normalizeId(r.fldGlosId || r.id) === k);
+  };
+
+  const glossaryRowsForDataEntry = useMemo(() => {
+    const base = activeGlossaryRowsForSelection;
+    const r = recordGlossaryContextRow;
+    if (!r || glossaryRowInSelectionList(r, base)) return base;
+    if (r?.fldDeleted || r?.fldIsDeleted) return base;
+    const cat = normalizeId(r.fldCat);
+    const item = normalizeId(r.fldItem);
+    const find = normalizeId(r.fldFind);
+    const recA = normalizeId(r.fldRec);
+    const recB = normalizeId(r.fldRecID);
+    if (!cat || !item || !find || (!recA && !recB)) return base;
+    return [...base, r];
+  }, [activeGlossaryRowsForSelection, recordGlossaryContextRow]);
+
+  /** Open record's glossary row is outside the current Active Glossary filter (selections still valid via context merge). */
+  const recordGlossaryOutOfActiveFilter = useMemo(() => {
+    if (selections.dataEntryMode === 'custom' || !recordGlossaryContextRow) return false;
+    return !glossaryRowInSelectionList(recordGlossaryContextRow, activeGlossaryRowsForSelection);
+  }, [selections.dataEntryMode, recordGlossaryContextRow, activeGlossaryRowsForSelection]);
+
+  const activeGlossarySelectorOptions = useMemo(() => {
+    const opts: { value: string; label: string; key: string }[] = [];
+    for (const d of GLOSSARY_SET_DEFS) {
+      if (!rowsExistForGlossarySet(d.id)) continue;
+      opts.push({
+        value: d.id,
+        label: d.name,
+        key: `ag-${d.id}`,
+      });
+    }
+    if (hasLegacyGlossaryWithoutSet) {
+      opts.push({
+        value: ACTIVE_GLOSSARY_UNASSIGNED,
+        label: 'Unassigned / Legacy',
+        key: 'ag-unassigned',
+      });
+    }
+    return opts;
+  }, [hasLegacyGlossaryWithoutSet, rowsExistForGlossarySet]);
+
   const approvedCategoryIds = useMemo(() => {
     const s = new Set<string>();
-    activeGlossaryRows.forEach((g: any) => {
+    glossaryRowsForDataEntry.forEach((g: any) => {
       const id = normalizeId(g.fldCat);
       if (id) s.add(id);
     });
     return s;
-  }, [activeGlossaryRows]);
+  }, [glossaryRowsForDataEntry]);
 
   const navRecords = useMemo(() => {
     const list = projectData || [];
@@ -316,6 +477,17 @@ export default function ProjectDataEntry({
     if (!editingRecordId) return -1;
     return navRecords.findIndex((d: any) => d.fldPDataID === editingRecordId);
   }, [navRecords, editingRecordId]);
+
+  /** Dropdown options: same order as `navRecords` (project/facility scope; excludes soft-deleted via upstream `projectData`). */
+  const jumpNavOptions = useMemo(() => {
+    return navRecords.map((d: any, i: number) => {
+      const locName =
+        (locations || []).find((l: any) => l.fldLocID === d.fldLocation)?.fldLocName || '—';
+      const short = String(d.fldFindShort || '').trim() || 'Untitled';
+      const label = `#${i + 1} · ${short} · ${locName}`;
+      return { value: d.fldPDataID, label: label.length > 140 ? `${label.slice(0, 137)}…` : label, key: d.fldPDataID };
+    });
+  }, [navRecords, locations]);
 
   const hasRequiredContext = Boolean(selections.projectId && inspector?.fldInspID);
   
@@ -383,6 +555,36 @@ export default function ProjectDataEntry({
   const [isDirty, setIsDirty] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
+  const handleActiveGlossaryChange = useCallback(
+    (nextId: string) => {
+      setActiveGlossarySetId(nextId);
+      try {
+        localStorage.setItem(ACTIVE_GLOSSARY_STORAGE_KEY, nextId);
+      } catch {
+        /* ignore */
+      }
+      setFldFindShort('');
+      setFldFindLong('');
+      setFldRecShort('');
+      setFldRecLong('');
+      setFldMeasurementType('');
+      setFldStandards([]);
+      onSelectionChange({
+        ...selections,
+        categoryId: '',
+        itemId: '',
+        findId: '',
+        recId: '',
+        glosId: '',
+        standards: [],
+        isDirty: true,
+      });
+      setCustomMasterRecId('');
+      setCustomMasterFindId('');
+    },
+    [onSelectionChange, selections]
+  );
+
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -436,13 +638,14 @@ export default function ProjectDataEntry({
         fldMeasurement !== '' ||
         fldUnitType !== 'Decimal' ||
         fldImages.length > 0 ||
-        safeArray(fldStandards).length > 0
+        safeArray(fldStandards).length > 0 ||
+        (Number(fldUnitCost) || 0) !== 0
       );
     }
   }, [
     activeRecord, selections.categoryId, selections.itemId, selections.findId, selections.recId,
     fldFindShort, fldFindLong, fldRecShort, fldRecLong,
-    fldQTY, fldMeasurement, fldMeasurementType, fldMeasurementUnit, fldUnitType, fldLocation, fldImages, fldStandards
+    fldQTY, fldMeasurement, fldMeasurementType, fldMeasurementUnit, fldUnitType, fldUnitCost, fldLocation, fldImages, fldStandards
   ]);
 
   useEffect(() => {
@@ -525,6 +728,7 @@ export default function ProjectDataEntry({
   useEffect(() => {
     return () => {
       if (!isFormDirtyRef.current) return;
+      if (isSavingRef.current) return;
       try {
         const payload = buildDraftPayloadRef.current();
         if (!isDraftPayloadPersistable(payload)) return;
@@ -543,6 +747,16 @@ export default function ProjectDataEntry({
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [savedDraft, setSavedDraft] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  /** Native DnD for fldImages reorder (indices only; URLs unchanged). */
+  const [imageDragState, setImageDragState] = useState<{
+    dragIndex: number | null;
+    overIndex: number | null;
+  }>({ dragIndex: null, overIndex: null });
+  const [citationPreview, setCitationPreview] = useState<{
+    id: string;
+    standard: MasterStandard | null;
+  } | null>(null);
 
   // Workspace / record guard: clear stale Data Entry when project/facility/client changes, record is ghosted,
   // or the loaded record does not belong to the current project/facility.
@@ -584,6 +798,7 @@ export default function ProjectDataEntry({
     draftRecoveryOfferedSigRef.current = '';
     setShowRecoveryModal(false);
     setSavedDraft(null);
+    clonePersistRef.current = null;
     isFormDirtyRef.current = false;
     setIsDirty(false);
     initialSelectionRef.current = {
@@ -694,7 +909,7 @@ export default function ProjectDataEntry({
     const recRaw = recIdOverride !== undefined ? recIdOverride : selections.recId;
     const rec = normalizeId(recRaw);
     if (!cat || !item || !find || !rec) return undefined;
-    return (activeGlossaryRows || []).find((g: any) =>
+    return (glossaryRowsForDataEntry || []).find((g: any) =>
       normalizeId(g.fldCat) === cat &&
       normalizeId(g.fldItem) === item &&
       normalizeId(g.fldFind) === find &&
@@ -702,20 +917,92 @@ export default function ProjectDataEntry({
     );
   };
 
+  /**
+   * Nudge StandardsBrowser type/version from the resolved glossary row (row metadata or set def).
+   * Not derived from Active Glossary alone. Omitted when the row has no usable standards context.
+   */
+  const dataEntryPreferredStandardContext = useMemo(() => {
+    if (selections.dataEntryMode !== 'glossary') return undefined;
+
+    let gRow: any =
+      resolveGlossaryForSelection() ||
+      (() => {
+        const gid = normalizeId(selections.glosId);
+        if (!gid) return undefined;
+        return (glossary || []).find((g: any) => normalizeId(g.fldGlosId || g.id) === gid);
+      })();
+
+    if (!gRow) return undefined;
+
+    let type = String(gRow.fldGlossaryStandardType ?? '').trim();
+    let version = String(gRow.fldGlossaryStandardVersion ?? '').trim();
+    const setIdRaw = String(gRow.fldGlossarySetId ?? '').trim();
+    if ((!type || !version) && setIdRaw) {
+      const def = glossarySetById(setIdRaw);
+      if (def) {
+        if (!type) type = def.standardType;
+        if (!version) version = def.standardVersion;
+      }
+    }
+
+    if (!type || type.toUpperCase() === 'ALL') return undefined;
+
+    const glosId = String(gRow.fldGlosId || gRow.id || '').trim();
+    if (!glosId) return undefined;
+
+    const verNorm =
+      !version || version.toUpperCase() === 'ALL' ? 'ALL' : version;
+    const syncToken = `${normalizeId(glosId)}:${type}:${verNorm}`;
+
+    return {
+      type,
+      version: verNorm === 'ALL' ? undefined : version,
+      syncToken,
+    };
+  }, [
+    selections.dataEntryMode,
+    selections.categoryId,
+    selections.itemId,
+    selections.findId,
+    selections.recId,
+    selections.glosId,
+    glossaryRowsForDataEntry,
+    glossary,
+  ]);
+
   /** Hydrate from a single approved glossary row (rec master + costs + selections.glosId). */
   const applyGlossaryRecommendationRow = (gRow: any, forceHydrateCosts = false) => {
     if (!gRow) return;
+
+    if (dataEntryMode === 'glossary' && !activeRecord) {
+      setFldStandards(safeArray(gRow.fldStandards));
+    }
+
     const recIdRaw = gRow.fldRec || gRow.fldRecID;
     const rec = (masterRecommendations || []).find((r: any) => recommendationMatches(r, recIdRaw));
-    if (!rec) return;
+    if (!rec) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn(
+          '[ProjectDataEntry] Glossary row has no matching master recommendation; citation defaults applied for new records only.',
+          { glosId: gRow.fldGlosId || gRow.id, recIdRaw }
+        );
+      }
+      if (!activeRecord) {
+        const glos = gRow;
+        const rawRecId = String(recIdRaw || '').trim();
+        onSelectionChange({
+          ...selections,
+          recId: rawRecId || selections.recId,
+          glosId: String(glos?.fldGlosId || glos?.id || '').trim() || selections.glosId,
+          isDirty: true,
+        });
+        setIsDirty(true);
+      }
+      return;
+    }
 
     setFldRecShort(rec.fldRecShort || '');
     setFldRecLong(rec.fldRecLong || '');
-    if (dataEntryMode === 'glossary' && !activeRecord) {
-      // New glossary record: inherit citation snapshot from glossary row
-      setFldStandards(safeArray(gRow.fldStandards));
-    }
-    // Existing records preserve projectData.fldStandards — do not overwrite from glossary row here.
 
     const glos = gRow;
     const shouldHydrateCosts = forceHydrateCosts || !activeRecord;
@@ -742,7 +1029,7 @@ export default function ProjectDataEntry({
       ...selections,
       recId: masterRecId,
       glosId: glos?.fldGlosId || glos?.id || '',
-      isDirty: true
+      isDirty: true,
     });
 
     setIsDirty(true);
@@ -839,11 +1126,77 @@ export default function ProjectDataEntry({
     [glossary]
   );
 
+  const applyCloneFromSeed = useCallback(
+    (seed: ProjectDataCloneSeed) => {
+      skipHydrationAfterDraftRef.current = true;
+      try {
+        localStorage.removeItem('fredasoft_draft');
+      } catch {
+        /* ignore */
+      }
+      draftRecoveryOfferedSigRef.current = '';
+      setShowRecoveryModal(false);
+      setSavedDraft(null);
+
+      clonePersistRef.current = {
+        provenance: { ...seed.provenance },
+        saveContext: { ...seed.saveContext }
+      };
+
+      setCustomMasterFindId(seed.customMasterFindId);
+      setCustomMasterRecId(seed.customMasterRecId);
+
+      const mergedSel = {
+        ...selections,
+        ...seed.selections,
+        editingRecordId: null,
+        locationId: '',
+        locationName: '',
+        images: [],
+        standards: [...seed.form.fldStandards],
+        isDirty: true
+      };
+      onSelectionChange(mergedSel);
+
+      initialSelectionRef.current = {
+        categoryId: seed.selections.categoryId || '',
+        itemId: seed.selections.itemId || '',
+        findId: seed.selections.findId || '',
+        recId: seed.selections.recId || '',
+        glosId: seed.selections.glosId || ''
+      };
+
+      setFldFindShort(seed.form.fldFindShort);
+      setFldFindLong(seed.form.fldFindLong);
+      setFldRecShort(seed.form.fldRecShort);
+      setFldRecLong(seed.form.fldRecLong);
+      setFldQTY(0);
+      setFldMeasurement('');
+      setFldMeasurementType('');
+      setFldMeasurementUnit('');
+      setFldUnitType(seed.form.fldUnitType);
+      setFldUnitCost(seed.form.fldUnitCost);
+      setFldTotalCost(0);
+      setFldLocation('');
+      setFldImages([]);
+      setFldStandards([...seed.form.fldStandards]);
+      setIsDirty(true);
+    },
+    [onSelectionChange, selections]
+  );
+
+  useEffect(() => {
+    if (!pendingCloneSeed) return;
+    applyCloneFromSeed(pendingCloneSeed);
+    pendingCloneConsumeRef.current?.();
+  }, [pendingCloneSeed, applyCloneFromSeed]);
+
   // Recovery: when workspace is known, validate draft context before offering recovery.
   useEffect(() => {
     const proj = String(selections?.projectId || '').trim();
     const fac = String(selections?.facilityId || '').trim();
     if (!proj || !fac) return;
+    if (isSavingRef.current) return;
 
     const draft = localStorage.getItem('fredasoft_draft');
     if (!draft) {
@@ -904,6 +1257,7 @@ export default function ProjectDataEntry({
     const t = setTimeout(() => {
       try {
         if (!isFormDirtyRef.current) return;
+        if (isSavingRef.current) return;
         const payload = buildDraftPayload();
         if (!isDraftPayloadPersistable(payload)) return;
         localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
@@ -920,6 +1274,7 @@ export default function ProjectDataEntry({
     const interval = setInterval(() => {
       try {
         if (!isFormDirtyRef.current) return;
+        if (isSavingRef.current) return;
         const payload = buildDraftPayload();
         if (!isDraftPayloadPersistable(payload)) return;
         localStorage.setItem('fredasoft_draft', JSON.stringify(payload));
@@ -1170,6 +1525,7 @@ export default function ProjectDataEntry({
           ''
         );
     
+    isSavingRef.current = true;
     try {
       const basePayload: any = {
         fldPDataID: finalizedId,
@@ -1201,75 +1557,95 @@ export default function ProjectDataEntry({
         fldTimestamp: new Date().toISOString()
       };
 
+      const cp = clonePersistRef.current;
+      if (!wasExisting && cp?.saveContext) {
+        const facFromCtx = facility?.fldFacID || cp.saveContext.fldFacility;
+        if (facFromCtx) {
+          basePayload.fldFacility = facFromCtx;
+        }
+        if (!isCustomMode && !String(basePayload.fldData || '').trim() && cp.saveContext.fldData) {
+          basePayload.fldData = cp.saveContext.fldData;
+        }
+      }
+      if (!wasExisting && cp?.provenance && Object.keys(cp.provenance).length > 0) {
+        Object.assign(basePayload, cp.provenance);
+      }
+
       await onSave(basePayload);
+      clonePersistRef.current = null;
     } catch {
+      isSavingRef.current = false;
       return;
     }
 
     try {
-      localStorage.removeItem('fredasoft_draft');
-    } catch {
-      /* ignore */
-    }
-    setShowRecoveryModal(false);
-    setSavedDraft(null);
-    isFormDirtyRef.current = false;
-    const projSave = String(selections?.projectId || '').trim();
-    const facSave = String(selections?.facilityId || '').trim();
-    if (projSave && facSave) {
-      draftRecoveryOfferedSigRef.current = `${ctxNorm(selections?.clientId)}|${ctxNorm(projSave)}|${ctxNorm(facSave)}|${ctxNorm(selections?.editingRecordId)}`;
-    } else {
-      draftRecoveryOfferedSigRef.current = '';
-    }
+      try {
+        localStorage.removeItem('fredasoft_draft');
+      } catch {
+        /* ignore */
+      }
+      setShowRecoveryModal(false);
+      setSavedDraft(null);
+      isFormDirtyRef.current = false;
+      const projSave = String(selections?.projectId || '').trim();
+      const facSave = String(selections?.facilityId || '').trim();
+      if (projSave && facSave) {
+        draftRecoveryOfferedSigRef.current = `${ctxNorm(selections?.clientId)}|${ctxNorm(projSave)}|${ctxNorm(facSave)}|${ctxNorm(selections?.editingRecordId)}`;
+      } else {
+        draftRecoveryOfferedSigRef.current = '';
+      }
 
-    if (wasExisting) {
+      if (wasExisting) {
+        setIsDirty(false);
+        initialSelectionRef.current = {
+          categoryId: selections.categoryId || '',
+          itemId: selections.itemId || '',
+          findId: selections.findId || '',
+          recId: selections.recId || '',
+          glosId: selections.glosId || ''
+        };
+        onSelectionChange({
+          ...selections,
+          locationId: fldLocation,
+          editingRecordId: finalizedId,
+          isDirty: false
+        });
+        return;
+      }
+
+      setFldFindShort('');
+      setFldFindLong('');
+      setFldRecShort('');
+      setFldRecLong('');
+      setFldQTY(0);
+      setFldMeasurement('');
+      setFldMeasurementType('');
+      setFldMeasurementUnit('');
+      setFldUnitType('Decimal');
+      setFldUnitCost(0);
+      setFldTotalCost(0);
+      setFldImages([]);
+      setFldStandards([]);
+
       setIsDirty(false);
-      initialSelectionRef.current = {
-        categoryId: selections.categoryId || '',
-        itemId: selections.itemId || '',
-        findId: selections.findId || '',
-        recId: selections.recId || '',
-        glosId: selections.glosId || ''
-      };
       onSelectionChange({
         ...selections,
+        categoryId: selections.categoryId,
         locationId: fldLocation,
-        editingRecordId: finalizedId,
+        itemId: '',
+        findId: '',
+        recId: '',
+        glosId: '',
+        standards: [],
+        images: [],
+        editingRecordId: null,
         isDirty: false
       });
-      return;
+      setCustomMasterRecId('');
+      setCustomMasterFindId('');
+    } finally {
+      isSavingRef.current = false;
     }
-
-    setFldFindShort('');
-    setFldFindLong('');
-    setFldRecShort('');
-    setFldRecLong('');
-    setFldQTY(0);
-    setFldMeasurement('');
-    setFldMeasurementType('');
-    setFldMeasurementUnit('');
-    setFldUnitType('Decimal');
-    setFldUnitCost(0);
-    setFldTotalCost(0);
-    setFldImages([]);
-    setFldStandards([]);
-
-    setIsDirty(false);
-    onSelectionChange({
-      ...selections,
-      categoryId: selections.categoryId,
-      locationId: fldLocation,
-      itemId: '',
-      findId: '',
-      recId: '',
-      glosId: '',
-      standards: [],
-      images: [],
-      editingRecordId: null,
-      isDirty: false
-    });
-    setCustomMasterRecId('');
-    setCustomMasterFindId('');
   };
 
   const confirmAction = (title: string, message: string, action: () => void) => {
@@ -1301,6 +1677,14 @@ export default function ProjectDataEntry({
     );
   };
 
+  const handleJumpToRecordSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const v = String(e.target.value || '').trim();
+    if (!v) return;
+    const cur = String(editingRecordId ?? '').trim();
+    if (v === cur) return;
+    navigateToRecord(v);
+  };
+
   const handleNavPrev = () => {
     if (navIndex <= 0) return;
     const prev = navRecords[navIndex - 1];
@@ -1309,54 +1693,85 @@ export default function ProjectDataEntry({
   };
 
   const handleNavNext = () => {
+    const rid = String(editingRecordId ?? '').trim();
+    if (!rid) {
+      const first = navRecords[0];
+      if (!first?.fldPDataID) return;
+      navigateToRecord(first.fldPDataID);
+      return;
+    }
     if (navIndex < 0 || navIndex >= navRecords.length - 1) return;
     const next = navRecords[navIndex + 1];
     if (!next?.fldPDataID) return;
     navigateToRecord(next.fldPDataID);
   };
 
+  /** Full wipe to a new unsaved row: keep workspace (client/project/facility/inspector/category/location/mode). */
+  const applyNewBlankRecord = useCallback(() => {
+    setFldFindShort('');
+    setFldFindLong('');
+    setFldRecShort('');
+    setFldRecLong('');
+    setFldQTY(0);
+    setFldMeasurement('');
+    setFldMeasurementType('');
+    setFldMeasurementUnit('');
+    setFldUnitType('Decimal');
+    setFldUnitCost(0);
+    setFldTotalCost(0);
+    setFldImages([]);
+    setFldStandards([]);
+    isFormDirtyRef.current = false;
+    setIsDirty(false);
+    try {
+      localStorage.removeItem('fredasoft_draft');
+    } catch {
+      /* ignore */
+    }
+    setShowRecoveryModal(false);
+    setSavedDraft(null);
+    draftRecoveryOfferedSigRef.current = '';
+    clonePersistRef.current = null;
+    setCustomMasterRecId('');
+    setCustomMasterFindId('');
+    onSelectionChange({
+      ...selections,
+      editingRecordId: null,
+      itemId: '',
+      findId: '',
+      recId: '',
+      glosId: '',
+      standards: [],
+      images: [],
+      isDirty: false
+    });
+    try {
+      pendingCloneConsumeRef.current?.();
+    } catch {
+      /* ignore */
+    }
+  }, [onSelectionChange, selections]);
+
   const handleClearForm = () => {
     confirmAction(
       "Clear Form",
       "You have unsaved changes. Are you sure you want to discard them and clear the form?",
       () => {
-        // 1. Wipe all record-specific local state
-        setFldFindShort('');
-        setFldFindLong('');
-        setFldRecShort('');
-        setFldRecLong('');
-        setFldQTY(0);
-        setFldMeasurement('');
-        setFldMeasurementType('');
-        setFldMeasurementUnit('');
-        setFldUnitType('Decimal');
-        setFldUnitCost(0);
-        setFldTotalCost(0);
-        setFldImages([]);
-        setFldStandards([]);
-        
-        // 2. Reset baseline for unsaved changes baseline
-        isFormDirtyRef.current = false;
-        setIsDirty(false);
-        localStorage.removeItem('fredasoft_draft');
-        setShowRecoveryModal(false);
-        setSavedDraft(null);
-        draftRecoveryOfferedSigRef.current = '';
-        
-        // 3. Update global selections to drop identity and downstream links
-        // Retain: projectId, facilityId, categoryId, locationId, inspectorId
-        onSelectionChange({
-          ...selections,
-          editingRecordId: '', // Drops the link to the existing record
-          itemId: '', 
-          findId: '', 
-          recId: '',
-          standards: [],
-          images: [],
-          isDirty: false
-        });
-        
+        applyNewBlankRecord();
         toast.info('Form reset to brand-new record state');
+      }
+    );
+  };
+
+  const handleNewRecord = () => {
+    const rid = String(editingRecordId ?? '').trim();
+    if (!rid && !isFormDirty) return;
+    confirmAction(
+      'Start new record',
+      'You have unsaved changes. Discard them and start a new blank record?',
+      () => {
+        applyNewBlankRecord();
+        toast.info('New blank record');
       }
     );
   };
@@ -1473,6 +1888,18 @@ export default function ProjectDataEntry({
     onSelectionChange((prev: any) => ({ ...prev, standards: [] }));
   };
 
+  const handleCloneActiveRecord = () => {
+    if (!activeRecord) return;
+    const seed = buildProjectDataCloneSeed(activeRecord, glossary);
+    confirmAction(
+      'Clone record',
+      'Start a new unsaved record as a copy of this one? Unsaved edits to the current form will be discarded.',
+      () => {
+        applyCloneFromSeed(seed);
+      }
+    );
+  };
+
   const handleRequestDeleteRecord = () => {
     if (!activeRecord || !onDeleteRecord) return;
     const rid = String(editingRecordId || '').trim();
@@ -1482,7 +1909,7 @@ export default function ProjectDataEntry({
     onDeleteRecord(id, {
       title: 'Delete project data record',
       message:
-        'You are about to permanently delete this inspection data record from the project. Its findings, recommendations, images, and citations will be removed. This action cannot be undone.',
+        'This inspection record will be moved to deleted records and hidden from Data Entry and Data Explorer. Its data stays in the project until you restore it from the dashboard Trash Bin (admin) or it is removed by maintenance cleanup.',
       afterDelete: resetDataEntryAfterRecordDeleted
     });
   };
@@ -1492,11 +1919,15 @@ export default function ProjectDataEntry({
       toast.error('Project context is required to add locations.');
       return;
     }
+    if (!selections.facilityId || !String(selections.facilityId).trim()) {
+      toast.error('Select a facility before adding a location.');
+      return;
+    }
     try {
       const newLoc = {
         fldLocID: uuidv4(),
         fldLocName: name,
-        fldFacID: selections.facilityId || '',
+        fldFacID: String(selections.facilityId).trim(),
         fldProjectID: selections.projectId
       };
       
@@ -1518,28 +1949,79 @@ export default function ProjectDataEntry({
   };
 
   const handleUpdateLocation = async (locId: string, newName: string) => {
+    const trimmedName = String(newName ?? '').trim();
+    if (!trimmedName) {
+      toast.error('Location name is required.');
+      return;
+    }
+
     try {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'locations', locId), { fldLocName: newName });
-      
-      // Cascade update to projectData records for this project
-      projectData.forEach(d => {
-        if (d.fldLocation === locId) {
-          batch.update(doc(db, 'projectData', d.fldPDataID), { 
-            fldLocation: locId,
-            fldLocationName: newName // Ensure denormalized name is updated for exports
-          });
-        }
-      });
-      
-      await batch.commit();
-      toast.success('Location updated');
+      await updateDoc(doc(db, 'locations', locId), { fldLocName: trimmedName });
     } catch (error) {
+      console.error('[handleUpdateLocation] Location document update failed:', error);
       toast.error('Failed to update location');
+      return;
+    }
+
+    const pid = String(selections.projectId || '').trim();
+    const fid = String(selections.facilityId || '').trim();
+    if (!pid || !fid) {
+      toast.success('Location updated');
+      return;
+    }
+
+    const matching = (projectData || []).filter((d: any) => {
+      if (String(d?.fldLocation || '').trim() !== String(locId || '').trim()) return false;
+      if (String(d?.fldPDataProject || '').trim() !== pid) return false;
+      if (String(d?.fldFacility || '').trim() !== fid) return false;
+      if (d?.fldDeleted || d?.fldIsDeleted || d?.fldIsArchived) return false;
+      if (!String(d?.fldPDataID || '').trim()) return false;
+      return true;
+    });
+
+    let propagationFailed = false;
+    for (let i = 0; i < matching.length; i += LOCATION_RENAME_PROJECTDATA_CHUNK) {
+      const slice = matching.slice(i, i + LOCATION_RENAME_PROJECTDATA_CHUNK);
+      try {
+        const batch = writeBatch(db);
+        slice.forEach((d: any) => {
+          batch.update(doc(db, 'projectData', d.fldPDataID), {
+            fldLocation: locId,
+            fldLocationName: trimmedName
+          });
+        });
+        await batch.commit();
+      } catch (error) {
+        propagationFailed = true;
+        console.error('[handleUpdateLocation] projectData denormalized propagation chunk failed:', error);
+      }
+    }
+
+    if (propagationFailed) {
+      toast.warning(
+        'Location updated, but some inspection records could not be refreshed.'
+      );
+    } else {
+      toast.success('Location updated');
     }
   };
 
   const handleDeleteLocation = async (locId: string) => {
+    const pid = String(selections.projectId || '').trim();
+    const fid = String(selections.facilityId || '').trim();
+    const activeRefCount = (projectData || []).filter((d: any) => {
+      if (String(d?.fldLocation || '').trim() !== String(locId || '').trim()) return false;
+      if (d?.fldDeleted || d?.fldIsDeleted || d?.fldIsArchived) return false;
+      if (pid && String(d?.fldPDataProject || '').trim() !== pid) return false;
+      if (fid && String(d?.fldFacility || '').trim() !== fid) return false;
+      return true;
+    }).length;
+    if (activeRefCount > 0) {
+      toast.error(
+        `This location is used by ${activeRefCount} inspection record${activeRefCount === 1 ? '' : 's'} and cannot be deleted.`
+      );
+      return;
+    }
     try {
       await firestoreService.softDelete('locations', locId);
       if (fldLocation === locId) setFldLocation('');
@@ -1591,9 +2073,85 @@ export default function ProjectDataEntry({
     setIsDirty(true);
   };
 
-  const facilityLocations = (Array.isArray(locations) ? locations : [])
-    .filter(l => (l.fldProjectID === selections.projectId || (l.fldFacID && l.fldFacID === selections.facilityId)) && !l.fldIsDeleted)
-    .sort((a, b) => a.fldLocName.localeCompare(b.fldLocName));
+  const moveFldImageEarlier = (index: number) => {
+    if (index <= 0) return;
+    setFldImages((prev) => {
+      const next = [...prev];
+      const t = next[index - 1];
+      next[index - 1] = next[index];
+      next[index] = t;
+      return next;
+    });
+    setIsDirty(true);
+  };
+
+  const moveFldImageLater = (index: number) => {
+    if (index >= fldImages.length - 1) return;
+    setFldImages((prev) => {
+      if (index >= prev.length - 1) return prev;
+      const next = [...prev];
+      const t = next[index + 1];
+      next[index + 1] = next[index];
+      next[index] = t;
+      return next;
+    });
+    setIsDirty(true);
+  };
+
+  const DND_IMG_MIME = 'application/x-fredasoft-pd-img-index';
+
+  const reorderFldImagesDrag = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    setFldImages((prev) => {
+      if (fromIndex < 0 || fromIndex >= prev.length || toIndex < 0 || toIndex >= prev.length) return prev;
+      const next = [...prev];
+      const [el] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, el);
+      return next;
+    });
+    setIsDirty(true);
+  };
+
+  const facilityLocations = useMemo(() => {
+    const list = Array.isArray(locations) ? locations : [];
+    const pid = String(selections.projectId || '').trim();
+    const fid = String(selections.facilityId || '').trim();
+    if (!pid || !fid) return [];
+    return list
+      .filter((l: any) => {
+        if (!l?.fldLocID) return false;
+        if (l.fldDeleted || l.fldIsDeleted || l.fldIsArchived) return false;
+        if (String(l.fldProjectID || '').trim() !== pid) return false;
+        if (String(l.fldFacID || '').trim() !== fid) return false;
+        return true;
+      })
+      .sort((a: any, b: any) =>
+        String(a.fldLocName || '').localeCompare(String(b.fldLocName || ''))
+      );
+  }, [locations, selections.projectId, selections.facilityId]);
+
+  /** Strict facility list plus optional orphan row so legacy fldLocation values do not break the select. */
+  const locationSelectOptions = useMemo(() => {
+    const base = facilityLocations.map((l: any) => ({
+      value: l.fldLocID,
+      label: l.fldLocName,
+      key: l.fldLocID
+    }));
+    const cur = String(fldLocation || '').trim();
+    if (!cur) return base;
+    if (base.some((o) => String(o.value) === cur)) return base;
+    const full = Array.isArray(locations) ? locations : [];
+    const hit = full.find(
+      (l: any) =>
+        String(l?.fldLocID || l?.id || '')
+          .trim()
+          .toLowerCase() === cur.toLowerCase()
+    );
+    const orphanLabel = hit?.fldLocName
+      ? `${String(hit.fldLocName)} (not in this facility)`
+      : 'Unknown location (not in this facility)';
+    return [{ value: cur, label: orphanLabel, key: `orphan-loc-${cur}` }, ...base];
+  }, [facilityLocations, fldLocation, locations]);
 
   const displayFldStandards = useMemo(() => {
     const ids = safeArray(fldStandards);
@@ -1606,23 +2164,8 @@ export default function ProjectDataEntry({
 
     return withIndex
       .sort((a, b) => {
-        const aOrder = Number(a.standard?.order);
-        const bOrder = Number(b.standard?.order);
-        const aHasOrder = Number.isFinite(aOrder);
-        const bHasOrder = Number.isFinite(bOrder);
-        if (aHasOrder && bHasOrder && aOrder !== bOrder) return aOrder - bOrder;
-        if (aHasOrder !== bHasOrder) return aHasOrder ? -1 : 1;
-
-        const aCitation = String(a.standard?.citation_num || '').trim();
-        const bCitation = String(b.standard?.citation_num || '').trim();
-        if (aCitation || bCitation) {
-          const citationCompare = aCitation.localeCompare(bCitation, undefined, {
-            numeric: true,
-            sensitivity: 'base'
-          });
-          if (citationCompare !== 0) return citationCompare;
-        }
-
+        const c = compareStandardCitations(a.standard, b.standard);
+        if (c !== 0) return c;
         return a.index - b.index;
       })
       .map((entry) => entry.id);
@@ -1666,16 +2209,16 @@ export default function ProjectDataEntry({
     addRecordCitation(standard.id);
   };
 
-  /** Glossary rows matching current Cat + Item + Finding (approved set only). */
+  /** Glossary rows matching current Cat + Item + Finding (filtered by Active Glossary + optional record context row). */
   const rowsForPath = useMemo(() => {
     if (!selections.findId || !selections.itemId || !selections.categoryId) return [];
-    return activeGlossaryRows.filter(
+    return glossaryRowsForDataEntry.filter(
       (g: any) =>
         normalizeId(g.fldCat) === normalizeId(selections.categoryId) &&
         normalizeId(g.fldItem) === normalizeId(selections.itemId) &&
         normalizeId(g.fldFind) === normalizeId(selections.findId)
     );
-  }, [activeGlossaryRows, selections.findId, selections.itemId, selections.categoryId]);
+  }, [glossaryRowsForDataEntry, selections.findId, selections.itemId, selections.categoryId]);
 
   /** One option per glossary row; value = fldGlosId || doc id for stable selection + fldData. */
   const recommendationOptions = useMemo(() => {
@@ -1694,8 +2237,27 @@ export default function ProjectDataEntry({
         key: `rec-gl-${glosKey}`
       });
     }
-    return out.sort((a, b) => a.label.localeCompare(b.label));
-  }, [rowsForPath, masterRecommendations]);
+    const result = [...out].sort((a, b) => a.label.localeCompare(b.label));
+    const gid = normalizeId(selections.glosId);
+    if (
+      selections.dataEntryMode !== 'custom' &&
+      gid &&
+      !result.some((o) => normalizeId(o.value) === gid) &&
+      recordGlossaryContextRow &&
+      normalizeId(recordGlossaryContextRow.fldGlosId || recordGlossaryContextRow.id) === gid
+    ) {
+      const g = recordGlossaryContextRow;
+      const recRaw = g.fldRec || g.fldRecID;
+      const rec = (masterRecommendations || []).find((r: any) => recommendationMatches(r, recRaw));
+      result.push({
+        value: g.fldGlosId || g.id,
+        label: `${rec?.fldRecShort || 'Recommendation'} (record glossary)`,
+        key: `rec-gl-out-${gid}`,
+      });
+      result.sort((a, b) => a.label.localeCompare(b.label));
+    }
+    return result;
+  }, [rowsForPath, masterRecommendations, selections.glosId, selections.dataEntryMode, recordGlossaryContextRow]);
 
   const recommendationSelectValue = useMemo(() => {
     const opts = recommendationOptions;
@@ -1714,11 +2276,16 @@ export default function ProjectDataEntry({
   useEffect(() => {
     if (!selections.findId || selections.recId || recommendationOptions.length !== 1) return;
     const only = recommendationOptions[0];
-    const gRow = rowsForPath.find(
+    let gRow = rowsForPath.find(
       (g: any) => normalizeId(g.fldGlosId || g.id) === normalizeId(only.value)
     );
+    if (!gRow) {
+      gRow = (glossary || []).find(
+        (g: any) => normalizeId(g.fldGlosId || g.id) === normalizeId(only.value)
+      );
+    }
     if (gRow) applyGlossaryRecommendationRow(gRow, false);
-  }, [selections.findId, selections.recId, recommendationOptions, rowsForPath]);
+  }, [selections.findId, selections.recId, recommendationOptions, rowsForPath, glossary]);
 
   const sortedCategories = useMemo(
     () =>
@@ -1734,7 +2301,7 @@ export default function ProjectDataEntry({
   const sortedItems = useMemo(() => {
     if (!selectedCat) return [];
     const approvedItemIds = new Set(
-      activeGlossaryRows
+      glossaryRowsForDataEntry
         .filter((g: any) => normalizeId(g.fldCat) === normalizeId(selectedCat))
         .map((g: any) => normalizeId(g.fldItem))
         .filter(Boolean)
@@ -1745,12 +2312,12 @@ export default function ProjectDataEntry({
       ),
       'fldItemName'
     );
-  }, [items, selectedCat, activeGlossaryRows]);
+  }, [items, selectedCat, glossaryRowsForDataEntry]);
 
   const sortedFindings = useMemo(() => {
     if (!selectedItem || !selectedCat) return [];
     const approvedFindIds = new Set(
-      activeGlossaryRows
+      glossaryRowsForDataEntry
         .filter(
           (g: any) =>
             normalizeId(g.fldCat) === normalizeId(selectedCat) &&
@@ -1767,7 +2334,38 @@ export default function ProjectDataEntry({
       }),
       'fldFindShort'
     );
-  }, [findings, selectedItem, selectedCat, activeGlossaryRows]);
+  }, [findings, selectedItem, selectedCat, glossaryRowsForDataEntry]);
+
+  const sortedCategoriesWithContext = useMemo(() => {
+    if (selections.dataEntryMode === 'custom' || !selections.categoryId) return sortedCategories;
+    const cid = normalizeId(selections.categoryId);
+    if (sortedCategories.some((c: any) => normalizeId(c.fldCategoryID || c.fldCatID) === cid)) {
+      return sortedCategories;
+    }
+    const add = (mergedCategories || []).find(
+      (c: any) => normalizeId(c.fldCategoryID || c.fldCatID) === cid
+    );
+    if (!add) return sortedCategories;
+    return sortEntities([...sortedCategories, add], 'fldCategoryName');
+  }, [sortedCategories, selections.categoryId, selections.dataEntryMode, mergedCategories]);
+
+  const sortedItemsWithContext = useMemo(() => {
+    if (selections.dataEntryMode === 'custom' || !selections.itemId) return sortedItems;
+    const iid = normalizeId(selections.itemId);
+    if (sortedItems.some((i: any) => normalizeId(i.fldItemID || i.id) === iid)) return sortedItems;
+    const add = (items || []).find((i: any) => normalizeId(i.fldItemID || i.id) === iid);
+    if (!add) return sortedItems;
+    return sortEntities([...sortedItems, add], 'fldItemName');
+  }, [sortedItems, selections.itemId, selections.dataEntryMode, items]);
+
+  const sortedFindingsWithContext = useMemo(() => {
+    if (selections.dataEntryMode === 'custom' || !selections.findId) return sortedFindings;
+    const fid = normalizeId(selections.findId);
+    if (sortedFindings.some((f: any) => normalizeId(f.fldFindID || f.id) === fid)) return sortedFindings;
+    const add = (findings || []).find((f: any) => normalizeId(f.fldFindID || f.id) === fid);
+    if (!add) return sortedFindings;
+    return sortEntities([...sortedFindings, add], 'fldFindShort');
+  }, [sortedFindings, selections.findId, selections.dataEntryMode, findings]);
 
   const selectedFinding = useMemo(() => {
     const id = (selections.findId || '').toLowerCase().trim();
@@ -1809,6 +2407,77 @@ export default function ProjectDataEntry({
       (x: any) => normalizeId(x.fldFindID || x.id) === id
     );
   }, [customMasterFindId, activeFindingsList]);
+
+  /** Library Finding used to backfill fldMeasurementType / fldMeasurementUnit (not glossary cost fldUnitType). */
+  const libraryFindingForMeasurementSync = useMemo(() => {
+    if (!activeRecord) return undefined;
+    const findingsList = Array.isArray(findings) ? findings : [];
+
+    const fldDataBlank = !String(activeRecord.fldData || '').trim();
+    const hasPDataCatItem =
+      !!String(activeRecord.fldPDataCategoryID || '').trim() &&
+      !!String(activeRecord.fldPDataItemID || '').trim();
+    const isCustomRecord =
+      activeRecord.fldRecordSource === 'custom' || (fldDataBlank && hasPDataCatItem);
+
+    if (isCustomRecord) {
+      const mid =
+        normalizeId(activeRecord.fldPDataMasterFindID) || normalizeId(customMasterFindId);
+      if (!mid) return undefined;
+      return findingsList.find((f: any) => normalizeId(f?.fldFindID || f?.id) === mid);
+    }
+
+    const dataKey = normalizeId(activeRecord.fldData);
+    if (!dataKey) return undefined;
+    const gRow = (glossary || []).find((g: any) => {
+      const gid = normalizeId(g?.fldGlosId || g?.id);
+      return gid === dataKey;
+    });
+    if (!gRow) return undefined;
+    const findFk = normalizeId(gRow.fldFind);
+    if (!findFk) return undefined;
+    return findingsList.find((f: any) => normalizeId(f?.fldFindID || f?.id) === findFk);
+  }, [activeRecord, glossary, findings, customMasterFindId]);
+
+  const showSyncMeasurementFromLibrary = useMemo(() => {
+    if (!activeRecord) return false;
+    const typeBlank = !String(fldMeasurementType || '').trim();
+    const unitBlank = !String(fldMeasurementUnit || '').trim();
+    if (!typeBlank && !unitBlank) return false;
+    const src = libraryFindingForMeasurementSync;
+    if (!src) return false;
+    const canType = typeBlank && !!String(src.fldMeasurementType || '').trim();
+    const canUnit = unitBlank && !!String(src.fldUnitType || '').trim();
+    return canType || canUnit;
+  }, [
+    activeRecord,
+    fldMeasurementType,
+    fldMeasurementUnit,
+    libraryFindingForMeasurementSync
+  ]);
+
+  const handleSyncMeasurementFromLibrary = () => {
+    const src = libraryFindingForMeasurementSync;
+    if (!src || !activeRecord) {
+      toast.info('No library finding available to sync measurement metadata.');
+      return;
+    }
+    let did = false;
+    if (!String(fldMeasurementType || '').trim() && String(src.fldMeasurementType || '').trim()) {
+      setFldMeasurementType(String(src.fldMeasurementType).trim());
+      did = true;
+    }
+    if (!String(fldMeasurementUnit || '').trim() && String(src.fldUnitType || '').trim()) {
+      setFldMeasurementUnit(String(src.fldUnitType).trim());
+      did = true;
+    }
+    if (!did) {
+      toast.info('No measurement metadata available from the library finding.');
+      return;
+    }
+    setIsDirty(true);
+    toast.success('Measurement fields updated from library finding. Save to persist.');
+  };
 
   const displayMeasurementTypeReadonly = useMemo(() => {
     const trimmed = (fldMeasurementType || '').trim();
@@ -2012,10 +2681,20 @@ export default function ProjectDataEntry({
         ? `Record ${navIndex + 1} of ${navCount}`
         : `Record not in list — ${navCount} in facility`
       : `New Record — ${navCount} existing records`;
-  const canNavStep =
-    Boolean(editingRecordId && String(editingRecordId).trim()) && navIndex >= 0 && navCount > 0;
-  const prevNavDisabled = !canNavStep || navIndex <= 0;
-  const nextNavDisabled = !canNavStep || navIndex < 0 || navIndex >= navCount - 1;
+  const editingRecordIdNorm = String(editingRecordId ?? '').trim();
+  const isBlankRecordNav = !editingRecordIdNorm;
+  const canNavStep = Boolean(editingRecordIdNorm) && navIndex >= 0 && navCount > 0;
+  const prevNavDisabled = isBlankRecordNav || !canNavStep || navIndex <= 0;
+  const nextNavDisabled = isBlankRecordNav
+    ? navCount === 0
+    : !canNavStep || navIndex < 0 || navIndex >= navCount - 1;
+
+  const jumpSelectValue =
+    editingRecordIdNorm && navRecords.some((d: any) => d.fldPDataID === editingRecordIdNorm)
+      ? editingRecordIdNorm
+      : '';
+
+  const newRecordDisabled = !hasNavContext || (isBlankRecordNav && !isFormDirty);
 
   const draftRecoveryFindingPreview = useMemo(() => {
     const d = savedDraft;
@@ -2040,22 +2719,76 @@ export default function ProjectDataEntry({
       <div className="flex-1 overflow-y-auto w-full bg-transparent">
         {/* LAYER 1: STICKY HEADER - Opaque background to mask scrolling content */}
         <div className="sticky top-0 z-30 bg-zinc-50 border-b border-zinc-200 shadow-sm">
-          <div className="max-w-6xl mx-auto px-8 pt-3 pb-4 space-y-4">
-            {/* Header Title & Inspector Badge - Wrapped in a card-like container for floating effect */}
-            <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-amber-200">
-                  <Book size={20} />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-zinc-900 leading-tight">Data Entry</h2>
-                </div>
+          <div className="max-w-6xl mx-auto px-6 pt-2 pb-2 space-y-2">
+            {/* Header: Active Glossary (glossary mode) | record nav | mode + inspector */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-white py-2 px-3 rounded-xl border border-zinc-200 shadow-sm">
+              <div
+                className={cn(
+                  'flex shrink-0 flex-col gap-1.5',
+                  dataEntryMode === 'glossary' &&
+                    hasRequiredContext &&
+                    'w-full max-w-[min(100%,22rem)] sm:max-w-xs md:max-w-sm'
+                )}
+              >
+                {dataEntryMode === 'glossary' && hasRequiredContext && (
+                  <>
+                    {activeGlossarySelectorOptions.length > 0 ? (
+                      <Select
+                        label="Active Glossary"
+                        labelClassName="!text-[9px] !font-bold !text-zinc-500"
+                        value={activeGlossarySetId}
+                        onChange={(e: any) =>
+                          handleActiveGlossaryChange(String(e?.target?.value ?? ''))
+                        }
+                        disabled={activeGlossarySelectorOptions.length === 0}
+                        selectClassName={cn(focusClasses, '!py-1.5', '!text-xs')}
+                        options={activeGlossarySelectorOptions}
+                      />
+                    ) : null}
+                    {recordGlossaryOutOfActiveFilter ? (
+                      <div className="rounded-lg border border-indigo-200 bg-indigo-50/90 px-2 py-1.5 text-[10px] leading-snug text-indigo-900">
+                        <span className="font-bold uppercase tracking-wide text-indigo-700">Record glossary set</span>
+                        <span className="mt-0.5 block">
+                          Different set than Active Glossary; path kept for saved values. Switch set to match.
+                        </span>
+                      </div>
+                    ) : null}
+                    {dataEntryMode === 'glossary' &&
+                    activeGlossaryRows.length > 0 &&
+                    activeGlossarySetId &&
+                    activeGlossaryRowsForSelection.length === 0 &&
+                    !recordGlossaryContextRow ? (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-2 py-1.5 text-[10px] text-amber-950">
+                        No glossary rows for this Active Glossary. Pick another set or add rows in Glossary Builder.
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </div>
-              
-              <div className="flex flex-wrap items-center justify-end gap-3">
-                <div className="flex items-center gap-2">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Mode</label>
-                  <div className="flex items-center bg-zinc-100 rounded-xl p-1 border border-zinc-200">
+
+              {hasNavContext ? (
+                <div className="flex flex-1 min-w-0 items-center justify-center gap-2 px-1">
+                  <span
+                    className={cn(
+                      'shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded select-none',
+                      isFormDirty ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
+                    )}
+                    aria-live="polite"
+                  >
+                    {isFormDirty ? 'DIRTY' : 'CLEAN'}
+                  </span>
+                  <span className="text-xs font-medium text-zinc-600 truncate text-center min-w-0 max-w-full">
+                    {navLabel}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex-1 min-w-0" aria-hidden />
+              )}
+
+              <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 ml-auto">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Mode</label>
+                  <div className="flex items-center bg-zinc-100 rounded-lg p-0.5 border border-zinc-200">
                     <button
                       type="button"
                       disabled={!hasRequiredContext}
@@ -2065,7 +2798,7 @@ export default function ProjectDataEntry({
                         onSelectionChange({ ...selections, dataEntryMode: 'glossary' });
                       }}
                       className={cn(
-                        "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
+                        "px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-md transition-all",
                         dataEntryMode === 'glossary' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                       )}
                       title="Use approved glossary record combinations"
@@ -2077,7 +2810,7 @@ export default function ProjectDataEntry({
                       disabled={!hasRequiredContext}
                       onClick={() => onSelectionChange({ ...selections, dataEntryMode: 'custom' })}
                       className={cn(
-                        "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
+                        "px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-md transition-all",
                         dataEntryMode === 'custom' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                       )}
                       title="Create a project-only custom record"
@@ -2088,11 +2821,11 @@ export default function ProjectDataEntry({
                 </div>
 
                 {inspector && (
-                  <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl shadow-sm">
-                    <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider leading-none">Active Inspector</span>
-                      <span className="text-xs font-bold text-zinc-900 tracking-tight">
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg shadow-sm">
+                    <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse shadow-[0_0_6px_rgba(245,158,11,0.5)]" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider leading-none">Active Inspector</span>
+                      <span className="text-[11px] font-bold text-zinc-900 tracking-tight truncate max-w-[10rem]">
                         {inspector.fldInspName || inspector.fldInspID}
                       </span>
                     </div>
@@ -2101,153 +2834,269 @@ export default function ProjectDataEntry({
               </div>
             </div>
 
-            {hasNavContext && (
-              <div className="flex flex-wrap items-center gap-3 bg-white px-4 py-2 rounded-xl border border-zinc-200 shadow-sm text-xs">
-                <span
-                  className={cn(
-                    'text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded select-none',
-                    isFormDirty ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
-                  )}
-                  aria-live="polite"
+            {hasNavContext ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-9 w-9 shrink-0 p-0 min-w-0"
+                  disabled={prevNavDisabled}
+                  onClick={handleNavPrev}
+                  aria-label="Previous record"
                 >
-                  {isFormDirty ? 'DIRTY' : 'CLEAN'}
-                </span>
-                <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-8 px-2 min-w-[2rem]"
-                    disabled={prevNavDisabled}
-                    onClick={handleNavPrev}
-                    aria-label="Previous record"
-                  >
-                    <ChevronLeft size={16} />
-                  </Button>
-                  <span className="text-zinc-700 font-medium flex-1 text-center">{navLabel}</span>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-8 px-2 min-w-[2rem]"
-                    disabled={nextNavDisabled}
-                    onClick={handleNavNext}
-                    aria-label="Next record"
-                  >
-                    <ChevronRight size={16} />
-                  </Button>
+                  <ChevronLeft size={18} />
+                </Button>
+                <div className="flex min-w-0 max-w-[min(100%,18rem)] shrink flex-[1_1_10rem] flex-col gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    Jump to record
+                  </span>
+                  <div className="flex min-h-0 items-stretch gap-2">
+                    <div className="min-w-0 flex-1">
+                      <Select
+                        placeholder={navCount === 0 ? 'No records in facility' : 'Select record…'}
+                        value={jumpSelectValue}
+                        onChange={handleJumpToRecordSelect}
+                        disabled={navCount === 0}
+                        options={jumpNavOptions}
+                        selectClassName={cn(focusClasses, '!py-1.5', '!text-xs')}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className={cn(
+                        'flex shrink-0 items-center justify-center gap-1 self-stretch px-2.5 text-xs font-bold uppercase tracking-tight',
+                        !newRecordDisabled &&
+                          '!border-orange-600 !bg-orange-500 !text-white hover:!border-orange-700 hover:!bg-orange-600'
+                      )}
+                      disabled={newRecordDisabled}
+                      onClick={handleNewRecord}
+                      title="Start a new blank inspection record"
+                    >
+                      <Plus size={14} />
+                      New
+                    </Button>
+                  </div>
                 </div>
+                <Card className="flex-1 min-w-0 border-zinc-200 shadow-sm !bg-blue-100 p-3 py-2">
+                  <div className="flex flex-wrap gap-3">
+                    <div className="flex-1 min-w-[180px] relative group">
+                      <Select
+                        label="Category"
+                        value={selectedCat}
+                        onChange={(e: any) => setSelectedCat(e.target.value)}
+                        disabled={!hasRequiredContext}
+                        selectClassName={cn(focusClasses, '!py-1.5')}
+                        options={(dataEntryMode === 'custom'
+                          ? sortEntities(mergedCategories || [], 'fldCategoryName')
+                          : sortedCategoriesWithContext
+                        ).map((c: any, index: number) => ({
+                          value: c.fldCategoryID || c.fldCatID || `missing-${index}`,
+                          label: c.fldCategoryName || c.fldCatName || 'Select Category',
+                          key: `cat-${c.fldCategoryID || c.fldCatID || index}-${index}`
+                        }))}
+                      />
+                      {selectedCat && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCat('')}
+                          className="absolute right-9 top-7 p-1 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Clear Category"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-[180px]">
+                      <Select
+                        label="Item"
+                        value={selectedItem}
+                        onChange={(e: any) => setSelectedItem(e.target.value)}
+                        selectClassName={cn(focusClasses, '!py-1.5')}
+                        options={(dataEntryMode === 'custom'
+                          ? sortEntities(
+                              (items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat),
+                              'fldItemName'
+                            )
+                          : sortedItemsWithContext
+                        ).map((i: any, index: number) => ({
+                          value: i.fldItemID || `missing-item-${index}`,
+                          label: i.fldItemName || 'Select Item',
+                          key: `item-${i.fldItemID || index}-${index}`
+                        }))}
+                      />
+                    </div>
+                    <div className="flex min-w-[180px] flex-1 items-end gap-2">
+                      <div className="relative min-w-0 flex-1 group">
+                        <Select
+                          label="Location / Area"
+                          value={fldLocation}
+                          onChange={(e: any) => {
+                            setFldLocation(e.target.value);
+                            onSelectionChange({ ...selections, locationId: e.target.value });
+                            setIsDirty(true);
+                          }}
+                          selectClassName={cn(focusClasses, '!py-1.5')}
+                          options={locationSelectOptions}
+                        />
+                        {fldLocation && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFldLocation('');
+                              onSelectionChange({ ...selections, locationId: '' });
+                            }}
+                            className="absolute right-9 top-7 p-1 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Clear Location"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        type="button"
+                        className="h-9 w-9 shrink-0 p-0"
+                        onClick={() => setIsLocationModalOpen(true)}
+                        title="Manage Locations"
+                      >
+                        <Edit2 size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-9 w-9 shrink-0 p-0 min-w-0"
+                  disabled={nextNavDisabled}
+                  onClick={handleNavNext}
+                  aria-label="Next record"
+                >
+                  <ChevronRight size={18} />
+                </Button>
               </div>
+            ) : (
+              <Card className="border-zinc-200 shadow-sm !bg-blue-100 p-3 py-2">
+                <div className="flex flex-wrap gap-3">
+                  <div className="flex-1 min-w-[180px] relative group">
+                    <Select
+                      label="Category"
+                      value={selectedCat}
+                      onChange={(e: any) => setSelectedCat(e.target.value)}
+                      disabled={!hasRequiredContext}
+                      selectClassName={cn(focusClasses, '!py-1.5')}
+                      options={(dataEntryMode === 'custom'
+                        ? sortEntities(mergedCategories || [], 'fldCategoryName')
+                        : sortedCategoriesWithContext
+                      ).map((c: any, index: number) => ({
+                        value: c.fldCategoryID || c.fldCatID || `missing-${index}`,
+                        label: c.fldCategoryName || c.fldCatName || 'Select Category',
+                        key: `cat-${c.fldCategoryID || c.fldCatID || index}-${index}`
+                      }))}
+                    />
+                    {selectedCat && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCat('')}
+                        className="absolute right-9 top-7 p-1 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Clear Category"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-[180px]">
+                    <Select
+                      label="Item"
+                      value={selectedItem}
+                      onChange={(e: any) => setSelectedItem(e.target.value)}
+                      selectClassName={cn(focusClasses, '!py-1.5')}
+                      options={(dataEntryMode === 'custom'
+                        ? sortEntities(
+                            (items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat),
+                            'fldItemName'
+                          )
+                        : sortedItemsWithContext
+                      ).map((i: any, index: number) => ({
+                        value: i.fldItemID || `missing-item-${index}`,
+                        label: i.fldItemName || 'Select Item',
+                        key: `item-${i.fldItemID || index}-${index}`
+                      }))}
+                    />
+                  </div>
+                  <div className="flex min-w-[180px] flex-1 items-end gap-2">
+                    <div className="relative min-w-0 flex-1 group">
+                      <Select
+                        label="Location / Area"
+                        value={fldLocation}
+                        onChange={(e: any) => {
+                          setFldLocation(e.target.value);
+                          onSelectionChange({ ...selections, locationId: e.target.value });
+                          setIsDirty(true);
+                        }}
+                        selectClassName={cn(focusClasses, '!py-1.5')}
+                        options={locationSelectOptions}
+                      />
+                      {fldLocation && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFldLocation('');
+                            onSelectionChange({ ...selections, locationId: '' });
+                          }}
+                          className="absolute right-9 top-7 p-1 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Clear Location"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      type="button"
+                      className="h-9 w-9 shrink-0 p-0"
+                      onClick={() => setIsLocationModalOpen(true)}
+                      title="Manage Locations"
+                    >
+                      <Edit2 size={16} />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
             )}
 
             {!hasRequiredContext && (
-              <div className="mb-4 p-4 rounded-xl border border-zinc-200 bg-zinc-50/90 text-zinc-700 shadow-sm">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/90 p-3 text-zinc-700 shadow-sm">
                 <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Workspace incomplete</p>
-                <p className="text-sm text-zinc-600 mt-1.5 leading-snug">
+                <p className="mt-1 text-sm leading-snug text-zinc-600">
                   Select a client, facility, project, and inspector to enable data entry.
                 </p>
               </div>
             )}
 
             {dataEntryMode === 'glossary' && hasRequiredContext && activeGlossaryRows.length === 0 && (
-              <div className="mb-4 p-4 rounded-xl border border-amber-200 bg-amber-50/90 text-amber-900 shadow-sm">
+              <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-3 text-amber-900 shadow-sm">
                 <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">No glossary records</p>
-                <p className="text-sm text-amber-900/90 mt-1.5 leading-snug">
+                <p className="mt-1 text-sm leading-snug text-amber-900/90">
                   No glossary records are available. Create glossary records in Glossary Builder first.
                 </p>
               </div>
             )}
-
-            {/* TOP CONTEXT CARD - Now part of sticky header */}
-            <Card className="p-6 border-zinc-200 shadow-sm !bg-blue-100">
-              <div className="flex flex-wrap gap-6">
-                {/* CATEGORY SELECT */}
-                <div className="flex-1 min-w-[240px] relative group">
-                  <Select 
-                    label="Category"
-                    value={selectedCat}
-                    onChange={(e: any) => setSelectedCat(e.target.value)}
-                    disabled={!hasRequiredContext}
-                    selectClassName={focusClasses}
-                    options={(dataEntryMode === 'custom' ? sortEntities(mergedCategories || [], 'fldCategoryName') : sortedCategories).map((c: any, index: number) => ({ 
-                      value: c.fldCategoryID || c.fldCatID || `missing-${index}`, 
-                      label: c.fldCategoryName || c.fldCatName || 'Select Category',
-                      key: `cat-${c.fldCategoryID || c.fldCatID || index}-${index}` 
-                    }))}
-                  />
-                  {selectedCat && (
-                    <button 
-                      onClick={() => setSelectedCat('')}
-                      className="absolute right-10 top-8 p-1 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Clear Category"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-                {/* ITEM SELECT */}
-                <div className="flex-1 min-w-[240px]">
-                  <Select 
-                    label="Item"
-                    value={selectedItem}
-                    onChange={(e: any) => setSelectedItem(e.target.value)}
-                    selectClassName={focusClasses}
-                    options={(dataEntryMode === 'custom'
-                      ? sortEntities((items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat), 'fldItemName')
-                      : sortedItems
-                    ).map((i: any, index: number) => ({ 
-                      value: i.fldItemID || `missing-item-${index}`, 
-                      label: i.fldItemName || 'Select Item',
-                      key: `item-${i.fldItemID || index}-${index}` 
-                    }))}
-                  />
-                </div>
-                <div className="flex-1 min-w-[240px] flex items-end gap-2">
-                  <div className="flex-1 relative group">
-                    <Select 
-                      label="Location / Area"
-                      value={fldLocation}
-                      onChange={(e: any) => { 
-                        setFldLocation(e.target.value); 
-                        onSelectionChange({ ...selections, locationId: e.target.value });
-                        setIsDirty(true); 
-                      }}
-                      selectClassName={focusClasses}
-                      options={facilityLocations.map(l => ({ value: l.fldLocID, label: l.fldLocName, key: l.fldLocID }))}
-                    />
-                    {fldLocation && (
-                      <button 
-                        onClick={() => {
-                          setFldLocation('');
-                          onSelectionChange({ ...selections, locationId: '' });
-                        }}
-                        className="absolute right-10 top-8 p-1 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Clear Location"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                  <Button 
-                    variant="secondary" 
-                    size="icon" 
-                    className="mb-1"
-                    onClick={() => setIsLocationModalOpen(true)}
-                    title="Manage Locations"
-                  >
-                    <Edit2 size={16} />
-                  </Button>
-                </div>
-              </div>
-            </Card>
           </div>
         </div>
 
         {/* LAYER 2: SCROLLABLE CONTENT */}
-        <div className="max-w-6xl mx-auto px-8 py-8 space-y-8">
+        <div className="max-w-6xl mx-auto px-6 py-6 space-y-8">
           {/* FINDING CARD */}
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
             {dataEntryMode === 'glossary' && (
               <Select 
                 label="Finding"
+                labelClassName="text-base font-bold text-zinc-900 leading-tight normal-case tracking-normal"
                 value={selections.findId || ''}
                 onChange={(e: any) => {
                    const find = (findings || []).find(f => (f.id || f.fldFindID || "").toLowerCase() === (e.target.value || "").toLowerCase());
@@ -2263,7 +3112,7 @@ export default function ProjectDataEntry({
                    onSelectionChange({...selections, findId: e.target.value, recId: '', glosId: '', isDirty: true});
                 }}
                 selectClassName={cn('!bg-yellow-50', focusClasses)}
-                options={sortedFindings.map((f, index) => ({ 
+                options={sortedFindingsWithContext.map((f, index) => ({ 
                   value: f.fldFindID || `missing-find-${index}`, 
                   label: f.fldFindShort || 'Select Finding', 
                   key: `find-${f.fldFindID || index}-${index}` 
@@ -2357,33 +3206,51 @@ export default function ProjectDataEntry({
                   className={focusClasses}
                   placeholder="Actual recorded value"
                 />
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Type</label>
-                  <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
-                    {displayMeasurementTypeReadonly}
+                <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Type</label>
+                    <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
+                      {displayMeasurementTypeReadonly}
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Unit</label>
-                  <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
-                    {/* ENFORCE CONTROLLED VOCABULARY */}
-                    {MEASUREMENT_UNITS.includes(fldMeasurementUnit) ? fldMeasurementUnit : (fldMeasurementUnit || 'None')}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Measurement Unit</label>
+                    <div className="h-10 px-3 flex items-center bg-zinc-100 border border-zinc-200 rounded-lg text-sm font-medium text-zinc-900 italic">
+                      {/* ENFORCE CONTROLLED VOCABULARY */}
+                      {MEASUREMENT_UNITS.includes(fldMeasurementUnit) ? fldMeasurementUnit : (fldMeasurementUnit || 'None')}
+                    </div>
                   </div>
+                  {showSyncMeasurementFromLibrary ? (
+                    <div className="pt-1 md:col-span-2">
+                      <button
+                        type="button"
+                        onClick={handleSyncMeasurementFromLibrary}
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        Sync from library finding
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
           </Card>
 
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
-             <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-2">Recommendation</label>
+             <label className="text-base font-bold text-zinc-900 leading-tight block mb-2">Recommendation</label>
              {dataEntryMode === 'glossary' && (
                <Select 
                 value={recommendationSelectValue || ''}
                 onChange={(e: any) => {
                   const gid = e.target.value;
-                  const gRow = rowsForPath.find(
+                  let gRow = rowsForPath.find(
                     (g: any) => normalizeId(g.fldGlosId || g.id) === normalizeId(gid)
                   );
+                  if (!gRow) {
+                    gRow = (glossary || []).find(
+                      (g: any) => normalizeId(g.fldGlosId || g.id) === normalizeId(gid)
+                    );
+                  }
                   applyGlossaryRecommendationRow(gRow, true);
                 }}
                 selectClassName={cn('!bg-yellow-50', focusClasses)}
@@ -2520,7 +3387,7 @@ export default function ProjectDataEntry({
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
             <div className="flex flex-col gap-1 border-b border-zinc-100 pb-2">
               <div>
-                <h3 className="text-sm font-bold text-zinc-900">Record Citations</h3>
+                <h3 className="text-base font-bold text-zinc-900 leading-tight">Record Citations</h3>
                 <p className="text-[11px] text-zinc-500 mt-0.5">
                   Stored on this project data record as <span className="font-mono text-zinc-600">fldStandards</span>.
                 </p>
@@ -2556,9 +3423,19 @@ export default function ProjectDataEntry({
                             key={id}
                             className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs"
                           >
-                            <span className="font-medium text-zinc-800 truncate" title={label}>
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 truncate text-left font-medium text-zinc-800 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 rounded px-0.5 -mx-0.5"
+                              title={label}
+                              onClick={() =>
+                                setCitationPreview({
+                                  id,
+                                  standard: s ?? null
+                                })
+                              }
+                            >
                               {label}
-                            </span>
+                            </button>
                             <button
                               type="button"
                               className="shrink-0 p-1 rounded-md text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-colors"
@@ -2589,6 +3466,8 @@ export default function ProjectDataEntry({
                   enableAutoExpand502={false}
                   uiResetKey={dataEntryStandardsUiKey}
                   persistUiStateKey={dataEntryStandardsUiKey}
+                  standardSelectionPersistKey="project-data-entry-standards"
+                  preferredStandardContext={dataEntryPreferredStandardContext}
                 />
               </div>
             </div>
@@ -2624,22 +3503,171 @@ export default function ProjectDataEntry({
               <p className="text-sm text-zinc-400 italic text-center py-6">No images attached.</p>
             ) : (
               <div className="flex flex-wrap gap-3">
-                {fldImages.map((url) => (
+                {fldImages.map((url, imgIndex) => {
+                  const canReorder = fldImages.length > 1;
+                  const isDragSource = canReorder && imageDragState.dragIndex === imgIndex;
+                  const isDropTarget =
+                    canReorder &&
+                    imageDragState.overIndex === imgIndex &&
+                    imageDragState.dragIndex !== null &&
+                    imageDragState.dragIndex !== imgIndex;
+                  return (
                   <div
                     key={url}
-                    className="relative w-24 h-24 rounded-xl border border-zinc-200 overflow-hidden bg-zinc-50 shrink-0 group"
+                    draggable={canReorder}
+                    onDragStart={(e) => {
+                      if (!canReorder) return;
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData(DND_IMG_MIME, String(imgIndex));
+                      e.dataTransfer.setData('text/plain', String(imgIndex));
+                      setImageDragState({ dragIndex: imgIndex, overIndex: null });
+                    }}
+                    onDragEnd={() => {
+                      setImageDragState({ dragIndex: null, overIndex: null });
+                    }}
+                    onDragOver={(e) => {
+                      if (!canReorder) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      setImageDragState((prev) =>
+                        prev.overIndex === imgIndex ? prev : { ...prev, overIndex: imgIndex }
+                      );
+                    }}
+                    onDragLeave={(e) => {
+                      if (!canReorder) return;
+                      const next = e.relatedTarget;
+                      if (next instanceof Node && e.currentTarget.contains(next)) return;
+                      setImageDragState((prev) =>
+                        prev.overIndex === imgIndex ? { ...prev, overIndex: null } : prev
+                      );
+                    }}
+                    onDrop={(e) => {
+                      if (!canReorder) return;
+                      e.preventDefault();
+                      const raw =
+                        e.dataTransfer.getData(DND_IMG_MIME) || e.dataTransfer.getData('text/plain');
+                      const from = Number.parseInt(String(raw).trim(), 10);
+                      if (!Number.isFinite(from) || from < 0 || from >= fldImages.length) {
+                        setImageDragState({ dragIndex: null, overIndex: null });
+                        return;
+                      }
+                      reorderFldImagesDrag(from, imgIndex);
+                      setImageDragState({ dragIndex: null, overIndex: null });
+                    }}
+                    className={cn(
+                      'relative h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 group',
+                      canReorder && 'cursor-grab active:cursor-grabbing',
+                      isDragSource && 'opacity-60 ring-2 ring-blue-500/70 ring-offset-1 ring-offset-zinc-100',
+                      isDropTarget && 'ring-2 ring-dashed ring-blue-500 ring-offset-1 ring-offset-zinc-100'
+                    )}
                   >
-                    <img src={url} alt="" className="w-full h-full object-cover" />
                     <button
                       type="button"
-                      onClick={() => handleRemoveImage(url)}
-                      className="absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      draggable={false}
+                      onClick={() => setImagePreviewUrl(url)}
+                      className={cn(
+                        'absolute top-0 bottom-0 z-0 block cursor-pointer text-left ring-offset-2 transition-shadow hover:ring-2 hover:ring-blue-400/60 focus:outline-none focus:ring-2 focus:ring-blue-500',
+                        canReorder ? 'left-6 right-0 rounded-r-xl' : 'inset-0 rounded-xl'
+                      )}
+                      aria-label="View image larger"
+                    >
+                      <img
+                        src={url}
+                        alt=""
+                        draggable={false}
+                        className={cn(
+                          'h-full w-full object-cover pointer-events-none',
+                          canReorder ? 'rounded-r-xl' : 'rounded-xl'
+                        )}
+                      />
+                    </button>
+                    <div
+                      className={cn(
+                        'pointer-events-none absolute top-0 bottom-0 bg-gradient-to-t from-black/35 to-transparent',
+                        canReorder ? 'left-6 right-0 rounded-r-xl' : 'inset-0 rounded-xl'
+                      )}
+                    />
+                    <div
+                      className={cn(
+                        'pointer-events-none absolute bottom-0.5 z-[5] text-center leading-none',
+                        canReorder ? 'left-7 right-1' : 'left-1 right-1'
+                      )}
+                    >
+                      <span className="inline-block rounded bg-black/55 px-1 py-px text-[7px] font-semibold uppercase tracking-wide text-white/95">
+                        {imgIndex < 2 ? 'Report image' : 'Additional'}
+                      </span>
+                    </div>
+                    <div
+                      className={cn(
+                        'pointer-events-none absolute top-1 z-[5] flex h-5 min-w-[1.25rem] items-center justify-center rounded bg-black/55 px-1 text-[10px] font-bold text-white',
+                        canReorder ? 'left-7' : 'left-1'
+                      )}
+                    >
+                      {imgIndex + 1}
+                    </div>
+                    {canReorder ? (
+                      <div className="absolute bottom-0 left-0 top-0 z-20 flex w-6 flex-col items-stretch justify-center gap-0.5 border-r border-white/10 bg-black/45 py-1">
+                        {imgIndex > 0 ? (
+                          <button
+                            type="button"
+                            draggable={false}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              moveFldImageEarlier(imgIndex);
+                            }}
+                            className="flex h-7 w-full shrink-0 items-center justify-center rounded text-white/90 transition-colors hover:bg-white/15 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/60"
+                            aria-label="Move image earlier in list"
+                            title="Move earlier"
+                          >
+                            <ChevronUp size={14} strokeWidth={2.5} />
+                          </button>
+                        ) : (
+                          <span className="h-7 shrink-0" aria-hidden />
+                        )}
+                        {imgIndex < fldImages.length - 1 ? (
+                          <button
+                            type="button"
+                            draggable={false}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              moveFldImageLater(imgIndex);
+                            }}
+                            className="flex h-7 w-full shrink-0 items-center justify-center rounded text-white/90 transition-colors hover:bg-white/15 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/60"
+                            aria-label="Move image later in list"
+                            title="Move later"
+                          >
+                            <ChevronDown size={14} strokeWidth={2.5} />
+                          </button>
+                        ) : (
+                          <span className="h-7 shrink-0" aria-hidden />
+                        )}
+                        <span
+                          className="pointer-events-none mt-0.5 flex h-5 w-full shrink-0 items-center justify-center text-white/50"
+                          title="Drag thumbnail to reorder"
+                          aria-hidden
+                        >
+                          <GripVertical size={12} strokeWidth={2} />
+                        </span>
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      draggable={false}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleRemoveImage(url);
+                      }}
+                      className="absolute top-1 right-1 z-30 p-1 rounded-full bg-black/50 text-white hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                       aria-label="Remove image"
                     >
                       <X size={14} />
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </Card>
@@ -2651,14 +3679,25 @@ export default function ProjectDataEntry({
             )}
           >
             {activeRecord && String(editingRecordId || '').trim() ? (
-              <Button
-                type="button"
-                variant="danger"
-                onClick={handleRequestDeleteRecord}
-                className="px-6 h-11 min-w-[140px]"
-              >
-                Delete Record
-              </Button>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCloneActiveRecord}
+                  className="px-6 h-11 min-w-[140px]"
+                >
+                  <Copy size={16} className="mr-2 inline-block" />
+                  Clone
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  onClick={handleRequestDeleteRecord}
+                  className="px-6 h-11 min-w-[140px]"
+                >
+                  Delete Record
+                </Button>
+              </div>
             ) : null}
             <div className="flex flex-wrap justify-end gap-3">
              {editingRecordId ? (
@@ -2723,7 +3762,15 @@ export default function ProjectDataEntry({
                   <div>
                     <label className="text-[10px] font-bold text-zinc-400 uppercase">Location</label>
                     <p className="text-sm font-medium truncate">
-                      {(facilityLocations || []).find(l => (l.id || l.fldLocID || "").toLowerCase() === (savedDraft.fldLocation || "").toLowerCase())?.fldLocName || 'Unknown'}
+                      {(locations || []).find(
+                        (l: any) =>
+                          String(l?.fldLocID || l?.id || '')
+                            .trim()
+                            .toLowerCase() ===
+                          String(savedDraft.fldLocation || '')
+                            .trim()
+                            .toLowerCase()
+                      )?.fldLocName || 'Unknown'}
                     </p>
                   </div>
                   <div>
@@ -2804,7 +3851,11 @@ export default function ProjectDataEntry({
 
               <div className="max-h-64 overflow-y-auto border border-zinc-200 rounded-xl divide-y divide-zinc-100">
                 {facilityLocations.length === 0 ? (
-                  <div className="p-8 text-center text-zinc-400 italic text-sm">No locations defined for this facility.</div>
+                  <div className="p-8 text-center text-zinc-400 italic text-sm">
+                    {!String(selections.facilityId || '').trim()
+                      ? 'Select a facility before adding or managing locations.'
+                      : 'No locations defined for this facility.'}
+                  </div>
                 ) : (
                   facilityLocations.map(loc => (
                     <div key={loc.fldLocID} className="p-3 flex items-center justify-between hover:bg-zinc-50 transition-colors group">
@@ -2816,14 +3867,20 @@ export default function ProjectDataEntry({
                             className="h-8 text-sm"
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
-                                handleUpdateLocation(loc.fldLocID, e.currentTarget.value);
+                                const v =
+                                  (e.currentTarget as HTMLInputElement)?.value ??
+                                  (e.target as HTMLInputElement)?.value ??
+                                  '';
+                                handleUpdateLocation(loc.fldLocID, v);
                                 setEditingLoc(null);
                               }
                             }}
                           />
                           <Button size="sm" onClick={(e) => {
-                            const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                            handleUpdateLocation(loc.fldLocID, input.value);
+                            // Input wraps the native <input> in a div; previousElementSibling is that wrapper, not the input.
+                            const row = (e.currentTarget as HTMLElement).parentElement;
+                            const nativeInput = row?.querySelector('input');
+                            handleUpdateLocation(loc.fldLocID, nativeInput?.value ?? '');
                             setEditingLoc(null);
                           }}>Save</Button>
                           <Button size="sm" variant="ghost" onClick={() => setEditingLoc(null)}>Cancel</Button>
@@ -2862,6 +3919,21 @@ export default function ProjectDataEntry({
           </Modal>
         )}
       </AnimatePresence>
+
+      <ImagePreviewModal
+        src={imagePreviewUrl}
+        alt="Project data image"
+        title="Image preview"
+        onClose={() => setImagePreviewUrl(null)}
+      />
+
+      {citationPreview ? (
+        <StandardCitationPreviewModal
+          standard={citationPreview.standard}
+          storedId={citationPreview.id}
+          onClose={() => setCitationPreview(null)}
+        />
+      ) : null}
     </div>
   );
 }

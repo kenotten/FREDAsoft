@@ -11,6 +11,8 @@ interface ModalProps {
   footer?: React.ReactNode;
   onSubmit?: (e: React.FormEvent) => void;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full';
+  /** Merged onto the fixed overlay (e.g. z-index above other full-screen UI). */
+  overlayClassName?: string;
 }
 
 export function Modal({ 
@@ -21,7 +23,8 @@ export function Modal({
   children, 
   footer,
   onSubmit,
-  maxWidth = 'md' 
+  maxWidth = 'md',
+  overlayClassName
 }: ModalProps) {
   if (!isOpen) return null;
 
@@ -41,7 +44,12 @@ export function Modal({
   const wrapperProps = onSubmit ? { onSubmit: (e: React.FormEvent) => { e.preventDefault(); onSubmit(e); } } : {};
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+    <div
+      className={cn(
+        'fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-200',
+        overlayClassName
+      )}
+    >
       <ContentWrapper 
         {...wrapperProps}
         className={cn(

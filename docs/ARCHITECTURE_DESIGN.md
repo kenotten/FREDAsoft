@@ -193,6 +193,59 @@ recommendations   → library recommendations / master recommendations
 users             → roles and identity
 ```
 
+✅ DECIDED: User-initiated deletion of `projectData` inspection records is a **soft delete** (`fldIsDeleted`, `fldDeleted`, `fldDeletedAt`, `fldDeletedBy`). Active views filter these out. Restore clears those flags via `firestoreService.restore('projectData', id)`. Hard document delete remains only for explicit maintenance paths (e.g. orphan cleanup), not for normal user delete.
+
+---
+
+## Persistence and Storage Ownership
+
+FREDAsoft uses more than one persistence mechanism. Each layer **owns** specific kinds of state. Cleanup or refactor work must **not** casually unify Firestore preferences, `localStorage`, and `sessionStorage` into a single approach unless there is an explicit design decision, migration plan, and verification that semantics (lifetime, scope, and authority) stay correct.
+
+**Authoritative data** — including project data, report-relevant record state, glossary data, standards / master library data, and other domain collections — lives in **Firestore** (and the domain records those documents represent). Browser storage is not a substitute for that authority.
+
+### Firestore user preferences
+
+- Owns **durable workspace context** and **user preference restoration** tied to the account (where implemented).
+- Examples include active client, facility, project, and related workspace selections persisted for cross-session use.
+- Intended to survive normal session boundaries and, where supported, browser or device changes for the same user.
+
+### localStorage
+
+- Owns **browser-local sticky selections** and **Data Entry draft recovery**.
+- Data Entry drafts are **intentionally local** to the browser; they are a safety net, not the system of record.
+- Draft restore paths must enforce **context compatibility**: a draft must not be applied when client, facility, project, target record, or mode no longer matches what the draft was saved against. Restores must not resurrect stale tuples into the wrong context.
+- **Future:** centralizing **storage key constants** (e.g. one module of string keys) is allowed for maintainability, but must **not** change key names, lifetimes, or read/write semantics unless explicitly approved.
+
+### sessionStorage
+
+- Owns **temporary UI state** for the tab or session (e.g. Standards Browser UI state).
+- Treat as **session convenience**, not authoritative project or library data.
+- Standards Browser state here is **UI state** for that surface. It is **not** Active Glossary (or broader Data Entry glossary-mode) state; those remain distinct by design.
+
+---
+
+## Firestore Write Boundaries and Maintenance Script Safety
+
+**Firestore writes are part of the system’s integrity boundary.** Any path that mutates stored documents — whether from the app, a batch API, or a script — can affect compliance data, auditability, and user trust. Treat writes as governed behavior, not implementation detail.
+
+**Normal application writes** should go through the established service layer (e.g. `firestoreService`) unless a narrow exception is explicitly justified and reviewed.
+
+**Direct `writeBatch` / low-level writes** in application code are allowed only when they are **intentional**, **narrowly scoped** (clear transaction intent, bounded document set), and **visible** in review. They must **not** be introduced or expanded under the cover of broad refactors, “cleanup,” or unrelated feature work without an explicit architectural note in this document or an approved task.
+
+**Maintenance and import scripts** that read or write Firestore must be treated as **operational tooling** (run with intent, often against production or shared environments), **not** as casual developer utilities. They belong in the same risk class as migrations.
+
+Scripts that **update** or **backfill** Firestore should **document clearly** in their header or companion README (minimum expectations):
+
+- **Target environment** (e.g. emulator vs named project; how the operator selects it).
+- **Dry-run mode** — whether the script supports a no-write / preview mode and how to invoke it.
+- **Backup / export expectations** — whether an export or backup is required before run.
+- **Operator confirmation** — prompts, flags, or runbooks that prevent mistaken execution.
+- **Scope of mutation** — which **collections** and **fields** may be written, and what invariants must hold afterward.
+
+**UI-triggered denormalization or repair writes** (for example, propagating stored display labels after a rename so historical rows stay readable) must be **explicit in code and documented** here or in a tightly linked maintenance note, so future readers know the write is intentional denormalization, not accidental duplication of business logic.
+
+**Future abstraction** (e.g. consolidating write paths behind a thinner API) is allowed only **after** the intended **write policy** is documented and **existing behavior** is preserved or called out as an intentional breaking change with migration steps.
+
 ---
 
 # 🧠 Libraries, Glossary Sets, Glossary Records, and Data Records
@@ -209,6 +262,10 @@ Libraries define reusable professional content:
 - default standards associations
 
 Libraries are the origin of structured content.
+
+✅ DECIDED: **Active Glossary** (glossary set chosen in Data Entry) filters which approved glossary rows drive Category / Item / Finding / Recommendation path options. **Standards Library Type** is separate and only scopes standards/citation browsing (e.g. Standards Browser). Active Glossary is user-selected and persisted locally in the browser for v1 (not derived from project or facility type).
+
+✅ DECIDED: **Glossary Builder** (v1): the **Glossary Set** dropdown scopes **Finding** and **Recommendation** authoring choices to that set (via master `fldGlossarySetId` and active glossary rows on the item). **Category** and **Item** lists remain **shared** across sets in v1 because those master records do not carry glossary set ids.
 
 Library Findings and Recommendations support direct citation associations.
 
@@ -287,6 +344,16 @@ The system follows a snapshot inheritance model:
 ```text
 Library → Glossary Record → Project Data Record
 ```
+
+✅ DECIDED: **Library / Glossary / ProjectData snapshot model**
+
+- **Master Finding** and **Master Recommendation** rows are reusable **source / template** records in the library (edited centrally, referenced by many workflows).
+- **Categories** own **Items**; **Items** own reusable **Findings** and **Recommendations** in the catalog (FKs and editorial ownership), not as one-off project text.
+- **Recommendations** are **not** strict hierarchical children of **Findings**; the library does not model a single mandatory parent-child chain from finding to recommendation.
+- **Finding-to-recommendation relevance** is expressed through **association metadata** (e.g. suggested-recommendation lists on findings, builder/Data Entry UX, and **approved glossary pairings**).
+- A **glossary row** approves a specific **Category + Item + Finding + Recommendation** pairing **for a Glossary Set** and holds **set-specific snapshot values** (e.g. default citations, unit/cost overrides, and other fields snapshotted at authoring time per this document’s inheritance rules).
+- A **ProjectData** row **snapshots** the **selected glossary row** (and related captured fields) at inspection time rather than treating the library as a live, always-current join for historical rows.
+- **Later** edits to masters or glossary rows **must not silently rewrite** existing **ProjectData**; updates flow **forward** only through **explicit** create, copy, or refresh / re-hydrate actions where the product intentionally implements them.
 
 Rules:
 
@@ -1017,6 +1084,10 @@ Do not union record citations with glossary citations at report time.
 
 This prevents removed record-level citations from reappearing in reports.
 
+✅ DECIDED (report UI v1): **View Report** opens a section-selection dialog before `ReportPreview`. The cover page is always included; other sections default to on for the current open only (no `localStorage`). **Referenced standards** and **Photo addendum** rows are omitted when `getReportSectionAvailability` reports no content. Deselected sections are not rendered (no empty placeholders). Page labels keep fixed prefixes (narrative Roman numerals, documentation `1,2,…`, financial `A*`, standards `B*`, photo `D*`); gaps when a section is omitted are acceptable.
+
+✅ DECIDED (report preview): The same dialog offers **report record sort** (default **Category → Location → Item**; optional **Location → Category → Item**). It drives **`filterReportProjectForPreview`** (Documentation order). **Financial Summary** follows the same choice: default mode groups by category with columns Item \| Location \| …; location-first mode groups by location with columns Category \| Item \| …. It is not persisted. **Referenced standards** addendum ordering stays citation-driven. **Photo addendum** keeps location-first display; `filteredData` order may only affect tie-breaks within the same location label.
+
 ---
 
 ## 28. Future Citation Drift / Refresh Workflow
@@ -1731,6 +1802,8 @@ A location may not be archived if active projectData records reference it.
 Facilities are the working entity for buildings and other built-environment areas. Buildings are treated as a type of facility, not a separate required hierarchy layer.
 
 Locations remain a flexible project-defined label for now. Structured location fields may be added later, but current workflows should support disciplined naming conventions.
+
+✅ DECIDED: Locations are **facility-scoped** in the app (`fldProjectID` + `fldFacID`). Data Entry and Data Explorer location pickers list only locations for the **selected project and facility**. **Deleting** a location is **blocked** when **active** (non-deleted, non-archived) `projectData` in the same project/facility scope references that location; there is **no cascade delete** of inspection records. Location removal remains **soft delete** only.
 
 Hard delete is reserved for admin cleanup of erroneous entries and should require strict proof that no active dependent records exist.
 

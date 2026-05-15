@@ -11,6 +11,7 @@ import { DocumentManager } from '../DocumentManager';
 import { OrderManager } from '../OrderManager';
 import { LibraryManager } from '../LibraryManager';
 import { cn } from '../../lib/utils';
+import { buildProjectDataCloneSeed, type ProjectDataCloneSeed } from '../../lib/cloneProjectData';
 import { 
   SelectionProps, 
   MasterDataProps, 
@@ -45,7 +46,9 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
     projectProps,
     opsProps
   } = props;
-  const [pendingEditRecord, setPendingEditRecord] = React.useState<any>(null);
+  type PendingExplorerNav = { kind: 'edit' | 'clone'; record: any } | null;
+  const [pendingExplorerNav, setPendingExplorerNav] = React.useState<PendingExplorerNav>(null);
+  const [pendingCloneSeed, setPendingCloneSeed] = React.useState<ProjectDataCloneSeed | null>(null);
   // Destructure for internal route compatibility
   const { selections, setSelections } = selectionProps;
   const currentEditingRecordId = selections?.editingRecordId || '';
@@ -55,10 +58,37 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
   const { isDeduplicating, dedupStatus, setIsSynced, setActiveGlossaryId, setUserPreferences, isUpdatingRef, runStandardsMigration, migrateUomToUnit, sessionReads, sessionWrites, collectionCounts, setIsDeduplicating, setDedupStatus } = opsProps;
 
   React.useEffect(() => {
-    if (activeTab !== 'explorer' && pendingEditRecord) {
-      setPendingEditRecord(null);
+    if (activeTab !== 'explorer' && pendingExplorerNav) {
+      setPendingExplorerNav(null);
     }
-  }, [activeTab, pendingEditRecord]);
+  }, [activeTab, pendingExplorerNav]);
+
+  const clearPendingCloneSeed = React.useCallback(() => {
+    setPendingCloneSeed(null);
+  }, []);
+
+  const applyExplorerClone = React.useCallback(
+    (record: any) => {
+      const seed = buildProjectDataCloneSeed(record, glossary);
+      setPendingCloneSeed(seed);
+      try {
+        localStorage.removeItem('fredasoft_draft');
+      } catch {
+        /* ignore */
+      }
+      onDataEntryDirtyChange?.(false);
+      setSelections((s: any) => ({
+        ...s,
+        editingRecordId: null,
+        isDirty: false,
+        locationId: '',
+        locationName: '',
+        images: [],
+      }));
+      setActiveTab('data');
+    },
+    [glossary, onDataEntryDirtyChange, setActiveTab, setSelections]
+  );
 
   return (
     <div className={cn("flex-1 overflow-y-auto scroll-smooth flex flex-col", activeTab === 'library_manager' ? "p-0" : "p-8")}>
@@ -100,9 +130,18 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           mergedCategories={mergedCategories} 
           onDirtyChange={(dirty: boolean) => onDataEntryDirtyChange?.(dirty)}
           onDeleteRecord={handleDeleteRecord}
+          pendingCloneSeed={pendingCloneSeed}
+          onPendingCloneSeedConsumed={clearPendingCloneSeed}
         />
       )}
-      {activeTab === 'explorer' && (
+      <div
+        className={cn(
+          activeTab === 'explorer'
+            ? 'flex min-h-0 w-full flex-1 flex-col'
+            : 'hidden'
+        )}
+        aria-hidden={activeTab !== 'explorer'}
+      >
         <DataExplorer 
           projectData={projectData} 
           projects={projects} 
@@ -125,15 +164,23 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
               return;
             }
             if (isDataEntryDirty) {
-              setPendingEditRecord(record);
+              setPendingExplorerNav({ kind: 'edit', record });
               return;
             }
             setSelections((s: any) => ({ ...s, editingRecordId: targetId }));
             setActiveTab('data');
-          }} 
+          }}
+          onCloneRecord={(record) => {
+            if (!record?.fldPDataID) return;
+            if (isDataEntryDirty) {
+              setPendingExplorerNav({ kind: 'clone', record });
+              return;
+            }
+            applyExplorerClone(record);
+          }}
           onDeleteRecord={handleDeleteRecord}
         />
-      )}
+      </div>
       {activeTab === 'maintenance' && (
         <GlossaryView 
           categories={categories}
@@ -249,33 +296,45 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           isAdmin={isAdmin} 
         />
       )}
-      {activeTab === 'explorer' && pendingEditRecord && (
+      {activeTab === 'explorer' && pendingExplorerNav && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
             <div className="p-6 border-b border-zinc-100">
               <h2 className="text-lg font-bold text-zinc-900">Unsaved changes</h2>
               <p className="text-sm text-zinc-600 mt-2">
-                You have unsaved changes in the current record. Leaving will discard them.
+                {pendingExplorerNav.kind === 'clone'
+                  ? 'You have unsaved changes in Data Entry. Cloning will discard them and open a new unsaved clone.'
+                  : 'You have unsaved changes in the current record. Leaving will discard them.'}
               </p>
             </div>
             <div className="p-6 flex gap-3">
               <button
-                onClick={() => setPendingEditRecord(null)}
+                type="button"
+                onClick={() => setPendingExplorerNav(null)}
                 className="flex-1 h-11 px-4 rounded-lg border border-zinc-200 text-zinc-700 font-medium hover:bg-zinc-50"
               >
                 Continue Editing
               </button>
               <button
+                type="button"
                 onClick={() => {
+                  const nav = pendingExplorerNav;
+                  if (!nav?.record) return;
                   localStorage.removeItem('fredasoft_draft');
                   onDataEntryDirtyChange?.(false);
-                  setSelections((s: any) => ({ ...s, editingRecordId: pendingEditRecord.fldPDataID }));
-                  setPendingEditRecord(null);
+                  if (nav.kind === 'edit') {
+                    setSelections((s: any) => ({ ...s, editingRecordId: nav.record.fldPDataID }));
+                  } else {
+                    applyExplorerClone(nav.record);
+                  }
+                  setPendingExplorerNav(null);
                   setActiveTab('data');
                 }}
                 className="flex-1 h-11 px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium"
               >
-                Discard Changes and Continue
+                {pendingExplorerNav.kind === 'clone'
+                  ? 'Discard Changes and Clone'
+                  : 'Discard Changes and Continue'}
               </button>
             </div>
           </div>

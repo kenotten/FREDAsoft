@@ -24,12 +24,21 @@ import {
 } from 'lucide-react';
 import { Button, Card, Select } from './ui/core';
 import { cn, sortEntities, MEASUREMENT_UNITS } from '../lib/utils';
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc, writeBatch, deleteField } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'sonner';
+import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { Category, Item, Finding, MasterRecommendation, MasterStandard } from '../types';
 import { UnsavedChangesModal } from './modals/UnsavedChangesModal';
 import { StandardsBrowser } from './StandardsBrowser';
+import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
+
+const LIBRARY_GLOSSARY_CTX_FIELDS = [
+  'fldGlossarySetId',
+  'fldGlossarySetName',
+  'fldStandardType',
+  'fldStandardVersion'
+] as const;
 
 function safeLibraryStandardsArray(value: unknown): string[] {
   if (Array.isArray(value)) return value as string[];
@@ -56,7 +65,7 @@ function libraryCitationDisplayLabel(standard: MasterStandard | undefined, idFal
   return fb ? `Unknown standard (${fb})` : 'Unknown standard';
 }
 
-/** Same ordering as modal selected list: order → citation_num → stable index */
+/** Same ordering as modal selected list: order → type → citation_num → relation → stable index */
 function sortLibraryStandardIds(ids: string[], standardsList: MasterStandard[]): string[] {
   const withIndex = ids.map((id, index) => ({
     id,
@@ -65,26 +74,14 @@ function sortLibraryStandardIds(ids: string[], standardsList: MasterStandard[]):
   }));
   return withIndex
     .sort((a, b) => {
-      const aOrder = Number(a.standard?.order);
-      const bOrder = Number(b.standard?.order);
-      const aHas = Number.isFinite(aOrder);
-      const bHas = Number.isFinite(bOrder);
-      if (aHas && bHas && aOrder !== bOrder) return aOrder - bOrder;
-      if (aHas !== bHas) return aHas ? -1 : 1;
-      const aC = String(a.standard?.citation_num || '').trim();
-      const bC = String(b.standard?.citation_num || '').trim();
-      if (aC || bC) {
-        const cmp = aC.localeCompare(bC, undefined, { numeric: true, sensitivity: 'base' });
-        if (cmp !== 0) return cmp;
-      }
+      const c = compareStandardCitations(a.standard, b.standard);
+      if (c !== 0) return c;
       return a.index - b.index;
     })
     .map((e) => e.id);
 }
 
 function inlineLibraryCitationChipText(standard: MasterStandard | undefined, idFallback: string): string {
-  const num = String(standard?.citation_num ?? '').trim();
-  if (num) return num;
   const full = libraryCitationDisplayLabel(standard, idFallback);
   return full.length > 22 ? `${full.slice(0, 20)}…` : full;
 }
@@ -121,6 +118,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   const [selectedItemId, setSelectedItemId] = useState<string>('');
   const [expandedCatId, setExpandedCatId] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
+  /** Findings / recommendations only: filter by Glossary Set (default All). */
+  const [glossarySetFilter, setGlossarySetFilter] = useState<string>('ALL');
   
   // Local working state for edits
   // Map of id -> partial document update
@@ -162,7 +161,13 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
         setSelectedCatId(value);
         setSelectedItemId('');
         break;
-      case 'item': setSelectedItemId(value); break;
+      case 'item': {
+        setSelectedItemId(value);
+        const it = items.find((i) => libNormId(i.fldItemID || (i as any).id) === libNormId(value));
+        const catFromItem = String(it?.fldCatID ?? '').trim();
+        if (catFromItem) setSelectedCatId(catFromItem);
+        break;
+      }
       case 'away': onNavigateAway?.(value); break;
     }
     setPendingAction(null);
@@ -207,6 +212,30 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     setIsDirty(true);
   };
 
+  const applyLibraryGlossarySetToRecord = (recordId: string, setKey: string) => {
+    const def = String(setKey || '').trim() ? glossarySetById(setKey) : undefined;
+    setEdits((prev) => ({
+      ...prev,
+      [recordId]: {
+        ...(prev[recordId] || {}),
+        ...(def
+          ? {
+              fldGlossarySetId: def.id,
+              fldGlossarySetName: def.name,
+              fldStandardType: def.standardType,
+              fldStandardVersion: def.standardVersion
+            }
+          : {
+              fldGlossarySetId: '',
+              fldGlossarySetName: '',
+              fldStandardType: '',
+              fldStandardVersion: ''
+            })
+      }
+    }));
+    setIsDirty(true);
+  };
+
   // Helper to get current value (from edits or original)
   const getValue = (entity: any, field: string) => {
     const id = entity.fldCategoryID || entity.fldItemID || entity.fldFindID || entity.fldRecID || entity.id;
@@ -214,6 +243,14 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       return edits[id][field];
     }
     return entity[field];
+  };
+
+  const libraryRowGlossaryBadgeLabel = (record: any): string => {
+    const idRaw = String(getValue(record, 'fldGlossarySetId') || '').trim();
+    if (!idRaw) return 'Unassigned';
+    const def = glossarySetById(idRaw);
+    const name = String(getValue(record, 'fldGlossarySetName') || '').trim();
+    return (name || def?.name || idRaw).trim() || 'Unassigned';
   };
 
   // Move item to a new position and renormalize (Task 118 behavior)
@@ -339,9 +376,31 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       });
     }
 
+    if (
+      (activeTab === 'findings' || activeTab === 'recommendations') &&
+      glossarySetFilter !== 'ALL'
+    ) {
+      base = base.filter((item) => {
+        const gid = String(getValue(item, 'fldGlossarySetId') || '').trim();
+        if (glossarySetFilter === 'UNASSIGNED') return !gid;
+        return gid.toLowerCase() === glossarySetFilter.toLowerCase();
+      });
+    }
+
     // Sort by order then name
     return base.sort((a, b) => a.order - b.order || (a.displayName || '').localeCompare(b.displayName || ''));
-  }, [activeTab, categories, items, findings, recommendations, selectedCatId, selectedItemId, edits, searchTerm]);
+  }, [
+    activeTab,
+    categories,
+    items,
+    findings,
+    recommendations,
+    selectedCatId,
+    selectedItemId,
+    edits,
+    searchTerm,
+    glossarySetFilter
+  ]);
 
   // Derived navigation lists that respect local edits
   const navigationCategories = useMemo(() => {
@@ -425,16 +484,58 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     [citationTargetId, activeTab]
   );
 
+  /**
+   * Nudge modal StandardsBrowser type/version from the citation target row: glossary set def is
+   * authoritative when fldGlossarySetId is set (avoids stale fldStandardType vs sessionStorage).
+   */
+  const libraryCitationPreferredStandardContext = useMemo(() => {
+    if (!citationTargetEntity || !citationTargetId) return undefined;
+
+    const gid = String(getValue(citationTargetEntity, 'fldGlossarySetId') ?? '').trim();
+    const def = gid ? glossarySetById(gid) : undefined;
+
+    let type: string;
+    let version: string | undefined;
+
+    if (def) {
+      type = String(def.standardType ?? '').trim();
+      const v = String(def.standardVersion ?? '').trim();
+      version = v || undefined;
+    } else {
+      type = String(getValue(citationTargetEntity, 'fldStandardType') ?? '').trim();
+      const v = String(getValue(citationTargetEntity, 'fldStandardVersion') ?? '').trim();
+      version = v || undefined;
+    }
+
+    if (!type) return undefined;
+
+    return {
+      type,
+      version,
+      syncToken: `lib-cit-ctx:${citationTargetId}:${libraryCitationsUiKey}:${type}:${version ?? ''}`,
+    };
+  }, [citationTargetEntity, citationTargetId, libraryCitationsUiKey, edits]);
+
   const citationModalBadges = useMemo(() => {
     if (!citationTargetEntity) return [] as { key: string; text: string }[];
     const badges: { key: string; text: string }[] = [];
     if (activeTab === 'findings') {
-      const cat = navigationCategories.find((c) => (c.fldCategoryID || (c as any).id) === selectedCatId);
-      if (cat?.fldCategoryName) badges.push({ key: 'cat', text: `Category: ${cat.fldCategoryName}` });
-      const itemId = selectedItemId || (citationTargetEntity.parentId as string) || '';
-      if (itemId) {
-        const it = navigationItems.find((i) => (i.fldItemID || (i as any).id) === itemId);
-        if (it?.fldItemName) badges.push({ key: 'item', text: `Item: ${it.fldItemName}` });
+      const itemFk = String(
+        citationTargetEntity.fldItem ?? citationTargetEntity.parentId ?? ''
+      ).trim();
+      if (itemFk) {
+        const it = navigationItems.find(
+          (i) => libNormId(i.fldItemID || (i as any).id) === libNormId(itemFk)
+        );
+        if (it) {
+          const catId = String(it.fldCatID ?? '').trim();
+          const cat = navigationCategories.find(
+            (c) => libNormId(c.fldCategoryID || (c as any).id) === libNormId(catId)
+          );
+          if (cat?.fldCategoryName) badges.push({ key: 'cat', text: `Category: ${cat.fldCategoryName}` });
+          const iname = String(it.fldItemName || '').trim();
+          if (iname) badges.push({ key: 'item', text: `Item: ${iname}` });
+        }
       }
       const findLabel = String(
         citationTargetEntity.displayName || getValue(citationTargetEntity, 'fldFindShort') || ''
@@ -461,8 +562,6 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   }, [
     citationTargetEntity,
     activeTab,
-    selectedCatId,
-    selectedItemId,
     navigationCategories,
     navigationItems,
     items,
@@ -607,6 +706,35 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 isOverLimit && "text-red-600 border-red-500 hover:border-red-500 focus:border-red-600"
               )}
             />
+            {isFindingOrRec && (
+              <div
+                className="mt-1 flex flex-wrap items-center gap-1.5 pointer-events-auto"
+                title={!String(getValue(record, 'fldGlossarySetId') || '').trim() ? 'Legacy: no Glossary Set tag' : undefined}
+              >
+                <span
+                  className={cn(
+                    'inline-flex max-w-[11rem] truncate rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-widest',
+                    String(getValue(record, 'fldGlossarySetId') || '').trim()
+                      ? 'border-indigo-200 bg-indigo-50 text-indigo-800'
+                      : 'border-zinc-200 bg-zinc-100 text-zinc-500'
+                  )}
+                >
+                  {libraryRowGlossaryBadgeLabel(record)}
+                </span>
+                <select
+                  value={String(getValue(record, 'fldGlossarySetId') || '').trim()}
+                  onChange={(e) => applyLibraryGlossarySetToRecord(record.id, e.target.value)}
+                  className="max-w-[10rem] rounded-md border border-zinc-200 bg-white py-0.5 pl-1.5 pr-6 text-[9px] font-bold text-zinc-700 outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Unassigned</option>
+                  {GLOSSARY_SET_DEFS.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {isFindingOrRec && (
               <div className="absolute right-0 -top-2 flex items-center gap-1 pointer-events-none">
                 <span className={cn("text-[7px] font-black uppercase tracking-widest px-1 py-0.25 rounded-full border", zone.color, zone.bgColor, zone.color.replace('text-', 'border-').replace('500', '200'))}>
@@ -798,7 +926,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       const batch = writeBatch(db);
       let count = 0;
 
-      Object.entries(edits).forEach(([id, fields]) => {
+      Object.entries(edits).forEach(([id, rawFields]) => {
         let collectionName = '';
         if (categories.some(c => (c.fldCategoryID || c.id) === id)) collectionName = 'categories';
         else if (items.some(i => (i.fldItemID || i.id) === id)) collectionName = 'items';
@@ -807,7 +935,17 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
 
         if (collectionName) {
           const docRef = doc(db, collectionName, id);
-          batch.update(docRef, fields);
+          const fields: Record<string, unknown> = { ...(rawFields as Record<string, unknown>) };
+          if (collectionName === 'findings' || collectionName === 'recommendations') {
+            const touchedCtx = LIBRARY_GLOSSARY_CTX_FIELDS.some((k) => k in fields);
+            const gid = fields.fldGlossarySetId;
+            if (touchedCtx && (gid === '' || gid === null || gid === undefined)) {
+              for (const k of LIBRARY_GLOSSARY_CTX_FIELDS) {
+                fields[k] = deleteField();
+              }
+            }
+          }
+          batch.update(docRef, fields as any);
           count++;
         }
       });
@@ -885,6 +1023,26 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               className="w-full bg-zinc-100 border-none rounded-lg py-1.5 pl-8 pr-4 text-xs focus:ring-2 focus:ring-black/5 outline-none placeholder:text-zinc-400"
             />
           </div>
+
+          {(activeTab === 'findings' || activeTab === 'recommendations') && (
+            <div className="relative w-[11.5rem] shrink-0">
+              <select
+                value={glossarySetFilter}
+                onChange={(e) => setGlossarySetFilter(e.target.value || 'ALL')}
+                className="w-full appearance-none bg-amber-50/80 border border-amber-100 rounded-lg py-1.5 pl-2 pr-7 text-[10px] font-black uppercase tracking-tight text-zinc-800 focus:ring-2 focus:ring-black/5 outline-none cursor-pointer"
+                title="Filter by Glossary Set"
+              >
+                <option value="ALL">All sets</option>
+                <option value="UNASSIGNED">Unassigned / Legacy</option>
+                {GLOSSARY_SET_DEFS.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronRight size={12} className="absolute right-2 top-1/2 -translate-y-1/2 rotate-90 text-zinc-400 pointer-events-none" />
+            </div>
+          )}
 
           {breadcrumbs.length > 0 && (
             <div className="hidden lg:flex items-center gap-1.5 text-[9px] font-bold text-zinc-400 uppercase tracking-widest shrink-0 max-w-[200px] overflow-hidden">
@@ -1229,6 +1387,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                     enableAutoExpand502={false}
                     uiResetKey={libraryCitationsUiKey}
                     persistUiStateKey={libraryCitationsUiKey}
+                    standardSelectionPersistKey="library-citations-standards"
+                    preferredStandardContext={libraryCitationPreferredStandardContext}
                   />
                 </div>
               </div>

@@ -97,6 +97,17 @@ export interface Finding {
   /** Library default citation IDs; may be absent on older Firestore rows */
   fldStandards?: string[];
   fldSuggestedRecs: string[]; // Array of MasterRecommendation IDs
+  /** Glossary Set / standard-version context (e.g. UFAS vs TAS); optional on legacy rows */
+  fldGlossarySetId?: string;
+  fldGlossarySetName?: string;
+  fldStandardType?: string;
+  fldStandardVersion?: string;
+  /** Lineage only (not equality): source finding this record was copied from */
+  fldSourceFindingId?: string;
+  /** Lineage only (not equality): source glossary set id */
+  fldSourceGlossarySetId?: string;
+  /** Lineage timestamp/string */
+  fldSourceCopiedAt?: any;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
 }
@@ -122,6 +133,17 @@ export interface MasterRecommendation {
   fldCitation?: string;
   /** Library default citation IDs; may be absent on older Firestore rows */
   fldStandards?: string[];
+  /** Glossary Set / standard-version context; optional on legacy rows */
+  fldGlossarySetId?: string;
+  fldGlossarySetName?: string;
+  fldStandardType?: string;
+  fldStandardVersion?: string;
+  /** Lineage only (not equality): source recommendation this record was copied from */
+  fldSourceRecommendationId?: string;
+  /** Lineage only (not equality): source glossary set id */
+  fldSourceGlossarySetId?: string;
+  /** Lineage timestamp/string */
+  fldSourceCopiedAt?: any;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
 }
@@ -213,6 +235,16 @@ export interface ProjectData {
   fldTimestamp: string;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
+  /** Lineage: source projectData id this row was cloned from */
+  fldSourcePDataID?: string;
+  /** Lineage: when the row was cloned (ISO string or server timestamp) */
+  fldSourceClonedAt?: string | unknown;
+  /** Lineage: source location id at clone time */
+  fldSourceClonedFromLocationId?: string;
+  /** Lineage: optional finding / recommendation / glossary ids at clone time */
+  fldSourceFindingId?: string;
+  fldSourceRecommendationId?: string;
+  fldSourceGlossaryId?: string;
 }
 
 export interface StandardSnapshot {

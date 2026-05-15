@@ -4,6 +4,7 @@ import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 import { GlossaryBuilder } from './GlossaryBuilder';
 import { MasterStandard, Finding, MasterRecommendation, Glossary } from '../types';
+import { glossarySetById } from '../lib/glossarySets';
 
 export function GlossaryView({ 
   categories = [], 
@@ -28,6 +29,20 @@ export function GlossaryView({
   const [stagedFindingStds, setStagedFindingStds] = useState<string[]>([]);
   const [stagedRecStds, setStagedRecStds] = useState<string[]>([]);
   const [stagedGlosStds, setStagedGlosStds] = useState<string[]>([]);
+  const [isGlossaryTemplateMode, setIsGlossaryTemplateMode] = useState(false);
+  const [selectedGlossarySetIdForStandardsSync, setSelectedGlossarySetIdForStandardsSync] = useState('');
+
+  const preferredStandardContext = React.useMemo(() => {
+    const setId = String(selectedGlossarySetIdForStandardsSync || '').trim();
+    if (!setId) return undefined;
+    const setDef = glossarySetById(setId);
+    if (!setDef) return undefined;
+    return {
+      type: setDef.standardType,
+      version: setDef.standardVersion,
+      syncToken: setDef.id,
+    };
+  }, [selectedGlossarySetIdForStandardsSync]);
 
   // INITIALIZE STAGED STATE
   const initializeStaged = () => {
@@ -93,6 +108,7 @@ const safeArray = (v: any): string[] => {
 const lastIdentity = React.useRef('');
 
 React.useEffect(() => {
+  if (isGlossaryTemplateMode) return;
   const { selectedFind, selectedRec, editingGlossaryId } = selections;
 
   const currentIdentity = `${selectedFind}-${selectedRec}-${editingGlossaryId}`;
@@ -128,6 +144,7 @@ React.useEffect(() => {
     }
   }
 }, [
+  isGlossaryTemplateMode,
   selections.selectedFind,
   selections.selectedRec,
   selections.editingGlossaryId,
@@ -207,6 +224,12 @@ React.useEffect(() => {
     }
   };
 
+  const handleReplaceStagedStandards = (next: { finding: string[]; rec: string[]; glossary: string[] }) => {
+    setStagedFindingStds(Array.isArray(next.finding) ? [...next.finding] : []);
+    setStagedRecStds(Array.isArray(next.rec) ? [...next.rec] : []);
+    setStagedGlosStds(Array.isArray(next.glossary) ? [...next.glossary] : []);
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-8 py-8 space-y-8">
       {/* Header */}
@@ -244,6 +267,9 @@ React.useEffect(() => {
             stagedFindingStds={stagedFindingStds}
             stagedRecStds={stagedRecStds}
             stagedGlosStds={stagedGlosStds}
+            onReplaceStagedStandards={handleReplaceStagedStandards}
+            onGlossarySetIdChange={setSelectedGlossarySetIdForStandardsSync}
+            onTemplateModeChange={setIsGlossaryTemplateMode}
           />
         </div>
 
@@ -253,6 +279,7 @@ React.useEffect(() => {
               standards={standards} 
               onSelect={handleAddStandard}
               className="flex-1"
+              preferredStandardContext={preferredStandardContext}
             />
           </div>
         )}

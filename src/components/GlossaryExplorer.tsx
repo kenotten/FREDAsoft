@@ -29,6 +29,57 @@ import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
 import { db } from '../firebase';
 import { writeBatch, doc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 
+/** Normalize glossary set id for identity / duplicate checks (empty = Unassigned/Legacy). */
+function normalizeGlossarySetKeyForExplorer(raw: string | undefined | null): string {
+  const def = glossarySetById(raw);
+  if (def) return def.id;
+  const t = String(raw ?? '').trim();
+  return t ? t.toUpperCase() : '';
+}
+
+function isExplorerGlossaryRowUnassigned(row: any): boolean {
+  return !normalizeGlossarySetKeyForExplorer(row.fldGlossarySetId ?? row.glossarySetId);
+}
+
+/**
+ * Find another glossary doc (same 5-tuple + target set) excluding the current doc.
+ * Future: reassigning an already-assigned row to another set may need a destructive flow
+ * with citation review/clearing rules — not implemented here.
+ */
+const glossarySetAssignSelectOptions = GLOSSARY_SET_DEFS.map((d) => ({
+  value: d.id,
+  label: d.name,
+}));
+
+function findExplorerDuplicateGlossaryFiveTuple(
+  glossaryList: any[],
+  cat: string,
+  item: string,
+  find: string,
+  rec: string,
+  targetSetCanonicalId: string,
+  excludeDocId: string
+): any | undefined {
+  const catN = String(cat || '').toLowerCase().trim();
+  const itemN = String(item || '').toLowerCase().trim();
+  const findN = String(find || '').toLowerCase().trim();
+  const recN = String(rec || '').toLowerCase().trim();
+  const setN = String(targetSetCanonicalId || '').trim();
+
+  return glossaryList.find((g: any) => {
+    if (g.fldDeleted === true || g.fldIsDeleted === true) return false;
+    const docId = String(g.fldGlosId || g.id || '').trim();
+    if (!docId || docId === excludeDocId) return false;
+    const sameFour =
+      String(g.fldCat || '').toLowerCase().trim() === catN &&
+      String(g.fldItem || '').toLowerCase().trim() === itemN &&
+      String(g.fldFind || '').toLowerCase().trim() === findN &&
+      String(g.fldRec || g.fldRecID || '').toLowerCase().trim() === recN;
+    if (!sameFour) return false;
+    return normalizeGlossarySetKeyForExplorer(g.fldGlossarySetId) === setN;
+  });
+}
+
 export default function GlossaryExplorer({
   categories = [], 
   items = [], 
@@ -68,6 +119,8 @@ export default function GlossaryExplorer({
   const [editingField, setEditingField] = useState<{ id: string, field: string, value: any } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string, name: string } | null>(null);
+  /** Pending target set id (GLOSSARY_SET_DEFS.id) per glossary doc for Assign action */
+  const [assignSetDraftByGlosId, setAssignSetDraftByGlosId] = useState<Record<string, string>>({});
   const [healthAudit, setHealthAudit] = useState<{
     orphanedFindings: number;
     orphanedRecommendations: number;
@@ -369,6 +422,65 @@ export default function GlossaryExplorer({
       };
     });
   }, [glossary, categories, items, findings, recommendations, masterRecommendations, localMasterRecs]);
+
+  const handleAssignGlossarySet = async (row: any) => {
+    if (!isExplorerGlossaryRowUnassigned(row)) {
+      toast.info('Only Unassigned/Legacy rows can be assigned here. Set-to-set moves are not supported.');
+      return;
+    }
+    const glossaryDocId = String(row.fldGlosId || row.id || '').trim();
+    if (!glossaryDocId) {
+      toast.error('Missing glossary document id');
+      return;
+    }
+    const draftSetId = assignSetDraftByGlosId[glossaryDocId] || '';
+    const setDef = glossarySetById(draftSetId);
+    if (!setDef || !draftSetId.trim()) {
+      toast.error('Choose a glossary set first');
+      return;
+    }
+    const targetKey = setDef.id;
+    const dup = findExplorerDuplicateGlossaryFiveTuple(
+      Array.isArray(glossary) ? glossary : [],
+      row.fldCat,
+      row.fldItem,
+      row.fldFind,
+      row.fldRec,
+      targetKey,
+      glossaryDocId
+    );
+    if (dup) {
+      toast.error('Cannot assign — duplicate glossary row', {
+        description: `Another row already exists for this set with the same category, item, finding, and recommendation (${setDef.name}).`,
+      });
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await firestoreService.save(
+        'glossary',
+        {
+          fldGlossarySetId: setDef.id,
+          fldGlossarySetName: setDef.name,
+          fldGlossaryStandardType: setDef.standardType,
+          fldGlossaryStandardVersion: setDef.standardVersion,
+        },
+        glossaryDocId,
+        false
+      );
+      setAssignSetDraftByGlosId((prev) => {
+        const next = { ...prev };
+        delete next[glossaryDocId];
+        return next;
+      });
+      toast.success(`Assigned to ${setDef.name}`);
+    } catch (error: any) {
+      console.error('Assign glossary set error:', error);
+      toast.error(error?.message || 'Failed to assign glossary set');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleRepairLink = async (glossaryId: string, newRecId: string) => {
     setIsSaving(true);
@@ -691,7 +803,7 @@ export default function GlossaryExplorer({
                 <th className="w-10 px-4 py-3"></th>
                 <th className="w-32 px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Category</th>
                 <th className="w-32 px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Item</th>
-                <th className="w-32 px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Glossary Set</th>
+                <th className="min-w-[14rem] w-48 px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Glossary Set</th>
                 <th className="px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Finding Short</span>
@@ -756,17 +868,54 @@ export default function GlossaryExplorer({
                     </td>
                     <td className="px-4 py-3 text-xs font-medium text-zinc-600 truncate">{row.categoryName}</td>
                     <td className="px-4 py-3 text-xs font-medium text-zinc-900 truncate">{row.itemName}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={cn(
-                          "inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border",
-                          row.glossarySetId
-                            ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                            : "bg-zinc-50 text-zinc-500 border-zinc-200"
-                        )}
-                      >
-                        {row.glossarySetLabel || 'Unassigned'}
-                      </span>
+                    <td className="px-4 py-3 align-top">
+                      {(() => {
+                        const glossaryDocId = String(row.fldGlosId || row.id || '').trim();
+                        const unassigned = isExplorerGlossaryRowUnassigned(row);
+                        return (
+                          <div onClick={(e) => e.stopPropagation()} className="space-y-1.5 min-w-[12rem]">
+                            <span
+                              className={cn(
+                                'inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border',
+                                unassigned
+                                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                  : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                              )}
+                              title={unassigned ? 'Missing or empty fldGlossarySetId — legacy cleanup row' : undefined}
+                            >
+                              {unassigned ? 'Unassigned / Legacy' : (row.glossarySetLabel || row.glossarySetName || row.glossarySetId)}
+                            </span>
+                            {unassigned && (
+                              <div className="flex flex-col gap-1.5 pt-0.5">
+                                <Select
+                                  className="!space-y-0"
+                                  selectClassName="text-[10px] py-1.5 px-2"
+                                  value={assignSetDraftByGlosId[glossaryDocId] || ''}
+                                  onChange={(e: any) => {
+                                    setAssignSetDraftByGlosId((prev) => ({
+                                      ...prev,
+                                      [glossaryDocId]: e.target.value,
+                                    }));
+                                  }}
+                                  options={glossarySetAssignSelectOptions}
+                                  placeholder="Choose glossary set…"
+                                  disabled={isSaving}
+                                />
+                                <Button
+                                  type="button"
+                                  size="xs"
+                                  variant="secondary"
+                                  className="text-[9px] font-bold h-7"
+                                  disabled={isSaving || !String(assignSetDraftByGlosId[glossaryDocId] || '').trim()}
+                                  onClick={() => handleAssignGlossarySet(row)}
+                                >
+                                  Assign set
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <EditableField id={row.findingId} field="fldFindShort" value={row.findingShort} inline />

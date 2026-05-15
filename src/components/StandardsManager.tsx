@@ -310,6 +310,9 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    // TODO: Bulk match uses citation_num only (`standards.find` first hit). When Standard and Figure
+    // share the same citation number, the linked row is ambiguous—consider filename patterns or explicit row targeting.
+
     setIsBulkUploading(true);
     setBulkUploadProgress({ current: 0, total: files.length });
     
@@ -875,10 +878,11 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                 />
               </div>
 
-              {(editingStandard.relation_type === 'Figure' ||
-                editingStandard.relation_type === 'Table') && (
-                <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
-                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Figure / table image</p>
+              <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Associated image</p>
+                  <p className="text-xs text-zinc-600 leading-relaxed">
+                    Images are stored on this standards row only. Removing the image does not delete the file from storage.
+                  </p>
                   {editingStandard.image_url ? (
                     <div className="space-y-3">
                       <img
@@ -939,8 +943,7 @@ export function StandardsManager({ standards }: { standards: MasterStandard[] })
                       </label>
                     </div>
                   )}
-                </div>
-              )}
+              </div>
 
               <TextArea 
                 label="Content Text" 
