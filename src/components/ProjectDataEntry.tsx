@@ -1886,26 +1886,7 @@ export default function ProjectDataEntry({
       "Cancel Edit",
       "You have unsaved changes. Are you sure you want to cancel editing and switch to a new record?",
       () => {
-        isFormDirtyRef.current = false;
-        onReset(); // This should set editingRecordId to null in parent
-        setFldFindShort('');
-        setFldFindLong('');
-        setFldRecShort('');
-        setFldRecLong('');
-        setFldQTY(0);
-        setFldMeasurement('');
-        setFldMeasurementType('');
-        setFldMeasurementUnit('');
-        setFldUnitType('Decimal');
-        setFldUnitCost(0);
-        setFldTotalCost(0);
-        setFldImages([]);
-        setFldStandards([]);
-        setIsDirty(false);
-        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
-        setShowRecoveryModal(false);
-        setSavedDraft(null);
-        draftRecoveryOfferedSigRef.current = '';
+        applyNewBlankRecord();
         toast.info('Edit cancelled');
       }
     );
