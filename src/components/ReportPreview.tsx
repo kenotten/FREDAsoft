@@ -1650,8 +1650,10 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
     return formatGroupedStandardCitations(ids, standards);
   }, [record.fldStandards, record.fldData, glos, standards]);
 
+  const hasReportImages = Array.isArray(record.fldImages) && record.fldImages.length > 0;
+
   return (
-    <div className="border-2 border-zinc-900 flex items-start break-inside-avoid">
+    <div className="border-2 border-zinc-900 flex items-stretch break-inside-avoid">
       {/* Number Column */}
       <div className="w-12 border-r-2 border-zinc-900 flex flex-col items-center justify-start shrink-0 pt-2 font-black text-2xl">
         {index}
@@ -1659,21 +1661,28 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
       </div>
 
       {/* Content Grid */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div
+        className={cn(
+          'flex min-h-0 min-w-0 flex-1 flex-col',
+          hasReportImages && 'border-r-2 border-zinc-900'
+        )}
+      >
         {/* Header Row */}
-        <div className="flex border-b border-zinc-300">
-          <div className="w-32 bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Category</div>
-          <div className="flex-1 px-2 py-1 text-[10px] font-bold text-zinc-900 border-r border-zinc-300 truncate">{cat?.fldCategoryName || 'N/A'}</div>
-          <div className="w-32 bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Item</div>
-          <div className="flex-1 bg-black text-white px-2 py-1 text-[10px] font-bold uppercase truncate">{item?.fldItemName || 'N/A'}</div>
+        <div className="flex border-b border-zinc-900">
+          <div className="w-32 bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase border-r border-zinc-900 shrink-0">Category</div>
+          <div className="flex-1 px-2 py-1 text-[10px] font-bold text-zinc-900 border-r border-zinc-900 truncate">{cat?.fldCategoryName || 'N/A'}</div>
+          <div className="w-32 bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase border-r border-zinc-900 shrink-0">Item</div>
+          <div className="flex-1 truncate border-r border-zinc-900 bg-black px-2 py-1 text-[10px] font-bold uppercase text-white">
+            {item?.fldItemName || 'N/A'}
+          </div>
         </div>
         
         {/* Location row: single continuous value band; cost right-aligned */}
-        <div className="flex min-w-0 border-b border-zinc-300">
-          <div className="w-32 shrink-0 border-r border-zinc-300 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase">
+        <div className="flex min-w-0 border-b border-zinc-900">
+          <div className="w-32 shrink-0 border-r border-zinc-900 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase">
             Location
           </div>
-          <div className="flex min-w-0 flex-1 items-center justify-between gap-3 bg-white px-2 py-2">
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-3 border-r border-zinc-900 bg-white px-2 py-2">
             <span
               className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-900"
               title={location?.fldLocName || 'N/A'}
@@ -1687,37 +1696,39 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
         </div>
 
         {/* Finding Row */}
-        <div className="flex border-b border-zinc-300">
-          <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Finding</div>
+        <div className="flex border-b border-zinc-900">
+          <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-900 shrink-0">Finding</div>
           {/* Glossary images are intentionally not rendered in formal report finding text (record.fldImages only in column / addendum). */}
-          <div className="flex-1 px-2 py-2 text-[11px] leading-snug border-r border-zinc-300 whitespace-pre-line">
+          <div className="flex-1 px-2 py-2 text-[11px] leading-snug border-r border-zinc-900 whitespace-pre-line">
             {record.fldFindLong}
           </div>
-          <div className="w-32 flex flex-col shrink-0">
-            <div className="bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase border-b border-zinc-300">Measurement</div>
-            <div className="flex-1 flex items-center justify-center text-xs font-bold p-2">
+          <div className="flex w-32 shrink-0 flex-col border-l border-zinc-900">
+            <div className="border-b border-zinc-900 bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase">Measurement</div>
+            <div className="flex-1 flex items-center justify-center p-2 text-xs font-bold">
               {formatMeasurement(record.fldMeasurement, record.fldMeasurementUnit || record.fldUnitType)}
             </div>
           </div>
         </div>
 
         {/* Recommendation Row */}
-        <div className="flex border-b border-zinc-300">
-          <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Recommendation</div>
-          <div className="flex-1 px-2 py-2 text-[11px] leading-snug whitespace-pre-line">{record.fldRecLong}</div>
+        <div className="flex border-b border-zinc-900">
+          <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-900 shrink-0">Recommendation</div>
+          <div className="flex-1 whitespace-pre-line border-r border-zinc-900 px-2 py-2 text-[11px] leading-snug">
+            {record.fldRecLong}
+          </div>
         </div>
 
         {/* Reference Row */}
-        <div className="flex border-t border-zinc-300">
-          <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-300 shrink-0">Reference</div>
-          <div className="flex-1 px-2 py-2 text-xs font-bold">{refs}</div>
+        <div className="flex border-b border-zinc-900">
+          <div className="w-32 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase border-r border-zinc-900 shrink-0">Reference</div>
+          <div className="flex-1 border-r border-zinc-900 px-2 py-2 text-xs font-bold">{refs}</div>
         </div>
       </div>
 
       {/* Images column: fixed h-32 slots at top; column self-stretch + flex filler completes right edge to card bottom. */}
       <div className={cn(
-        'w-48 shrink-0 self-stretch flex min-h-0 flex-col border-l-2 border-zinc-900 bg-zinc-900',
-        (!Array.isArray(record.fldImages) || record.fldImages.length === 0) && 'hidden'
+        'flex min-h-0 w-48 shrink-0 flex-col bg-zinc-900',
+        !hasReportImages && 'hidden'
       )}>
         {Array.isArray(record.fldImages) && record.fldImages.slice(0, 2).map((img: string, i: number) => {
           const multi = record.fldImages.length > 1;
@@ -1728,9 +1739,9 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
                 'h-32 shrink-0 overflow-hidden bg-white p-1',
                 multi
                   ? i === 0
-                    ? 'rounded-t-sm border-l border-r border-t border-zinc-900'
-                    : 'border-l border-r border-t border-zinc-900'
-                  : 'rounded-t-sm border-l border-r border-t border-zinc-900'
+                    ? 'rounded-t-sm border-r border-t border-zinc-900'
+                    : 'border-r border-t border-zinc-900'
+                  : 'rounded-t-sm border-r border-t border-zinc-900'
               )}
             >
               <img
@@ -1743,7 +1754,7 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
           );
         })}
         <div
-          className="min-h-0 flex-1 border-l border-r border-b border-t border-zinc-900 bg-zinc-50"
+          className="min-h-0 flex-1 border-r border-b border-t border-zinc-900 bg-zinc-50"
           aria-hidden={true}
         />
       </div>
