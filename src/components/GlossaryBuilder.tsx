@@ -43,6 +43,44 @@ import {
   MasterStandard 
 } from '../types';
 
+type RelatedRecordScenarioId =
+  | 'same_find_new_rec'
+  | 'new_find_same_rec'
+  | 'new_find_new_rec'
+  | 'cross_set_template';
+
+const RELATED_RECORD_SCENARIO_OPTIONS: {
+  id: RelatedRecordScenarioId;
+  title: string;
+  description: string;
+  futureMasters: string;
+}[] = [
+  {
+    id: 'same_find_new_rec',
+    title: 'Same finding + new recommendation',
+    description: 'Keep the current finding; add a new recommendation and glossary row.',
+    futureMasters: 'Reuse finding - create or pick recommendation',
+  },
+  {
+    id: 'new_find_same_rec',
+    title: 'New finding + same recommendation',
+    description: 'Add a new finding; link the current recommendation and a new glossary row.',
+    futureMasters: 'Create or pick finding - reuse recommendation',
+  },
+  {
+    id: 'new_find_new_rec',
+    title: 'New finding + new recommendation',
+    description: 'Fork both masters from the selected text, then create a new glossary row.',
+    futureMasters: 'Create finding - create recommendation (short titles must differ in same set)',
+  },
+  {
+    id: 'cross_set_template',
+    title: 'Cross-set related record',
+    description: 'Use the Glossary Set dropdown and template banner, then Prepare Target Set Records.',
+    futureMasters: 'Reuse or create masters per target set - SAVE RECORD for glossary',
+  },
+];
+
 /** Empty string = Unassigned/Legacy bucket (must not match a real set id). */
 function normalizeGlossaryRecordSetKey(raw: string | undefined | null): string {
   const t = String(raw ?? '').trim();
@@ -642,6 +680,8 @@ export function GlossaryBuilder({
     fldUnitCostOverride: '', fldUnitTypeOverride: ''
   });
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [relatedRecordModalOpen, setRelatedRecordModalOpen] = useState(false);
+  const [relatedRecordScenario, setRelatedRecordScenario] = useState<RelatedRecordScenarioId | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, collection: string, label: string, type: 'delete' | 'unassociate', isAssociated?: boolean } | null>(null);
 
   const handleDeleteAction = async () => {
@@ -1423,6 +1463,70 @@ export function GlossaryBuilder({
     selections.editingGlossaryId
   ]);
 
+  const relatedRecordSourceContext = useMemo(() => {
+    if (!selectedCat || !selectedItem || !selectedFind || !selectedRec) return null;
+    const cat = categories?.find(
+      (c: any) =>
+        String(c.id || c.fldCategoryID || '').toLowerCase().trim() ===
+        String(selectedCat || '').toLowerCase().trim()
+    );
+    const item = items?.find(
+      (i: any) =>
+        String(i.id || i.fldItemID || '').toLowerCase().trim() ===
+        String(selectedItem || '').toLowerCase().trim()
+    );
+    const find = findings?.find(
+      (f: any) =>
+        String(f.id || f.fldFindID || '').toLowerCase().trim() ===
+        String(selectedFind || '').toLowerCase().trim()
+    );
+    const rec = masterRecsSource?.find(
+      (r: any) =>
+        String(r.id || r.fldRecID || '').toLowerCase().trim() ===
+        String(selectedRec || '').toLowerCase().trim()
+    );
+    const setDef = selectedGlossarySetId ? glossarySetById(selectedGlossarySetId) : null;
+    const glossarySetLabel =
+      setDef?.name ||
+      (String(selectedGlossarySetId || '').trim() ? String(selectedGlossarySetId).trim() : 'Unassigned / Legacy');
+    return {
+      categoryName: cat?.fldCategoryName || selectedCat,
+      itemName: item?.fldItemName || selectedItem,
+      findShort: find?.fldFindShort || selectedFind,
+      recShort: rec?.fldRecShort || selectedRec,
+      glossarySetLabel,
+    };
+  }, [
+    selectedCat,
+    selectedItem,
+    selectedFind,
+    selectedRec,
+    selectedGlossarySetId,
+    categories,
+    items,
+    findings,
+    masterRecsSource,
+  ]);
+
+  const closeRelatedRecordModal = () => {
+    setRelatedRecordModalOpen(false);
+    setRelatedRecordScenario(null);
+  };
+
+  const handleRelatedRecordContinue = () => {
+    if (!relatedRecordScenario) {
+      toast.error('Select a scenario first.');
+      return;
+    }
+    if (relatedRecordScenario === 'cross_set_template') {
+      toast.info(
+        'Cross-set related records use the Glossary Set dropdown and Prepare Target Set Records below. Create Related Record save is not implemented yet (Phase 2B+).'
+      );
+      return;
+    }
+    toast.info('Create Related Record is not implemented yet (Phase 2B+). No data was saved.');
+  };
+
   const recommendationSelectOptions = useMemo(() => {
     if (!masterRecsSource || masterRecsSource.length === 0) {
       return [{ label: '⏳ Hydrating Library...', value: 'loading', disabled: true }];
@@ -1590,12 +1694,17 @@ export function GlossaryBuilder({
               </Button>
             )}
               {selectedCat && selectedItem && selectedFind && selectedRec ? (
-                <span
-                  className="max-w-[220px] self-center text-[10px] leading-snug text-zinc-500"
-                  title="Use + Finding, + Recommendation, Search (link), Glossary Set template, or SAVE RECORD."
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setRelatedRecordScenario(null);
+                    setRelatedRecordModalOpen(true);
+                  }}
                 >
-                  Related rows: use + Finding, + Recommendation, Search, or Glossary Set template—not bulk copy.
-                </span>
+                  Create Related Record...
+                </Button>
               ) : (
                 <Button
                   size="sm"
@@ -2131,6 +2240,95 @@ export function GlossaryBuilder({
           </div>
         </div>
       )}
+      {relatedRecordModalOpen && relatedRecordSourceContext && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-zinc-900 uppercase tracking-tight">
+                Create Related Glossary Record
+              </h2>
+              <button
+                type="button"
+                onClick={closeRelatedRecordModal}
+                className="p-2 hover:bg-zinc-100 rounded-full transition-colors"
+                aria-label="Close"
+              >
+                <Plus size={20} className="rotate-45 text-zinc-400" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-2 text-sm">
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Source context</p>
+                <dl className="grid grid-cols-[minmax(7rem,auto)_1fr] gap-x-3 gap-y-1.5">
+                  <dt className="text-zinc-500">Category</dt>
+                  <dd className="font-medium text-zinc-900">{relatedRecordSourceContext.categoryName}</dd>
+                  <dt className="text-zinc-500">Item</dt>
+                  <dd className="font-medium text-zinc-900">{relatedRecordSourceContext.itemName}</dd>
+                  <dt className="text-zinc-500">Finding</dt>
+                  <dd className="font-medium text-zinc-900">{relatedRecordSourceContext.findShort}</dd>
+                  <dt className="text-zinc-500">Recommendation</dt>
+                  <dd className="font-medium text-zinc-900">{relatedRecordSourceContext.recShort}</dd>
+                  <dt className="text-zinc-500">Glossary Set</dt>
+                  <dd className="font-medium text-zinc-900">{relatedRecordSourceContext.glossarySetLabel}</dd>
+                </dl>
+              </div>
+
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/80 p-3 text-xs text-indigo-900 leading-snug">
+                A related row is a <span className="font-semibold">new glossary five-tuple</span> (category, item,
+                finding, recommendation, glossary set). A later step will ask whether to{' '}
+                <span className="font-semibold">reuse</span> or <span className="font-semibold">create</span> each
+                master finding and recommendation. This dialog does not save anything yet.
+              </div>
+
+              <fieldset className="space-y-2">
+                <legend className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                  What do you want to create?
+                </legend>
+                {RELATED_RECORD_SCENARIO_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.id}
+                    className={cn(
+                      'flex cursor-pointer gap-3 rounded-xl border p-3 transition-colors',
+                      relatedRecordScenario === opt.id
+                        ? 'border-indigo-400 bg-indigo-50/50 ring-1 ring-indigo-200'
+                        : 'border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50'
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="relatedRecordScenario"
+                      className="mt-1 shrink-0"
+                      checked={relatedRecordScenario === opt.id}
+                      onChange={() => setRelatedRecordScenario(opt.id)}
+                    />
+                    <span className="min-w-0 space-y-0.5">
+                      <span className="block text-sm font-semibold text-zinc-900">{opt.title}</span>
+                      <span className="block text-xs text-zinc-600">{opt.description}</span>
+                      <span className="block text-[10px] font-medium text-indigo-700">{opt.futureMasters}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            </div>
+
+            <div className="p-6 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3">
+              <Button type="button" variant="secondary" onClick={closeRelatedRecordModal}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={!relatedRecordScenario}
+                title={relatedRecordScenario ? undefined : 'Select a scenario first'}
+                onClick={handleRelatedRecordContinue}
+              >
+                Continue
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Standards Section */}
       <div className="grid grid-cols-3 gap-6">
         <Card 
