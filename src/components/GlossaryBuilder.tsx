@@ -858,9 +858,16 @@ export function GlossaryBuilder({
   };
 
   const saveNewGlossaryRecord = async () => {
+    if (selectedCat && selectedItem && selectedFind && selectedRec) {
+      toast.error(
+        'Use + Finding, + Recommendation, Search (link), or change Glossary Set and SAVE RECORD for related rows—not bulk copy here.'
+      );
+      setNewType(null);
+      return;
+    }
     try {
       let findId = selectedFind;
-      if (!selectedFind || (selectedCat && selectedItem && selectedFind && selectedRec)) {
+      if (!selectedFind) {
         findId = uuidv4();
         const findingPayload = sanitizeData({
           fldFindID: findId, 
@@ -1582,9 +1589,23 @@ export function GlossaryBuilder({
                 <Trash2 size={14} className="mr-1" /> DELETE RECORD
               </Button>
             )}
-              <Button size="sm" variant="secondary" onClick={handleAddNewGlossaryFlow} disabled={!selectedCat || !selectedItem}>
-                <Plus size={14} className="mr-1" /> {selectedCat && selectedItem && selectedFind && selectedRec ? "COPY & EDIT" : "ADD FINDING/REC"}
-              </Button>
+              {selectedCat && selectedItem && selectedFind && selectedRec ? (
+                <span
+                  className="max-w-[220px] self-center text-[10px] leading-snug text-zinc-500"
+                  title="Use + Finding, + Recommendation, Search (link), Glossary Set template, or SAVE RECORD."
+                >
+                  Related rows: use + Finding, + Recommendation, Search, or Glossary Set template—not bulk copy.
+                </span>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleAddNewGlossaryFlow}
+                  disabled={!selectedCat || !selectedItem}
+                >
+                  <Plus size={14} className="mr-1" /> ADD FINDING/REC
+                </Button>
+              )}
             <Button size="sm" onClick={handleAddNew} disabled={!selectedCat || !selectedItem || !selectedFind || !selectedRec} className={cn(!selectedCat || !selectedItem || !selectedFind || !selectedRec ? "bg-zinc-200" : "bg-indigo-600 hover:bg-indigo-700")}>
               <Save size={14} className="mr-1" /> SAVE RECORD
             </Button>
