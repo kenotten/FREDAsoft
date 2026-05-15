@@ -93,6 +93,27 @@ function glossaryRecommendationMatches(g: any, recId: string): boolean {
   return normalizeId(g?.fldRec) === t || normalizeId(g?.fldRecID) === t;
 }
 
+/** Glossary row standards, else union of linked master finding + recommendation (Glossary Builder parity). */
+function standardsIdsFromGlossaryRow(
+  gRow: any,
+  findingsList: any[],
+  masterRecs: any[]
+): string[] {
+  const fromGlos = safeArray(gRow?.fldStandards);
+  if (fromGlos.length > 0) return fromGlos;
+  const find = (findingsList || []).find((f: any) =>
+    normalizeId(f.fldFindID || f.id) === normalizeId(gRow?.fldFind)
+  );
+  const recRaw = gRow?.fldRec || gRow?.fldRecID;
+  const rec = (masterRecs || []).find((r: any) => recommendationMatches(r, recRaw));
+  const merged = new Set<string>();
+  for (const id of [...safeArray(find?.fldStandards), ...safeArray(rec?.fldStandards)]) {
+    const s = String(id).trim();
+    if (s) merged.add(s);
+  }
+  return Array.from(merged);
+}
+
 function recordCitationDisplayLabel(standard: any | undefined, idFallback: string): string {
   const formatted = formatStandardCitationLabel(standard);
   if (formatted !== undefined && formatted !== '') return formatted;
@@ -508,7 +529,7 @@ export default function ProjectDataEntry({
     setFldRecShort('');
     setFldRecLong('');
     setFldMeasurementType('');
-    setFldStandards([]);
+    clearFldStandardsBecauseNoGlossaryRow();
     onSelectionChange({ 
       ...selections, 
       categoryId: val, 
@@ -531,7 +552,7 @@ export default function ProjectDataEntry({
     setFldRecShort('');
     setFldRecLong('');
     setFldMeasurementType('');
-    setFldStandards([]);
+    clearFldStandardsBecauseNoGlossaryRow();
     onSelectionChange({ ...selections, itemId: val, findId: '', recId: '', glosId: '', standards: [], isDirty: true });
     setCustomMasterRecId('');
     setCustomMasterFindId('');
@@ -539,6 +560,8 @@ export default function ProjectDataEntry({
   
   const [fldImages, setFldImages] = useState<string[]>([]);
   const [fldStandards, setFldStandards] = useState<string[]>([]);
+  const fldStandardsRef = useRef(fldStandards);
+  fldStandardsRef.current = fldStandards;
   const [fldQTY, setFldQTY] = useState<number | ''>(0);
   const [fldMeasurement, setFldMeasurement] = useState<number | ''>('');
   const [fldMeasurementUnit, setFldMeasurementUnit] = useState('');
@@ -555,6 +578,18 @@ export default function ProjectDataEntry({
   const [isDirty, setIsDirty] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
+  const CITATIONS_CLEARED_NO_GLOSSARY_ROW_MSG =
+    'Record citations were cleared because this path is not tied to an approved glossary row. Add citations manually in the Record citations section.';
+
+  /** Clears projectData citation snapshot when leaving an approved glossary-row identity. */
+  const clearFldStandardsBecauseNoGlossaryRow = useCallback(() => {
+    const hadStandards = safeArray(fldStandardsRef.current).length > 0;
+    setFldStandards([]);
+    if (hadStandards) {
+      toast.info(CITATIONS_CLEARED_NO_GLOSSARY_ROW_MSG);
+    }
+  }, []);
+
   const handleActiveGlossaryChange = useCallback(
     (nextId: string) => {
       setActiveGlossarySetId(nextId);
@@ -568,7 +603,7 @@ export default function ProjectDataEntry({
       setFldRecShort('');
       setFldRecLong('');
       setFldMeasurementType('');
-      setFldStandards([]);
+      clearFldStandardsBecauseNoGlossaryRow();
       onSelectionChange({
         ...selections,
         categoryId: '',
@@ -582,7 +617,7 @@ export default function ProjectDataEntry({
       setCustomMasterRecId('');
       setCustomMasterFindId('');
     },
-    [onSelectionChange, selections]
+    [onSelectionChange, selections, clearFldStandardsBecauseNoGlossaryRow]
   );
 
   const [confirmModal, setConfirmModal] = useState<{
@@ -881,7 +916,7 @@ export default function ProjectDataEntry({
       return;
     }
     if (hadGlossaryLinks) {
-      setFldStandards([]);
+      clearFldStandardsBecauseNoGlossaryRow();
       setFldMeasurementType('');
       setFldMeasurementUnit('');
       onSelectionChange({
@@ -898,7 +933,8 @@ export default function ProjectDataEntry({
     activeRecord?.fldPDataID,
     selections.findId,
     selections.recId,
-    selections.glosId
+    selections.glosId,
+    clearFldStandardsBecauseNoGlossaryRow
   ]);
 
   /** Resolves glossary row from category → item → finding → recommendation path (raw FKs; rec matches fldRec or fldRecID). */
@@ -971,11 +1007,13 @@ export default function ProjectDataEntry({
   ]);
 
   /** Hydrate from a single approved glossary row (rec master + costs + selections.glosId). */
-  const applyGlossaryRecommendationRow = (gRow: any, forceHydrateCosts = false) => {
+  const applyGlossaryRecommendationRow = (gRow: any, hydrateCostsFromRow = false) => {
     if (!gRow) return;
 
-    if (dataEntryMode === 'glossary' && !activeRecord) {
-      setFldStandards(safeArray(gRow.fldStandards));
+    if (dataEntryMode === 'glossary') {
+      setFldStandards(
+        standardsIdsFromGlossaryRow(gRow, findings || [], masterRecommendations || [])
+      );
     }
 
     const recIdRaw = gRow.fldRec || gRow.fldRecID;
@@ -1005,7 +1043,7 @@ export default function ProjectDataEntry({
     setFldRecLong(rec.fldRecLong || '');
 
     const glos = gRow;
-    const shouldHydrateCosts = forceHydrateCosts || !activeRecord;
+    const shouldHydrateCosts = hydrateCostsFromRow || !activeRecord;
 
     if (shouldHydrateCosts) {
       const unitCost = glos?.fldUnitCost ?? rec.fldUnit ?? 0;
@@ -1444,8 +1482,24 @@ export default function ProjectDataEntry({
       setFldTotalCost(activeRecord.fldTotalCost || 0);
       setFldLocation(activeRecord.fldLocation || '');
       setFldImages(Array.isArray(activeRecord.fldImages) ? activeRecord.fldImages : []);
-      // Existing records preserve projectData.fldStandards
-      setFldStandards(safeArray(activeRecord.fldStandards));
+      // Existing records preserve saved projectData.fldStandards; backfill from glossary when empty
+      if (!isCustom) {
+        const savedStd = safeArray(activeRecord.fldStandards);
+        const glosForStd = (glossary || []).find(
+          (g: any) =>
+            (g.id || g.fldGlosId || '').trim().toLowerCase() ===
+            (activeRecord.fldData || '').trim().toLowerCase()
+        );
+        setFldStandards(
+          savedStd.length > 0
+            ? savedStd
+            : glosForStd
+              ? standardsIdsFromGlossaryRow(glosForStd, findings || [], masterRecommendations || [])
+              : []
+        );
+      } else {
+        setFldStandards(safeArray(activeRecord.fldStandards));
+      }
       setIsDirty(false);
     } else {
       initialSelectionRef.current = {
@@ -2808,7 +2862,10 @@ export default function ProjectDataEntry({
                     <button
                       type="button"
                       disabled={!hasRequiredContext}
-                      onClick={() => onSelectionChange({ ...selections, dataEntryMode: 'custom' })}
+                      onClick={() => {
+                        clearFldStandardsBecauseNoGlossaryRow();
+                        onSelectionChange({ ...selections, dataEntryMode: 'custom' });
+                      }}
                       className={cn(
                         "px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-md transition-all",
                         dataEntryMode === 'custom' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
@@ -3108,7 +3165,7 @@ export default function ProjectDataEntry({
                      }
                      setFldMeasurementUnit(find.fldUnitType || '');
                    }
-                   setFldStandards([]); // Clear standards on finding change
+                   clearFldStandardsBecauseNoGlossaryRow();
                    onSelectionChange({...selections, findId: e.target.value, recId: '', glosId: '', isDirty: true});
                 }}
                 selectClassName={cn('!bg-yellow-50', focusClasses)}
@@ -3131,6 +3188,7 @@ export default function ProjectDataEntry({
                     setIsDirty(true);
                     return;
                   }
+                  clearFldStandardsBecauseNoGlossaryRow();
                   const f = activeFindingsList.find(
                     (x: any) => normalizeId(x.fldFindID || x.id) === normalizeId(id)
                   );
@@ -3243,6 +3301,11 @@ export default function ProjectDataEntry({
                 value={recommendationSelectValue || ''}
                 onChange={(e: any) => {
                   const gid = e.target.value;
+                  if (!gid) {
+                    clearFldStandardsBecauseNoGlossaryRow();
+                    onSelectionChange({ ...selections, recId: '', glosId: '', isDirty: true });
+                    return;
+                  }
                   let gRow = rowsForPath.find(
                     (g: any) => normalizeId(g.fldGlosId || g.id) === normalizeId(gid)
                   );
@@ -3250,6 +3313,11 @@ export default function ProjectDataEntry({
                     gRow = (glossary || []).find(
                       (g: any) => normalizeId(g.fldGlosId || g.id) === normalizeId(gid)
                     );
+                  }
+                  if (!gRow) {
+                    clearFldStandardsBecauseNoGlossaryRow();
+                    onSelectionChange({ ...selections, recId: '', glosId: '', isDirty: true });
+                    return;
                   }
                   applyGlossaryRecommendationRow(gRow, true);
                 }}
@@ -3262,19 +3330,20 @@ export default function ProjectDataEntry({
                  label="Optional: Copy recommendation template from library"
                  value={customMasterRecId || ''}
                  onChange={(e: any) => {
-                   const id = e.target.value || '';
-                   setCustomMasterRecId(id);
-                   if (!id) {
-                     setIsDirty(true);
-                     return;
-                   }
-                   const rec = masterRecsActive.find(
-                     (r: any) =>
-                       normalizeId(r?.fldRecID) === normalizeId(id) || normalizeId(r?.id) === normalizeId(id)
-                   );
-                   if (rec) {
-                     setFldRecShort(rec.fldRecShort || '');
-                     setFldRecLong(rec.fldRecLong || '');
+                  const id = e.target.value || '';
+                  setCustomMasterRecId(id);
+                  if (!id) {
+                    setIsDirty(true);
+                    return;
+                  }
+                  clearFldStandardsBecauseNoGlossaryRow();
+                  const rec = masterRecsActive.find(
+                    (r: any) =>
+                      normalizeId(r?.fldRecID) === normalizeId(id) || normalizeId(r?.id) === normalizeId(id)
+                  );
+                  if (rec) {
+                    setFldRecShort(rec.fldRecShort || '');
+                    setFldRecLong(rec.fldRecLong || '');
                      const uom = rec.fldUOM || 'Decimal';
                      setFldUnitType(uom);
                      setFldUnitCost(rec.fldUnit ?? 0);
