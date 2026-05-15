@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import FREDAsoftLogo from './Assets/FREDAsoftLogo.png';
 import { cn, toFraction, formatMeasurement, fromFraction, sanitizeData } from './lib/utils';
+import { FREDASOFT_SELECTIONS_LOCAL_STORAGE_KEY } from './lib/storageKeys';
 import { motion, AnimatePresence } from 'motion/react';
 import { entityService } from './services/entityService';
 
@@ -294,7 +295,7 @@ export default function App() {
   const [deleteConfirmation, setDeleteConfirmation] = useState<any>(null);
 
   const [selections, setSelections] = useState<any>(() => {
-    const saved = localStorage.getItem('fredasoft_selections');
+    const saved = localStorage.getItem(FREDASOFT_SELECTIONS_LOCAL_STORAGE_KEY);
     const initial = { clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', glosId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null, dataEntryMode: 'glossary' as const };
     if (saved) {
       try {
@@ -425,7 +426,7 @@ export default function App() {
       locationName: selections.locationName || '',
       dataEntryMode: selections.dataEntryMode === 'custom' ? 'custom' : 'glossary'
     };
-    localStorage.setItem('fredasoft_selections', JSON.stringify(sticky));
+    localStorage.setItem(FREDASOFT_SELECTIONS_LOCAL_STORAGE_KEY, JSON.stringify(sticky));
   }, [
     selections.clientId,
     selections.facilityId,

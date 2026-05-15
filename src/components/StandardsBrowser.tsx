@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { Search, ChevronRight, ChevronDown, Book, FileText, Hash, Info, AlertCircle, Image as ImageIcon, Database, Plus, X } from 'lucide-react';
 import { MasterStandard } from '../types';
+import { STANDARDS_BROWSER_SELECTION_STORAGE_PREFIX, STANDARDS_BROWSER_UI_STORAGE_PREFIX } from '../lib/storageKeys';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -107,9 +108,6 @@ const StandardItem = ({
     </div>
   );
 };
-
-const STANDARDS_BROWSER_UI_STORAGE_PREFIX = 'fredasoft_standards_browser_ui_v1:';
-const STANDARDS_BROWSER_SELECTION_STORAGE_PREFIX = 'fredasoft_standards_browser_selection_v1:';
 
 type PersistedStandardsBrowserUi = {
   searchQuery?: string;

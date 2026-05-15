@@ -11,6 +11,7 @@ import { DocumentManager } from '../DocumentManager';
 import { OrderManager } from '../OrderManager';
 import { LibraryManager } from '../LibraryManager';
 import { cn } from '../../lib/utils';
+import { FREDASOFT_DRAFT_LOCAL_STORAGE_KEY } from '../../lib/storageKeys';
 import { buildProjectDataCloneSeed, type ProjectDataCloneSeed } from '../../lib/cloneProjectData';
 import { 
   SelectionProps, 
@@ -72,7 +73,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
       const seed = buildProjectDataCloneSeed(record, glossary);
       setPendingCloneSeed(seed);
       try {
-        localStorage.removeItem('fredasoft_draft');
+        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
       } catch {
         /* ignore */
       }
@@ -320,7 +321,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
                 onClick={() => {
                   const nav = pendingExplorerNav;
                   if (!nav?.record) return;
-                  localStorage.removeItem('fredasoft_draft');
+                  localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
                   onDataEntryDirtyChange?.(false);
                   if (nav.kind === 'edit') {
                     setSelections((s: any) => ({ ...s, editingRecordId: nav.record.fldPDataID }));
