@@ -1,7 +1,7 @@
 /**
  * !!! VERSION 87.0 - THE OPENING FORCE FIX !!!
  */
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ref, getDownloadURL, uploadString } from 'firebase/storage';
 import { storage } from '../firebase';
 import { resizeImage } from '../lib/imageUtils';
@@ -101,6 +101,47 @@ function masterMatchesSelectedGlossarySet(master: any, selectedSetKey: string): 
   return mk === selectedSetKey;
 }
 
+function glossaryRowRecId(g: any): string {
+  return String(g?.fldRec || g?.fldRecID || '').trim().toLowerCase();
+}
+
+type PendingRelatedActivation = {
+  selectedCat: string;
+  selectedItem: string;
+  selectedFind: string;
+  sourceRecId: string;
+  newRecId: string;
+  glosId: string;
+  glossarySetKey: string;
+};
+
+function pendingMatchesRelatedContext(
+  pending: PendingRelatedActivation,
+  selectedCat: string,
+  selectedItem: string,
+  selectedFind: string
+): boolean {
+  const n = (v: string) => String(v || '').trim().toLowerCase();
+  return (
+    n(pending.selectedCat) === n(selectedCat) &&
+    n(pending.selectedItem) === n(selectedItem) &&
+    n(pending.selectedFind) === n(selectedFind)
+  );
+}
+
+function glossarySameTripleContext(
+  g: any,
+  selectedCat: string,
+  selectedItem: string,
+  selectedFind: string
+): boolean {
+  return (
+    String(g.fldCat || '').toLowerCase().trim() === String(selectedCat || '').toLowerCase().trim() &&
+    String(g.fldItem || '').toLowerCase().trim() === String(selectedItem || '').toLowerCase().trim() &&
+    String(g.fldFind || '').toLowerCase().trim() === String(selectedFind || '').toLowerCase().trim()
+  );
+}
+
 function glossarySameFourTuple(
   g: any,
   selectedCat: string,
@@ -146,6 +187,94 @@ function filterGlossaryFourTupleOtherSets(
   );
 }
 
+/** Infers the set key used for 5-tuple glossary resolution (matches sync effect + SAVE). */
+function glossaryKeyForExactLookup(
+  glossaryList: any[],
+  selectedGlossarySetId: string,
+  editingGlossaryId: string | undefined,
+  selectedCat: string,
+  selectedItem: string,
+  selectedFind: string,
+  selectedRec: string
+): string {
+  const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
+  let keyForExactLookup = selectedSetKeyUi;
+  if (keyForExactLookup === '') {
+    const gid = String(editingGlossaryId || '').trim();
+    if (gid) {
+      const rowById = (glossaryList || []).find(
+        (g: any) => String(g.fldGlosId || g.id || '').trim() === gid
+      );
+      if (
+        rowById &&
+        glossarySameTripleContext(rowById, selectedCat, selectedItem, selectedFind)
+      ) {
+        keyForExactLookup = normalizeGlossaryRecordSetKey(rowById.fldGlossarySetId);
+      }
+    }
+  }
+  return keyForExactLookup;
+}
+
+/** Named set in UI: pinned row must belong to the same set. Legacy/unassigned dropdown skips this check. */
+function glossaryRowMatchesPinnedSetContext(g: any, selectedGlossarySetId: string): boolean {
+  const dropKey = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
+  if (!dropKey) return true;
+  return normalizeGlossaryRecordSetKey(g.fldGlossarySetId) === dropKey;
+}
+
+/**
+ * Shared active glossary row resolution for builder sync + SAVE.
+ * Priority: (1) pinned row by selections.editingGlossaryId (+ cat/item/find + set; rec may lag props);
+ * (2) canonical 5-tuple match via glossaryKeyForExactLookup + findExactGlossaryByFiveTuple.
+ */
+function resolveSyncedGlossaryRow(
+  glossaryList: any[],
+  selectedGlossarySetId: string,
+  editingGlossaryId: string | undefined,
+  selectedCat: string,
+  selectedItem: string,
+  selectedFind: string,
+  selectedRec: string
+): any | undefined {
+  const list = glossaryList || [];
+  const gid = String(editingGlossaryId || '').trim();
+  if (gid) {
+    const pinned = list.find(
+      (g: any) =>
+        String(g.fldGlosId || g.id || '').trim() === gid &&
+        glossarySameTripleContext(g, selectedCat, selectedItem, selectedFind) &&
+        glossaryRowMatchesPinnedSetContext(g, selectedGlossarySetId)
+    );
+    if (pinned) {
+      const ctxRec = String(selectedRec || '').trim().toLowerCase();
+      const pinnedRec = glossaryRowRecId(pinned);
+      // Stale pin: editingGlossaryId still points at source row while selectedRec already moved (e.g. post–related-record activation).
+      if (!ctxRec || !pinnedRec || pinnedRec === ctxRec) {
+        return pinned;
+      }
+    }
+  }
+
+  const key = glossaryKeyForExactLookup(
+    list,
+    selectedGlossarySetId,
+    editingGlossaryId,
+    selectedCat,
+    selectedItem,
+    selectedFind,
+    selectedRec
+  );
+  return findExactGlossaryByFiveTuple(
+    list,
+    selectedCat,
+    selectedItem,
+    selectedFind,
+    selectedRec,
+    key
+  );
+}
+
 /** Active glossary rows (exclude soft-deleted / archived). */
 function isActiveGlossaryRow(g: any): boolean {
   return (
@@ -182,7 +311,7 @@ interface GlossaryBuilderProps {
   unitTypes: UnitType[];
   standards: MasterStandard[];
   selections: any;
-  onSelectionChange: (selections: any) => void;
+  onSelectionChange: React.Dispatch<React.SetStateAction<any>>;
   updatePreferences: (prefs: any) => void;
   setIsSynced: (val: boolean) => void;
   isUpdatingRef: React.MutableRefObject<boolean>;
@@ -199,6 +328,8 @@ interface GlossaryBuilderProps {
   onReplaceStagedStandards?: (next: { finding: string[]; rec: string[]; glossary: string[] }) => void;
   onGlossarySetIdChange?: (setId: string) => void;
   onTemplateModeChange?: (isTemplateMode: boolean) => void;
+  /** App-level activation (functional setSelections) — same shape as Glossary Explorer row open. */
+  onActivateGlossaryBuilderRecord?: (item: any) => void;
 }
 
 function normStagedStandardId(v: string | undefined | null): string {
@@ -245,13 +376,20 @@ export function GlossaryBuilder({
   stagedGlosStds = [],
   onReplaceStagedStandards,
   onGlossarySetIdChange,
-  onTemplateModeChange
+  onTemplateModeChange,
+  onActivateGlossaryBuilderRecord
 }: GlossaryBuilderProps) {
   // Base UI should always render to prevent layout shifts.
   const { selectedCat, selectedItem, selectedFind, selectedRec } = selections;
   const hasMinimumContext = !!(selectedCat && selectedItem && selectedFind && selectedRec);
 
   const masterRecsSource = Array.isArray(masterRecommendations) ? masterRecommendations : [];
+
+  /** Same-finding+new-rec Continue: blocks sync from restoring source row until new rec+glos land in App selections. */
+  const pendingRelatedActivationRef = useRef<PendingRelatedActivation | null>(null);
+  const relatedPrefillKeyRef = useRef('');
+  const relatedFormTouchedRef = useRef(false);
+
   const [selectedGlossarySetId, setSelectedGlossarySetId] = useState<string>('');
   const [libraryGlossaryContextMismatch, setLibraryGlossaryContextMismatch] = useState(false);
   const [templateSourceSnapshot, setTemplateSourceSnapshot] = useState<{
@@ -502,15 +640,17 @@ export function GlossaryBuilder({
     if (val === selections.selectedRec) return;
     isUpdatingRef.current = true;
     const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID) === val);
-    const newS = { 
-      ...selections, 
-      selectedRec: val,
-      stagedRecShort: matchedRec?.fldRecShort || "",
-      stagedRecLong: matchedRec?.fldRecLong || "",
-      isDirty: false // Reset dirty when intentionally switching recommendation
-    };
-    onSelectionChange(newS);
-    updatePreferences({ glossaryBuilderSelections: newS });
+    onSelectionChange((prev: any) => {
+      const newS = {
+        ...prev,
+        selectedRec: val,
+        stagedRecShort: matchedRec?.fldRecShort || '',
+        stagedRecLong: matchedRec?.fldRecLong || '',
+        isDirty: false
+      };
+      updatePreferences({ glossaryBuilderSelections: newS });
+      return newS;
+    });
     setTimeout(() => { isUpdatingRef.current = false; }, 500);
   };
 
@@ -522,35 +662,48 @@ export function GlossaryBuilder({
     }
     if (selections.isDirty) return;
 
-    /** User-selected set in dropdown; '' = Unassigned/Legacy. */
-    const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
-    /**
-     * When dropdown is still empty but Explorer set editingGlossaryId on a matching 4-tuple row,
-     * infer that row's set for exact lookup only (avoids matching the wrong legacy row first).
-     */
-    let keyForExactLookup = selectedSetKeyUi;
-    if (keyForExactLookup === '') {
-      const gid = String(selections.editingGlossaryId || '').trim();
-      if (gid) {
-        const rowById = (glossary || []).find(
-          (g: any) => String(g.fldGlosId || g.id || '').trim() === gid
-        );
-        if (
-          rowById &&
-          glossarySameFourTuple(rowById, selectedCat, selectedItem, selectedFind, selectedRec)
-        ) {
-          keyForExactLookup = normalizeGlossaryRecordSetKey(rowById.fldGlossarySetId);
+    const pendingActivation = pendingRelatedActivationRef.current;
+    if (
+      pendingActivation &&
+      pendingMatchesRelatedContext(pendingActivation, selectedCat, selectedItem, selectedFind)
+    ) {
+      const propRec = String(selectedRec || '').trim().toLowerCase();
+      const propGlos = String(selections.editingGlossaryId || '').trim().toLowerCase();
+      const sourceRec = String(pendingActivation.sourceRecId || '').trim().toLowerCase();
+      const newRec = String(pendingActivation.newRecId || '').trim().toLowerCase();
+      const newGlos = String(pendingActivation.glosId || '').trim().toLowerCase();
+
+      if (propRec === sourceRec) {
+        return;
+      }
+
+      if (propRec === newRec) {
+        if (propGlos !== newGlos) {
+          onSelectionChange((prev: any) => ({
+            ...prev,
+            selectedRec: pendingActivation.newRecId,
+            editingGlossaryId: pendingActivation.glosId,
+            isDirty: false
+          }));
+          return;
         }
+        pendingRelatedActivationRef.current = null;
+      } else {
+        return;
       }
     }
 
-    const exact = findExactGlossaryByFiveTuple(
+    /** User-selected set in dropdown; '' = Unassigned/Legacy. */
+    const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
+
+    const resolved = resolveSyncedGlossaryRow(
       glossary || [],
+      selectedGlossarySetId,
+      selections.editingGlossaryId,
       selectedCat,
       selectedItem,
       selectedFind,
-      selectedRec,
-      keyForExactLookup
+      selectedRec
     );
     const otherSetRows = filterGlossaryFourTupleOtherSets(
       glossary || [],
@@ -568,29 +721,46 @@ export function GlossaryBuilder({
       String(r.id || r.fldRecID || '').toLowerCase().trim() === String(selectedRec || '').toLowerCase().trim()
     );
 
-    if (exact) {
+    if (resolved) {
       if (templateSourceSnapshot) {
         setTemplateSourceSnapshot(null);
       }
       setLibraryGlossaryContextMismatch(false);
-      setSelectedGlossarySetId(normalizeGlossaryRecordSetKey(exact.fldGlossarySetId));
-      const exactFindId = String(exact.fldFind || '').trim();
-      const exactRecId = String(exact.fldRec || exact.fldRecID || '').trim();
+      setSelectedGlossarySetId(normalizeGlossaryRecordSetKey(resolved.fldGlossarySetId));
+      const exactFindId = String(resolved.fldFind || '').trim();
+      const exactRecId = String(resolved.fldRec || resolved.fldRecID || '').trim();
 
-      onSelectionChange({
-        ...selections,
-        selectedFind: exactFindId || selections.selectedFind,
-        selectedRec: exactRecId || selections.selectedRec,
-        fldUnitCost: exact.fldUnitCost ?? undefined,
-        fldUnitType: exact.fldUnitType ?? undefined,
+      const resolvedGlosId = String(resolved.fldGlosId || resolved.id || '').trim();
+      const contextRec = String(selectedRec || '').trim().toLowerCase();
+      const resolvedRec = exactRecId.toLowerCase();
+      const recMismatch =
+        Boolean(contextRec && resolvedRec && contextRec !== resolvedRec);
+      const pendingNow = pendingRelatedActivationRef.current;
+      const pendingBlocksSourceWrite =
+        Boolean(
+          pendingNow &&
+            pendingMatchesRelatedContext(pendingNow, selectedCat, selectedItem, selectedFind) &&
+            resolvedRec === String(pendingNow.sourceRecId || '').trim().toLowerCase()
+        );
+
+      if (recMismatch || pendingBlocksSourceWrite) {
+        return;
+      }
+
+      onSelectionChange((prev: any) => ({
+        ...prev,
+        selectedFind: exactFindId || prev.selectedFind,
+        selectedRec: exactRecId || prev.selectedRec,
+        fldUnitCost: resolved.fldUnitCost ?? undefined,
+        fldUnitType: resolved.fldUnitType ?? undefined,
         stagedFindShort: matchedFinding?.fldFindShort || '',
         stagedFindLong: matchedFinding?.fldFindLong || '',
         stagedRecShort: matchedRec?.fldRecShort || '',
         stagedRecLong: matchedRec?.fldRecLong || '',
-        editingGlossaryId: exact.fldGlosId || exact.id || '',
-        images: exact.fldImages || [],
+        editingGlossaryId: resolvedGlosId || prev.editingGlossaryId || '',
+        images: resolved.fldImages || [],
         isDirty: false
-      });
+      }));
       return;
     }
 
@@ -611,8 +781,8 @@ export function GlossaryBuilder({
       }
       setLibraryGlossaryContextMismatch(mismatch);
 
-      onSelectionChange({
-        ...selections,
+      onSelectionChange((prev: any) => ({
+        ...prev,
         fldUnitCost: undefined,
         fldUnitType: undefined,
         stagedFindShort: matchedFinding?.fldFindShort || '',
@@ -622,7 +792,7 @@ export function GlossaryBuilder({
         editingGlossaryId: '',
         images: Array.isArray(templateRow?.fldImages) ? templateRow.fldImages : [],
         isDirty: false
-      });
+      }));
       return;
     }
 
@@ -648,8 +818,8 @@ export function GlossaryBuilder({
     setSelectedGlossarySetId(nextId);
     setLibraryGlossaryContextMismatch(mismatch);
 
-    onSelectionChange({
-      ...selections,
+    onSelectionChange((prev: any) => ({
+      ...prev,
       fldUnitCost: undefined,
       fldUnitType: undefined,
       stagedFindShort: matchedFinding?.fldFindShort || '',
@@ -659,7 +829,7 @@ export function GlossaryBuilder({
       editingGlossaryId: '',
       images: [],
       isDirty: false
-    });
+    }));
   }, [
     selectedCat,
     selectedItem,
@@ -682,6 +852,11 @@ export function GlossaryBuilder({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [relatedRecordModalOpen, setRelatedRecordModalOpen] = useState(false);
   const [relatedRecordScenario, setRelatedRecordScenario] = useState<RelatedRecordScenarioId | null>(null);
+  const [relatedNewRecShort, setRelatedNewRecShort] = useState('');
+  const [relatedNewRecLong, setRelatedNewRecLong] = useState('');
+  const [relatedNewRecUnit, setRelatedNewRecUnit] = useState('0');
+  const [relatedNewRecUom, setRelatedNewRecUom] = useState('EA');
+  const [relatedRecordSaving, setRelatedRecordSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, collection: string, label: string, type: 'delete' | 'unassociate', isAssociated?: boolean } | null>(null);
 
   const handleDeleteAction = async () => {
@@ -789,8 +964,6 @@ export function GlossaryBuilder({
       return;
     }
 
-    const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
-
     try {
       setIsSynced(false);
       const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
@@ -832,15 +1005,18 @@ export function GlossaryBuilder({
         fldStandards: normalizeStringArray(stagedGlosStds)
       };
 
-      const exactNow = findExactGlossaryByFiveTuple(
+      const glossaryRowNow = resolveSyncedGlossaryRow(
         glossary || [],
+        selectedGlossarySetId,
+        selections.editingGlossaryId,
         selectedCat,
         selectedItem,
         selectedFind,
-        selectedRec,
-        selectedSetKeyUi
+        selectedRec
       );
-      const updateId = exactNow ? String(exactNow.fldGlosId || exactNow.id || '').trim() : '';
+      const updateId = glossaryRowNow
+        ? String(glossaryRowNow.fldGlosId || glossaryRowNow.id || '').trim()
+        : '';
 
       if (updateId) {
         await firestoreService.glossary.save(sanitizeData(payload), updateId);
@@ -865,17 +1041,18 @@ export function GlossaryBuilder({
         isDirty: false 
       });
     } catch (error) {
-      const exactForErr = findExactGlossaryByFiveTuple(
+      const glossaryRowForErr = resolveSyncedGlossaryRow(
         glossary || [],
+        selectedGlossarySetId,
+        selections.editingGlossaryId,
         selectedCat,
         selectedItem,
         selectedFind,
-        selectedRec,
-        selectedSetKeyUi
+        selectedRec
       );
       handleFirestoreError(
         error,
-        exactForErr ? OperationType.UPDATE : OperationType.CREATE,
+        glossaryRowForErr ? OperationType.UPDATE : OperationType.CREATE,
         'glossary'
       );
     }
@@ -1511,21 +1688,258 @@ export function GlossaryBuilder({
   const closeRelatedRecordModal = () => {
     setRelatedRecordModalOpen(false);
     setRelatedRecordScenario(null);
+    setRelatedNewRecShort('');
+    setRelatedNewRecLong('');
+    setRelatedNewRecUnit('0');
+    setRelatedNewRecUom('EA');
+    setRelatedRecordSaving(false);
+    relatedPrefillKeyRef.current = '';
+    relatedFormTouchedRef.current = false;
   };
 
-  const handleRelatedRecordContinue = () => {
+  const markRelatedFormTouched = () => {
+    relatedFormTouchedRef.current = true;
+  };
+
+  /** Include legacy masters with no fldItem when checking duplicate rec short titles in-context. */
+  const masterRecOverlapsSelectedItemContext = (r: any, itemId: string) => {
+    const ri = String(r?.fldItem || '').trim().toLowerCase();
+    if (!ri) return true;
+    return ri === String(itemId || '').trim().toLowerCase();
+  };
+
+  /** Phase 2B: same finding + new recommendation (+ new glossary row). */
+  const applySameFindingNewRecommendation = async () => {
+    const trimmedShort = relatedNewRecShort.trim();
+    if (!trimmedShort) {
+      toast.error('New recommendation title cannot be blank.');
+      return;
+    }
+
+    if (!selectedCat || !selectedItem || !selectedFind || !selectedRec) {
+      toast.error('Select Category, Item, Finding, and Recommendation first.');
+      return;
+    }
+
+    const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
+
+    const finding = findings.find(
+      (f: any) =>
+        String(f.id || f.fldFindID || '').toLowerCase().trim() ===
+        String(selectedFind || '').toLowerCase().trim()
+    );
+    const sourceRec = masterRecsSource.find(
+      (r: any) =>
+        String(r.id || r.fldRecID || '').toLowerCase().trim() ===
+        String(selectedRec || '').toLowerCase().trim()
+    );
+
+    if (!finding?.fldFindID || !sourceRec) {
+      toast.error('Source finding or recommendation not found.');
+      return;
+    }
+
+    const sourceShortNorm = normalizeForDeterministicMatch(sourceRec.fldRecShort);
+    const candidateNorm = normalizeForDeterministicMatch(trimmedShort);
+    if (candidateNorm === sourceShortNorm) {
+      toast.error(
+        'New recommendation short title must differ from the source recommendation (change the default copy suffix or edit the title).'
+      );
+      return;
+    }
+
+    const duplicateMaster = masterRecsSource.some((r: any) => {
+      if (!masterMatchesSelectedGlossarySet(r, selectedSetKeyUi)) return false;
+      if (!masterRecOverlapsSelectedItemContext(r, selectedItem)) return false;
+      const rid = String(r.id || r.fldRecID || '').toLowerCase().trim();
+      const srcId = String(sourceRec.id || sourceRec.fldRecID || '').toLowerCase().trim();
+      if (rid === srcId) return false;
+      return normalizeForDeterministicMatch(r.fldRecShort) === candidateNorm;
+    });
+
+    if (duplicateMaster) {
+      toast.error(
+        'A recommendation with this short title already exists for this glossary set and item context. Use a distinct title.'
+      );
+      return;
+    }
+
+    const newRecId = uuidv4();
+    const glosId = uuidv4();
+    const sourceRecId = String(selectedRec || '').trim();
+
+    pendingRelatedActivationRef.current = {
+      selectedCat,
+      selectedItem,
+      selectedFind,
+      sourceRecId,
+      newRecId,
+      glosId,
+      glossarySetKey: selectedSetKeyUi
+    };
+
+    const sourceGlossary = findExactGlossaryByFiveTuple(
+      glossary || [],
+      selectedCat,
+      selectedItem,
+      selectedFind,
+      selectedRec,
+      selectedSetKeyUi
+    );
+    const glosFromSource = normalizeStringArray(sourceGlossary?.fldStandards);
+    const glosStds =
+      glosFromSource.length > 0
+        ? glosFromSource
+        : Array.from(
+            new Set([
+              ...normalizeStringArray(finding?.fldStandards),
+              ...normalizeStringArray(sourceRec?.fldStandards),
+            ])
+          );
+
+    setRelatedRecordSaving(true);
+    setIsSynced(false);
+    try {
+      const recPayload = sanitizeData({
+        fldRecID: newRecId,
+        fldRecShort: trimmedShort,
+        fldRecLong: relatedNewRecLong.trim(),
+        fldOrder: sourceRec.fldOrder ?? 999,
+        fldUnit: Number(relatedNewRecUnit) || 0,
+        fldUOM: relatedNewRecUom || 'EA',
+        fldStandards: [],
+      });
+
+      await firestoreService.masterRecommendations.save(recPayload, newRecId);
+
+      const rawSuggested = finding.fldSuggestedRecs;
+      let currentSuggested: string[] = [];
+      if (Array.isArray(rawSuggested)) currentSuggested = rawSuggested;
+      else if (rawSuggested !== undefined && rawSuggested !== null && rawSuggested !== '')
+        currentSuggested = [String(rawSuggested)];
+      const lowered = new Set(currentSuggested.map((id) => String(id).toLowerCase().trim()));
+      if (!lowered.has(newRecId.toLowerCase().trim())) {
+        const suggested = [...currentSuggested, newRecId];
+        await handleUpdateFinding(String(finding.fldFindID), { fldSuggestedRecs: suggested });
+      }
+
+      const glossaryPayload = sanitizeData({
+        fldGlosId: glosId,
+        ...glossarySetMetadataForId(selectedGlossarySetId),
+        fldCat: selectedCat,
+        fldItem: selectedItem,
+        fldFind: selectedFind,
+        fldRec: newRecId,
+        fldImages: [],
+        fldUnitCost:
+          sourceGlossary &&
+          sourceGlossary.fldUnitCost !== undefined &&
+          sourceGlossary.fldUnitCost !== null
+            ? sourceGlossary.fldUnitCost
+            : null,
+        fldUnitType:
+          sourceGlossary &&
+          sourceGlossary.fldUnitType !== undefined &&
+          sourceGlossary.fldUnitType !== null &&
+          String(sourceGlossary.fldUnitType).trim() !== ''
+            ? sourceGlossary.fldUnitType
+            : null,
+        fldStandards: glosStds,
+      });
+      await firestoreService.glossary.save(glossaryPayload, glosId);
+
+      const optimisticRec = { ...recPayload, id: newRecId };
+      const optimisticGlos = { ...glossaryPayload, id: glosId };
+
+      /** Same array source as dropdown (`masterRecommendations`); Explorer uses functional App activation instead of merging stale `selections` snapshots after await. */
+      setRecommendations((prev: any[]) => {
+        const exists = prev.some(
+          (r) => String(r.fldRecID || r.id || '').toLowerCase().trim() === newRecId.toLowerCase().trim()
+        );
+        if (exists) return prev;
+        return [...prev, optimisticRec];
+      });
+      setGlossary((prev: Glossary[]) => {
+        const exists = prev.some(
+          (g: any) => String(g.fldGlosId || g.id || '').toLowerCase().trim() === glosId.toLowerCase().trim()
+        );
+        if (exists) return prev;
+        return [...prev, optimisticGlos as Glossary];
+      });
+
+      setSelectedGlossarySetId(
+        normalizeGlossaryRecordSetKey(glossaryPayload?.fldGlossarySetId ?? null)
+      );
+
+      const activationItem = {
+        fldCat: optimisticGlos.fldCat ?? selectedCat,
+        fldItem: optimisticGlos.fldItem ?? selectedItem,
+        fldFind: optimisticGlos.fldFind ?? selectedFind,
+        fldRec: newRecId,
+        fldGlosId: glosId,
+        id: glosId,
+        fldImages: Array.isArray(optimisticGlos.fldImages) ? optimisticGlos.fldImages : [],
+        fldStandards: Array.isArray(optimisticGlos.fldStandards) ? optimisticGlos.fldStandards : glosStds
+      };
+
+      if (onActivateGlossaryBuilderRecord) {
+        onActivateGlossaryBuilderRecord(activationItem);
+      }
+
+      toast.success('New recommendation and glossary record created.');
+      closeRelatedRecordModal();
+    } catch (error) {
+      pendingRelatedActivationRef.current = null;
+      handleFirestoreError(error, OperationType.CREATE, 'related-glossary-record');
+    } finally {
+      setRelatedRecordSaving(false);
+    }
+  };
+
+  const handleRelatedRecordContinue = async () => {
     if (!relatedRecordScenario) {
       toast.error('Select a scenario first.');
       return;
     }
     if (relatedRecordScenario === 'cross_set_template') {
       toast.info(
-        'Cross-set related records use the Glossary Set dropdown and Prepare Target Set Records below. Create Related Record save is not implemented yet (Phase 2B+).'
+        'Cross-set related records use the Glossary Set dropdown and Prepare Target Set Records below. Create Related Record save is not implemented yet (Phase 2C+).'
       );
       return;
     }
-    toast.info('Create Related Record is not implemented yet (Phase 2B+). No data was saved.');
+    if (relatedRecordScenario === 'same_find_new_rec') {
+      await applySameFindingNewRecommendation();
+      return;
+    }
+    if (relatedRecordScenario === 'new_find_same_rec' || relatedRecordScenario === 'new_find_new_rec') {
+      toast.info('Create Related Record is not implemented yet (Phase 2C/2D). No data was saved.');
+      return;
+    }
+    toast.info('Create Related Record is not implemented yet (Phase 2C+). No data was saved.');
   };
+
+  useEffect(() => {
+    if (!relatedRecordModalOpen || relatedRecordScenario !== 'same_find_new_rec') return;
+    if (relatedRecordSaving) return;
+    if (relatedFormTouchedRef.current) return;
+
+    const prefillKey = `same_find_new_rec|${String(selectedRec || '').trim()}`;
+    if (relatedPrefillKeyRef.current === prefillKey) return;
+
+    const rec = masterRecsSource.find(
+      (r: any) =>
+        String(r.id || r.fldRecID || '').toLowerCase().trim() ===
+        String(selectedRec || '').toLowerCase().trim()
+    );
+    if (!rec) return;
+
+    relatedPrefillKeyRef.current = prefillKey;
+    const baseShort = String(rec.fldRecShort || '').trim();
+    setRelatedNewRecShort(baseShort ? `${baseShort} (Copy)` : '(Copy)');
+    setRelatedNewRecLong(String(rec.fldRecLong || ''));
+    setRelatedNewRecUnit(String(rec.fldUnit ?? 0));
+    setRelatedNewRecUom(String(rec.fldUOM || 'EA'));
+  }, [relatedRecordModalOpen, relatedRecordScenario, selectedRec, relatedRecordSaving]);
 
   const recommendationSelectOptions = useMemo(() => {
     if (!masterRecsSource || masterRecsSource.length === 0) {
@@ -1700,6 +2114,8 @@ export function GlossaryBuilder({
                   variant="secondary"
                   onClick={() => {
                     setRelatedRecordScenario(null);
+                    relatedPrefillKeyRef.current = '';
+                    relatedFormTouchedRef.current = false;
                     setRelatedRecordModalOpen(true);
                   }}
                 >
@@ -2276,9 +2692,9 @@ export function GlossaryBuilder({
 
               <div className="rounded-xl border border-indigo-100 bg-indigo-50/80 p-3 text-xs text-indigo-900 leading-snug">
                 A related row is a <span className="font-semibold">new glossary five-tuple</span> (category, item,
-                finding, recommendation, glossary set). A later step will ask whether to{' '}
-                <span className="font-semibold">reuse</span> or <span className="font-semibold">create</span> each
-                master finding and recommendation. This dialog does not save anything yet.
+                finding, recommendation, glossary set). For other scenarios, Continue is not implemented yet.
+                <span className="font-semibold"> Same finding + new recommendation</span> saves below when you click
+                Continue. A future step will ask explicitly for reuse vs create for other flows.
               </div>
 
               <fieldset className="space-y-2">
@@ -2300,7 +2716,13 @@ export function GlossaryBuilder({
                       name="relatedRecordScenario"
                       className="mt-1 shrink-0"
                       checked={relatedRecordScenario === opt.id}
-                      onChange={() => setRelatedRecordScenario(opt.id)}
+                      onChange={() => {
+                        setRelatedRecordScenario(opt.id);
+                        if (opt.id === 'same_find_new_rec') {
+                          relatedPrefillKeyRef.current = '';
+                          relatedFormTouchedRef.current = false;
+                        }
+                      }}
                     />
                     <span className="min-w-0 space-y-0.5">
                       <span className="block text-sm font-semibold text-zinc-900">{opt.title}</span>
@@ -2310,6 +2732,59 @@ export function GlossaryBuilder({
                   </label>
                 ))}
               </fieldset>
+
+              {relatedRecordScenario === 'same_find_new_rec' && (
+                <div className="space-y-4 rounded-xl border border-zinc-200 p-4 bg-white">
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                    New master recommendation
+                  </p>
+                  <Input
+                    label="Short title"
+                    value={relatedNewRecShort}
+                    onChange={(e) => {
+                      markRelatedFormTouched();
+                      setRelatedNewRecShort(e.target.value);
+                    }}
+                  />
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                      Long description
+                    </label>
+                    <textarea
+                      className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-black/5 outline-none min-h-[100px]"
+                      value={relatedNewRecLong}
+                      onChange={(e) => {
+                        markRelatedFormTouched();
+                        setRelatedNewRecLong(e.target.value);
+                      }}
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <Input
+                      label="Unit cost ($)"
+                      type="number"
+                      value={relatedNewRecUnit}
+                      onChange={(e) => {
+                        markRelatedFormTouched();
+                        setRelatedNewRecUnit(e.target.value);
+                      }}
+                    />
+                    <Select
+                      label="Cost unit type"
+                      value={relatedNewRecUom}
+                      onChange={(e: any) => {
+                        markRelatedFormTouched();
+                        setRelatedNewRecUom(e.target.value);
+                      }}
+                      options={['EA', 'LF', 'SF', 'LS'].map((u) => ({ value: u, label: u }))}
+                    />
+                  </div>
+                  <p className="text-[10px] text-zinc-500">
+                    The finding is reused. Glossary citations default from the source glossary row when present;
+                    images are not copied. Duplicate short titles are blocked.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="p-6 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3">
@@ -2318,11 +2793,11 @@ export function GlossaryBuilder({
               </Button>
               <Button
                 type="button"
-                disabled={!relatedRecordScenario}
+                disabled={!relatedRecordScenario || relatedRecordSaving}
                 title={relatedRecordScenario ? undefined : 'Select a scenario first'}
                 onClick={handleRelatedRecordContinue}
               >
-                Continue
+                {relatedRecordSaving ? 'Saving...' : 'Continue'}
               </Button>
             </div>
           </div>
