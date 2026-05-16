@@ -89,6 +89,8 @@ export interface MasterDataProps {
   setRawRecommendations: (data: Recommendation[]) => void;
   importMasterGlossary: (csvData?: string) => Promise<void> | void;
   onEditGlossaryItem: (item: any) => void;
+  /** Same selection merge as opening a row from Glossary Explorer (functional setSelections). */
+  onActivateGlossaryBuilderRecord: (item: any) => void;
 }
 
 export interface EntityManagementProps {

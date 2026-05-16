@@ -665,9 +665,9 @@ export default function App() {
     });
   };
 
-  const proceedWithEditGlossaryItem = (item: any) => {
-    setActiveTab('maintenance');
-    setSelections(prev => ({
+  /** Canonical Glossary Builder row activation (functional merge — matches Explorer open semantics). */
+  const activateGlossaryBuilderRecord = (item: any) => {
+    setSelections((prev: any) => ({
       ...prev,
       selectedCat: item.fldCat || '',
       selectedItem: item.fldItem || '',
@@ -675,13 +675,18 @@ export default function App() {
       selectedRec: item.fldRec || '',
       editingGlossaryId: item.fldGlosId || item.id || '',
       images: item.fldImages || [],
-      stagedFindShort: '', // Will be hydrated by builder useEffect
+      stagedFindShort: '',
       stagedFindLong: '',
       stagedRecShort: '',
       stagedRecLong: '',
       standards: item.fldStandards || [],
       isDirty: false
     }));
+  };
+
+  const proceedWithEditGlossaryItem = (item: any) => {
+    setActiveTab('maintenance');
+    activateGlossaryBuilderRecord(item);
     toast.info(`Editing glossary record: ${item.findingShort || 'selected item'}`);
     setPendingGlossaryItem(null);
   };
@@ -727,7 +732,8 @@ export default function App() {
     setStandards,
     setRawRecommendations: setRawMasterRecommendations,
     importMasterGlossary,
-    onEditGlossaryItem: handleEditGlossaryItem
+    onEditGlossaryItem: handleEditGlossaryItem,
+    onActivateGlossaryBuilderRecord: activateGlossaryBuilderRecord
   };
 
   const entityProps = {

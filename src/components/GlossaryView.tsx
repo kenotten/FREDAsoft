@@ -22,7 +22,8 @@ export function GlossaryView({
   onSelectionChange,
   updatePreferences,
   setIsSynced,
-  isUpdatingRef
+  isUpdatingRef,
+  onActivateGlossaryBuilderRecord
 }: any) {
   const [showStandards, setShowStandards] = useState(true);
   const [activeStandardTarget, setActiveStandardTarget] = useState<'finding' | 'recommendation' | 'glossary'>('finding');
@@ -272,6 +273,7 @@ React.useEffect(() => {
             onReplaceStagedStandards={handleReplaceStagedStandards}
             onGlossarySetIdChange={setSelectedGlossarySetIdForStandardsSync}
             onTemplateModeChange={setIsGlossaryTemplateMode}
+            onActivateGlossaryBuilderRecord={onActivateGlossaryBuilderRecord}
           />
         </div>
 
