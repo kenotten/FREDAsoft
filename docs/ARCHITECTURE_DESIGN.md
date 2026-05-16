@@ -716,13 +716,43 @@ The modal `cross_set_template` radio only directs the user to that flow; it does
 
 ### Citation and snapshot behavior (related records)
 
-When branching from a source glossary row or selection:
+✅ DECIDED: A glossary row’s `fldStandards` may be **hydrated** from the standards attached to the selected master finding and selected master recommendation, with duplicate citations filtered out.
+
+**Terminology**
+
+| Term | Meaning |
+|------|---------|
+| Master finding standards | Standards stored on the selected finding record (`findings.fldStandards`). |
+| Master recommendation standards | Standards stored on the selected recommendation record (`master_recommendations.fldStandards`). |
+| Glossary row standards | `fldStandards` stored directly on the glossary row/document (`glossary.fldStandards`). |
+| Hydrate / inherit | Populate glossary row standards from selected master finding and/or selected master recommendation standards (deduped). |
+
+**Normal new glossary creation**
+
+When the user selects a master finding and master recommendation from their libraries, glossary row `fldStandards` should hydrate from **both** selected masters, with duplicates filtered out.
+
+**Related-record creation (Phase 2B / 2C / 2D)**
+
+| Scenario | Glossary row hydration | New master(s) | Source glossary row |
+|----------|------------------------|---------------|---------------------|
+| **2B** — Same finding + new recommendation | Hydrate from the **reused** master finding only | New recommendation: `fldStandards: []` | Do **not** copy `fldStandards` from the source/host/template glossary row |
+| **2C** — New finding + same recommendation | Hydrate from the **reused** master recommendation only | New finding: `fldStandards: []` | Do **not** copy `fldStandards` from the source/host/template glossary row |
+| **2D** — New finding + new recommendation (not implemented) | No hydration at creation | New finding and new recommendation: `fldStandards: []`; new glossary row: `fldStandards: []` | Do **not** copy `fldStandards` from the source/host/template glossary row |
+| **Cross-glossary-set** (template / Prepare Target Set Records) | No standards hydrate **across** glossary sets | Per target-set master create/reuse rules | Do **not** copy source-set `fldStandards`; new glossary row standards start empty unless later set by normal user action |
+
+**Important distinction**
+
+- **Correct:** Standards from the selected/reused master finding and selected/reused master recommendation may hydrate the glossary row (deduped).
+- **Incorrect:** Source/host/template glossary row standards are copied into the new glossary row merely because the related record was created from that source row.
+
+Duplicate citation ids are filtered by existing normalization (`normalizeStringArray`, staged `Set` unions).
+
+**Other snapshot fields when branching from a source glossary row or selection**
 
 | Field | Default | Notes |
 |-------|---------|--------|
 | Finding/rec long text (staged) | Copy from source masters | User edits in Glossary Builder before **SAVE RECORD**. |
-| Glossary citations (`fldStandards`) | Copy from **source glossary row** when branching from that row; else union of source masters | Glossary snapshot is authoritative for Data Entry inheritance. |
-| Unit/cost overrides on glossary | Copy from source glossary when present | Matches template hydration behavior. |
+| Unit/cost on glossary | Copy from source glossary when present | Matches template hydration behavior. |
 | Measurement metadata | Copy from source **finding** | Data Entry aligns measurement fields to selected finding. |
 | Images (`fldImages`) | **Opt-in** (unchecked by default) for manual **SAVE RECORD** flows | Phase 2B/2C **Continue** always writes `[]`; do not silently share image sets across related rows. |
 
