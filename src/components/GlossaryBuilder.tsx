@@ -105,6 +105,16 @@ function glossaryRowRecId(g: any): string {
   return String(g?.fldRec || g?.fldRecID || '').trim().toLowerCase();
 }
 
+type LibraryDraftSnapshot = {
+  findShort: string;
+  findLong: string;
+  recShort: string;
+  recLong: string;
+};
+
+/** Survives GlossaryBuilder unmount (e.g. Explorer tab) while selections.isDirty stays true. */
+const libraryDraftByIdentity = new Map<string, LibraryDraftSnapshot>();
+
 type PendingRelatedActivation =
   | {
       kind: 'same_find_new_rec';
@@ -439,6 +449,88 @@ export function GlossaryBuilder({
   const hasMinimumContext = !!(selectedCat && selectedItem && selectedFind && selectedRec);
 
   const masterRecsSource = Array.isArray(masterRecommendations) ? masterRecommendations : [];
+
+  const [draftFindShort, setDraftFindShort] = useState('');
+  const [draftFindLong, setDraftFindLong] = useState('');
+  const [draftRecShort, setDraftRecShort] = useState('');
+  const [draftRecLong, setDraftRecLong] = useState('');
+  const libraryDirtySyncedToAppRef = useRef(false);
+
+  const normMasterId = (v: any) => String(v ?? '').toLowerCase().trim();
+
+  const resolveMatchedFindingForDraft = () =>
+    findings?.find(
+      (f: any) => normMasterId(f.id || f.fldFindID) === normMasterId(selectedFind)
+    );
+
+  const resolveMatchedRecForDraft = () =>
+    masterRecsSource?.find(
+      (r: any) => normMasterId(r.id || r.fldRecID) === normMasterId(selectedRec)
+    );
+
+  const libraryDraftHydrationKey = useMemo(
+    () =>
+      [
+        normMasterId(selectedFind),
+        normMasterId(selectedRec),
+        normMasterId(selections.editingGlossaryId),
+      ].join('|'),
+    [selectedFind, selectedRec, selections.editingGlossaryId]
+  );
+
+  const persistLibraryDraftCache = (patch: Partial<LibraryDraftSnapshot>) => {
+    libraryDraftByIdentity.set(libraryDraftHydrationKey, {
+      findShort: patch.findShort ?? draftFindShort,
+      findLong: patch.findLong ?? draftFindLong,
+      recShort: patch.recShort ?? draftRecShort,
+      recLong: patch.recLong ?? draftRecLong,
+    });
+  };
+
+  const applyLibraryDraftSnapshot = (snapshot: LibraryDraftSnapshot) => {
+    setDraftFindShort(snapshot.findShort);
+    setDraftFindLong(snapshot.findLong);
+    setDraftRecShort(snapshot.recShort);
+    setDraftRecLong(snapshot.recLong);
+  };
+
+  const hydrateLibraryDraft = () => {
+    if (selections.isDirty) {
+      const cached = libraryDraftByIdentity.get(libraryDraftHydrationKey);
+      if (cached) {
+        applyLibraryDraftSnapshot(cached);
+      }
+      return;
+    }
+
+    const matchedFinding = resolveMatchedFindingForDraft();
+    const matchedRec = resolveMatchedRecForDraft();
+    const snapshot: LibraryDraftSnapshot = {
+      findShort: matchedFinding?.fldFindShort || '',
+      findLong: matchedFinding?.fldFindLong || '',
+      recShort: matchedRec?.fldRecShort || '',
+      recLong: matchedRec?.fldRecLong || '',
+    };
+    applyLibraryDraftSnapshot(snapshot);
+    libraryDraftByIdentity.set(libraryDraftHydrationKey, snapshot);
+    libraryDirtySyncedToAppRef.current = false;
+  };
+
+  const markLibraryDraftDirty = () => {
+    if (!libraryDirtySyncedToAppRef.current) {
+      libraryDirtySyncedToAppRef.current = true;
+      onSelectionChange((prev: any) => (prev.isDirty ? prev : { ...prev, isDirty: true }));
+    }
+  };
+
+  useEffect(() => {
+    hydrateLibraryDraft();
+  }, [libraryDraftHydrationKey]);
+
+  useEffect(() => {
+    if (selections.isDirty) return;
+    hydrateLibraryDraft();
+  }, [findings, masterRecommendations, libraryDraftHydrationKey, selections.isDirty]);
 
   /** Same-finding+new-rec Continue: blocks sync from restoring source row until new rec+glos land in App selections. */
   const pendingRelatedActivationRef = useRef<PendingRelatedActivation | null>(null);
@@ -1112,6 +1204,34 @@ export function GlossaryBuilder({
 
   const filteredItems = items.filter((i: any) => i.fldCatID === selectedCat);
 
+  const categorySelectOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const filtered = (Array.isArray(categories) ? [...categories] : []).filter((c: any) => {
+      const id = c.fldCategoryID;
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    return sortEntities(filtered, 'fldCategoryName').map((c: any) => ({
+      value: c.fldCategoryID,
+      label: c.fldCategoryName,
+    }));
+  }, [categories]);
+
+  const itemSelectOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const filtered = (Array.isArray(filteredItems) ? [...filteredItems] : []).filter((i: any) => {
+      const id = i.fldItemID;
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    return sortEntities(filtered, 'fldItemName').map((i: any) => ({
+      value: i.fldItemID,
+      label: i.fldItemName,
+    }));
+  }, [filteredItems]);
+
   const handleAddNew = async () => {
     if (!selectedCat || !selectedItem || !selectedFind || !selectedRec) {
       toast.error('Please select Category, Item, Finding, and Recommendation');
@@ -1128,8 +1248,8 @@ export function GlossaryBuilder({
         if (finding) {
           const findingPayload = sanitizeData({ 
             fldStandards: normalizeStringArray(stagedFindingStds),
-            fldFindShort: selections.stagedFindShort,
-            fldFindLong: selections.stagedFindLong
+            fldFindShort: draftFindShort,
+            fldFindLong: draftFindLong
           });
           await firestoreService.save('findings', findingPayload, finding.fldFindID);
         }
@@ -1140,8 +1260,8 @@ export function GlossaryBuilder({
         if (recommendation) {
           const recPayload = sanitizeData({ 
             fldStandards: normalizeStringArray(stagedRecStds),
-            fldRecShort: selections.stagedRecShort,
-            fldRecLong: selections.stagedRecLong
+            fldRecShort: draftRecShort,
+            fldRecLong: draftRecLong
           });
           await firestoreService.masterRecommendations.save(recPayload, recommendation.fldRecID);
         }
@@ -1185,6 +1305,8 @@ export function GlossaryBuilder({
         toast.success('Glossary record created and master citations committed!');
       }
       setIsDirty(false);
+      libraryDirtySyncedToAppRef.current = false;
+      libraryDraftByIdentity.delete(libraryDraftHydrationKey);
       onSelectionChange({ 
         ...selections, 
         selectedItem: '', 
@@ -1213,6 +1335,12 @@ export function GlossaryBuilder({
   };
 
   const handleClearAll = () => {
+    libraryDraftByIdentity.delete(libraryDraftHydrationKey);
+    setDraftFindShort('');
+    setDraftFindLong('');
+    setDraftRecShort('');
+    setDraftRecLong('');
+    libraryDirtySyncedToAppRef.current = false;
     onSelectionChange({ 
       ...selections, 
       selectedItem: '', 
@@ -2904,18 +3032,7 @@ export function GlossaryBuilder({
               value={selectedCat} 
               highlight={true} 
               onChange={(e: any) => setSelectedCat(e.target.value)} 
-              options={(() => {
-                const seen = new Set();
-                const filtered = (Array.isArray(categories) ? [...categories] : [])
-                  .filter(c => {
-                    const id = c.fldCategoryID;
-                    if (!id || seen.has(id)) return false;
-                    seen.add(id);
-                    return true;
-                  });
-                return sortEntities(filtered, 'fldCategoryName')
-                  .map((c: any) => ({ value: c.fldCategoryID, label: c.fldCategoryName }));
-              })() || []} 
+              options={categorySelectOptions}
             />
             <div className="flex gap-1 items-end">
               <Button variant="secondary" size="sm" className="mb-1" onClick={() => openNewWithTemplate('category')}><Plus size={14} /></Button>
@@ -2931,18 +3048,7 @@ export function GlossaryBuilder({
               value={selectedItem} 
               highlight={true} 
               onChange={(e: any) => setSelectedItem(e.target.value)} 
-              options={(() => {
-                const seen = new Set();
-                const filtered = (Array.isArray(filteredItems) ? [...filteredItems] : [])
-                  .filter(i => {
-                    const id = i.fldItemID;
-                    if (!id || seen.has(id)) return false;
-                    seen.add(id);
-                    return true;
-                  });
-                return sortEntities(filtered, 'fldItemName')
-                  .map((i: any) => ({ value: i.fldItemID, label: i.fldItemName }));
-              })() || []} 
+              options={itemSelectOptions}
             />
             <div className="flex gap-1 items-end">
               <Button variant="secondary" size="sm" className="mb-1" disabled={!selectedCat} onClick={() => openNewWithTemplate('item')}><Plus size={14} /></Button>
@@ -3015,8 +3121,13 @@ export function GlossaryBuilder({
                     <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Short Finding</label>
                     <input 
                       className="w-full bg-zinc-50 border border-zinc-100 rounded-lg py-1.5 px-3 text-sm font-bold text-zinc-900 outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
-                      value={selections.stagedFindShort ?? ""}
-                      onChange={(e) => onSelectionChange({ ...selections, stagedFindShort: e.target.value, isDirty: true })}
+                      value={draftFindShort}
+                      onChange={(e) => {
+                        const findShort = e.target.value;
+                        setDraftFindShort(findShort);
+                        persistLibraryDraftCache({ findShort });
+                        markLibraryDraftDirty();
+                      }}
                       placeholder="Short finding title..."
                     />
                   </div>
@@ -3024,8 +3135,13 @@ export function GlossaryBuilder({
                     <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Long Finding</label>
                     <textarea 
                       className="w-full bg-zinc-50 border border-zinc-100 rounded-lg py-1.5 px-3 text-xs text-zinc-600 leading-relaxed outline-none focus:ring-1 focus:ring-indigo-500 transition-all min-h-[100px] resize-none"
-                      value={selections.stagedFindLong ?? ""}
-                      onChange={(e) => onSelectionChange({ ...selections, stagedFindLong: e.target.value, isDirty: true })}
+                      value={draftFindLong}
+                      onChange={(e) => {
+                        const findLong = e.target.value;
+                        setDraftFindLong(findLong);
+                        persistLibraryDraftCache({ findLong });
+                        markLibraryDraftDirty();
+                      }}
                       placeholder="Detailed finding description..."
                     />
                   </div>
@@ -3051,8 +3167,13 @@ export function GlossaryBuilder({
                       <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Short Recommendation</label>
                       <input 
                         className="w-full bg-zinc-50 border border-zinc-100 rounded-lg py-1.5 px-3 text-sm font-bold text-zinc-900 outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
-                        value={selections.stagedRecShort ?? ""}
-                        onChange={(e) => onSelectionChange({ ...selections, stagedRecShort: e.target.value, isDirty: true })}
+                        value={draftRecShort}
+                        onChange={(e) => {
+                          const recShort = e.target.value;
+                          setDraftRecShort(recShort);
+                          persistLibraryDraftCache({ recShort });
+                          markLibraryDraftDirty();
+                        }}
                         placeholder="Short recommendation title..."
                       />
                     </div>
@@ -3060,8 +3181,13 @@ export function GlossaryBuilder({
                       <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Long Recommendation</label>
                       <textarea 
                         className="w-full bg-zinc-50 border border-zinc-100 rounded-lg py-1.5 px-3 text-xs text-zinc-600 leading-relaxed outline-none focus:ring-1 focus:ring-indigo-500 transition-all min-h-[100px] resize-none"
-                        value={selections.stagedRecLong ?? ""}
-                        onChange={(e) => onSelectionChange({ ...selections, stagedRecLong: e.target.value, isDirty: true })}
+                        value={draftRecLong}
+                        onChange={(e) => {
+                          const recLong = e.target.value;
+                          setDraftRecLong(recLong);
+                          persistLibraryDraftCache({ recLong });
+                          markLibraryDraftDirty();
+                        }}
                         placeholder="Detailed recommendation description..."
                       />
                     </div>
