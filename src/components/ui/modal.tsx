@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import { releaseInactiveTabPanelFocus } from '../../lib/releaseInactiveTabPanelFocus';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -26,6 +27,14 @@ export function Modal({
   maxWidth = 'md',
   overlayClassName
 }: ModalProps) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    releaseInactiveTabPanelFocus('');
+    closeButtonRef.current?.focus();
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const maxWidthClasses = {
@@ -52,6 +61,9 @@ export function Modal({
     >
       <ContentWrapper 
         {...wrapperProps}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? 'modal-title' : undefined}
         className={cn(
           "bg-white rounded-2xl shadow-2xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200",
           maxWidthClasses[maxWidth]
@@ -61,13 +73,15 @@ export function Modal({
         <div className="px-6 py-4 border-b border-zinc-100 shrink-0 bg-white z-10">
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
-              <h2 className="font-bold text-zinc-900">{title}</h2>
+              <h2 id="modal-title" className="font-bold text-zinc-900">{title}</h2>
               {subTitle && <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-0.5">{subTitle}</p>}
             </div>
             <button 
+              ref={closeButtonRef}
               type="button"
               onClick={onClose}
               className="p-2 hover:bg-zinc-100 rounded-full transition-colors text-zinc-400 hover:text-zinc-900"
+              aria-label="Close dialog"
             >
               <X size={20} />
             </button>

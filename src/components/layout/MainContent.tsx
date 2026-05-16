@@ -11,6 +11,7 @@ import { DocumentManager } from '../DocumentManager';
 import { OrderManager } from '../OrderManager';
 import { LibraryManager } from '../LibraryManager';
 import { cn } from '../../lib/utils';
+import { releaseInactiveTabPanelFocus } from '../../lib/releaseInactiveTabPanelFocus';
 import { FREDASOFT_DRAFT_LOCAL_STORAGE_KEY } from '../../lib/storageKeys';
 import { buildProjectDataCloneSeed, type ProjectDataCloneSeed } from '../../lib/cloneProjectData';
 import { 
@@ -63,6 +64,10 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
       setPendingExplorerNav(null);
     }
   }, [activeTab, pendingExplorerNav]);
+
+  React.useEffect(() => {
+    releaseInactiveTabPanelFocus(activeTab);
+  }, [activeTab]);
 
   const clearPendingCloneSeed = React.useCallback(() => {
     setPendingCloneSeed(null);
@@ -141,7 +146,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
             ? 'flex min-h-0 w-full flex-1 flex-col'
             : 'hidden'
         )}
-        aria-hidden={activeTab !== 'explorer'}
+        data-tab-panel="explorer"
       >
         <DataExplorer 
           projectData={projectData} 
@@ -214,7 +219,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
             ? 'flex min-h-0 w-full flex-1 flex-col'
             : 'hidden'
         )}
-        aria-hidden={activeTab !== 'glossary_explorer'}
+        data-tab-panel="glossary_explorer"
       >
         <GlossaryExplorer 
           clients={clients}
@@ -250,7 +255,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
             ? 'flex min-h-0 w-full flex-1 flex-col'
             : 'hidden'
         )}
-        aria-hidden={activeTab !== 'standards_manager'}
+        data-tab-panel="standards_manager"
       >
         <StandardsManager 
           standards={standards}
@@ -269,7 +274,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
             ? 'flex min-h-0 w-full flex-1 flex-col'
             : 'hidden'
         )}
-        aria-hidden={activeTab !== 'library_manager'}
+        data-tab-panel="library_manager"
       >
         <LibraryManager 
           ref={(props as any).libraryManagerRef}

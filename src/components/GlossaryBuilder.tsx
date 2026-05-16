@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { cn, sanitizeData, sortEntities, compareEntities } from '../lib/utils';
+import { releaseInactiveTabPanelFocus } from '../lib/releaseInactiveTabPanelFocus';
 import { Button, Select, Card, Input, Modal } from './ui/core';
 import { toast } from 'sonner';
 import { firestoreService, OperationType, handleFirestoreError } from '../services/firestoreService';
@@ -1095,6 +1096,7 @@ export function GlossaryBuilder({
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [relatedRecordModalOpen, setRelatedRecordModalOpen] = useState(false);
+  const relatedRecordModalCloseRef = useRef<HTMLButtonElement>(null);
   const [relatedRecordScenario, setRelatedRecordScenario] = useState<RelatedRecordScenarioId | null>(null);
   const [relatedNewRecShort, setRelatedNewRecShort] = useState('');
   const [relatedNewRecLong, setRelatedNewRecLong] = useState('');
@@ -1966,6 +1968,20 @@ export function GlossaryBuilder({
     findings,
     masterRecsSource,
   ]);
+
+  const openRelatedRecordModal = () => {
+    setRelatedRecordScenario(null);
+    relatedPrefillKeyRef.current = '';
+    relatedFormTouchedRef.current = false;
+    releaseInactiveTabPanelFocus('maintenance');
+    setRelatedRecordModalOpen(true);
+  };
+
+  useEffect(() => {
+    if (!relatedRecordModalOpen) return;
+    releaseInactiveTabPanelFocus('maintenance');
+    relatedRecordModalCloseRef.current?.focus();
+  }, [relatedRecordModalOpen]);
 
   const closeRelatedRecordModal = () => {
     setRelatedRecordModalOpen(false);
@@ -2877,12 +2893,7 @@ export function GlossaryBuilder({
                   type="button"
                   size="sm"
                   variant="secondary"
-                  onClick={() => {
-                    setRelatedRecordScenario(null);
-                    relatedPrefillKeyRef.current = '';
-                    relatedFormTouchedRef.current = false;
-                    setRelatedRecordModalOpen(true);
-                  }}
+                  onClick={openRelatedRecordModal}
                 >
                   Create Related Record...
                 </Button>
@@ -3421,12 +3432,21 @@ export function GlossaryBuilder({
       )}
       {relatedRecordModalOpen && relatedRecordSourceContext && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="related-record-modal-title"
+            className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden"
+          >
             <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-zinc-900 uppercase tracking-tight">
+              <h2
+                id="related-record-modal-title"
+                className="text-lg font-bold text-zinc-900 uppercase tracking-tight"
+              >
                 Create Related Glossary Record
               </h2>
               <button
+                ref={relatedRecordModalCloseRef}
                 type="button"
                 onClick={closeRelatedRecordModal}
                 className="p-2 hover:bg-zinc-100 rounded-full transition-colors"
