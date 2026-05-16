@@ -720,9 +720,9 @@ When branching from a source glossary row or selection:
 
 **Phase 2A:** Modal scaffolding only—relationship type selection, copy defaults UI, **no writes** or a single read-only preview path.
 
-**Phase 2B:** Implement scenario **A** (same finding + new recommendation) end-to-end through one orchestrated save path.
+**Phase 2B (done):** Scenario **A** (same finding + new recommendation) — orchestrated Continue path creates new recommendation + glossary row, reuses finding, activates via `activateGlossaryBuilderRecord`, pending-activation guard prevents source-row rehydration.
 
-**Phase 2C:** Implement scenario **B** (new finding + same recommendation).
+**Phase 2C (done):** Scenario **B** (new finding + same recommendation) — orchestrated Continue path creates new finding + glossary row, reuses recommendation (no writes to source finding, source recommendation, or source glossary row), activates new row immediately, duplicate short-title blocked per glossary set + item.
 
 **Phase 2D:** Implement scenario **C** (new finding + new recommendation) with short-label collision checks.
 

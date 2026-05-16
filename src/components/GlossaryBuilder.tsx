@@ -105,18 +105,30 @@ function glossaryRowRecId(g: any): string {
   return String(g?.fldRec || g?.fldRecID || '').trim().toLowerCase();
 }
 
-type PendingRelatedActivation = {
-  selectedCat: string;
-  selectedItem: string;
-  selectedFind: string;
-  sourceRecId: string;
-  newRecId: string;
-  glosId: string;
-  glossarySetKey: string;
-};
+type PendingRelatedActivation =
+  | {
+      kind: 'same_find_new_rec';
+      selectedCat: string;
+      selectedItem: string;
+      selectedFind: string;
+      sourceRecId: string;
+      newRecId: string;
+      glosId: string;
+      glossarySetKey: string;
+    }
+  | {
+      kind: 'new_find_same_rec';
+      selectedCat: string;
+      selectedItem: string;
+      sourceFindId: string;
+      newFindId: string;
+      selectedRecId: string;
+      glosId: string;
+      glossarySetKey: string;
+    };
 
-function pendingMatchesRelatedContext(
-  pending: PendingRelatedActivation,
+function pendingMatchesSameFindNewRecContext(
+  pending: Extract<PendingRelatedActivation, { kind: 'same_find_new_rec' }>,
   selectedCat: string,
   selectedItem: string,
   selectedFind: string
@@ -126,6 +138,23 @@ function pendingMatchesRelatedContext(
     n(pending.selectedCat) === n(selectedCat) &&
     n(pending.selectedItem) === n(selectedItem) &&
     n(pending.selectedFind) === n(selectedFind)
+  );
+}
+
+function pendingMatchesNewFindSameRecContext(
+  pending: Extract<PendingRelatedActivation, { kind: 'new_find_same_rec' }>,
+  selectedCat: string,
+  selectedItem: string,
+  selectedRec: string,
+  glossarySetKey: string
+): boolean {
+  const n = (v: string) => String(v || '').trim().toLowerCase();
+  return (
+    n(pending.selectedCat) === n(selectedCat) &&
+    n(pending.selectedItem) === n(selectedItem) &&
+    n(pending.selectedRecId) === n(selectedRec) &&
+    normalizeGlossaryRecordSetKey(pending.glossarySetKey) ===
+      normalizeGlossaryRecordSetKey(glossarySetKey)
   );
 }
 
@@ -664,8 +693,8 @@ export function GlossaryBuilder({
 
     const pendingActivation = pendingRelatedActivationRef.current;
     if (
-      pendingActivation &&
-      pendingMatchesRelatedContext(pendingActivation, selectedCat, selectedItem, selectedFind)
+      pendingActivation?.kind === 'same_find_new_rec' &&
+      pendingMatchesSameFindNewRecContext(pendingActivation, selectedCat, selectedItem, selectedFind)
     ) {
       const propRec = String(selectedRec || '').trim().toLowerCase();
       const propGlos = String(selections.editingGlossaryId || '').trim().toLowerCase();
@@ -682,6 +711,42 @@ export function GlossaryBuilder({
           onSelectionChange((prev: any) => ({
             ...prev,
             selectedRec: pendingActivation.newRecId,
+            editingGlossaryId: pendingActivation.glosId,
+            isDirty: false
+          }));
+          return;
+        }
+        pendingRelatedActivationRef.current = null;
+      } else {
+        return;
+      }
+    }
+
+    if (
+      pendingActivation?.kind === 'new_find_same_rec' &&
+      pendingMatchesNewFindSameRecContext(
+        pendingActivation,
+        selectedCat,
+        selectedItem,
+        selectedRec,
+        selectedGlossarySetId
+      )
+    ) {
+      const propFind = String(selectedFind || '').trim().toLowerCase();
+      const propGlos = String(selections.editingGlossaryId || '').trim().toLowerCase();
+      const sourceFind = String(pendingActivation.sourceFindId || '').trim().toLowerCase();
+      const newFind = String(pendingActivation.newFindId || '').trim().toLowerCase();
+      const newGlos = String(pendingActivation.glosId || '').trim().toLowerCase();
+
+      if (propFind === sourceFind) {
+        return;
+      }
+
+      if (propFind === newFind) {
+        if (propGlos !== newGlos) {
+          onSelectionChange((prev: any) => ({
+            ...prev,
+            selectedFind: pendingActivation.newFindId,
             editingGlossaryId: pendingActivation.glosId,
             isDirty: false
           }));
@@ -738,9 +803,20 @@ export function GlossaryBuilder({
       const pendingNow = pendingRelatedActivationRef.current;
       const pendingBlocksSourceWrite =
         Boolean(
-          pendingNow &&
-            pendingMatchesRelatedContext(pendingNow, selectedCat, selectedItem, selectedFind) &&
+          pendingNow?.kind === 'same_find_new_rec' &&
+            pendingMatchesSameFindNewRecContext(pendingNow, selectedCat, selectedItem, selectedFind) &&
             resolvedRec === String(pendingNow.sourceRecId || '').trim().toLowerCase()
+        ) ||
+        Boolean(
+          pendingNow?.kind === 'new_find_same_rec' &&
+            pendingMatchesNewFindSameRecContext(
+              pendingNow,
+              selectedCat,
+              selectedItem,
+              selectedRec,
+              selectedSetKeyUi
+            ) &&
+            exactFindId.toLowerCase() === String(pendingNow.sourceFindId || '').trim().toLowerCase()
         );
 
       if (recMismatch || pendingBlocksSourceWrite) {
@@ -856,6 +932,8 @@ export function GlossaryBuilder({
   const [relatedNewRecLong, setRelatedNewRecLong] = useState('');
   const [relatedNewRecUnit, setRelatedNewRecUnit] = useState('0');
   const [relatedNewRecUom, setRelatedNewRecUom] = useState('EA');
+  const [relatedNewFindShort, setRelatedNewFindShort] = useState('');
+  const [relatedNewFindLong, setRelatedNewFindLong] = useState('');
   const [relatedRecordSaving, setRelatedRecordSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, collection: string, label: string, type: 'delete' | 'unassociate', isAssociated?: boolean } | null>(null);
 
@@ -1692,6 +1770,8 @@ export function GlossaryBuilder({
     setRelatedNewRecLong('');
     setRelatedNewRecUnit('0');
     setRelatedNewRecUom('EA');
+    setRelatedNewFindShort('');
+    setRelatedNewFindLong('');
     setRelatedRecordSaving(false);
     relatedPrefillKeyRef.current = '';
     relatedFormTouchedRef.current = false;
@@ -1769,6 +1849,7 @@ export function GlossaryBuilder({
     const sourceRecId = String(selectedRec || '').trim();
 
     pendingRelatedActivationRef.current = {
+      kind: 'same_find_new_rec',
       selectedCat,
       selectedItem,
       selectedFind,
@@ -1896,6 +1977,193 @@ export function GlossaryBuilder({
     }
   };
 
+  /** Phase 2C: new finding + same recommendation (+ new glossary row). */
+  const applyNewFindingSameRecommendation = async () => {
+    const trimmedShort = relatedNewFindShort.trim();
+    if (!trimmedShort) {
+      toast.error('New finding title cannot be blank.');
+      return;
+    }
+
+    if (!selectedCat || !selectedItem || !selectedFind || !selectedRec) {
+      toast.error('Select Category, Item, Finding, and Recommendation first.');
+      return;
+    }
+
+    const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
+
+    const sourceFinding = findings.find(
+      (f: any) =>
+        String(f.id || f.fldFindID || '').toLowerCase().trim() ===
+        String(selectedFind || '').toLowerCase().trim()
+    );
+    const sourceRec = masterRecsSource.find(
+      (r: any) =>
+        String(r.id || r.fldRecID || '').toLowerCase().trim() ===
+        String(selectedRec || '').toLowerCase().trim()
+    );
+
+    if (!sourceFinding?.fldFindID || !sourceRec) {
+      toast.error('Source finding or recommendation not found.');
+      return;
+    }
+
+    const sourceShortNorm = normalizeForDeterministicMatch(sourceFinding.fldFindShort);
+    const candidateNorm = normalizeForDeterministicMatch(trimmedShort);
+    if (candidateNorm === sourceShortNorm) {
+      toast.error(
+        'New finding short title must differ from the source finding (change the default copy suffix or edit the title).'
+      );
+      return;
+    }
+
+    const duplicateMaster = findings.some((f: any) => {
+      if (!masterMatchesSelectedGlossarySet(f, selectedSetKeyUi)) return false;
+      if (
+        String(f.fldItem || '').toLowerCase().trim() !==
+        String(selectedItem || '').toLowerCase().trim()
+      ) {
+        return false;
+      }
+      const fid = String(f.id || f.fldFindID || '').toLowerCase().trim();
+      const srcId = String(sourceFinding.id || sourceFinding.fldFindID || '').toLowerCase().trim();
+      if (fid === srcId) return false;
+      return normalizeForDeterministicMatch(f.fldFindShort) === candidateNorm;
+    });
+
+    if (duplicateMaster) {
+      toast.error(
+        'A finding with this short title already exists for this glossary set and item context. Use a distinct title.'
+      );
+      return;
+    }
+
+    const newFindId = uuidv4();
+    const glosId = uuidv4();
+    const sourceFindId = String(selectedFind || '').trim();
+    const sourceRecId = String(selectedRec || '').trim();
+
+    pendingRelatedActivationRef.current = {
+      kind: 'new_find_same_rec',
+      selectedCat,
+      selectedItem,
+      sourceFindId,
+      newFindId,
+      selectedRecId: sourceRecId,
+      glosId,
+      glossarySetKey: selectedSetKeyUi
+    };
+
+    const sourceGlossary = findExactGlossaryByFiveTuple(
+      glossary || [],
+      selectedCat,
+      selectedItem,
+      selectedFind,
+      selectedRec,
+      selectedSetKeyUi
+    );
+    const glosFromSource = normalizeStringArray(sourceGlossary?.fldStandards);
+    const glosStds =
+      glosFromSource.length > 0
+        ? glosFromSource
+        : Array.from(
+            new Set([
+              ...normalizeStringArray(sourceFinding?.fldStandards),
+              ...normalizeStringArray(sourceRec?.fldStandards),
+            ])
+          );
+
+    setRelatedRecordSaving(true);
+    setIsSynced(false);
+    try {
+      const findPayload = sanitizeData({
+        fldFindID: newFindId,
+        fldItem: selectedItem,
+        ...glossarySetMetadataForId(selectedGlossarySetId),
+        fldFindShort: trimmedShort,
+        fldFindLong: relatedNewFindLong.trim(),
+        fldOrder: sourceFinding.fldOrder ?? 999,
+        fldMeasurementType: sourceFinding.fldMeasurementType || '',
+        fldUnitType: sourceFinding.fldUnitType || '',
+        fldSuggestedRecs: [sourceRecId],
+        fldStandards: [],
+      });
+
+      await firestoreService.save('findings', findPayload, newFindId);
+
+      const glossaryPayload = sanitizeData({
+        fldGlosId: glosId,
+        ...glossarySetMetadataForId(selectedGlossarySetId),
+        fldCat: selectedCat,
+        fldItem: selectedItem,
+        fldFind: newFindId,
+        fldRec: sourceRecId,
+        fldImages: [],
+        fldUnitCost:
+          sourceGlossary &&
+          sourceGlossary.fldUnitCost !== undefined &&
+          sourceGlossary.fldUnitCost !== null
+            ? sourceGlossary.fldUnitCost
+            : null,
+        fldUnitType:
+          sourceGlossary &&
+          sourceGlossary.fldUnitType !== undefined &&
+          sourceGlossary.fldUnitType !== null &&
+          String(sourceGlossary.fldUnitType).trim() !== ''
+            ? sourceGlossary.fldUnitType
+            : null,
+        fldStandards: glosStds,
+      });
+      await firestoreService.glossary.save(glossaryPayload, glosId);
+
+      const optimisticFind = { ...findPayload, id: newFindId };
+      const optimisticGlos = { ...glossaryPayload, id: glosId };
+
+      setFindings((prev: Finding[]) => {
+        const exists = prev.some(
+          (f) =>
+            String(f.fldFindID || f.id || '').toLowerCase().trim() === newFindId.toLowerCase().trim()
+        );
+        if (exists) return prev;
+        return [...prev, optimisticFind as Finding];
+      });
+      setGlossary((prev: Glossary[]) => {
+        const exists = prev.some(
+          (g: any) => String(g.fldGlosId || g.id || '').toLowerCase().trim() === glosId.toLowerCase().trim()
+        );
+        if (exists) return prev;
+        return [...prev, optimisticGlos as Glossary];
+      });
+
+      setSelectedGlossarySetId(
+        normalizeGlossaryRecordSetKey(glossaryPayload?.fldGlossarySetId ?? null)
+      );
+
+      const activationItem = {
+        fldCat: optimisticGlos.fldCat ?? selectedCat,
+        fldItem: optimisticGlos.fldItem ?? selectedItem,
+        fldFind: newFindId,
+        fldRec: sourceRecId,
+        fldGlosId: glosId,
+        id: glosId,
+        fldImages: Array.isArray(optimisticGlos.fldImages) ? optimisticGlos.fldImages : [],
+        fldStandards: Array.isArray(optimisticGlos.fldStandards) ? optimisticGlos.fldStandards : glosStds
+      };
+
+      if (onActivateGlossaryBuilderRecord) {
+        onActivateGlossaryBuilderRecord(activationItem);
+      }
+
+      toast.success('New finding and glossary record created.');
+      closeRelatedRecordModal();
+    } catch (error) {
+      pendingRelatedActivationRef.current = null;
+      handleFirestoreError(error, OperationType.CREATE, 'related-glossary-record');
+    } finally {
+      setRelatedRecordSaving(false);
+    }
+  };
+
   const handleRelatedRecordContinue = async () => {
     if (!relatedRecordScenario) {
       toast.error('Select a scenario first.');
@@ -1903,7 +2171,7 @@ export function GlossaryBuilder({
     }
     if (relatedRecordScenario === 'cross_set_template') {
       toast.info(
-        'Cross-set related records use the Glossary Set dropdown and Prepare Target Set Records below. Create Related Record save is not implemented yet (Phase 2C+).'
+        'Cross-set related records use the Glossary Set dropdown and Prepare Target Set Records below. Create Related Record save is not implemented yet (Phase 2D+).'
       );
       return;
     }
@@ -1911,11 +2179,14 @@ export function GlossaryBuilder({
       await applySameFindingNewRecommendation();
       return;
     }
-    if (relatedRecordScenario === 'new_find_same_rec' || relatedRecordScenario === 'new_find_new_rec') {
-      toast.info('Create Related Record is not implemented yet (Phase 2C/2D). No data was saved.');
+    if (relatedRecordScenario === 'new_find_same_rec') {
+      await applyNewFindingSameRecommendation();
       return;
     }
-    toast.info('Create Related Record is not implemented yet (Phase 2C+). No data was saved.');
+    if (relatedRecordScenario === 'new_find_new_rec') {
+      toast.info('Create Related Record is not implemented yet (Phase 2D). No data was saved.');
+      return;
+    }
   };
 
   useEffect(() => {
@@ -1940,6 +2211,27 @@ export function GlossaryBuilder({
     setRelatedNewRecUnit(String(rec.fldUnit ?? 0));
     setRelatedNewRecUom(String(rec.fldUOM || 'EA'));
   }, [relatedRecordModalOpen, relatedRecordScenario, selectedRec, relatedRecordSaving]);
+
+  useEffect(() => {
+    if (!relatedRecordModalOpen || relatedRecordScenario !== 'new_find_same_rec') return;
+    if (relatedRecordSaving) return;
+    if (relatedFormTouchedRef.current) return;
+
+    const prefillKey = `new_find_same_rec|${String(selectedFind || '').trim()}`;
+    if (relatedPrefillKeyRef.current === prefillKey) return;
+
+    const find = findings?.find(
+      (f: any) =>
+        String(f.id || f.fldFindID || '').toLowerCase().trim() ===
+        String(selectedFind || '').toLowerCase().trim()
+    );
+    if (!find) return;
+
+    relatedPrefillKeyRef.current = prefillKey;
+    const baseShort = String(find.fldFindShort || '').trim();
+    setRelatedNewFindShort(baseShort ? `${baseShort} (Copy)` : '(Copy)');
+    setRelatedNewFindLong(String(find.fldFindLong || ''));
+  }, [relatedRecordModalOpen, relatedRecordScenario, selectedFind, relatedRecordSaving, findings]);
 
   const recommendationSelectOptions = useMemo(() => {
     if (!masterRecsSource || masterRecsSource.length === 0) {
@@ -2702,9 +2994,9 @@ export function GlossaryBuilder({
                   What do you want to create?
                 </legend>
                 {RELATED_RECORD_SCENARIO_OPTIONS.map((opt) => (
-                  <label
-                    key={opt.id}
-                    className={cn(
+                  <div key={opt.id} className="space-y-2">
+                    <label
+                      className={cn(
                       'flex cursor-pointer gap-3 rounded-xl border p-3 transition-colors',
                       relatedRecordScenario === opt.id
                         ? 'border-indigo-400 bg-indigo-50/50 ring-1 ring-indigo-200'
@@ -2718,7 +3010,7 @@ export function GlossaryBuilder({
                       checked={relatedRecordScenario === opt.id}
                       onChange={() => {
                         setRelatedRecordScenario(opt.id);
-                        if (opt.id === 'same_find_new_rec') {
+                        if (opt.id === 'same_find_new_rec' || opt.id === 'new_find_same_rec') {
                           relatedPrefillKeyRef.current = '';
                           relatedFormTouchedRef.current = false;
                         }
@@ -2730,11 +3022,9 @@ export function GlossaryBuilder({
                       <span className="block text-[10px] font-medium text-indigo-700">{opt.futureMasters}</span>
                     </span>
                   </label>
-                ))}
-              </fieldset>
 
-              {relatedRecordScenario === 'same_find_new_rec' && (
-                <div className="space-y-4 rounded-xl border border-zinc-200 p-4 bg-white">
+                    {relatedRecordScenario === opt.id && opt.id === 'same_find_new_rec' && (
+                      <div className="ml-2 space-y-4 rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
                   <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
                     New master recommendation
                   </p>
@@ -2779,12 +3069,49 @@ export function GlossaryBuilder({
                       options={['EA', 'LF', 'SF', 'LS'].map((u) => ({ value: u, label: u }))}
                     />
                   </div>
-                  <p className="text-[10px] text-zinc-500">
-                    The finding is reused. Glossary citations default from the source glossary row when present;
-                    images are not copied. Duplicate short titles are blocked.
-                  </p>
-                </div>
-              )}
+                        <p className="text-[10px] text-zinc-500">
+                          The finding is reused. Glossary citations default from the source glossary row when
+                          present; images are not copied. Duplicate short titles are blocked.
+                        </p>
+                      </div>
+                    )}
+
+                    {relatedRecordScenario === opt.id && opt.id === 'new_find_same_rec' && (
+                      <div className="ml-2 space-y-4 rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
+                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                          New master finding
+                        </p>
+                        <Input
+                          label="Short title"
+                          value={relatedNewFindShort}
+                          onChange={(e) => {
+                            markRelatedFormTouched();
+                            setRelatedNewFindShort(e.target.value);
+                          }}
+                        />
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                            Long description
+                          </label>
+                          <textarea
+                            className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-black/5 outline-none min-h-[100px]"
+                            value={relatedNewFindLong}
+                            onChange={(e) => {
+                              markRelatedFormTouched();
+                              setRelatedNewFindLong(e.target.value);
+                            }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-zinc-500">
+                          The recommendation is reused. Glossary citations default from the source glossary row when
+                          present; measurement fields copy from the source finding; finding-level standards and images
+                          are not copied. Duplicate short titles are blocked.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </fieldset>
             </div>
 
             <div className="p-6 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3">
