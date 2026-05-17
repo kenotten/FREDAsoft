@@ -2087,16 +2087,7 @@ export function GlossaryBuilder({
       selectedRec,
       selectedSetKeyUi
     );
-    const glosFromSource = normalizeStringArray(sourceGlossary?.fldStandards);
-    const glosStds =
-      glosFromSource.length > 0
-        ? glosFromSource
-        : Array.from(
-            new Set([
-              ...normalizeStringArray(finding?.fldStandards),
-              ...normalizeStringArray(sourceRec?.fldStandards),
-            ])
-          );
+    const glosStds = normalizeStringArray(finding?.fldStandards);
 
     setRelatedRecordSaving(true);
     setIsSynced(false);
@@ -2282,16 +2273,7 @@ export function GlossaryBuilder({
       selectedRec,
       selectedSetKeyUi
     );
-    const glosFromSource = normalizeStringArray(sourceGlossary?.fldStandards);
-    const glosStds =
-      glosFromSource.length > 0
-        ? glosFromSource
-        : Array.from(
-            new Set([
-              ...normalizeStringArray(sourceFinding?.fldStandards),
-              ...normalizeStringArray(sourceRec?.fldStandards),
-            ])
-          );
+    const glosStds = normalizeStringArray(sourceRec?.fldStandards);
 
     setRelatedRecordSaving(true);
     setIsSynced(false);
@@ -3565,8 +3547,9 @@ export function GlossaryBuilder({
                     />
                   </div>
                         <p className="text-[10px] text-zinc-500">
-                          The finding is reused. Glossary citations default from the source glossary row when
-                          present; images are not copied. Duplicate short titles are blocked.
+                          The finding is reused. Glossary citations hydrate from the reused finding master only
+                          (not from the source glossary row or new recommendation); images are not copied. Duplicate
+                          short titles are blocked.
                         </p>
                       </div>
                     )}
@@ -3598,9 +3581,9 @@ export function GlossaryBuilder({
                           />
                         </div>
                         <p className="text-[10px] text-zinc-500">
-                          The recommendation is reused. Glossary citations default from the source glossary row when
-                          present; measurement fields copy from the source finding; finding-level standards and images
-                          are not copied. Duplicate short titles are blocked.
+                          The recommendation is reused. Glossary citations hydrate from the reused recommendation master
+                          only (not from the source glossary row or new finding); measurement fields copy from the source
+                          finding; finding-level standards and images are not copied. Duplicate short titles are blocked.
                         </p>
                       </div>
                     )}
