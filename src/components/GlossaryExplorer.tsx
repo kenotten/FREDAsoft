@@ -80,6 +80,122 @@ function findExplorerDuplicateGlossaryFiveTuple(
   });
 }
 
+type GlossaryExplorerEditingField = {
+  id: string;
+  field: string;
+  value: any;
+} | null;
+
+type GlossaryExplorerEditableFieldProps = {
+  id: string;
+  field: string;
+  value: any;
+  type?: 'text' | 'textarea' | 'number';
+  label?: string;
+  inline?: boolean;
+  editingField: GlossaryExplorerEditingField;
+  isSaving: boolean;
+  onStartEdit: (id: string, field: string, value: any) => void;
+  onValueChange: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+};
+
+/** Stable module component — must not be defined inside GlossaryExplorer (avoids remount/caret jump). */
+function GlossaryExplorerEditableField({
+  id,
+  field,
+  value,
+  type = 'text',
+  label,
+  inline = false,
+  editingField,
+  isSaving,
+  onStartEdit,
+  onValueChange,
+  onSave,
+  onCancel,
+}: GlossaryExplorerEditableFieldProps) {
+  const isEditing = editingField?.id === id && editingField?.field === field;
+  const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const wasEditingRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (isEditing && !wasEditingRef.current) {
+      const el = inputRef.current;
+      if (el) {
+        el.focus();
+        const len = String(editingField?.value ?? '').length;
+        if (typeof el.setSelectionRange === 'function') {
+          el.setSelectionRange(len, len);
+        }
+      }
+    }
+    wasEditingRef.current = isEditing;
+  }, [isEditing, editingField?.id, editingField?.field]);
+
+  if (isEditing && editingField) {
+    const inputType = type === 'number' ? 'number' : 'text';
+    return (
+      <div
+        className={cn('flex flex-col gap-2 w-full', inline ? 'p-1' : '')}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {!inline && label ? (
+          <label className="text-[10px] font-bold text-zinc-400 uppercase">{label}</label>
+        ) : null}
+        {type === 'textarea' ? (
+          <textarea
+            ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+            className="w-full p-2 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-black/5 outline-none min-h-[100px]"
+            value={editingField.value ?? ''}
+            onChange={(e) => onValueChange(e.target.value)}
+          />
+        ) : (
+          <input
+            ref={inputRef as React.RefObject<HTMLInputElement>}
+            type={inputType}
+            className="w-full p-2 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-black/5 outline-none"
+            value={editingField.value ?? ''}
+            onChange={(e) => onValueChange(e.target.value)}
+          />
+        )}
+        <div className="flex gap-2">
+          <Button size="sm" onClick={onSave} disabled={isSaving}>
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn('group relative flex flex-col', inline ? '' : 'gap-1')}>
+      {!inline && label ? (
+        <label className="text-[10px] font-bold text-zinc-400 uppercase">{label}</label>
+      ) : null}
+      <div className="flex items-start justify-between gap-2">
+        <p className={cn('text-sm text-zinc-700', inline ? 'truncate' : 'whitespace-pre-wrap')}>
+          {value || <span className="text-zinc-300 italic">Empty</span>}
+        </p>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onStartEdit(id, field, value);
+          }}
+          className="p-1 text-zinc-400 hover:text-zinc-900 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <Edit2 size={12} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function GlossaryExplorer({
   categories = [], 
   items = [], 
@@ -238,6 +354,18 @@ export default function GlossaryExplorer({
     else next.add(id);
     setExpandedRows(next);
   };
+
+  const handleStartEdit = React.useCallback((id: string, field: string, value: any) => {
+    setEditingField({ id, field, value });
+  }, []);
+
+  const handleEditValueChange = React.useCallback((nextValue: string) => {
+    setEditingField((prev) => (prev ? { ...prev, value: nextValue } : null));
+  }, []);
+
+  const handleCancelEdit = React.useCallback(() => {
+    setEditingField(null);
+  }, []);
 
   const handleSaveEdit = async () => {
     if (!editingField) return;
@@ -575,57 +703,6 @@ export default function GlossaryExplorer({
     });
   }, [resolvedGlossary, searchTerm, selectedCategoryId, selectedItemId, selectedGlossarySetFilter, sortMode, showMissingOnly, columnFilters]);
 
-  const EditableField = ({ id, field, value, type = 'text', label, inline = false }: any) => {
-    const isEditing = editingField?.id === id && editingField?.field === field;
-    
-    if (isEditing) {
-      return (
-        <div className={cn("flex flex-col gap-2 w-full", inline ? "p-1" : "")} onClick={(e) => e.stopPropagation()}>
-          {!inline && <label className="text-[10px] font-bold text-zinc-400 uppercase">{label}</label>}
-          {type === 'textarea' ? (
-            <textarea 
-              className="w-full p-2 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-black/5 outline-none min-h-[100px]"
-              value={editingField.value}
-              onChange={(e) => setEditingField({ ...editingField, value: e.target.value })}
-              autoFocus
-            />
-          ) : (
-            <input 
-              className="w-full p-2 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-black/5 outline-none"
-              value={editingField.value}
-              onChange={(e) => setEditingField({ ...editingField, value: e.target.value })}
-              autoFocus
-            />
-          )}
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handleSaveEdit} disabled={isSaving}>Save</Button>
-            <Button size="sm" variant="ghost" onClick={() => setEditingField(null)}>Cancel</Button>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className={cn("group relative flex flex-col", inline ? "" : "gap-1")}>
-        {!inline && <label className="text-[10px] font-bold text-zinc-400 uppercase">{label}</label>}
-        <div className="flex items-start justify-between gap-2">
-          <p className={cn("text-sm text-zinc-700", inline ? "truncate" : "whitespace-pre-wrap")}>
-            {value || <span className="text-zinc-300 italic">Empty</span>}
-          </p>
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingField({ id, field, value });
-            }}
-            className="p-1 text-zinc-400 hover:text-zinc-900 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <Edit2 size={12} />
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   const sortedCategories = useMemo(() => {
     return [...categories].sort((a, b) => {
       if (sortMode === 'order') {
@@ -671,6 +748,15 @@ export default function GlossaryExplorer({
       ...mergedRows.map((r) => ({ value: r.id, label: r.label })),
     ];
   }, [resolvedGlossary]);
+
+  const explorerEditableFieldProps = {
+    editingField,
+    isSaving,
+    onStartEdit: handleStartEdit,
+    onValueChange: handleEditValueChange,
+    onSave: handleSaveEdit,
+    onCancel: handleCancelEdit,
+  };
 
   return (
     <div className="flex flex-col flex-1 min-h-0 space-y-6 overflow-hidden">
@@ -918,11 +1004,11 @@ export default function GlossaryExplorer({
                       })()}
                     </td>
                     <td className="px-4 py-3">
-                      <EditableField id={row.findingId} field="fldFindShort" value={row.findingShort} inline />
+                      <GlossaryExplorerEditableField {...explorerEditableFieldProps} id={row.findingId} field="fldFindShort" value={row.findingShort} inline />
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <EditableField id={row.recommendationId} field="fldRecShort" value={row.recommendationShort} inline />
+                        <GlossaryExplorerEditableField {...explorerEditableFieldProps} id={row.recommendationId} field="fldRecShort" value={row.recommendationShort} inline />
                         {row.isOrphaned && (
                           <div className="flex items-center gap-1.5">
                             <span title="Orphaned: Not in Master">
@@ -959,10 +1045,10 @@ export default function GlossaryExplorer({
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <EditableField id={row.recommendationId} field="fldUOM" value={row.uom} inline />
+                      <GlossaryExplorerEditableField {...explorerEditableFieldProps} id={row.recommendationId} field="fldUOM" value={row.uom} inline />
                     </td>
                     <td className="px-4 py-3">
-                      <EditableField id={row.recommendationId} field="fldUnit" value={row.unitCost} inline />
+                      <GlossaryExplorerEditableField {...explorerEditableFieldProps} id={row.recommendationId} field="fldUnit" value={row.unitCost} inline />
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -994,14 +1080,14 @@ export default function GlossaryExplorer({
                       <td colSpan={4}></td>
                       <td className="px-4 py-4 border-b border-zinc-100 align-top">
                         <div className="space-y-4">
-                          <EditableField 
+                          <GlossaryExplorerEditableField {...explorerEditableFieldProps} 
                             id={row.findingId} 
                             field="fldFindLong" 
                             value={row.findingLong} 
                             type="textarea" 
                             label="Long Finding"
                           />
-                          <EditableField 
+                          <GlossaryExplorerEditableField {...explorerEditableFieldProps} 
                             id={row.findingId} 
                             field="fldOrder" 
                             value={row.fldOrder} 
@@ -1012,14 +1098,14 @@ export default function GlossaryExplorer({
                       </td>
                       <td colSpan={3} className="px-4 py-4 border-b border-zinc-100 align-top">
                         <div className="space-y-4">
-                          <EditableField 
+                          <GlossaryExplorerEditableField {...explorerEditableFieldProps} 
                             id={row.recommendationId} 
                             field="fldRecLong" 
                             value={row.recommendationLong} 
                             type="textarea" 
                             label="Long Recommendation"
                           />
-                          <EditableField 
+                          <GlossaryExplorerEditableField {...explorerEditableFieldProps} 
                             id={row.recommendationId} 
                             field="fldOrder" 
                             value={row.fldOrder} 
