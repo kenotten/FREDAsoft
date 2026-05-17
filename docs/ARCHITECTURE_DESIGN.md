@@ -668,7 +668,7 @@ Supported product intents:
 3. Create a **related** glossary record from an existing selection (new five-tuple, explicit reuse/create choices) — **Continue** implemented for intents 4–5 below.
 4. Reuse an existing finding with a new recommendation (same `fldFind`, new `fldRec`, new glossary row) — ✅ Phase 2B.
 5. Create a new finding and reuse an existing recommendation (new `fldFind`, same `fldRec`, new glossary row) — ✅ Phase 2C.
-6. Create a new finding and new recommendation from selected text (new both, new glossary row) — ❌ Phase 2D (not implemented).
+6. Create a new finding and new recommendation from selected text (new both, new glossary row) — ✅ Phase 2D (`new_find_new_rec`).
 7. Avoid duplicate-looking findings/recommendations in Data Entry (same set + item + normalized short label must not silently fork masters).
 
 ### Why COPY & EDIT was unsafe
@@ -689,8 +689,8 @@ Phase 1 safety (implemented): hide **COPY & EDIT**, keep **ADD FINDING/REC** for
 |-------------|-------|--------|
 | `same_find_new_rec` | Same finding + new recommendation | ✅ **Implemented** (Phase 2B) |
 | `new_find_same_rec` | New finding + same recommendation | ✅ **Implemented** (Phase 2C) |
-| `new_find_new_rec` | New finding + new recommendation | ❌ **Not implemented** (Phase 2D) |
-| `cross_set_template` | Cross-set related record | ❌ **Not implemented** via modal **Continue**; use template flow below |
+| `new_find_new_rec` | New finding + new recommendation | ✅ **Implemented** (Phase 2D) |
+| `cross_set_template` | Cross-set related record | ❌ **Not implemented** via modal **Continue**; use template flow below (see [Cross-Glossary-Set Related Record Design](#cross-glossary-set-related-record-design)) |
 
 Manual **SAVE RECORD** remains the path for greenfield rows and for post-Continue citation/image edits on the activated row. Related-record **Continue** paths (2B and 2C) create the new master record(s) and a glossary row in one transaction; they do not replace **SAVE RECORD** for ongoing snapshot edits.
 
@@ -818,9 +818,200 @@ Sync effects and pending guards must use **functional** `onSelectionChange((prev
 
 | Scenario | Expected behavior today |
 |----------|-------------------------|
-| **Phase 2D** — `new_find_new_rec` | Modal shows info toast only; no Firestore writes. |
-| **Cross-set** — `cross_set_template` | Modal info only; use Glossary Set + template banner + **Prepare Target Set Records** + **SAVE RECORD**. |
+| **Cross-set** — `cross_set_template` | Modal **Continue** shows info toast only; use Glossary Set dropdown + template banner + **Prepare Target Set Records** + **SAVE RECORD** (partial automation today — see [Cross-Glossary-Set Related Record Design](#cross-glossary-set-related-record-design)). |
 | **Phase 3** duplicate cleanup | Admin reporting/migration; not part of related-record branches. |
+
+---
+
+## Cross-Glossary-Set Related Record Design
+
+**Status:** Design proposal (docs branch). **Not** a single orchestrated modal **Continue** write path today.
+
+**Related implemented same-set flows:** Phase 2B (`same_find_new_rec`), 2C (`new_find_same_rec`), 2D (`new_find_new_rec`) — all create a new glossary row in the **current** glossary set via modal **Continue**.
+
+### 1. Product definition
+
+✅ DECIDED: A **cross-glossary-set related record** is a **new approved glossary row** in a **target glossary set** that corresponds to the same category, item, finding text, and recommendation text intent as a **source** selection in another set — using **target-set master finding and recommendation documents** (reused or newly created in that set), not the source-set master ids.
+
+| Concept | Same-set related record (2B/2C/2D) | Cross-set related record |
+|---------|-----------------------------------|-------------------------|
+| Glossary set | Unchanged (current dropdown set) | **Different** target set |
+| Master finding/rec ids | Reuse and/or create **in current set** | Reuse and/or create **in target set only** |
+| Source five-tuple | Starting point; source row usually unchanged | Reference only; source row **not moved** |
+| Primary UX today | **Create Related Record** modal **Continue** | **Glossary Set** change + template banner + **Prepare Target Set Records** + manual **SAVE RECORD** |
+| Linking model | New glossary row; optional `fldSuggestedRecs` update (2B) | **Create/reuse** flow — **not** a live link between sets (no shared master ids across sets) |
+
+**Not** a “link flow”: target rows do not reference source `fldGlosId` as an active join for runtime behavior (provenance trace fields on **new** target masters are allowed — see §4).
+
+**Is a template/copy flow:** User copies **text and measurement/cost defaults** from source masters (and optionally from source glossary row for unit/cost) into **independent** target-set masters and a **new** target-set glossary snapshot.
+
+### 2. Source vs target terminology
+
+| Term | Meaning |
+|------|---------|
+| **Source glossary set** | Set of the glossary row currently being edited / the set on the source five-tuple when the user starts cross-set work. |
+| **Target glossary set** | Set selected in the **Glossary Set** dropdown for the row to be created. Must differ from source set for cross-set intent. |
+| **Source five-tuple** | `Category + Item + sourceFindId + sourceRecId + sourceGlossarySetId` (exact glossary row identity in source set). |
+| **Target five-tuple** | `Category + Item + targetFindId + targetRecId + targetGlossarySetId` — must be unique in `glossary` before save. |
+| **Source master finding / recommendation** | `findings` / `master_recommendations` documents tied to the **source** selection (may lack `fldGlossarySetId` on legacy recs). |
+| **Target master finding / recommendation** | Masters **scoped to target set** (`fldGlossarySetId` + `glossarySetMetadataForId`) — either pre-existing (text match) or created on prepare. |
+
+Category and Item remain **shared** across sets in v1 (no per-set category/item ids).
+
+### 3. Master record behavior
+
+#### Implemented today (`handlePrepareTargetSetRecords` in Glossary Builder)
+
+When the user clicks **Prepare Target Set Records** (template banner, target set selected):
+
+1. Resolve **source** finding/rec from current path selection (source-set ids still selected in UI).
+2. **Reuse** target-set finding if exactly one match: same target set + same item + normalized `fldFindShort` **and** `fldFindLong` equal to source.
+3. **Reuse** target-set recommendation if exactly one match: same target set + (same `fldItem` as source rec when source rec has `fldItem`) + normalized short **and** long equal to source.
+4. If **multiple** text matches in target set → **error**, no writes.
+5. If **no** match → **create** new finding and/or rec in target set with:
+   - Copied short/long text from source masters
+   - `fldStandards: []`
+   - `glossarySetMetadataForId(targetSet)`
+   - Provenance: `fldSourceFindingId` / `fldSourceRecommendationId`, `fldSourceGlossarySetId`, `fldSourceCopiedAt`
+   - Measurement fields copied from source finding on create; rec unit/UOM from source rec
+   - `fldSuggestedRecs: []` on new finding (user links via SAVE / library later)
+6. Switch UI selection to **target** find/rec ids; clear `editingGlossaryId`; stage standards from **reused** target masters only (`glossary` staged `[]`).
+7. **Does not** create the target glossary row — user must **SAVE RECORD**.
+
+#### Design rules (target-set masters)
+
+✅ DECIDED:
+
+- Target-set masters are **always** distinct documents from source-set masters (different ids), even when short text is identical across sets (controlled duplication per §10).
+- **Never** reuse source-set finding/rec ids on the target five-tuple.
+- Text-match reuse in target set is **deterministic** (`normalizeForDeterministicMatch` on short; long must match for finding/rec prepare today).
+
+OPEN:
+
+- **Q-CROSS-001:** Should reuse require **short-only** match (like 2B/2C duplicate guards) or keep short **+** long (stricter, current prepare behavior)?
+- **Q-CROSS-002:** When zero target matches exist, should the UI require an explicit **“Create new target masters”** confirmation before write (today: implicit on button click)?
+- **Q-CROSS-003:** Should prepare auto-append target rec id to target finding `fldSuggestedRecs` (symmetry with 2B)?
+
+### 4. Standards behavior
+
+✅ DECIDED (cross-set — non-negotiable):
+
+| Rule | Detail |
+|------|--------|
+| No cross-set standards inheritance | Do **not** copy `fldStandards` from source glossary row, source-set finding, or source-set recommendation onto target glossary row or onto **new** target masters. |
+| New target masters | `fldStandards: []` on create (implemented in **Prepare Target Set Records**). |
+| No source glossary row copy | Target glossary `fldStandards` must **not** be populated from source/host/template glossary row merely because the user branched from that row. |
+
+✅ DECIDED (target-set-only hydration — when reusing existing target masters after prepare):
+
+| Situation | Staged / row behavior |
+|-----------|----------------------|
+| Reused target finding exists | Staged **finding** standards may reflect **that target finding’s** `fldStandards` (implemented: `onReplaceStagedStandards` uses `findingMatches[0].fldStandards`). |
+| Reused target rec exists | Staged **rec** standards may reflect **that target rec’s** `fldStandards` (implemented). |
+| Target glossary row | Staged glossary standards start **`[]`** after prepare; normal **SAVE RECORD** / selection rules apply until user edits. |
+
+**Incorrect:** Hydrating target glossary row from source-set master standards or source glossary row standards at prepare or at a future modal **Continue**.
+
+Same-set rules (2B/2C/2D) remain in the table above; do not apply source-glossary-row copy rules from older doc lines to 2B/2C (implemented: finding-only / rec-only / none).
+
+### 5. Images
+
+✅ DECIDED:
+
+- **Prepare Target Set Records** does not copy images (no glossary row created yet).
+- **Future orchestrated cross-set Continue** (if added): new target glossary row `fldImages: []` by default — same as 2B/2C/2D.
+
+OPEN:
+
+- **Q-CROSS-004:** Today, when the user changes glossary set and the sync effect finds a **source-set four-tuple** in another set (`otherSetRows`), it may set `selections.images` from that **source-set glossary row** (`templateRow.fldImages`) while `editingGlossaryId` is cleared. Confirm whether cross-set template UX should **always** clear images until explicit opt-in on **SAVE RECORD** (recommended: align with “no silent image copy across sets”).
+
+### 6. Measurement / unit / cost behavior
+
+| Field | Source for target (today / proposal) | Notes |
+|-------|--------------------------------------|--------|
+| `fldMeasurementType`, `fldUnitType` (finding) | Copy from **source finding** on **new** target finding create | Implemented in prepare |
+| `fldUnit`, `fldUOM`, `fldOrder` (rec) | Copy from **source rec** on **new** target rec create | Implemented |
+| `fldUnitCost`, `fldUnitType` (glossary override) | OPEN — manual **SAVE RECORD**; sync may clear overrides in template mode | Same-set 2B/2C copy from **source glossary row** when present; cross-set should **not** auto-copy source glossary unit/cost without user confirmation |
+| Category / Item | Unchanged (shared masters) | v1 |
+
+OPEN:
+
+- **Q-CROSS-005:** Should target glossary row inherit unit/cost overrides from **source glossary row** on save, or only from target rec defaults?
+
+### 7. Activation behavior
+
+| Approach | Description |
+|----------|-------------|
+| **Today (prepare path)** | User stays in Builder on target find/rec; `editingGlossaryId` cleared; banner “New Glossary Record Pending” until **SAVE RECORD**. Source row unchanged. **Revert** restores source set + staged standards snapshot. |
+| **Recommended (future orchestrated cross-set)** | After successful target master + glossary create: **switch dropdown to target set**, **activate new target five-tuple** (`activateGlossaryBuilderRecord` + `pendingRelatedActivationRef` pattern), same as 2B/2C/2D — user lands on editable target row, not source. |
+
+✅ DECIDED (recommendation for implementation): **Activate target row** on completion of an orchestrated cross-set write (when shipped). Keeping the user on the source row after creating a target record is easy to misread as “nothing happened.”
+
+### 8. Duplicate prevention
+
+Apply checks in **target set** before any Firestore write (orchestrated path should mirror prepare + save):
+
+| Check | Rule |
+|-------|------|
+| Target finding short title | If creating new finding: normalized short must not collide with another finding in **target set + item** (exclude self). OPEN: allow same short as source set (yes — different sets). |
+| Target rec short title | Same pattern in **target set + item context** (`masterRecOverlapsSelectedItemContext` pattern). |
+| Target five-tuple | `findExactGlossaryByFiveTuple` in **target set** must be empty before create; else block and direct to edit existing. |
+| Ambiguous text reuse | >1 finding or >1 rec text match in target set → block (implemented). |
+| Partial writes | If any check fails, **no** finding/rec/glossary writes in that transaction. |
+
+### 9. UI flow
+
+#### Today
+
+| Surface | Behavior |
+|---------|----------|
+| **Create Related Record** modal → `cross_set_template` | **Continue** → info toast; directs to Glossary Set + **Prepare Target Set Records** (no Firestore writes on Continue). |
+| **Glossary Set** dropdown | Changing set while on an **existing** source five-tuple captures `templateSourceSnapshot` (source set id, `editingGlossaryId`, staged standards) and clears staged standards to `[]`. |
+| Template banner | Shown when `glossaryWorkflowStatus.kind === 'template'` (four-tuple exists in another set, no exact row in current set). |
+| **Prepare Target Set Records** | Creates/reuses target masters only. |
+| **SAVE RECORD** | User creates target glossary row (normal five-tuple upsert). |
+
+✅ DECIDED: Until an orchestrated cross-set **Continue** exists, **do not** imply modal **Continue** performs cross-set saves.
+
+OPEN:
+
+- **Q-CROSS-006:** Should modal **Continue** eventually run the same orchestration as prepare + save in one step, or remain a launcher for the dropdown/banner path (Phase X1 = clarification only)?
+- **Q-CROSS-007:** Pre-save summary dialog: “Will reuse/create target finding X, target rec Y, new glossary row in {target set}” — required?
+
+**Proposed modal copy (when `cross_set_template` selected):** “Cross-set records are not created on Continue. Select the **target Glossary Set**, use **Prepare Target Set Records**, then **SAVE RECORD**. Citations and images are not copied from the source set automatically.”
+
+### 10. Implementation phases
+
+| Phase | Scope | Status |
+|-------|--------|--------|
+| **X1 — Docs + UI clarification** | Architecture (this section); modal/helper text; no new writes | OPEN (docs in progress) |
+| **X2 — Target-set duplicate preview** | Dry-run panel: reuse vs create, five-tuple collision, ambiguous match — no writes | Not started |
+| **X3 — Orchestrated cross-set create** | Single transactional path: target masters (reuse/create) + target glossary row + activation; standards/images rules above | Not started |
+| **X4 — Activation / polish** | `pendingRelatedActivationRef` for cross-set; optimistic lists; Revert semantics | Not started |
+
+**Dependency:** X3 should reuse `normalizeForDeterministicMatch`, `glossarySetMetadataForId`, `findExactGlossaryByFiveTuple`, and provenance fields already used in **Prepare Target Set Records**.
+
+### 11. Non-goals
+
+- No migrations or bulk duplicate cleanup (Phase 3 admin remains separate).
+- No Data Entry or Report Preview changes as part of cross-set work unless explicitly scoped.
+- No automatic cross-set **standards** inheritance.
+- No silent **image** copy across sets (unless Q-CROSS-004 resolves otherwise).
+- No shared master ids across glossary sets.
+- No “link only” glossary rows without target-set masters.
+
+### Current code map (reference)
+
+| Area | File / symbol |
+|------|----------------|
+| Modal scenario + toast | `GlossaryBuilder` — `cross_set_template`, `handleRelatedRecordContinue` |
+| Template snapshot | `templateSourceSnapshot`, Glossary Set `onChange` |
+| Prepare writes | `handlePrepareTargetSetRecords` |
+| Template banner UI | `glossaryWorkflowStatus.kind === 'template'` |
+| Set metadata | `src/lib/glossarySets.ts` — `glossarySetMetadataForId` |
+| Revert | `handleRevertTemplateSource` |
+
+---
 
 ### Implementation phases and guardrails
 
@@ -832,7 +1023,7 @@ Sync effects and pending guards must use **functional** `onSelectionChange((prev
 
 **Phase 2C (done):** `new_find_same_rec` — see table above.
 
-**Phase 2D (not started):** `new_find_new_rec` — planned scope only (not ✅ DECIDED): create both masters and a glossary row, with collision checks on both short titles.
+**Phase 2D (done):** `new_find_new_rec` — create both masters and a glossary row in the current set, with collision checks on both short titles; no standards hydration at creation.
 
 **Phase 3 (not started):** Duplicate reporting/cleanup (admin): list masters with same normalized short text + same `fldItem` + same `fldGlossarySetId` but different ids; no automatic deletion without review.
 
