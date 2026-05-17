@@ -1800,9 +1800,7 @@ export function GlossaryBuilder({
     });
 
     const recIds = new Set(
-      relatedGlossaryRecords
-        .map((g) => String(g.fldRec || g.fldRecID || '').toLowerCase().trim())
-        .filter(Boolean)
+      relatedGlossaryRecords.map((g) => glossaryRowRecId(g)).filter(Boolean)
     );
 
     return masterRecsSource.filter((r) => {
@@ -1835,7 +1833,7 @@ export function GlossaryBuilder({
         continue;
       }
       if (normalizeGlossaryRecordSetKey(g.fldGlossarySetId) !== setKey) continue;
-      const rid = String(g.fldRec || g.fldRecID || '').toLowerCase().trim();
+      const rid = glossaryRowRecId(g);
       if (rid) out.add(rid);
     }
     return out;
