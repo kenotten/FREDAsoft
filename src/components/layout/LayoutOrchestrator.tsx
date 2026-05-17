@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   LayoutDashboard, 
@@ -15,13 +15,13 @@ import {
   X, 
   ChevronDown,
   ShieldAlert,
-  Hash
+  Hash,
+  Loader2
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { FREDASOFT_DRAFT_LOCAL_STORAGE_KEY } from '../../lib/storageKeys';
 import { Button, Select, Card } from '../ui/core';
 import { MainContent } from './MainContent';
-import { ReportPreview } from '../ReportPreview';
 import {
   ReportSectionSelectionDialog,
   type ReportSectionSelection
@@ -54,6 +54,10 @@ import {
 } from '../../types';
 import { UnsavedChangesModal } from '../modals/UnsavedChangesModal';
 import { LibraryManagerHandle } from '../LibraryManager';
+
+const ReportPreview = React.lazy(() =>
+  import('../ReportPreview').then((m) => ({ default: m.ReportPreview }))
+);
 
 export interface SelectionProps {
   selections: any;
@@ -489,27 +493,42 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
       />
 
       {showReportPreview && selectedProject && selectedClient && selectedFacility && selectedInspector && (
-        <ReportPreview 
-          project={selectedProject}
-          client={selectedClient}
-          facility={selectedFacility}
-          inspector={selectedInspector}
-          projectData={projectData}
-          standards={standards}
-          glossary={glossary}
-          categories={categories}
-          items={items}
-          locations={locations}
-          recommendations={recommendations as any}
-          findings={findings}
-          sectionSelection={reportSectionSelection ?? undefined}
-          onClose={() => {
-            setShowReportPreview(false);
-            setReportSectionSelection(null);
-          }}
-          isSidebarOpen={isSidebarOpen}
-          toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
+        <React.Suspense
+          fallback={
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/80 backdrop-blur-sm"
+            >
+              <div className="flex flex-col items-center gap-3 text-white">
+                <Loader2 size={32} className="animate-spin" />
+                <p className="text-sm font-medium">Loading report preview…</p>
+              </div>
+            </motion.div>
+          }
+        >
+          <ReportPreview
+            project={selectedProject}
+            client={selectedClient}
+            facility={selectedFacility}
+            inspector={selectedInspector}
+            projectData={projectData}
+            standards={standards}
+            glossary={glossary}
+            categories={categories}
+            items={items}
+            locations={locations}
+            recommendations={recommendations as any}
+            findings={findings}
+            sectionSelection={reportSectionSelection ?? undefined}
+            onClose={() => {
+              setShowReportPreview(false);
+              setReportSectionSelection(null);
+            }}
+            isSidebarOpen={isSidebarOpen}
+            toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          />
+        </React.Suspense>
       )}
 
       {deleteConfirmation && (

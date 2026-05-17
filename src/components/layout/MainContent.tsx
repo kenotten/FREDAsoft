@@ -7,9 +7,9 @@ import { GlossaryView } from '../GlossaryView';
 import GlossaryExplorer from '../GlossaryExplorer';
 import { StandardsManager } from '../StandardsManager';
 import { SettingsPage } from '../SettingsPage';
-import { DocumentManager } from '../DocumentManager';
 import { OrderManager } from '../OrderManager';
 import { LibraryManager } from '../LibraryManager';
+import { Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { releaseInactiveTabPanelFocus } from '../../lib/releaseInactiveTabPanelFocus';
 import { FREDASOFT_DRAFT_LOCAL_STORAGE_KEY } from '../../lib/storageKeys';
@@ -21,6 +21,10 @@ import {
   ProjectContextProps, 
   OperationalProps 
 } from './LayoutOrchestrator';
+
+const DocumentManager = React.lazy(() =>
+  import('../DocumentManager').then((m) => ({ default: m.DocumentManager }))
+);
 
 interface MainContentProps {
   activeTab: string;
@@ -298,10 +302,16 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
         />
       )}
       {activeTab === 'documents' && (
-        <DocumentManager 
-          documents={documents} 
-          isAdmin={isAdmin} 
-        />
+        <React.Suspense
+          fallback={
+            <div className="flex flex-1 items-center justify-center gap-2 p-12 text-zinc-500">
+              <Loader2 size={24} className="animate-spin" />
+              <span className="text-sm font-medium">Loading documents…</span>
+            </div>
+          }
+        >
+          <DocumentManager documents={documents} isAdmin={isAdmin} />
+        </React.Suspense>
       )}
       {activeTab === 'explorer' && pendingExplorerNav && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">

@@ -1,5 +1,3 @@
-import PortfolioManager from './components/PortfolioManager';
-import GlossaryExplorer from './components/GlossaryExplorer';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Fuse from 'fuse.js';
 import { initializeApp, deleteApp, getApp } from 'firebase/app';
