@@ -221,7 +221,7 @@ export function filterReportProjectForPreview(
         .toLowerCase() === String(project.fldProjID || '').trim().toLowerCase() &&
       String(d.fldFacility || '')
         .trim()
-        .toLowerCase() === String(facility.fldFacID || facility.id || '').trim().toLowerCase()
+        .toLowerCase() === String(facility.fldFacID || '').trim().toLowerCase()
   );
 
   const uniqueMap = new Map<string, ProjectData>();
