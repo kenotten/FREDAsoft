@@ -3,6 +3,11 @@
  * No I/O. Used by Data Explorer and ProjectData Entry so both paths share identical field logic.
  */
 
+import type { Glossary } from '../types';
+
+/** Glossary row fields used for clone lookup (canonical shape + legacy rec id alias on stored rows). */
+type GlossaryCloneLookup = Glossary & { fldRecID?: string };
+
 export type ProjectDataCloneSeed = {
   selections: {
     dataEntryMode: 'glossary' | 'custom';
@@ -54,7 +59,7 @@ function safeArray<T>(v: unknown): T[] {
  */
 export function buildProjectDataCloneSeed(
   source: Record<string, unknown>,
-  glossary?: unknown[]
+  glossary?: GlossaryCloneLookup[]
 ): ProjectDataCloneSeed {
   const fldDataStr = safeString(source.fldData);
   const fldDataBlank = !fldDataStr;
@@ -76,9 +81,9 @@ export function buildProjectDataCloneSeed(
     };
   } else {
     const targetLower = fldDataStr.toLowerCase();
-    const glos = (glossary || []).find((g: any) => {
-      const gid = safeString(g?.fldGlosId).toLowerCase();
-      const id = safeString(g?.id).toLowerCase();
+    const glos = (glossary || []).find((g) => {
+      const gid = safeString(g.fldGlosId).toLowerCase();
+      const id = safeString(g.id).toLowerCase();
       return gid === targetLower || id === targetLower;
     });
     selections = {
