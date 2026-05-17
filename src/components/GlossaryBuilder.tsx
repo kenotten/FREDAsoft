@@ -33,6 +33,11 @@ import { toast } from 'sonner';
 import { firestoreService, OperationType, handleFirestoreError } from '../services/firestoreService';
 import { GLOSSARY_SET_DEFS, glossarySetById, glossarySetMetadataForId } from '../lib/glossarySets';
 import { normalizeForDeterministicMatch } from '../lib/textNormalize';
+import {
+  computeCrossSetTargetPreview,
+  type CrossSetTargetPreviewResult,
+} from '../lib/crossSetTargetPreview';
+import { CrossSetTargetPreviewPanel } from './CrossSetTargetPreviewPanel';
 import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { 
   Category, 
@@ -1967,6 +1972,87 @@ export function GlossaryBuilder({
     masterRecsSource,
   ]);
 
+  const crossSetTargetPreview = useMemo((): CrossSetTargetPreviewResult => {
+    const inCrossSetWorkflow =
+      Boolean(templateSourceSnapshot) || glossaryWorkflowStatus.kind === 'template';
+    if (!inCrossSetWorkflow || !hasMinimumContext) {
+      return {
+        kind: 'inactive',
+        reason: 'Cross-set preview appears when you branch from a source glossary row to another Glossary Set.',
+      };
+    }
+
+    let sourceGlossarySetId = String(templateSourceSnapshot?.sourceGlossarySetId || '').trim();
+    let sourceGlossaryRowId = String(templateSourceSnapshot?.sourceEditingGlossaryId || '').trim();
+
+    if (!sourceGlossaryRowId && glossaryWorkflowStatus.kind === 'template') {
+      const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
+      const otherRows = filterGlossaryFourTupleOtherSets(
+        glossary || [],
+        selectedCat,
+        selectedItem,
+        selectedFind,
+        selectedRec,
+        selectedSetKeyUi
+      );
+      const src = otherRows[0];
+      if (src) {
+        sourceGlossaryRowId = String(src.fldGlosId || src.id || '').trim();
+        sourceGlossarySetId =
+          normalizeGlossaryRecordSetKey(src.fldGlossarySetId) ||
+          String(glossaryWorkflowStatus.sourceLabel || '');
+      }
+    }
+
+    const cat = categories?.find(
+      (c: any) => normMasterId(c.id || c.fldCategoryID) === normMasterId(selectedCat)
+    );
+    const item = items?.find(
+      (i: any) => normMasterId(i.id || i.fldItemID) === normMasterId(selectedItem)
+    );
+    const find = findings?.find(
+      (f: any) => normMasterId(f.id || f.fldFindID) === normMasterId(selectedFind)
+    );
+    const rec = masterRecsSource?.find(
+      (r: any) => normMasterId(r.id || r.fldRecID) === normMasterId(selectedRec)
+    );
+
+    return computeCrossSetTargetPreview({
+      selectedCat,
+      selectedItem,
+      selectedFind,
+      selectedRec,
+      selectedGlossarySetId,
+      sourceGlossarySetId,
+      sourceGlossaryRowId,
+      categoryName: cat?.fldCategoryName || selectedCat,
+      itemName: item?.fldItemName || selectedItem,
+      sourceFindingShort: find?.fldFindShort || '',
+      sourceRecShort: rec?.fldRecShort || '',
+      findings: findings || [],
+      masterRecommendations: masterRecsSource || [],
+      glossary: glossary || [],
+    });
+  }, [
+    templateSourceSnapshot,
+    glossaryWorkflowStatus,
+    hasMinimumContext,
+    selectedCat,
+    selectedItem,
+    selectedFind,
+    selectedRec,
+    selectedGlossarySetId,
+    categories,
+    items,
+    findings,
+    masterRecsSource,
+    glossary,
+  ]);
+
+  const showCrossSetPreviewPanel =
+    hasMinimumContext &&
+    (Boolean(templateSourceSnapshot) || glossaryWorkflowStatus.kind === 'template');
+
   const openRelatedRecordModal = () => {
     setRelatedRecordScenario(null);
     relatedPrefillKeyRef.current = '';
@@ -3014,6 +3100,10 @@ export function GlossaryBuilder({
                 )}
               </div>
             </div>
+          )}
+
+          {showCrossSetPreviewPanel && (
+            <CrossSetTargetPreviewPanel preview={crossSetTargetPreview} />
           )}
 
           <div className="flex gap-2 items-end">
