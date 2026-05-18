@@ -50,6 +50,8 @@ export interface Project {
   fldFacID?: string; // Legacy/Filter compatibility
   fldPDDate: string;
   fldNarrative?: string;
+  /** Per-facility report narrative within this project (key = fldFacID). */
+  fldFacilityNarratives?: Record<string, string>;
   fldCostMultiplier?: number;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;

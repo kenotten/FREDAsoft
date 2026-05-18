@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   LayoutDashboard, 
@@ -8,7 +8,8 @@ import {
   ClipboardList, 
   Book,
   Table, 
-  FileText, 
+  FileText,
+  PenLine,
   Settings, 
   BookOpen,
   LogOut, 
@@ -34,6 +35,7 @@ import {
   InspectorModal, 
   DeleteConfirmationModal 
 } from '../modals/EntityModals';
+import { FacilityNarrativeModal } from '../modals/FacilityNarrativeModal';
 import FREDAsoftLogo from '../../Assets/FREDAsoftLogo.png';
 import { 
   Client, 
@@ -234,6 +236,7 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
   const libRef = React.useRef<LibraryManagerHandle>(null);
   const [showReportSectionDialog, setShowReportSectionDialog] = React.useState(false);
   const [reportSectionSelection, setReportSectionSelection] = React.useState<ReportSectionSelection | null>(null);
+  const [showFacilityNarrativeModal, setShowFacilityNarrativeModal] = React.useState(false);
 
   const reportSectionAvailability = React.useMemo(() => {
     if (!selectedProject || !selectedFacility) {
@@ -409,11 +412,21 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              {selectedProject && selectedFacility && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowFacilityNarrativeModal(true)}
+                  className="bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100"
+                >
+                  <PenLine size={14} className="mr-2" /> Edit facility narrative
+                </Button>
+              )}
               {selectedProject && (
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setShowReportSectionDialog(true)}
                   className="bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100"
                 >
@@ -480,6 +493,15 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
         </div>
       )}
 
+      {selectedProject && selectedFacility && (
+        <FacilityNarrativeModal
+          isOpen={showFacilityNarrativeModal}
+          project={selectedProject}
+          facility={selectedFacility}
+          onClose={() => setShowFacilityNarrativeModal(false)}
+        />
+      )}
+
       <ReportSectionSelectionDialog
         isOpen={showReportSectionDialog}
         hasReferencedStandards={reportSectionAvailability.hasReferencedStandards}
@@ -502,7 +524,7 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
             >
               <div className="flex flex-col items-center gap-3 text-white">
                 <Loader2 size={32} className="animate-spin" />
-                <p className="text-sm font-medium">Loading report preview…</p>
+                <p className="text-sm font-medium">Loading report preview?</p>
               </div>
             </motion.div>
           }

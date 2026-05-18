@@ -253,6 +253,22 @@ export function filterReportProjectForPreview(
   });
 }
 
+const DEFAULT_REPORT_NARRATIVE_FALLBACK = 'No project narrative provided.';
+
+/** Facility-specific report narrative with legacy project-level fallback. */
+export function resolveFacilityReportNarrative(
+  project: Pick<Project, 'fldFacilityNarratives' | 'fldNarrative'>,
+  facilityId: string,
+  fallback: string = DEFAULT_REPORT_NARRATIVE_FALLBACK
+): string {
+  const facKey = String(facilityId || '').trim();
+  const perFacility =
+    facKey && project.fldFacilityNarratives
+      ? project.fldFacilityNarratives[facKey]
+      : undefined;
+  return perFacility ?? project.fldNarrative ?? fallback;
+}
+
 export function getReportSectionAvailability(
   projectData: ProjectData[],
   project: Project,

@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import {
   buildReferencedAddendumEntries,
   filterReportProjectForPreview,
+  resolveFacilityReportNarrative,
   formatGroupedStandardCitations,
   getRecordStandardIds,
   getReportRecordSortKeys,
@@ -860,9 +861,9 @@ export function ReportPreview({
 
   // Pagination Chunks using measured heights
   const narrativePages = useMemo(() => {
-    const narrative = project.fldNarrative || "No project narrative provided.";
+    const narrative = resolveFacilityReportNarrative(project, facility.fldFacID);
     return [narrative];
-  }, [project.fldNarrative]);
+  }, [project.fldFacilityNarratives, project.fldNarrative, facility.fldFacID]);
 
   const documentationPages = useMemo(() => {
     if (!sectionSel.documentation) return [];
