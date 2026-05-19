@@ -343,6 +343,13 @@ const DOC_HEADER_SPACE_AFTER_PX = 14;
 /** Margin below each DocumentationCard wrapper (outside border box; added in pagination after measured card height). */
 const DOC_CARD_GAP_PX = 22;
 
+/** Documentation record card borders: 2px outer/verticals, 1px interior horizontals. */
+const DOC_CARD_OUTER_BORDER = 'border-2 border-zinc-900';
+const DOC_CARD_VERT_BORDER = 'border-r-2 border-zinc-900';
+const DOC_CARD_VERT_BORDER_L = 'border-l-2 border-zinc-900';
+const DOC_CARD_HORIZ_BORDER = 'border-b border-zinc-900';
+const DOC_CARD_IMG_ROW_BORDER = 'border-t border-zinc-900';
+
 type DocumentationPageItem =
   | { kind: 'groupHeader'; groupKey: string; label: string; continued: boolean }
   | { kind: 'record'; record: ProjectData };
@@ -1654,42 +1661,37 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
   const hasReportImages = Array.isArray(record.fldImages) && record.fldImages.length > 0;
 
   return (
-    <div className="border-2 border-zinc-900 flex items-stretch break-inside-avoid">
+    <div className={cn('flex items-stretch break-inside-avoid', DOC_CARD_OUTER_BORDER)}>
       {/* Number Column */}
-      <div className="w-12 border-r-2 border-zinc-900 flex flex-col items-center justify-start shrink-0 pt-2 font-black text-2xl">
+      <div className={cn('flex w-12 shrink-0 flex-col items-center justify-start pt-2 font-black text-2xl', DOC_CARD_VERT_BORDER)}>
         {index}
         <span className="text-[8px] font-mono text-zinc-400 mt-1 print:hidden">{record.fldPDataID?.slice(0, 8)}</span>
       </div>
 
       {/* Content column: recommendation flex-1 absorbs height when image column is taller */}
-      <div
-        className={cn(
-          'flex min-h-0 min-w-0 flex-1 flex-col',
-          hasReportImages && 'border-r-2 border-zinc-900'
-        )}
-      >
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Header Row */}
-        <div className="flex shrink-0 items-center border-b border-zinc-900">
-          <div className="flex w-32 shrink-0 items-center self-stretch border-r border-zinc-900 bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase">
+        <div className={cn('flex shrink-0 items-center', DOC_CARD_HORIZ_BORDER)}>
+          <div className="flex w-32 shrink-0 items-center self-stretch border-r-2 border-zinc-900 bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase">
             Category
           </div>
-          <div className="flex min-h-0 flex-1 items-center truncate border-r border-zinc-900 px-2 py-1 text-[10px] font-bold text-zinc-900">
+          <div className="flex min-h-0 flex-1 items-center truncate border-r-2 border-zinc-900 px-2 py-1 text-[10px] font-bold text-zinc-900">
             {cat?.fldCategoryName || 'N/A'}
           </div>
-          <div className="flex w-32 shrink-0 items-center self-stretch border-r border-zinc-900 bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase">
+          <div className="flex w-32 shrink-0 items-center self-stretch border-r-2 border-zinc-900 bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase">
             Item
           </div>
-          <div className="flex min-h-0 flex-1 items-center truncate border-r border-zinc-900 bg-black px-2 py-1 text-[10px] font-bold uppercase text-white">
+          <div className="flex min-h-0 flex-1 items-center truncate bg-black px-2 py-1 text-[10px] font-bold uppercase text-white">
             {item?.fldItemName || 'N/A'}
           </div>
         </div>
         
         {/* Location row: single continuous value band; cost right-aligned */}
-        <div className="flex min-w-0 shrink-0 items-center border-b border-zinc-900">
-          <div className="flex w-32 shrink-0 items-center self-stretch border-r border-zinc-900 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase">
+        <div className={cn('flex min-w-0 shrink-0 items-center', DOC_CARD_HORIZ_BORDER)}>
+          <div className="flex w-32 shrink-0 items-center self-stretch border-r-2 border-zinc-900 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase">
             Location
           </div>
-          <div className="flex min-w-0 flex-1 items-center justify-between gap-3 border-r border-zinc-900 bg-white px-2 py-2">
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-3 bg-white px-2 py-2">
             <span
               className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-900"
               title={location?.fldLocName || 'N/A'}
@@ -1703,16 +1705,16 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
         </div>
 
         {/* Finding Row */}
-        <div className="flex shrink-0 items-stretch border-b border-zinc-900">
-          <div className="flex w-32 shrink-0 items-center self-stretch border-r border-zinc-900 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase">
+        <div className={cn('flex shrink-0 items-stretch', DOC_CARD_HORIZ_BORDER)}>
+          <div className="flex w-32 shrink-0 items-center self-stretch border-r-2 border-zinc-900 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase">
             Finding
           </div>
           {/* Glossary images are intentionally not rendered in formal report finding text (record.fldImages only in column / addendum). */}
-          <div className="flex min-h-0 flex-1 items-center border-r border-zinc-900 px-2 py-2 text-[11px] leading-snug whitespace-pre-line">
+          <div className="flex min-h-0 flex-1 items-center px-2 py-2 text-[11px] leading-snug whitespace-pre-line">
             {record.fldFindLong}
           </div>
-          <div className="flex w-32 shrink-0 flex-col self-stretch border-l border-zinc-900">
-            <div className="shrink-0 border-b border-zinc-900 bg-zinc-50 px-2 py-1 text-center text-[9px] font-bold uppercase">
+          <div className={cn('flex w-32 shrink-0 flex-col self-stretch', DOC_CARD_VERT_BORDER_L)}>
+            <div className={cn('shrink-0 bg-zinc-50 px-2 py-1 text-center text-[9px] font-bold uppercase', DOC_CARD_HORIZ_BORDER)}>
               Measurement
             </div>
             <div className="flex min-h-[2.5rem] flex-1 items-center justify-center p-2 text-xs font-bold">
@@ -1722,58 +1724,53 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
         </div>
 
         {/* Recommendation Row — grows when image column sets card height */}
-        <div className="flex min-h-0 flex-1 border-b border-zinc-900">
-          <div className="flex w-32 shrink-0 items-center self-stretch border-r border-zinc-900 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase">
+        <div className={cn('flex min-h-0 flex-1', DOC_CARD_HORIZ_BORDER)}>
+          <div className="flex w-32 shrink-0 items-center self-stretch border-r-2 border-zinc-900 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase">
             Recommendation
           </div>
-          <div className="flex min-h-0 flex-1 items-center border-r border-zinc-900 px-2 py-2 text-[11px] leading-snug whitespace-pre-line">
+          <div className="flex min-h-0 flex-1 items-center px-2 py-2 text-[11px] leading-snug whitespace-pre-line">
             {record.fldRecLong}
           </div>
         </div>
 
         {/* Reference Row — anchored at bottom of content column */}
         <div className="flex shrink-0 items-center">
-          <div className="flex w-32 shrink-0 items-center self-stretch border-r border-zinc-900 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase">
+          <div className="flex w-32 shrink-0 items-center self-stretch border-r-2 border-zinc-900 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase">
             Reference
           </div>
-          <div className="flex min-h-0 flex-1 items-center border-r border-zinc-900 px-2 py-2 text-xs font-bold">
+          <div className="flex min-h-0 flex-1 items-center px-2 py-2 text-xs font-bold">
             {refs}
           </div>
         </div>
       </div>
 
-      {/* Images column: fixed h-32 slots at top; column self-stretch + flex filler completes right edge to card bottom. */}
-      <div className={cn(
-        'flex min-h-0 w-48 shrink-0 flex-col bg-zinc-900',
-        !hasReportImages && 'hidden'
-      )}>
-        {Array.isArray(record.fldImages) && record.fldImages.slice(0, 2).map((img: string, i: number) => {
-          const multi = record.fldImages.length > 1;
-          return (
+      {/* Images column: one continuous border-l-2 for full-height content/image separator */}
+      <div
+        className={cn(
+          'flex min-h-0 w-48 shrink-0 flex-col bg-zinc-900',
+          DOC_CARD_VERT_BORDER_L,
+          !hasReportImages && 'hidden'
+        )}
+      >
+        {Array.isArray(record.fldImages) &&
+          record.fldImages.slice(0, 2).map((img: string, i: number) => (
             <div
               key={i}
               className={cn(
                 'h-32 shrink-0 overflow-hidden bg-white p-1',
-                multi
-                  ? i === 0
-                    ? 'rounded-t-sm border-r border-t border-zinc-900'
-                    : 'border-r border-t border-zinc-900'
-                  : 'rounded-t-sm border-r border-t border-zinc-900'
+                i === 0 && 'rounded-t-sm',
+                i > 0 && DOC_CARD_IMG_ROW_BORDER
               )}
             >
               <img
                 src={img}
-                className="h-full w-full object-cover rounded-sm"
+                className="h-full w-full rounded-sm object-cover"
                 alt={`Finding ${i + 1}`}
                 referrerPolicy="no-referrer"
               />
             </div>
-          );
-        })}
-        <div
-          className="min-h-0 flex-1 border-r border-b border-t border-zinc-900 bg-zinc-50"
-          aria-hidden={true}
-        />
+          ))}
+        <div className={cn('min-h-0 flex-1 bg-zinc-50', DOC_CARD_IMG_ROW_BORDER)} aria-hidden={true} />
       </div>
     </div>
   );
