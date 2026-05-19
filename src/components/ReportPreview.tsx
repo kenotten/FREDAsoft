@@ -349,6 +349,9 @@ const DOC_CARD_VERT_BORDER = 'border-r-2 border-zinc-900';
 const DOC_CARD_VERT_BORDER_L = 'border-l-2 border-zinc-900';
 const DOC_CARD_HORIZ_BORDER = 'border-b border-zinc-900';
 const DOC_CARD_IMG_ROW_BORDER = 'border-t border-zinc-900';
+/** Header row value cells (Category name, Item name) — black band, white text. */
+const DOC_CARD_HEADER_VALUE_CELL =
+  'flex min-h-0 flex-1 items-center truncate bg-black px-2 py-1 text-[10px] font-bold uppercase text-white';
 
 type DocumentationPageItem =
   | { kind: 'groupHeader'; groupKey: string; label: string; continued: boolean }
@@ -1675,13 +1678,13 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
           <div className="flex w-32 shrink-0 items-center self-stretch border-r-2 border-zinc-900 bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase">
             Category
           </div>
-          <div className="flex min-h-0 flex-1 items-center truncate border-r-2 border-zinc-900 px-2 py-1 text-[10px] font-bold text-zinc-900">
+          <div className={cn(DOC_CARD_HEADER_VALUE_CELL, DOC_CARD_VERT_BORDER)}>
             {cat?.fldCategoryName || 'N/A'}
           </div>
           <div className="flex w-32 shrink-0 items-center self-stretch border-r-2 border-zinc-900 bg-zinc-50 px-2 py-1 text-[9px] font-bold uppercase">
             Item
           </div>
-          <div className="flex min-h-0 flex-1 items-center truncate bg-black px-2 py-1 text-[10px] font-bold uppercase text-white">
+          <div className={DOC_CARD_HEADER_VALUE_CELL}>
             {item?.fldItemName || 'N/A'}
           </div>
         </div>
