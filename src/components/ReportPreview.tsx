@@ -25,6 +25,7 @@ import {
   buildReferencedAddendumEntries,
   filterReportProjectForPreview,
   resolveFacilityReportNarrative,
+  buildReportPdfSuggestedFilename,
   formatGroupedStandardCitations,
   getRecordStandardIds,
   getReportRecordSortKeys,
@@ -1157,8 +1158,15 @@ export function ReportPreview({
   ]);
 
   const handlePrint = () => {
-    // Current-window print flow consolidation (Task 125.D)
-    // We no longer use the new-tab flow as print CSS is now hardened.
+    // Browser Print / Save as PDF uses document.title as the default filename (adds .pdf).
+    const previousTitle = document.title;
+    const printTitle = buildReportPdfSuggestedFilename(project.fldProjName, facility.fldFacName);
+    const restoreTitle = () => {
+      document.title = previousTitle;
+      window.removeEventListener('afterprint', restoreTitle);
+    };
+    window.addEventListener('afterprint', restoreTitle);
+    document.title = printTitle;
     setTimeout(() => {
       window.print();
     }, 100);

@@ -255,6 +255,30 @@ export function filterReportProjectForPreview(
 
 const DEFAULT_REPORT_NARRATIVE_FALLBACK = 'No project narrative provided.';
 
+const INVALID_FILENAME_CHARS = /[\\/:*?"<>|]/g;
+
+/** Sanitize one segment for use in a print-to-PDF suggested filename (no path separators). */
+export function sanitizeReportPdfFilenamePart(value: string | undefined | null): string {
+  return String(value ?? '')
+    .trim()
+    .replace(INVALID_FILENAME_CHARS, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Suggested filename stem for browser Print / Save as PDF (omit `.pdf`; the browser adds it).
+ * Format: `<Project Name> - <Facility Name>`
+ */
+export function buildReportPdfSuggestedFilename(
+  projectName: string | undefined | null,
+  facilityName: string | undefined | null
+): string {
+  const project = sanitizeReportPdfFilenamePart(projectName) || 'Project';
+  const facility = sanitizeReportPdfFilenamePart(facilityName) || 'Facility';
+  return `${project} - ${facility}`;
+}
+
 /** Facility-specific report narrative with legacy project-level fallback. */
 export function resolveFacilityReportNarrative(
   project: Pick<Project, 'fldFacilityNarratives' | 'fldNarrative'>,
