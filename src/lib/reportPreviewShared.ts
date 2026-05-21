@@ -107,6 +107,96 @@ export function getRecordStandardIds(record: any, glos: Glossary | undefined): s
   return [];
 }
 
+/**
+ * Split standards body text into paragraphs for report addendum rendering.
+ * Blank lines (one or more) separate paragraphs; single newlines stay within a paragraph.
+ */
+export function splitStandardTextParagraphs(text: string): string[] {
+  const normalized = String(text ?? '')
+    .replace(/\r\n/g, '\n')
+    .trim();
+  if (!normalized) return [];
+  const paragraphs = normalized
+    .split(/\n\s*\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return paragraphs.length > 0 ? paragraphs : [normalized];
+}
+
+/** Max lines per addendum text chunk so a single measured row can fit a page body budget. */
+export const ADDENDUM_TEXT_CHUNK_MAX_LINES = 14;
+/** Fallback char split when a paragraph has no line breaks but is very long. */
+export const ADDENDUM_TEXT_CHUNK_MAX_CHARS = 1800;
+
+export function splitLongParagraphIntoChunks(
+  paragraph: string,
+  maxLines: number = ADDENDUM_TEXT_CHUNK_MAX_LINES
+): string[] {
+  const normalized = String(paragraph ?? '').trim();
+  if (!normalized) return [];
+  const lines = normalized.split('\n');
+  if (lines.length === 1 && normalized.length > ADDENDUM_TEXT_CHUNK_MAX_CHARS) {
+    const chunks: string[] = [];
+    let start = 0;
+    while (start < normalized.length) {
+      let end = Math.min(start + ADDENDUM_TEXT_CHUNK_MAX_CHARS, normalized.length);
+      if (end < normalized.length) {
+        const space = normalized.lastIndexOf(' ', end);
+        if (space > start + 400) end = space;
+      }
+      const piece = normalized.slice(start, end).trim();
+      if (piece) chunks.push(piece);
+      start = end;
+    }
+    return chunks.length > 0 ? chunks : [normalized];
+  }
+  if (lines.length <= maxLines) return [normalized];
+  const chunks: string[] = [];
+  for (let i = 0; i < lines.length; i += maxLines) {
+    chunks.push(lines.slice(i, i + maxLines).join('\n'));
+  }
+  return chunks;
+}
+
+/** Paragraph splits, then line/char chunks for addendum pagination measurement rows. */
+export function splitStandardTextForAddendumPagination(text: string): string[] {
+  const parts: string[] = [];
+  for (const paragraph of splitStandardTextParagraphs(text)) {
+    parts.push(...splitLongParagraphIntoChunks(paragraph));
+  }
+  return parts;
+}
+
+export type StandardTextPaginationPart = {
+  text: string;
+  partKey: string;
+  isFirst: boolean;
+  isLastInStandard: boolean;
+};
+
+export function buildStandardTextPaginationParts(
+  standardId: string,
+  contentText: string
+): StandardTextPaginationPart[] {
+  const chunks = splitStandardTextForAddendumPagination(contentText);
+  if (chunks.length === 0) {
+    return [
+      {
+        text: '',
+        partKey: `${standardId}::__p0`,
+        isFirst: true,
+        isLastInStandard: true
+      }
+    ];
+  }
+  return chunks.map((text, i) => ({
+    text,
+    partKey: `${standardId}::__p${i}`,
+    isFirst: i === 0,
+    isLastInStandard: i === chunks.length - 1
+  }));
+}
+
 export function standardTypeKey(std: { fldStandardType?: string }): string {
   const t = std.fldStandardType;
   if (t === undefined || t === null || String(t).trim() === '') return 'Unknown';

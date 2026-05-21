@@ -30,6 +30,7 @@ import {
   getRecordStandardIds,
   getReportRecordSortKeys,
   compareReportRecordSortKeysLocationFirst,
+  buildStandardTextPaginationParts,
   standardTypeKey,
   type AddendumEntry,
   type ReportRecordSortOrder,
@@ -95,7 +96,15 @@ const ADDENDUM_STANDARD_IMAGE_MAX_HEIGHT_PX = 200;
 /** Pagination/measurement slice: image-bearing standards split into text + image units. */
 type AddendumPaginateUnit =
   | { kind: 'header'; key: string; standardType: string }
-  | { kind: 'standardText'; standard: StandardSnapshot }
+  | {
+      kind: 'standardText';
+      standard: StandardSnapshot;
+      text: string;
+      partKey: string;
+      isFirst: boolean;
+      isLastInStandard: boolean;
+      isLastTextBeforeImage: boolean;
+    }
   | { kind: 'standardImage'; standard: StandardSnapshot };
 
 function expandAddendumForPagination(entries: AddendumEntry[]): AddendumPaginateUnit[] {
@@ -107,7 +116,18 @@ function expandAddendumForPagination(entries: AddendumEntry[]): AddendumPaginate
     }
     const s = e.standard;
     const img = s.fldImageUrl && String(s.fldImageUrl).trim();
-    out.push({ kind: 'standardText', standard: s });
+    const textParts = buildStandardTextPaginationParts(s.fldStandardId, s.fldContentText);
+    textParts.forEach((part, idx) => {
+      out.push({
+        kind: 'standardText',
+        standard: s,
+        text: part.text,
+        partKey: part.partKey,
+        isFirst: part.isFirst,
+        isLastInStandard: part.isLastInStandard,
+        isLastTextBeforeImage: Boolean(img) && idx === textParts.length - 1
+      });
+    });
     if (img) out.push({ kind: 'standardImage', standard: s });
   }
   return out;
@@ -115,10 +135,36 @@ function expandAddendumForPagination(entries: AddendumEntry[]): AddendumPaginate
 
 function addendumPaginateMeasureId(unit: AddendumPaginateUnit): string {
   if (unit.kind === 'header') return unit.key;
-  const id = unit.standard.fldStandardId;
-  const hasImg = unit.standard.fldImageUrl && String(unit.standard.fldImageUrl).trim();
-  if (unit.kind === 'standardText') return hasImg ? `${id}::__text` : id;
-  return `${id}::__img`;
+  if (unit.kind === 'standardText') return unit.partKey;
+  return `${unit.standard.fldStandardId}::__img`;
+}
+
+function estimateAddendumTextPartHeight(text: string, isFirst: boolean): number {
+  const lines = Math.max(1, String(text ?? '').split('\n').length);
+  const chrome = isFirst ? 40 : 8;
+  return chrome + lines * 15;
+}
+
+/** Visible addendum page: heading once per standard; body-only between chunks on the same page. */
+function addendumTextPartDisplayFlags(
+  units: AddendumPaginateUnit[],
+  idx: number
+): { showHeading: boolean; showPageContinuation: boolean; continuesOnSamePage: boolean } {
+  const unit = units[idx];
+  if (!unit || unit.kind !== 'standardText') {
+    return { showHeading: false, showPageContinuation: false, continuesOnSamePage: false };
+  }
+  if (unit.isFirst) {
+    return { showHeading: true, showPageContinuation: false, continuesOnSamePage: false };
+  }
+  const prev = units[idx - 1];
+  const continuesOnSamePage =
+    prev?.kind === 'standardText' && prev.standard.fldStandardId === unit.standard.fldStandardId;
+  return {
+    showHeading: false,
+    showPageContinuation: !continuesOnSamePage,
+    continuesOnSamePage
+  };
 }
 
 function addendumSnapshotCiteLabels(standard: StandardSnapshot): { citeLabel: string; citeTitle: string } {
@@ -161,12 +207,18 @@ function addendumImageIsOrphanOnPage(page: AddendumPaginateUnit[], idx: number):
 function AddendumPaginateRow({
   unit,
   forMeasurement,
-  showImageContinuation
+  showImageContinuation,
+  showHeading,
+  showPageContinuation,
+  continuesOnSamePage
 }: {
   unit: AddendumPaginateUnit;
   forMeasurement?: boolean;
   /** When the figure starts a page without its citation/text block above it. */
   showImageContinuation?: boolean;
+  showHeading?: boolean;
+  showPageContinuation?: boolean;
+  continuesOnSamePage?: boolean;
 }) {
   const wrapMeasured = (measureId: string, className: string, children: React.ReactNode) =>
     forMeasurement ? (
@@ -190,17 +242,35 @@ function AddendumPaginateRow({
   if (unit.kind === 'standardText') {
     const s = unit.standard;
     const { citeLabel, citeTitle } = addendumSnapshotCiteLabels(s);
-    const hasImg = s.fldImageUrl && String(s.fldImageUrl).trim();
-    const measureId = hasImg ? `${s.fldStandardId}::__text` : s.fldStandardId;
+    const renderHeading = forMeasurement ? unit.isFirst : Boolean(showHeading);
+    const renderPageCont = !forMeasurement && Boolean(showPageContinuation);
+    const samePageFlow = Boolean(continuesOnSamePage);
+    const marginClass = unit.isLastTextBeforeImage
+      ? 'mb-2'
+      : unit.isLastInStandard
+        ? 'mb-6'
+        : samePageFlow
+          ? 'mb-0'
+          : 'mb-3';
+    const contLabel = `${citeLabel}${s.fldCitationName ? ` ${s.fldCitationName}` : ''} (cont.)`;
     return wrapMeasured(
-      measureId,
-      hasImg ? 'mb-2' : 'mb-6',
-      <div className="space-y-2 break-inside-avoid">
-        <h3 className="font-bold text-zinc-900 text-sm" title={citeTitle}>
-          {citeLabel}
-          {s.fldCitationName ? ` ${s.fldCitationName}` : ''}
-        </h3>
-        <p className="text-xs text-zinc-700 leading-relaxed">{s.fldContentText}</p>
+      unit.partKey,
+      cn(marginClass, samePageFlow && 'mt-2'),
+      <div className={cn(renderHeading && 'space-y-2 break-inside-avoid')}>
+        {renderHeading ? (
+          <h3 className="font-bold text-zinc-900 text-sm" title={citeTitle}>
+            {citeLabel}
+            {s.fldCitationName ? ` ${s.fldCitationName}` : ''}
+          </h3>
+        ) : null}
+        {renderPageCont ? (
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-tight text-zinc-800 leading-tight">
+            {contLabel}
+          </p>
+        ) : null}
+        {unit.text ? (
+          <p className="text-xs text-zinc-700 leading-relaxed whitespace-pre-line">{unit.text}</p>
+        ) : null}
       </div>
     );
   }
@@ -250,14 +320,23 @@ function AddendumPaginatedContent({
 }) {
   return (
     <>
-      {units.map((unit, idx) => (
-        <AddendumPaginateRow
-          key={`${addendumPaginateMeasureId(unit)}-${idx}`}
-          unit={unit}
-          forMeasurement={forMeasurement}
-          showImageContinuation={Boolean(imageContinuationFlags?.[idx])}
-        />
-      ))}
+      {units.map((unit, idx) => {
+        const textFlags =
+          unit.kind === 'standardText' && !forMeasurement
+            ? addendumTextPartDisplayFlags(units, idx)
+            : null;
+        return (
+          <AddendumPaginateRow
+            key={`${addendumPaginateMeasureId(unit)}-${idx}`}
+            unit={unit}
+            forMeasurement={forMeasurement}
+            showImageContinuation={Boolean(imageContinuationFlags?.[idx])}
+            showHeading={textFlags?.showHeading}
+            showPageContinuation={textFlags?.showPageContinuation}
+            continuesOnSamePage={textFlags?.continuesOnSamePage}
+          />
+        );
+      })}
     </>
   );
 }
@@ -1089,6 +1168,8 @@ export function ReportPreview({
       if (unit.kind === 'header') return 56;
       if (unit.kind === 'standardImage')
         return ADDENDUM_STANDARD_IMAGE_MAX_HEIGHT_PX + ADDENDUM_IMAGE_DEFAULT_EXTRA_PX;
+      if (unit.kind === 'standardText')
+        return estimateAddendumTextPartHeight(unit.text, unit.isFirst);
       return 100;
     };
 
@@ -1105,6 +1186,17 @@ export function ReportPreview({
     while (i < units.length) {
       const u = units[i];
       const next = units[i + 1];
+
+      if (u.kind === 'header' && next?.kind === 'standardText' && currentChunk.length > 0) {
+        const hHeader = heightFor(u);
+        const hNext = heightFor(next);
+        const lim = pageLimit();
+        if (currentHeight + hHeader + hNext > lim && currentHeight + hHeader <= lim) {
+          chunks.push(currentChunk);
+          currentChunk = [];
+          currentHeight = 0;
+        }
+      }
 
       if (addendumIsTextImagePair(u, next)) {
         const h1 = heightFor(u);
