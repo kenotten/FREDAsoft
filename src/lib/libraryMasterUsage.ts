@@ -210,3 +210,75 @@ export function formatLibraryMasterUsageSummaryLine(
       : 'Unassigned / Legacy';
   return `Used in ${n} glossary row${n === 1 ? '' : 's'} · ${sets}`;
 }
+
+export type MasterEditImpactItem = {
+  masterId: string;
+  kind: 'finding' | 'recommendation';
+  displayName: string;
+  glossaryRowCount: number;
+  setLabels: string[];
+};
+
+/** Pending Library Manager edits that touch glossary-used masters (save confirmation). */
+export function collectMasterEditImpacts(
+  edits: Record<string, Record<string, unknown>>,
+  index: LibraryMasterUsageIndex,
+  findings: Finding[],
+  recommendations: MasterRecommendation[]
+): MasterEditImpactItem[] {
+  const impacts: MasterEditImpactItem[] = [];
+
+  for (const rawId of Object.keys(edits)) {
+    const id = libraryMasterUsageNormId(rawId);
+    if (!id) continue;
+
+    const finding = findings.find(
+      (f) => libraryMasterUsageNormId(f.fldFindID || f.id) === id
+    );
+    if (finding) {
+      const summary = lookupFindingUsage(index, rawId);
+      if (summary && summary.glossaryRowCount > 0) {
+        impacts.push({
+          masterId: rawId,
+          kind: 'finding',
+          displayName: String(finding.fldFindShort || rawId).trim(),
+          glossaryRowCount: summary.glossaryRowCount,
+          setLabels: summary.setLabels,
+        });
+      }
+      continue;
+    }
+
+    const rec = recommendations.find(
+      (r) => libraryMasterUsageNormId(r.fldRecID || r.id) === id
+    );
+    if (rec) {
+      const summary = lookupRecUsage(index, rawId);
+      if (summary && summary.glossaryRowCount > 0) {
+        impacts.push({
+          masterId: rawId,
+          kind: 'recommendation',
+          displayName: String(rec.fldRecShort || rawId).trim(),
+          glossaryRowCount: summary.glossaryRowCount,
+          setLabels: summary.setLabels,
+        });
+      }
+    }
+  }
+
+  impacts.sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
+  return impacts;
+}
+
+export function libraryMasterEditImpactWarning(
+  kind: 'finding' | 'recommendation',
+  summary: LibraryMasterUsageSummary
+): string {
+  const noun = kind === 'finding' ? 'finding' : 'recommendation';
+  const n = summary.glossaryRowCount;
+  return `This ${noun} is used in ${n} glossary row${n === 1 ? '' : 's'}. Editing this library ${noun} changes the wording shown by every glossary pairing that uses this ${noun}. Existing project inspection records keep their saved text.`;
+}
+
+export function libraryMasterUnusedEditNote(): string {
+  return 'Unused in glossary rows. Edits apply to this library record only.';
+}
