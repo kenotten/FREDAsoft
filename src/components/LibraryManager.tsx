@@ -21,6 +21,7 @@ import {
   MoreVertical,
   Quote,
   Copy,
+  Archive,
   X
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -56,6 +57,13 @@ import {
   type FindingCopyDraft,
   type RecommendationCopyDraft,
 } from '../lib/libraryMasterCopy';
+import {
+  LIBRARY_MASTER_ARCHIVE_UNUSED_HELP,
+  libraryMasterArchiveBlockedMessage,
+  libraryMasterArchiveConfirmLabel,
+  libraryMasterArchiveModalTitle,
+  masterArchiveFirestorePayload,
+} from '../lib/libraryMasterArchive';
 import type { Glossary } from '../types';
 
 const LIBRARY_GLOSSARY_CTX_FIELDS = [
@@ -450,6 +458,78 @@ function LibraryMasterCopyModal({
   );
 }
 
+type LibraryArchiveModalState = {
+  kind: 'finding' | 'recommendation';
+  recordId: string;
+  displayShort: string;
+};
+
+function LibraryMasterArchiveModal({
+  state,
+  isSaving,
+  onClose,
+  onConfirm,
+}: {
+  state: LibraryArchiveModalState;
+  isSaving: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const title = libraryMasterArchiveModalTitle(state.kind);
+  const confirmLabel = libraryMasterArchiveConfirmLabel(state.kind);
+
+  return (
+    <div
+      className="fixed inset-0 z-[150] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="library-master-archive-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+        aria-label="Cancel archive"
+        onClick={onClose}
+      />
+      <Card className="relative z-10 flex max-h-[min(92vh,520px)] w-full max-w-md flex-col overflow-hidden border-zinc-200 p-0 shadow-2xl">
+        <div className="shrink-0 border-b border-amber-100 bg-amber-50/80 px-5 py-4">
+          <h2 id="library-master-archive-title" className="text-base font-black text-zinc-900">
+            {title}
+          </h2>
+          <p className="mt-2 text-sm leading-snug text-zinc-700">{LIBRARY_MASTER_ARCHIVE_UNUSED_HELP}</p>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <div className="rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-xs text-zinc-600">
+            <p>
+              <span className="font-bold text-zinc-800">Item:</span> {state.displayShort}
+            </p>
+            <p className="mt-1 font-mono text-[10px] text-zinc-400">{state.recordId}</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-2 border-t border-zinc-100 bg-zinc-50 px-5 py-4">
+          <Button
+            type="button"
+            variant="ghost"
+            className="flex-1 text-[10px] font-black uppercase tracking-widest"
+            onClick={onClose}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="flex-1 bg-amber-800 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-900"
+            onClick={onConfirm}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Archiving…' : confirmLabel}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerProps>(({ 
   categories, 
   items, 
@@ -483,6 +563,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   const savePromiseResolveRef = React.useRef<((success: boolean) => void) | null>(null);
   const [copyModal, setCopyModal] = useState<LibraryCopyModalState | null>(null);
   const [isCopySaving, setIsCopySaving] = useState(false);
+  const [archiveModal, setArchiveModal] = useState<LibraryArchiveModalState | null>(null);
+  const [isArchiveSaving, setIsArchiveSaving] = useState(false);
   const [highlightMasterId, setHighlightMasterId] = useState<string | null>(null);
 
   // Intercept navigation
@@ -837,6 +919,83 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       handleFirestoreError(error, OperationType.CREATE, copyModal.kind === 'finding' ? 'findings' : 'recommendations');
     } finally {
       setIsCopySaving(false);
+    }
+  };
+
+  const openFindingArchiveModal = (recordId: string) => {
+    const usage = lookupFindingUsage(masterUsageIndex, recordId);
+    if (usage && usage.glossaryRowCount > 0) return;
+    const entity = mergeFindingWithEdits(recordId);
+    if (!entity) {
+      toast.error('Finding not found.');
+      return;
+    }
+    setArchiveModal({
+      kind: 'finding',
+      recordId,
+      displayShort: String(entity.fldFindShort || recordId).trim(),
+    });
+  };
+
+  const openRecommendationArchiveModal = (recordId: string) => {
+    const usage = lookupRecUsage(masterUsageIndex, recordId);
+    if (usage && usage.glossaryRowCount > 0) return;
+    const entity = mergeRecommendationWithEdits(recordId);
+    if (!entity) {
+      toast.error('Recommendation not found.');
+      return;
+    }
+    setArchiveModal({
+      kind: 'recommendation',
+      recordId,
+      displayShort: String(entity.fldRecShort || recordId).trim(),
+    });
+  };
+
+  const handleConfirmArchive = async () => {
+    if (!archiveModal) return;
+    const usage =
+      archiveModal.kind === 'finding'
+        ? lookupFindingUsage(masterUsageIndex, archiveModal.recordId)
+        : lookupRecUsage(masterUsageIndex, archiveModal.recordId);
+    if (usage && usage.glossaryRowCount > 0) {
+      toast.error(
+        libraryMasterArchiveBlockedMessage(archiveModal.kind, usage)
+      );
+      setArchiveModal(null);
+      return;
+    }
+
+    setIsArchiveSaving(true);
+    try {
+      const collection = archiveModal.kind === 'finding' ? 'findings' : 'recommendations';
+      await firestoreService.save(
+        collection,
+        masterArchiveFirestorePayload(),
+        archiveModal.recordId
+      );
+      setEdits((prev) => {
+        const next = { ...prev };
+        delete next[archiveModal.recordId];
+        return next;
+      });
+      if (citationTargetId === archiveModal.recordId) {
+        setCitationTargetId(null);
+      }
+      toast.success(
+        archiveModal.kind === 'finding'
+          ? 'Finding archived. It will no longer appear in active library lists.'
+          : 'Recommendation archived. It will no longer appear in active library lists.'
+      );
+      setArchiveModal(null);
+    } catch (error) {
+      handleFirestoreError(
+        error,
+        OperationType.UPDATE,
+        archiveModal.kind === 'finding' ? 'findings' : 'recommendations'
+      );
+    } finally {
+      setIsArchiveSaving(false);
     }
   };
 
@@ -1249,7 +1408,22 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   const renderRecord = (record: any, index: number, list: any[]) => {
     const isFinding = activeTab === 'findings';
     const isRec = activeTab === 'recommendations';
-    
+    const masterUsageSummary = isFinding
+      ? lookupFindingUsage(masterUsageIndex, record.id)
+      : isRec
+        ? lookupRecUsage(masterUsageIndex, record.id)
+        : undefined;
+    const masterArchiveKind = isFinding ? ('finding' as const) : isRec ? ('recommendation' as const) : null;
+    const archiveBlockedMessage =
+      masterArchiveKind && masterUsageSummary && masterUsageSummary.glossaryRowCount > 0
+        ? libraryMasterArchiveBlockedMessage(masterArchiveKind, masterUsageSummary)
+        : '';
+    const archiveActionDisabled =
+      !masterArchiveKind ||
+      Boolean(masterUsageSummary && masterUsageSummary.glossaryRowCount > 0) ||
+      isArchiveSaving ||
+      isCopySaving;
+
     const shortField = isFinding ? 'fldFindShort' : isRec ? 'fldRecShort' : activeTab === 'categories' ? 'fldCategoryName' : 'fldItemName';
     const shortValue = record.displayName || '';
     const charCount = shortValue.length;
@@ -1370,20 +1544,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
           <div className="w-40 text-[9px] font-mono text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded truncate border border-zinc-100">
             {record.id}
           </div>
-          <div className="w-28 flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-            {(isFinding || isRec) && (
-              <button
-                type="button"
-                title={isFinding ? 'Copy as new finding' : 'Copy as new recommendation'}
-                onClick={() =>
-                  isFinding ? openFindingCopyModal(record.id) : openRecommendationCopyModal(record.id)
-                }
-                disabled={isCopySaving}
-                className="p-1 hover:bg-violet-100 rounded text-violet-600 hover:text-violet-900 disabled:opacity-30"
-              >
-                <Copy size={12} />
-              </button>
-            )}
+          <div className="w-20 flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
             <button 
               onClick={() => reorderAndNormalize(record.id, index, list)}
               disabled={index === 0}
@@ -1402,21 +1563,52 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
         </div>
 
         {(isFinding || isRec) && (
-          <div className="ml-16 mr-20 space-y-2">
-            {(() => {
-              const usageSummary = isFinding
-                ? lookupFindingUsage(masterUsageIndex, record.id)
-                : lookupRecUsage(masterUsageIndex, record.id);
-              if (usageSummary && usageSummary.glossaryRowCount > 0) {
-                return (
-                  <LibraryMasterEditImpactBanner
-                    kind={isFinding ? 'finding' : 'recommendation'}
-                    summary={usageSummary}
-                  />
-                );
+          <div className="ml-16 mr-20 flex flex-wrap items-center gap-2 pb-1">
+            <button
+              type="button"
+              title={isFinding ? 'Copy as new finding' : 'Copy as new recommendation'}
+              onClick={() =>
+                isFinding ? openFindingCopyModal(record.id) : openRecommendationCopyModal(record.id)
               }
-              return null;
-            })()}
+              disabled={isCopySaving || isArchiveSaving}
+              className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-violet-800 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Copy size={12} aria-hidden />
+              Copy
+            </button>
+            <button
+              type="button"
+              title={
+                archiveBlockedMessage ||
+                (isFinding ? 'Archive unused finding' : 'Archive unused recommendation')
+              }
+              onClick={() =>
+                isFinding
+                  ? openFindingArchiveModal(record.id)
+                  : openRecommendationArchiveModal(record.id)
+              }
+              disabled={archiveActionDisabled}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider transition-colors disabled:cursor-not-allowed',
+                archiveBlockedMessage
+                  ? 'border-zinc-200 bg-zinc-50 text-zinc-400'
+                  : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 disabled:opacity-40'
+              )}
+            >
+              <Archive size={12} aria-hidden />
+              {archiveBlockedMessage ? 'Archive blocked' : 'Archive'}
+            </button>
+          </div>
+        )}
+
+        {(isFinding || isRec) && (
+          <div className="ml-16 mr-20 space-y-2">
+            {masterUsageSummary && masterUsageSummary.glossaryRowCount > 0 ? (
+              <LibraryMasterEditImpactBanner
+                kind={isFinding ? 'finding' : 'recommendation'}
+                summary={masterUsageSummary}
+              />
+            ) : null}
             <textarea 
               rows={3}
               value={getValue(record, isFinding ? 'fldFindLong' : 'fldRecLong') || ''}
@@ -1547,17 +1739,16 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               </div>
             )}
             {isFinding && (
-              <LibraryMasterUsagePanel
-                kind="finding"
-                summary={lookupFindingUsage(masterUsageIndex, record.id)}
-              />
+              <LibraryMasterUsagePanel kind="finding" summary={masterUsageSummary} />
             )}
             {isRec && (
-              <LibraryMasterUsagePanel
-                kind="recommendation"
-                summary={lookupRecUsage(masterUsageIndex, record.id)}
-              />
+              <LibraryMasterUsagePanel kind="recommendation" summary={masterUsageSummary} />
             )}
+            {archiveBlockedMessage ? (
+              <p className="text-[10px] leading-snug text-amber-900/90 rounded border border-amber-100 bg-amber-50/80 px-2 py-1.5">
+                {archiveBlockedMessage}
+              </p>
+            ) : null}
           </div>
         )}
       </div>
@@ -2040,6 +2231,15 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
             });
           }}
           onConfirm={() => void handleConfirmCopy()}
+        />
+      ) : null}
+
+      {archiveModal ? (
+        <LibraryMasterArchiveModal
+          state={archiveModal}
+          isSaving={isArchiveSaving}
+          onClose={() => !isArchiveSaving && setArchiveModal(null)}
+          onConfirm={() => void handleConfirmArchive()}
         />
       ) : null}
 
