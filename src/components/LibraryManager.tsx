@@ -64,6 +64,14 @@ import {
   libraryMasterArchiveModalTitle,
   masterArchiveFirestorePayload,
 } from '../lib/libraryMasterArchive';
+import {
+  countUnassignedFindings,
+  isActiveLibraryMaster,
+  isUnassignedFinding,
+  LIBRARY_UNASSIGNED_FINDINGS_CAT_ID,
+  LIBRARY_UNASSIGNED_FINDINGS_LABEL,
+  unassignedFindingItemStatusLabel,
+} from '../lib/libraryManagerFindings';
 import type { Glossary } from '../types';
 
 const LIBRARY_GLOSSARY_CTX_FIELDS = [
@@ -1062,6 +1070,31 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     toast.info('Sequence normalized to 1, 2, 3...');
   };
 
+  // Derived navigation lists that respect local edits (before visibleData — used for finding filters)
+  const navigationCategories = useMemo(() => {
+    return categories.map((c) => {
+      const id = c.fldCategoryID || (c as any).id;
+      const updatedFields = edits[id] || {};
+      return { ...c, ...updatedFields };
+    });
+  }, [categories, edits]);
+
+  const navigationItems = useMemo(() => {
+    return items.map((i) => {
+      const id = i.fldItemID || (i as any).id;
+      const updatedFields = edits[id] || {};
+      return { ...i, ...updatedFields };
+    });
+  }, [items, edits]);
+
+  const unassignedFindingsCount = useMemo(
+    () => countUnassignedFindings(findings, navigationItems, edits),
+    [findings, navigationItems, edits]
+  );
+
+  const isUnassignedFindingsView =
+    activeTab === 'findings' && selectedCatId === LIBRARY_UNASSIGNED_FINDINGS_CAT_ID;
+
   // Filtered and Sorted Data for display
   const visibleData = useMemo(() => {
     let base: any[] = [];
@@ -1087,28 +1120,42 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
           parentId: i.fldCatID
         }));
     } else if (activeTab === 'findings') {
-      // PROGRESSIVE FILTERING: Must select at least a category
+      // PROGRESSIVE FILTERING: Must select at least a category (or Unassigned Findings)
       if (!selectedCatId) return [];
 
-      let itemIds: string[] = [];
-      if (selectedItemId) {
-        itemIds = [selectedItemId];
+      if (selectedCatId === LIBRARY_UNASSIGNED_FINDINGS_CAT_ID) {
+        base = findings
+          .filter((f) => isUnassignedFinding(f, navigationItems, edits))
+          .map((f) => ({
+            ...f,
+            id: f.fldFindID || f.id,
+            displayName: getValue(f, 'fldFindShort'),
+            order: getValue(f, 'fldOrder') ?? 999,
+            parentId: f.fldItem,
+          }));
       } else {
-        // Narrow to all items in selected category
-        itemIds = items
-          .filter(i => i.fldCatID === selectedCatId)
-          .map(i => i.fldItemID || i.id || '');
-      }
+        let itemIds: string[] = [];
+        if (selectedItemId) {
+          itemIds = [selectedItemId];
+        } else {
+          itemIds = navigationItems
+            .filter((i) => i.fldCatID === selectedCatId)
+            .map((i) => i.fldItemID || i.id || '');
+        }
 
-      base = findings
-        .filter(f => itemIds.includes(f.fldItem || ''))
-        .map(f => ({
-          ...f,
-          id: f.fldFindID || f.id,
-          displayName: getValue(f, 'fldFindShort'),
-          order: getValue(f, 'fldOrder') ?? 999,
-          parentId: f.fldItem
-        }));
+        base = findings
+          .filter((f) => {
+            const itemFk = String(getValue(f, 'fldItem') ?? '').trim();
+            return itemIds.some((id) => libNormId(id) === libNormId(itemFk));
+          })
+          .map((f) => ({
+            ...f,
+            id: f.fldFindID || f.id,
+            displayName: getValue(f, 'fldFindShort'),
+            order: getValue(f, 'fldOrder') ?? 999,
+            parentId: f.fldItem,
+          }));
+      }
     } else if (activeTab === 'recommendations') {
       base = recommendations.map(r => ({
         ...r,
@@ -1153,37 +1200,35 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     selectedItemId,
     edits,
     searchTerm,
-    glossarySetFilter
+    glossarySetFilter,
+    navigationItems,
   ]);
-
-  // Derived navigation lists that respect local edits
-  const navigationCategories = useMemo(() => {
-    return categories.map(c => {
-      const id = c.fldCategoryID || (c as any).id;
-      const updatedFields = edits[id] || {};
-      return { ...c, ...updatedFields };
-    });
-  }, [categories, edits]);
-
-  const navigationItems = useMemo(() => {
-    return items.map(i => {
-      const id = i.fldItemID || (i as any).id;
-      const updatedFields = edits[id] || {};
-      return { ...i, ...updatedFields };
-    });
-  }, [items, edits]);
 
   // Derived Breadcrumbs
   const breadcrumbs = useMemo(() => {
-    const parts = [];
-    const cat = navigationCategories.find(c => (c.fldCategoryID || (c as any).id) === selectedCatId);
+    const parts: string[] = [];
+    if (isUnassignedFindingsView) {
+      parts.push(LIBRARY_UNASSIGNED_FINDINGS_LABEL);
+      return parts;
+    }
+    const cat = navigationCategories.find(
+      (c) => (c.fldCategoryID || (c as any).id) === selectedCatId
+    );
     if (cat) parts.push(cat.fldCategoryName);
-    
-    const item = navigationItems.find(i => (i.fldItemID || (i as any).id) === selectedItemId);
+
+    const item = navigationItems.find(
+      (i) => (i.fldItemID || (i as any).id) === selectedItemId
+    );
     if (item) parts.push(item.fldItemName);
-    
+
     return parts;
-  }, [selectedCatId, selectedItemId, navigationCategories, navigationItems]);
+  }, [
+    selectedCatId,
+    selectedItemId,
+    navigationCategories,
+    navigationItems,
+    isUnassignedFindingsView,
+  ]);
 
   const masterUsageIndex = useMemo(
     () =>
@@ -1197,7 +1242,11 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     [glossary, findings, recommendations, categories, items]
   );
 
-  const isGroupedMode = activeTab === 'findings' && !!selectedCatId && !selectedItemId;
+  const isGroupedMode =
+    activeTab === 'findings' &&
+    !!selectedCatId &&
+    selectedCatId !== LIBRARY_UNASSIGNED_FINDINGS_CAT_ID &&
+    !selectedItemId;
 
   const groupedFindings = useMemo(() => {
     if (!isGroupedMode) return null;
@@ -1609,6 +1658,58 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 summary={masterUsageSummary}
               />
             ) : null}
+            {isFinding && isUnassignedFindingsView ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 space-y-2">
+                <p className="text-[9px] font-black uppercase tracking-widest text-amber-800">
+                  Assign to category / item
+                </p>
+                <p className="text-[10px] leading-snug text-amber-900/90">
+                  {unassignedFindingItemStatusLabel(
+                    record as Finding,
+                    navigationItems,
+                    edits
+                  )}
+                </p>
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">
+                  Item
+                </label>
+                <select
+                  value={String(getValue(record, 'fldItem') || '').trim()}
+                  onChange={(e) => handleEdit(record.id, 'fldItem', e.target.value)}
+                  className="w-full max-w-md rounded-md border border-zinc-200 bg-white py-1.5 pl-2 pr-8 text-[11px] font-semibold text-zinc-800 outline-none focus:ring-1 focus:ring-amber-500"
+                >
+                  <option value="">Select category → item…</option>
+                  {sortEntities(navigationCategories, 'fldCategoryName').map((cat) => {
+                    const catId = cat.fldCategoryID || (cat as { id?: string }).id;
+                    const catItems = sortEntities(
+                      navigationItems.filter(
+                        (i) =>
+                          isActiveLibraryMaster(i) &&
+                          libNormId(i.fldCatID) === libNormId(catId)
+                      ),
+                      'fldItemName'
+                    );
+                    if (catItems.length === 0) return null;
+                    return (
+                      <optgroup key={catId} label={cat.fldCategoryName}>
+                        {catItems.map((item) => {
+                          const itemId = item.fldItemID || (item as { id?: string }).id;
+                          return (
+                            <option key={itemId} value={itemId}>
+                              {item.fldItemName}
+                            </option>
+                          );
+                        })}
+                      </optgroup>
+                    );
+                  })}
+                </select>
+                <p className="text-[9px] text-zinc-500">
+                  Saves with <span className="font-semibold">Save Changes</span> — updates this finding
+                  only.
+                </p>
+              </div>
+            ) : null}
             <textarea 
               rows={3}
               value={getValue(record, isFinding ? 'fldFindLong' : 'fldRecLong') || ''}
@@ -1763,9 +1864,16 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   };
 
   const getEmptyStateMessage = () => {
-    if (activeTab === 'items' && !selectedCatId) return "Select a Category to view Items.";
-    if (activeTab === 'findings' && !selectedCatId) return "Select a Category to view Findings.";
-    return "No records found for the current search or selection.";
+    if (activeTab === 'items' && !selectedCatId) return 'Select a Category to view Items.';
+    if (activeTab === 'findings' && !selectedCatId) {
+      return 'Select a Category or Unassigned Findings to view findings.';
+    }
+    if (isUnassignedFindingsView) {
+      return searchTerm.trim()
+        ? 'No unassigned findings match your search.'
+        : 'No findings with a missing or invalid item assignment.';
+    }
+    return 'No records found for the current search or selection.';
   };
 
   return (
@@ -1920,6 +2028,32 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               {activeTab === 'findings' && (
                 <div className="space-y-3">
                   <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest pl-2 block">Category Hierarchy</label>
+                  <button
+                    type="button"
+                    onClick={() => confirmNavigation('cat', LIBRARY_UNASSIGNED_FINDINGS_CAT_ID)}
+                    className={cn(
+                      'mb-2 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition-all',
+                      isUnassignedFindingsView
+                        ? 'border-amber-300 bg-amber-50 font-bold text-amber-900'
+                        : 'border-zinc-200 bg-white text-zinc-700 hover:border-amber-200 hover:bg-amber-50/50'
+                    )}
+                  >
+                    <span className="truncate">{LIBRARY_UNASSIGNED_FINDINGS_LABEL}</span>
+                    <span
+                      className={cn(
+                        'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black tabular-nums',
+                        unassignedFindingsCount > 0
+                          ? 'bg-amber-200 text-amber-900'
+                          : 'bg-zinc-100 text-zinc-500'
+                      )}
+                    >
+                      {unassignedFindingsCount}
+                    </span>
+                  </button>
+                  <p className="px-2 text-[9px] leading-snug text-zinc-500">
+                    Findings with no item, or an item that no longer exists. Assign via Category →
+                    Item, then Save Changes.
+                  </p>
                   <div className="space-y-0.5">
                     {sortEntities(navigationCategories, 'fldCategoryName').map(cat => {
                       const catId = cat.fldCategoryID || (cat as any).id;
@@ -2032,6 +2166,13 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                   references; inspection records keep saved text until re-saved in Data Entry.
                 </div>
               )}
+              {isUnassignedFindingsView ? (
+                <div className="border-b border-amber-100 bg-amber-50/80 px-4 py-2 text-[10px] leading-snug text-amber-900">
+                  <span className="font-bold">Unassigned / invalid item.</span> These findings are not
+                  listed under any category until you assign a valid item below and save (updates{' '}
+                  <span className="font-mono">fldItem</span> only).
+                </div>
+              ) : null}
               {visibleData.length > 0 ? (
                 isGroupedMode ? (
                   groupedFindings?.map(group => (
