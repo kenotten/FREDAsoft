@@ -1,3 +1,4 @@
+import { isRecommendationMetadataOnlyEdit } from './libraryRecommendationMetadata';
 import type { Category, Finding, Glossary, Item, MasterRecommendation } from '../types';
 import {
   GLOSSARY_SET_DEFS,
@@ -253,6 +254,10 @@ export function collectMasterEditImpacts(
       (r) => libraryMasterUsageNormId(r.fldRecID || r.id) === id
     );
     if (rec) {
+      const patch = edits[rawId] as Record<string, unknown> | undefined;
+      if (patch && isRecommendationMetadataOnlyEdit(patch)) {
+        continue;
+      }
       const summary = lookupRecUsage(index, rawId);
       if (summary && summary.glossaryRowCount > 0) {
         impacts.push({

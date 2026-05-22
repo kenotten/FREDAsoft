@@ -70,8 +70,27 @@ import {
   isUnassignedFinding,
   LIBRARY_UNASSIGNED_FINDINGS_CAT_ID,
   LIBRARY_UNASSIGNED_FINDINGS_LABEL,
+  resolveItemAssignmentPathLabel,
   unassignedFindingItemStatusLabel,
 } from '../lib/libraryManagerFindings';
+import {
+  countMetadataCleanupBreakdown,
+  countUnusedRecommendations,
+  getRecommendationAssociatedItemIds,
+  glossaryUsageItemContextLabelsFromSummary,
+  glossaryUsageItemIdsFromSummary,
+  hasPendingAssociatedItemIdsEdit,
+  isUnusedRecommendation,
+  LIBRARY_RECOMMENDATION_ASSOCIATED_ITEMS_HELP,
+  LIBRARY_RECOMMENDATION_FILTER_LABELS,
+  LIBRARY_RECOMMENDATION_PENDING_ASSOCIATED_ITEMS_HELP,
+  LIBRARY_RECOMMENDATION_UNUSED_HELP,
+  matchesRecommendationMetadataCleanupFilter,
+  normalizeAssociatedItemIds,
+  recommendationMetadataCleanupStatusLabel,
+  recommendationPendingAssociatedItemsMessage,
+  type LibraryRecommendationViewFilter,
+} from '../lib/libraryRecommendationMetadata';
 import type { Glossary } from '../types';
 
 const LIBRARY_GLOSSARY_CTX_FIELDS = [
@@ -466,6 +485,182 @@ function LibraryMasterCopyModal({
   );
 }
 
+function LibraryRecommendationAssociatedItemsPanel({
+  recordId,
+  rec,
+  navigationCategories,
+  navigationItems,
+  edits,
+  onSetAssociatedItemIds,
+  usageSummary,
+  showPersistedProblem,
+}: {
+  recordId: string;
+  rec: MasterRecommendation;
+  navigationCategories: Category[];
+  navigationItems: Item[];
+  edits: Record<string, Record<string, unknown>>;
+  onSetAssociatedItemIds: (itemIds: string[]) => void;
+  usageSummary: LibraryMasterUsageSummary | undefined;
+  /** Metadata cleanup view: show persisted missing/invalid status above the control */
+  showPersistedProblem: boolean;
+}) {
+  const [addSelectValue, setAddSelectValue] = useState('');
+  const associatedIds = getRecommendationAssociatedItemIds(rec, edits, recordId);
+  const usageLabels = glossaryUsageItemContextLabelsFromSummary(usageSummary);
+  const usageIds = glossaryUsageItemIdsFromSummary(usageSummary);
+  const pendingMessage = recommendationPendingAssociatedItemsMessage(
+    rec,
+    navigationItems,
+    navigationCategories,
+    edits
+  );
+  const missingUsageIds = usageIds.filter(
+    (id) => !associatedIds.some((a) => libNormId(a) === libNormId(id))
+  );
+
+  const addItem = (itemId: string) => {
+    const trimmed = String(itemId ?? '').trim();
+    if (!trimmed) return;
+    onSetAssociatedItemIds(normalizeAssociatedItemIds([...associatedIds, trimmed]));
+  };
+
+  const removeItem = (itemId: string) => {
+    const key = libNormId(itemId);
+    onSetAssociatedItemIds(associatedIds.filter((id) => libNormId(id) !== key));
+  };
+
+  const addUsageItems = () => {
+    onSetAssociatedItemIds(normalizeAssociatedItemIds([...associatedIds, ...usageIds]));
+  };
+
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2.5 space-y-2">
+      <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600">
+        Associated items (metadata)
+      </p>
+      <p className="text-[10px] leading-snug text-zinc-600">
+        {LIBRARY_RECOMMENDATION_ASSOCIATED_ITEMS_HELP}
+      </p>
+      {showPersistedProblem ? (
+        <p className="text-[10px] leading-snug text-amber-900/90">
+          {recommendationMetadataCleanupStatusLabel(rec, navigationItems)}
+        </p>
+      ) : null}
+      {usageLabels.length > 0 ? (
+        <p className="text-[10px] leading-snug text-zinc-600">
+          <span className="font-semibold text-zinc-800">Used in glossary item contexts:</span>{' '}
+          {usageLabels.join(', ')}
+        </p>
+      ) : null}
+      {pendingMessage ? (
+        <p className="rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-[10px] leading-snug text-blue-900">
+          {pendingMessage}
+        </p>
+      ) : hasPendingAssociatedItemIdsEdit(recordId, edits) ? (
+        <p className="text-[10px] text-blue-800">
+          {LIBRARY_RECOMMENDATION_PENDING_ASSOCIATED_ITEMS_HELP}
+        </p>
+      ) : null}
+      {associatedIds.length > 0 ? (
+        <ul className="flex flex-wrap gap-1.5">
+          {associatedIds.map((itemId) => {
+            const path =
+              resolveItemAssignmentPathLabel(itemId, navigationItems, navigationCategories) ??
+              itemId;
+            const invalid = !resolveItemAssignmentPathLabel(
+              itemId,
+              navigationItems,
+              navigationCategories
+            );
+            return (
+              <li
+                key={itemId}
+                className={cn(
+                  'inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+                  invalid
+                    ? 'border-amber-300 bg-amber-50 text-amber-900'
+                    : 'border-zinc-200 bg-white text-zinc-700'
+                )}
+              >
+                <span className="truncate" title={path}>
+                  {path}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeItem(itemId)}
+                  className="shrink-0 rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-800"
+                  aria-label={`Remove ${path}`}
+                >
+                  <X size={12} />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-[10px] italic text-zinc-500">No associated item metadata on saved record.</p>
+      )}
+      {missingUsageIds.length > 0 ? (
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-auto px-2 py-1 text-[10px] font-bold uppercase tracking-tight text-violet-800 hover:bg-violet-50"
+          onClick={addUsageItems}
+        >
+          Add usage item(s)
+        </Button>
+      ) : null}
+      <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">
+        Add item
+      </label>
+      <select
+        value={addSelectValue}
+        onChange={(e) => {
+          const v = e.target.value;
+          setAddSelectValue('');
+          addItem(v);
+        }}
+        className="w-full max-w-md rounded-md border border-zinc-200 bg-white py-1.5 pl-2 pr-8 text-[11px] font-semibold text-zinc-800 outline-none focus:ring-1 focus:ring-violet-500"
+      >
+        <option value="">Select category → item…</option>
+        {sortEntities(navigationCategories, 'fldCategoryName').map((cat) => {
+          const catId = cat.fldCategoryID || (cat as { id?: string }).id;
+          const catItems = sortEntities(
+            navigationItems.filter(
+              (i) =>
+                isActiveLibraryMaster(i) &&
+                libNormId(i.fldCatID) === libNormId(catId) &&
+                !associatedIds.some(
+                  (aid) =>
+                    libNormId(aid) === libNormId(i.fldItemID || (i as { id?: string }).id)
+                )
+            ),
+            'fldItemName'
+          );
+          if (catItems.length === 0) return null;
+          return (
+            <optgroup key={catId} label={cat.fldCategoryName}>
+              {catItems.map((item) => {
+                const itemId = item.fldItemID || (item as { id?: string }).id;
+                return (
+                  <option key={itemId} value={itemId}>
+                    {item.fldItemName}
+                  </option>
+                );
+              })}
+            </optgroup>
+          );
+        })}
+      </select>
+      <p className="text-[9px] text-zinc-500">
+        Staged in memory until you click <span className="font-semibold">Save Changes</span> (updates{' '}
+        <span className="font-mono">fldAssociatedItemIds</span> only — no glossary or project data).
+      </p>
+    </div>
+  );
+}
+
 type LibraryArchiveModalState = {
   kind: 'finding' | 'recommendation';
   recordId: string;
@@ -555,6 +750,9 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   const [searchTerm, setSearchTerm] = useState('');
   /** Findings / recommendations only: filter by Glossary Set (default All). */
   const [glossarySetFilter, setGlossarySetFilter] = useState<string>('ALL');
+  /** Recommendations tab: all vs cleanup filters (default All). */
+  const [recommendationViewFilter, setRecommendationViewFilter] =
+    useState<LibraryRecommendationViewFilter>('all');
   
   // Local working state for edits
   // Map of id -> partial document update
@@ -738,6 +936,9 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       setSelectedItemId('');
     } else if (activeTab === 'items') {
       setSelectedItemId('');
+    }
+    if (activeTab !== 'recommendations') {
+      setRecommendationViewFilter('all');
     }
   }, [activeTab]);
 
@@ -1095,6 +1296,31 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   const isUnassignedFindingsView =
     activeTab === 'findings' && selectedCatId === LIBRARY_UNASSIGNED_FINDINGS_CAT_ID;
 
+  const isMetadataCleanupRecommendationsView =
+    activeTab === 'recommendations' && recommendationViewFilter === 'metadata_cleanup';
+
+  const masterUsageIndex = useMemo(
+    () =>
+      buildLibraryMasterUsageIndex({
+        glossary,
+        findings,
+        recommendations,
+        categories,
+        items,
+      }),
+    [glossary, findings, recommendations, categories, items]
+  );
+
+  const unusedRecommendationsCount = useMemo(
+    () => countUnusedRecommendations(recommendations, masterUsageIndex),
+    [recommendations, masterUsageIndex]
+  );
+
+  const metadataCleanupBreakdown = useMemo(
+    () => countMetadataCleanupBreakdown(recommendations, navigationItems),
+    [recommendations, navigationItems]
+  );
+
   // Filtered and Sorted Data for display
   const visibleData = useMemo(() => {
     let base: any[] = [];
@@ -1157,12 +1383,17 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
           }));
       }
     } else if (activeTab === 'recommendations') {
-      base = recommendations.map(r => ({
+      base = recommendations.map((r) => ({
         ...r,
         id: r.fldRecID || r.id,
         displayName: getValue(r, 'fldRecShort'),
-        order: getValue(r, 'fldOrder') ?? 999
+        order: getValue(r, 'fldOrder') ?? 999,
       }));
+      if (recommendationViewFilter === 'unused') {
+        base = base.filter((r) => isUnusedRecommendation(r, masterUsageIndex));
+      } else if (recommendationViewFilter === 'metadata_cleanup') {
+        base = base.filter((r) => matchesRecommendationMetadataCleanupFilter(r, navigationItems));
+      }
     }
 
     // Apply Search
@@ -1202,6 +1433,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     searchTerm,
     glossarySetFilter,
     navigationItems,
+    recommendationViewFilter,
+    masterUsageIndex,
   ]);
 
   // Derived Breadcrumbs
@@ -1229,18 +1462,6 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     navigationItems,
     isUnassignedFindingsView,
   ]);
-
-  const masterUsageIndex = useMemo(
-    () =>
-      buildLibraryMasterUsageIndex({
-        glossary,
-        findings,
-        recommendations,
-        categories,
-        items,
-      }),
-    [glossary, findings, recommendations, categories, items]
-  );
 
   const isGroupedMode =
     activeTab === 'findings' &&
@@ -1710,6 +1931,20 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 </p>
               </div>
             ) : null}
+            {isRec && activeTab === 'recommendations' ? (
+              <LibraryRecommendationAssociatedItemsPanel
+                recordId={record.id}
+                rec={record as MasterRecommendation}
+                navigationCategories={navigationCategories}
+                navigationItems={navigationItems}
+                edits={edits}
+                onSetAssociatedItemIds={(itemIds) =>
+                  handleEdit(record.id, 'fldAssociatedItemIds', itemIds)
+                }
+                usageSummary={masterUsageSummary}
+                showPersistedProblem={isMetadataCleanupRecommendationsView}
+              />
+            ) : null}
             <textarea 
               rows={3}
               value={getValue(record, isFinding ? 'fldFindLong' : 'fldRecLong') || ''}
@@ -1873,6 +2108,16 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
         ? 'No unassigned findings match your search.'
         : 'No findings with a missing or invalid item assignment.';
     }
+    if (activeTab === 'recommendations' && recommendationViewFilter === 'unused') {
+      return searchTerm.trim()
+        ? 'No unused recommendations match your search.'
+        : 'No recommendations without active glossary rows.';
+    }
+    if (activeTab === 'recommendations' && recommendationViewFilter === 'metadata_cleanup') {
+      return searchTerm.trim()
+        ? 'No recommendations needing metadata cleanup match your search.'
+        : 'No recommendations with missing or invalid associated item metadata.';
+    }
     return 'No records found for the current search or selection.';
   };
 
@@ -1920,6 +2165,34 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               className="w-full bg-zinc-100 border-none rounded-lg py-1.5 pl-8 pr-4 text-xs focus:ring-2 focus:ring-black/5 outline-none placeholder:text-zinc-400"
             />
           </div>
+
+          {activeTab === 'recommendations' && (
+            <div className="relative w-[12.5rem] shrink-0">
+              <select
+                value={recommendationViewFilter}
+                onChange={(e) =>
+                  setRecommendationViewFilter(e.target.value as LibraryRecommendationViewFilter)
+                }
+                className="w-full appearance-none rounded-lg border border-violet-200 bg-violet-50/80 py-1.5 pl-2 pr-7 text-[10px] font-black uppercase tracking-tight text-zinc-800 outline-none focus:ring-2 focus:ring-black/5 cursor-pointer"
+                title="Recommendation list filter"
+              >
+                <option value="all">
+                  {LIBRARY_RECOMMENDATION_FILTER_LABELS.all} ({recommendations.length})
+                </option>
+                <option value="unused">
+                  {LIBRARY_RECOMMENDATION_FILTER_LABELS.unused} ({unusedRecommendationsCount})
+                </option>
+                <option value="metadata_cleanup">
+                  {LIBRARY_RECOMMENDATION_FILTER_LABELS.metadata_cleanup} (
+                  {metadataCleanupBreakdown.total})
+                </option>
+              </select>
+              <ChevronRight
+                size={12}
+                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rotate-90 text-zinc-400"
+              />
+            </div>
+          )}
 
           {(activeTab === 'findings' || activeTab === 'recommendations') && (
             <div className="relative w-[11.5rem] shrink-0">
@@ -2171,6 +2444,21 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                   <span className="font-bold">Unassigned / invalid item.</span> These findings are not
                   listed under any category until you assign a valid item below and save (updates{' '}
                   <span className="font-mono">fldItem</span> only).
+                </div>
+              ) : null}
+              {activeTab === 'recommendations' && recommendationViewFilter === 'unused' ? (
+                <div className="border-b border-violet-100 bg-violet-50/80 px-4 py-2 text-[10px] leading-snug text-violet-900">
+                  <span className="font-bold">Unused recommendations.</span> {LIBRARY_RECOMMENDATION_UNUSED_HELP}
+                </div>
+              ) : null}
+              {isMetadataCleanupRecommendationsView ? (
+                <div className="border-b border-amber-100 bg-amber-50/80 px-4 py-2 text-[10px] leading-snug text-amber-900">
+                  <span className="font-bold">Item metadata cleanup.</span> No associated metadata:{' '}
+                  {metadataCleanupBreakdown.empty}. Invalid associated item id(s):{' '}
+                  {metadataCleanupBreakdown.invalid}. Rows stay visible while you stage changes; click{' '}
+                  <span className="font-semibold">Save Changes</span> to write{' '}
+                  <span className="font-mono">fldAssociatedItemIds</span> only (no glossary or project
+                  data changes).
                 </div>
               ) : null}
               {visibleData.length > 0 ? (

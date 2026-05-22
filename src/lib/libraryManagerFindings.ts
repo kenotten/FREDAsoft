@@ -1,4 +1,4 @@
-import type { Finding, Item } from '../types';
+import type { Category, Finding, Item } from '../types';
 
 /** Navigation-only pseudo-category id for the unassigned findings drill-down. */
 export const LIBRARY_UNASSIGNED_FINDINGS_CAT_ID = '__library_unassigned_findings__';
@@ -16,17 +16,25 @@ export function isActiveLibraryMaster(row: {
   return row.fldDeleted !== true && row.fldIsDeleted !== true;
 }
 
+export function effectiveMasterFldItem(
+  masterId: string,
+  storedFldItem: unknown,
+  edits: Record<string, Record<string, unknown>>
+): string {
+  const patch = edits[masterId];
+  if (patch && 'fldItem' in patch) {
+    return String(patch.fldItem ?? '').trim();
+  }
+  return String(storedFldItem ?? '').trim();
+}
+
 export function effectiveFindingFldItem(
   finding: Finding,
   edits: Record<string, Record<string, unknown>>,
   findingId?: string
 ): string {
   const id = findingId ?? finding.fldFindID ?? finding.id;
-  const patch = edits[id];
-  if (patch && 'fldItem' in patch) {
-    return String(patch.fldItem ?? '').trim();
-  }
-  return String(finding.fldItem ?? '').trim();
+  return effectiveMasterFldItem(id, finding.fldItem, edits);
 }
 
 export function isValidActiveItemId(itemId: string, items: Item[]): boolean {
@@ -70,4 +78,25 @@ export function countUnassignedFindings(
   edits: Record<string, Record<string, unknown>>
 ): number {
   return findings.filter((f) => isUnassignedFinding(f, items, edits)).length;
+}
+
+export function resolveItemAssignmentPathLabel(
+  itemId: string,
+  items: Item[],
+  categories: Category[]
+): string | null {
+  if (!isValidActiveItemId(itemId, items)) return null;
+  const key = normId(itemId);
+  const item = items.find(
+    (i) =>
+      isActiveLibraryMaster(i) &&
+      (normId(i.fldItemID) === key || normId(i.id) === key)
+  );
+  if (!item) return null;
+  const cat = categories.find(
+    (c) => normId(c.fldCategoryID || c.id) === normId(item.fldCatID)
+  );
+  const catName = cat?.fldCategoryName ?? '(unknown category)';
+  const itemName = item.fldItemName ?? itemId;
+  return `${catName} → ${itemName}`;
 }

@@ -9,6 +9,7 @@ import {
   type ResolvedGlossarySet,
 } from './glossarySets';
 import { compareStandardCitations, formatStandardCitationLabel } from './standardCitationLabel';
+import { getRecommendationAssociatedItemIds } from './libraryRecommendationMetadata';
 
 export const GLOSSARY_SET_UNASSIGNED_KEY = '';
 
@@ -253,7 +254,9 @@ export function collectRecommendationCatItemPaths(
     paths.push(path);
   };
 
-  addItemId(rec.fldItem ?? '');
+  for (const itemId of getRecommendationAssociatedItemIds(rec)) {
+    addItemId(itemId);
+  }
 
   for (const g of glossary) {
     if (g.fldDeleted || g.fldIsDeleted) continue;

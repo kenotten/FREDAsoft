@@ -129,6 +129,8 @@ export interface MasterRecommendation {
   fldRecShort: string;
   fldRecLong: string;
   fldItem?: string;
+  /** Optional metadata: item ids this recommendation relates to (organize/report only; glossary rows are canonical pairings) */
+  fldAssociatedItemIds?: string[];
   fldOrder?: number;
   fldUnit: number; // Unit Cost (Currency)
   fldUOM: string; // Unit of Measure (EA, LF, etc.)
