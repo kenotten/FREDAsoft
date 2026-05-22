@@ -67,6 +67,44 @@ export function glossarySetMetadataForId(id: string) {
   };
 }
 
+/** Glossary row Firestore fields — omits keys when set id is unknown (avoids merge:null clearing). */
+export type GlossaryRowSetMetadataFields = {
+  fldGlossarySetId: string;
+  fldGlossarySetName: string;
+  fldGlossaryStandardType: string;
+  fldGlossaryStandardVersion: string;
+};
+
+export function glossaryRowSetMetadataPayload(
+  setId: string | undefined | null
+): Partial<GlossaryRowSetMetadataFields> {
+  const def = glossarySetById(setId);
+  if (!def) return {};
+  return {
+    fldGlossarySetId: def.id,
+    fldGlossarySetName: def.name,
+    fldGlossaryStandardType: def.standardType,
+    fldGlossaryStandardVersion: def.standardVersion,
+  };
+}
+
+/** Canonical set id for a new glossary row save (dropdown must be a known set). */
+export function canonicalGlossarySetIdForSave(setId: string | undefined | null): string {
+  return glossarySetById(setId)?.id ?? '';
+}
+
+/**
+ * Set id to persist on glossary row update: selected dropdown first, else derive from existing row.
+ */
+export function effectiveGlossarySetIdForGlossaryRowSave(
+  selectedSetId: string | undefined | null,
+  existingRow?: GlossarySetResolvable | null
+): string {
+  const fromSelected = canonicalGlossarySetIdForSave(selectedSetId);
+  if (fromSelected) return fromSelected;
+  return resolveGlossarySetForRecord(existingRow).setKey;
+}
+
 /** Fields used to derive canonical glossary set (read-only reporting / display). */
 export type GlossarySetResolvable = {
   fldGlossarySetId?: string | null;

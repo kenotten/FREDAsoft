@@ -31,7 +31,14 @@ import { releaseInactiveTabPanelFocus } from '../lib/releaseInactiveTabPanelFocu
 import { Button, Select, Card, Input, Modal } from './ui/core';
 import { toast } from 'sonner';
 import { firestoreService, OperationType, handleFirestoreError } from '../services/firestoreService';
-import { GLOSSARY_SET_DEFS, glossarySetById, glossarySetMetadataForId } from '../lib/glossarySets';
+import {
+  GLOSSARY_SET_DEFS,
+  glossarySetById,
+  glossaryRowSetMetadataPayload,
+  glossarySetMetadataForId,
+  canonicalGlossarySetIdForSave,
+  effectiveGlossarySetIdForGlossaryRowSave,
+} from '../lib/glossarySets';
 import { normalizeForDeterministicMatch } from '../lib/textNormalize';
 import {
   computeCrossSetTargetPreview,
@@ -88,6 +95,22 @@ const RELATED_RECORD_SCENARIO_OPTIONS: {
 ];
 
 /** Empty string = Unassigned/Legacy bucket (must not match a real set id). */
+function requireGlossarySetForNewGlossaryRow(selectedGlossarySetId: string): boolean {
+  if (canonicalGlossarySetIdForSave(selectedGlossarySetId)) return true;
+  toast.error('Select a Glossary Set before creating a glossary record.');
+  return false;
+}
+
+function glossarySetFieldsForGlossaryRowSave(
+  selectedGlossarySetId: string,
+  existingRow?: Glossary | null
+): Partial<ReturnType<typeof glossaryRowSetMetadataPayload>> {
+  const effectiveId = existingRow
+    ? effectiveGlossarySetIdForGlossaryRowSave(selectedGlossarySetId, existingRow)
+    : canonicalGlossarySetIdForSave(selectedGlossarySetId);
+  return glossaryRowSetMetadataPayload(effectiveId);
+}
+
 function normalizeGlossaryRecordSetKey(raw: string | undefined | null): string {
   const t = String(raw ?? '').trim();
   if (!t) return '';
@@ -1274,18 +1297,6 @@ export function GlossaryBuilder({
         }
       }
 
-      const payload: any = { 
-        fldCat: selectedCat,
-        fldItem: selectedItem,
-        fldFind: selectedFind,
-        fldRec: selectedRec,
-        ...glossarySetMetadataForId(selectedGlossarySetId),
-        fldImages: images,
-        fldUnitCost: selections.fldUnitCost !== undefined ? selections.fldUnitCost : null,
-        fldUnitType: selections.fldUnitType !== undefined ? selections.fldUnitType : null,
-        fldStandards: normalizeStringArray(stagedGlosStds)
-      };
-
       const glossaryRowNow = resolveSyncedGlossaryRow(
         glossary || [],
         selectedGlossarySetId,
@@ -1299,6 +1310,22 @@ export function GlossaryBuilder({
         ? String(glossaryRowNow.fldGlosId || glossaryRowNow.id || '').trim()
         : '';
 
+      if (!updateId && !requireGlossarySetForNewGlossaryRow(selectedGlossarySetId)) {
+        return;
+      }
+
+      const payload: any = {
+        fldCat: selectedCat,
+        fldItem: selectedItem,
+        fldFind: selectedFind,
+        fldRec: selectedRec,
+        ...glossarySetFieldsForGlossaryRowSave(selectedGlossarySetId, glossaryRowNow ?? null),
+        fldImages: images,
+        fldUnitCost: selections.fldUnitCost !== undefined ? selections.fldUnitCost : null,
+        fldUnitType: selections.fldUnitType !== undefined ? selections.fldUnitType : null,
+        fldStandards: normalizeStringArray(stagedGlosStds),
+      };
+
       if (updateId) {
         await firestoreService.glossary.save(sanitizeData(payload), updateId);
         toast.success('Glossary record and master citations updated!');
@@ -1306,7 +1333,7 @@ export function GlossaryBuilder({
         const glosId = uuidv4();
         const newGlos = sanitizeData({
           ...payload,
-          fldGlosId: glosId
+          fldGlosId: glosId,
         });
         await firestoreService.glossary.save(newGlos, glosId);
         toast.success('Glossary record created and master citations committed!');
@@ -1371,6 +1398,9 @@ export function GlossaryBuilder({
       setNewType(null);
       return;
     }
+    if (!requireGlossarySetForNewGlossaryRow(selectedGlossarySetId)) {
+      return;
+    }
     try {
       let findId = selectedFind;
       if (!selectedFind) {
@@ -1420,7 +1450,7 @@ export function GlossaryBuilder({
 
       const glossaryPayload = sanitizeData({
         fldGlosId: glosId, 
-        ...glossarySetMetadataForId(selectedGlossarySetId),
+        ...glossaryRowSetMetadataPayload(selectedGlossarySetId),
         fldCat: selectedCat || '', 
         fldItem: selectedItem || '', 
         fldFind: findId || '', 
@@ -1429,7 +1459,7 @@ export function GlossaryBuilder({
         fldStandards: glosStds
       });
       await firestoreService.save('glossary', glossaryPayload, glosId);
-      
+
       onSelectionChange({ ...selections, selectedItem: selectedItem, selectedFind: findId, selectedRec: recId, images: images || [], isDirty: false });
       setNewType(null);
       toast.success('Glossary record created!');
@@ -2177,6 +2207,10 @@ export function GlossaryBuilder({
     );
     const glosStds = normalizeStringArray(finding?.fldStandards);
 
+    if (!requireGlossarySetForNewGlossaryRow(selectedGlossarySetId)) {
+      return;
+    }
+
     setRelatedRecordSaving(true);
     setIsSynced(false);
     try {
@@ -2206,7 +2240,7 @@ export function GlossaryBuilder({
 
       const glossaryPayload = sanitizeData({
         fldGlosId: glosId,
-        ...glossarySetMetadataForId(selectedGlossarySetId),
+        ...glossaryRowSetMetadataPayload(selectedGlossarySetId),
         fldCat: selectedCat,
         fldItem: selectedItem,
         fldFind: selectedFind,
@@ -2364,6 +2398,10 @@ export function GlossaryBuilder({
     );
     const glosStds = normalizeStringArray(sourceRec?.fldStandards);
 
+    if (!requireGlossarySetForNewGlossaryRow(selectedGlossarySetId)) {
+      return;
+    }
+
     setRelatedRecordSaving(true);
     setIsSynced(false);
     try {
@@ -2384,7 +2422,7 @@ export function GlossaryBuilder({
 
       const glossaryPayload = sanitizeData({
         fldGlosId: glosId,
-        ...glossarySetMetadataForId(selectedGlossarySetId),
+        ...glossaryRowSetMetadataPayload(selectedGlossarySetId),
         fldCat: selectedCat,
         fldItem: selectedItem,
         fldFind: newFindId,
@@ -2573,6 +2611,10 @@ export function GlossaryBuilder({
       selectedSetKeyUi
     );
 
+    if (!requireGlossarySetForNewGlossaryRow(selectedGlossarySetId)) {
+      return;
+    }
+
     setRelatedRecordSaving(true);
     setIsSynced(false);
     try {
@@ -2606,7 +2648,7 @@ export function GlossaryBuilder({
 
       const glossaryPayload = sanitizeData({
         fldGlosId: glosId,
-        ...glossarySetMetadataForId(selectedGlossarySetId),
+        ...glossaryRowSetMetadataPayload(selectedGlossarySetId),
         fldCat: selectedCat,
         fldItem: selectedItem,
         fldFind: newFindId,
