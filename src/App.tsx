@@ -118,6 +118,7 @@ const tabNames: Record<string, string> = {
   data: 'Project Data Entry',
   explorer: 'Data Explorer',
   library_manager: 'Library Manager',
+  library_reports: 'Library Reports',
   documents: 'Documents',
   settings: 'Settings & Billing'
 };

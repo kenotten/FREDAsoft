@@ -12,6 +12,7 @@ import {
   PenLine,
   Settings, 
   BookOpen,
+  BookMarked,
   LogOut, 
   X, 
   ChevronDown,
@@ -375,6 +376,12 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
                 icon={<BookOpen size={18} />} 
                 label="Library Manager" 
                 tooltip="IDs and parent relationships are IMMUTABLE in this view. Updates only affect display names and ordering. Historical project snapshots remain unchanged."
+              />
+              <NavItem
+                active={activeTab === 'library_reports'}
+                onClick={() => handleGuardedTabSwitch('library_reports')}
+                icon={<BookMarked size={18} />}
+                label="Library Reports"
               />
               <NavItem active={activeTab === 'documents'} onClick={() => handleGuardedTabSwitch('documents')} icon={<FileText size={18} />} label="Document Manager" />
             </NavSection>

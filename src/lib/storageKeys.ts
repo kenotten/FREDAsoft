@@ -15,3 +15,6 @@ export const STANDARDS_BROWSER_UI_STORAGE_PREFIX = 'fredasoft_standards_browser_
 
 /** sessionStorage key prefix: selected type/version slice in Standards Browser. */
 export const STANDARDS_BROWSER_SELECTION_STORAGE_PREFIX = 'fredasoft_standards_browser_selection_v1:';
+
+/** sessionStorage: Library Reports UI (mode, search, expanded accordion keys). */
+export const LIBRARY_REPORTS_SESSION_STORAGE_KEY = 'fredasoft.libraryReports.state.v1';

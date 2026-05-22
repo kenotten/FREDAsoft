@@ -9,6 +9,7 @@ import { StandardsManager } from '../StandardsManager';
 import { SettingsPage } from '../SettingsPage';
 import { OrderManager } from '../OrderManager';
 import { LibraryManager } from '../LibraryManager';
+import { LibraryReports } from '../LibraryReports';
 import { Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { releaseInactiveTabPanelFocus } from '../../lib/releaseInactiveTabPanelFocus';
@@ -288,6 +289,21 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           recommendations={recommendations as any}
           standards={standards}
           onDirtyChange={(props as any).onLibraryDirtyChange}
+        />
+      </div>
+      <div
+        className={cn(
+          activeTab === 'library_reports' ? 'flex min-h-0 w-full flex-1 flex-col' : 'hidden'
+        )}
+        data-tab-panel="library_reports"
+      >
+        <LibraryReports
+          standards={standards}
+          findings={findings}
+          recommendations={masterRecommendations}
+          glossary={glossary}
+          categories={categories}
+          items={items}
         />
       </div>
       {activeTab === 'settings' && (
