@@ -98,21 +98,40 @@ export type StandardsAssocSetGroup = {
 /** Standards Associations view: citation order vs category/item hierarchy */
 export type StandardsAssocViewMode = 'citation_order' | 'category_item';
 
-export type StandardsAssocCatItemCitationNode = {
+export type StandardsAssocCatItemCitationRow = {
   standardId: string;
   citationLabel: string;
   citationName: string;
   contentPreview: string;
   relationType: string;
-  findings: StandardsAssocFindingRow[];
-  recommendations: StandardsAssocRecommendationRow[];
+};
+
+export type StandardsAssocCatItemRecRow = {
+  recId: string;
+  recShort: string;
+  recLong: string;
+  missingGlossarySetMetadata: boolean;
+  /** Citations from this recommendation's fldStandards only */
+  citations: StandardsAssocCatItemCitationRow[];
+};
+
+export type StandardsAssocCatItemFindingNode = {
+  findingId: string;
+  findingShort: string;
+  findingLong: string;
+  missingGlossarySetMetadata: boolean;
+  /** Citations from this finding's fldStandards only */
+  findingCitations: StandardsAssocCatItemCitationRow[];
+  recommendations: StandardsAssocCatItemRecRow[];
 };
 
 export type StandardsAssocCatItemItemNode = {
   itemId: string;
   itemName: string;
   sortItemOrder: number;
-  citations: StandardsAssocCatItemCitationNode[];
+  findings: StandardsAssocCatItemFindingNode[];
+  /** Recommendations at this item not linked to a finding via suggested recs or glossary */
+  standaloneRecommendations: StandardsAssocCatItemRecRow[];
 };
 
 export type StandardsAssocCatItemCategoryNode = {
@@ -123,12 +142,14 @@ export type StandardsAssocCatItemCategoryNode = {
 };
 
 export type StandardsAssocCatItemSetGroup = {
-  setKey: StandardSetKey;
+  /** Glossary / standard set key (empty = unassigned) */
+  setKey: string;
   setLabel: string;
+  isUnassigned: boolean;
   categories: StandardsAssocCatItemCategoryNode[];
-  citationSlotCount: number;
-  findingLinkCount: number;
+  findingCount: number;
   recommendationLinkCount: number;
+  citationSlotCount: number;
 };
 
 export type GlossarySetAssociationStatus = 'ok' | 'missing' | 'mismatch';
@@ -354,28 +375,183 @@ export function filterStandardsAssociationsGroups(
     .filter((g) => g.standards.length > 0);
 }
 
-function ensureCatItemCitationSlot(
-  slotMap: Map<string, StandardsAssocCatItemCitationNode>,
-  std: StandardsAssocStandardNode
-): StandardsAssocCatItemCitationNode {
-  const existing = slotMap.get(normId(std.standardId));
-  if (existing) return existing;
-  const node: StandardsAssocCatItemCitationNode = {
-    standardId: std.standardId,
-    citationLabel: std.citationLabel,
-    citationName: std.citationName,
-    contentPreview: std.contentPreview,
-    relationType: std.relationType,
-    findings: [],
-    recommendations: [],
+function isActiveLibraryMaster(row: { fldDeleted?: boolean; fldIsDeleted?: boolean }): boolean {
+  return row.fldDeleted !== true && row.fldIsDeleted !== true;
+}
+
+function catItemGlossarySetLabel(setKey: string): string {
+  if (!setKey) return GLOSSARY_SET_UNASSIGNED_LABEL;
+  return resolveGlossarySetLabelForKey(setKey);
+}
+
+function collectFindingGlossarySetKeys(finding: Finding, glossary: Glossary[]): string[] {
+  const keys = new Set<string>();
+  const fromMaster = resolveGlossarySetForRecord(finding);
+  if (fromMaster.setKey) keys.add(fromMaster.setKey);
+
+  const findKey = normId(finding.fldFindID || finding.id);
+  const itemKey = normId(finding.fldItem);
+
+  for (const g of glossary) {
+    if (!isActiveLibraryMaster(g)) continue;
+    if (normId(g.fldFind) !== findKey) continue;
+    if (itemKey && normId(g.fldItem) !== itemKey) continue;
+    keys.add(resolveGlossaryHierarchySetKey(g, finding, undefined));
+  }
+
+  if (keys.size === 0) keys.add(GLOSSARY_SET_UNASSIGNED_KEY);
+  return Array.from(keys);
+}
+
+function collectRecommendationGlossarySetKeys(
+  rec: MasterRecommendation,
+  glossary: Glossary[],
+  itemId: string
+): string[] {
+  const keys = new Set<string>();
+  const fromMaster = resolveGlossarySetForRecord(rec);
+  if (fromMaster.setKey) keys.add(fromMaster.setKey);
+
+  const recKey = normId(rec.fldRecID || rec.id);
+  const itemKey = normId(itemId);
+
+  for (const g of glossary) {
+    if (!isActiveLibraryMaster(g)) continue;
+    if (normId(g.fldRec) !== recKey) continue;
+    if (itemKey && normId(g.fldItem) !== itemKey) continue;
+    keys.add(resolveGlossaryHierarchySetKey(g, undefined, rec));
+  }
+
+  if (keys.size === 0) keys.add(GLOSSARY_SET_UNASSIGNED_KEY);
+  return Array.from(keys);
+}
+
+function collectFindingContextRecommendations(
+  finding: Finding,
+  path: LibraryReportCatItemPath,
+  glossary: Glossary[],
+  recById: Map<string, MasterRecommendation>,
+  standardById: Map<string, MasterStandard>
+): StandardsAssocCatItemRecRow[] {
+  const findKey = normId(finding.fldFindID || finding.id);
+  const itemKey = normId(path.itemId);
+  const catKey = normId(path.categoryId);
+  const seen = new Set<string>();
+  const rows: StandardsAssocCatItemRecRow[] = [];
+
+  const pushRec = (r: MasterRecommendation, standardById: Map<string, MasterStandard>) => {
+    const id = normId(r.fldRecID || r.id);
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    rows.push(toCatItemRecRow(r, standardById));
   };
-  slotMap.set(normId(std.standardId), node);
-  return node;
+
+  for (const rid of normalizeSuggestedRecIds(finding.fldSuggestedRecs)) {
+    const r = recById.get(normId(rid));
+    if (r) pushRec(r, standardById);
+  }
+
+  for (const g of glossary) {
+    if (!isActiveLibraryMaster(g)) continue;
+    if (normId(g.fldFind) !== findKey) continue;
+    if (itemKey && normId(g.fldItem) !== itemKey) continue;
+    if (catKey && normId(g.fldCat) !== catKey) continue;
+    const r = recById.get(normId(g.fldRec));
+    if (r) pushRec(r, standardById);
+  }
+
+  rows.sort((a, b) =>
+    a.recShort.localeCompare(b.recShort, undefined, { sensitivity: 'base' })
+  );
+  return rows;
+}
+
+function buildCitationRowsFromStandardIds(
+  standardIds: string[],
+  standardById: Map<string, MasterStandard>
+): StandardsAssocCatItemCitationRow[] {
+  const idOrder: string[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of standardIds) {
+    const key = normId(raw);
+    if (!key || !standardById.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    idOrder.push(key);
+  }
+
+  const citations: StandardsAssocCatItemCitationRow[] = [];
+  for (const key of idOrder) {
+    const s = standardById.get(key)!;
+    const content = String(s.content_text ?? '').trim();
+    const contentPreview = content.length > 280 ? `${content.slice(0, 280)}…` : content;
+    citations.push({
+      standardId: s.id,
+      citationLabel: formatStandardCitationLabel(s) ?? s.citation_num ?? s.id,
+      citationName: String(s.citation_name ?? '').trim(),
+      contentPreview,
+      relationType: String(s.relation_type ?? '').trim(),
+    });
+  }
+
+  citations.sort((a, b) => {
+    const sa = standardById.get(normId(a.standardId));
+    const sb = standardById.get(normId(b.standardId));
+    const c = compareStandardCitations(sa, sb);
+    if (c !== 0) return c;
+    return a.standardId.localeCompare(b.standardId, undefined, { sensitivity: 'base' });
+  });
+  return citations;
+}
+
+function collectMasterFldStandardsCitations(
+  entity: { fldStandards?: unknown },
+  standardById: Map<string, MasterStandard>
+): StandardsAssocCatItemCitationRow[] {
+  return buildCitationRowsFromStandardIds(safeStandardsArray(entity.fldStandards), standardById);
+}
+
+function toCatItemRecRow(
+  r: MasterRecommendation,
+  standardById: Map<string, MasterStandard>
+): StandardsAssocCatItemRecRow {
+  return {
+    recId: r.fldRecID || r.id,
+    recShort: r.fldRecShort,
+    recLong: r.fldRecLong,
+    missingGlossarySetMetadata: hasMissingGlossarySetMetadata(r),
+    citations: collectMasterFldStandardsCitations(r, standardById),
+  };
+}
+
+function buildCatItemFindingNode(
+  finding: Finding,
+  path: LibraryReportCatItemPath,
+  glossary: Glossary[],
+  recById: Map<string, MasterRecommendation>,
+  standardById: Map<string, MasterStandard>
+): StandardsAssocCatItemFindingNode {
+  const recommendations = collectFindingContextRecommendations(
+    finding,
+    path,
+    glossary,
+    recById,
+    standardById
+  );
+  return {
+    findingId: finding.fldFindID || finding.id,
+    findingShort: finding.fldFindShort,
+    findingLong: finding.fldFindLong,
+    missingGlossarySetMetadata: hasMissingGlossarySetMetadata(finding),
+    findingCitations: collectMasterFldStandardsCitations(finding, standardById),
+    recommendations,
+  };
 }
 
 /**
- * Category / Item hierarchy: each citation appears once per (category, item) pair that has
- * linked findings or recommendations for that standard.
+ * Category / Item / Finding hierarchy: glossary set → category → item → finding →
+ * recommendations (each with its own fldStandards citations) → finding fldStandards citations.
+ * Includes uncited findings and recommendations when placed via metadata or glossary usage.
  */
 export function buildStandardsAssociationsCatItemReport(input: {
   standards: MasterStandard[];
@@ -385,121 +561,150 @@ export function buildStandardsAssociationsCatItemReport(input: {
   categories: Category[];
   items: Item[];
 }): StandardsAssocCatItemSetGroup[] {
-  const citationGroups = buildStandardsAssociationsReport(input);
-  const {
-    glossary,
-    findings,
-    recommendations,
-    categories: masterCategories,
-    items: masterItems,
-  } = input;
-  const recById = new Map(recommendations.map((r) => [normId(r.fldRecID), r]));
+  const { standards, findings, recommendations, glossary, categories, items } = input;
+
   const standardById = new Map<string, MasterStandard>();
-  for (const s of input.standards.filter((row) => !row.fldIsArchived)) {
+  for (const s of standards.filter((row) => !row.fldIsArchived)) {
     standardById.set(normId(s.id), s);
+  }
+
+  const recById = new Map(
+    recommendations
+      .filter(isActiveLibraryMaster)
+      .map((r) => [normId(r.fldRecID || r.id), r])
+  );
+
+  type ItemAcc = {
+    itemId: string;
+    itemName: string;
+    sortItemOrder: number;
+    findings: Map<string, StandardsAssocCatItemFindingNode>;
+    placedRecIds: Set<string>;
+    standaloneRecommendations: Map<string, StandardsAssocCatItemRecRow>;
+  };
+  type CatAcc = {
+    categoryId: string;
+    categoryName: string;
+    sortCategoryOrder: number;
+    items: Map<string, ItemAcc>;
+  };
+
+  const setMap = new Map<string, Map<string, CatAcc>>();
+
+  const ensureCat = (setKey: string, path: LibraryReportCatItemPath): CatAcc => {
+    let cats = setMap.get(setKey);
+    if (!cats) {
+      cats = new Map();
+      setMap.set(setKey, cats);
+    }
+    const catKey = normId(path.categoryId);
+    let cat = cats.get(catKey);
+    if (!cat) {
+      cat = {
+        categoryId: path.categoryId,
+        categoryName: path.categoryName,
+        sortCategoryOrder: path.sortCategoryOrder,
+        items: new Map(),
+      };
+      cats.set(catKey, cat);
+    }
+    return cat;
+  };
+
+  const ensureItem = (setKey: string, path: LibraryReportCatItemPath): ItemAcc => {
+    const cat = ensureCat(setKey, path);
+    const itemKey = normId(path.itemId);
+    let item = cat.items.get(itemKey);
+    if (!item) {
+      item = {
+        itemId: path.itemId,
+        itemName: path.itemName,
+        sortItemOrder: path.sortItemOrder,
+        findings: new Map(),
+        placedRecIds: new Set(),
+        standaloneRecommendations: new Map(),
+      };
+      cat.items.set(itemKey, item);
+    }
+    return item;
+  };
+
+  const placeFinding = (setKey: string, finding: Finding, path: LibraryReportCatItemPath) => {
+    const item = ensureItem(setKey, path);
+    const fid = normId(finding.fldFindID || finding.id);
+    if (!item.findings.has(fid)) {
+      const node = buildCatItemFindingNode(finding, path, glossary, recById, standardById);
+      item.findings.set(fid, node);
+      for (const r of node.recommendations) {
+        item.placedRecIds.add(normId(r.recId));
+      }
+    }
+  };
+
+  for (const finding of findings.filter(isActiveLibraryMaster)) {
+    const path = resolveCatItemPath(finding.fldItem, categories, items);
+    if (!isPlaceableCatItemPath(path)) continue;
+    for (const setKey of collectFindingGlossarySetKeys(finding, glossary)) {
+      placeFinding(setKey, finding, path);
+    }
+  }
+
+  for (const rec of recommendations.filter(isActiveLibraryMaster)) {
+    const path = resolveCatItemPath(rec.fldItem ?? '', categories, items);
+    if (!isPlaceableCatItemPath(path)) continue;
+    const recKey = normId(rec.fldRecID || rec.id);
+    for (const setKey of collectRecommendationGlossarySetKeys(rec, glossary, path.itemId)) {
+      const item = ensureItem(setKey, path);
+      if (item.placedRecIds.has(recKey)) continue;
+      if (!item.standaloneRecommendations.has(recKey)) {
+        item.standaloneRecommendations.set(recKey, toCatItemRecRow(rec, standardById));
+      }
+    }
+  }
+
+  const setKeys = new Set<string>(setMap.keys());
+  for (const def of GLOSSARY_SET_DEFS) {
+    if (setMap.has(def.id)) setKeys.add(def.id);
+  }
+
+  const orderedSetKeys = [
+    ...GLOSSARY_SET_DEFS.map((d) => d.id).filter((id) => setKeys.has(id)),
+    ...Array.from(setKeys)
+      .filter((k) => k && !GLOSSARY_SET_DEFS.some((d) => d.id === k))
+      .sort((a, b) =>
+        catItemGlossarySetLabel(a).localeCompare(catItemGlossarySetLabel(b), undefined, {
+          sensitivity: 'base',
+        })
+      ),
+  ];
+  if (setKeys.has(GLOSSARY_SET_UNASSIGNED_KEY)) {
+    orderedSetKeys.unshift(GLOSSARY_SET_UNASSIGNED_KEY);
   }
 
   const groups: StandardsAssocCatItemSetGroup[] = [];
 
-  for (const setGroup of citationGroups) {
-    type ItemAcc = {
-      itemId: string;
-      itemName: string;
-      sortItemOrder: number;
-      citations: Map<string, StandardsAssocCatItemCitationNode>;
-    };
-    type CatAcc = {
-      categoryId: string;
-      categoryName: string;
-      sortCategoryOrder: number;
-      items: Map<string, ItemAcc>;
-    };
-    const catMap = new Map<string, CatAcc>();
-
-    const ensureItem = (path: LibraryReportCatItemPath): ItemAcc => {
-      const catKey = normId(path.categoryId);
-      let cat = catMap.get(catKey);
-      if (!cat) {
-        cat = {
-          categoryId: path.categoryId,
-          categoryName: path.categoryName,
-          sortCategoryOrder: path.sortCategoryOrder,
-          items: new Map(),
-        };
-        catMap.set(catKey, cat);
-      }
-      const itemKey = normId(path.itemId);
-      let item = cat.items.get(itemKey);
-      if (!item) {
-        item = {
-          itemId: path.itemId,
-          itemName: path.itemName,
-          sortItemOrder: path.sortItemOrder,
-          citations: new Map(),
-        };
-        cat.items.set(itemKey, item);
-      }
-      return item;
-    };
-
-    for (const std of setGroup.standards) {
-      for (const f of std.findings) {
-        const item = ensureItem(f.path);
-        const slot = ensureCatItemCitationSlot(item.citations, std);
-        if (!slot.findings.some((row) => row.findingId === f.findingId)) {
-          slot.findings.push(f);
-        }
-      }
-      for (const r of std.recommendations) {
-        const masterRec = recById.get(normId(r.recId));
-        if (!masterRec) continue;
-
-        const paths = collectRecommendationCatItemPaths(masterRec, {
-          standardId: std.standardId,
-          glossary,
-          findings,
-          categories: masterCategories,
-          items: masterItems,
-        });
-
-        const pathsToUse = paths.length > 0 ? paths : isPlaceableCatItemPath(r.path) ? [r.path] : [];
-
-        for (const path of pathsToUse) {
-          const item = ensureItem(path);
-          const slot = ensureCatItemCitationSlot(item.citations, std);
-          if (!slot.recommendations.some((row) => row.recId === r.recId)) {
-            slot.recommendations.push({ ...r, path });
-          }
-        }
-      }
-    }
+  for (const setKey of orderedSetKeys) {
+    const catMap = setMap.get(setKey);
+    if (!catMap) continue;
 
     const categories: StandardsAssocCatItemCategoryNode[] = [];
 
     for (const cat of catMap.values()) {
       const itemNodes: StandardsAssocCatItemItemNode[] = [];
       for (const item of cat.items.values()) {
-        const citations = Array.from(item.citations.values()).sort((a, b) => {
-          const sa = standardById.get(normId(a.standardId));
-          const sb = standardById.get(normId(b.standardId));
-          const c = compareStandardCitations(sa, sb);
-          if (c !== 0) return c;
-          return a.standardId.localeCompare(b.standardId, undefined, { sensitivity: 'base' });
-        });
-        if (citations.length === 0) continue;
-        citations.forEach((c) => {
-          c.findings.sort((a, b) =>
-            a.findingShort.localeCompare(b.findingShort, undefined, { sensitivity: 'base' })
-          );
-          c.recommendations.sort((a, b) =>
-            a.recShort.localeCompare(b.recShort, undefined, { sensitivity: 'base' })
-          );
-        });
+        const findingsList = Array.from(item.findings.values()).sort((a, b) =>
+          a.findingShort.localeCompare(b.findingShort, undefined, { sensitivity: 'base' })
+        );
+        const standalone = Array.from(item.standaloneRecommendations.values()).sort((a, b) =>
+          a.recShort.localeCompare(b.recShort, undefined, { sensitivity: 'base' })
+        );
+        if (findingsList.length === 0 && standalone.length === 0) continue;
         itemNodes.push({
           itemId: item.itemId,
           itemName: item.itemName,
           sortItemOrder: item.sortItemOrder,
-          citations,
+          findings: findingsList,
+          standaloneRecommendations: standalone,
         });
       }
       itemNodes.sort((a, b) => {
@@ -522,113 +727,115 @@ export function buildStandardsAssociationsCatItemReport(input: {
 
     if (categories.length === 0) continue;
 
-    let citationSlotCount = 0;
-    let findingLinkCount = 0;
-    let recommendationLinkCount = 0;
-    for (const cat of categories) {
-      for (const item of cat.items) {
-        citationSlotCount += item.citations.length;
-        for (const c of item.citations) {
-          findingLinkCount += c.findings.length;
-          recommendationLinkCount += c.recommendations.length;
-        }
-      }
-    }
-
     groups.push({
-      setKey: setGroup.setKey,
-      setLabel: setGroup.setLabel,
+      setKey,
+      setLabel: catItemGlossarySetLabel(setKey),
+      isUnassigned: setKey === GLOSSARY_SET_UNASSIGNED_KEY,
       categories,
-      citationSlotCount,
-      findingLinkCount,
-      recommendationLinkCount,
+      ...recomputeCatItemSetCounts(categories),
     });
   }
 
-  groups.sort((a, b) => a.setLabel.localeCompare(b.setLabel, undefined, { sensitivity: 'base' }));
   return groups;
 }
 
-function catItemCitationHasAssociations(node: StandardsAssocCatItemCitationNode): boolean {
-  return node.findings.length > 0 || node.recommendations.length > 0;
+function catItemFindingMatchesSearch(
+  cat: StandardsAssocCatItemCategoryNode,
+  item: StandardsAssocCatItemItemNode,
+  finding: StandardsAssocCatItemFindingNode,
+  q: string
+): boolean {
+  const hay = [
+    cat.categoryName,
+    item.itemName,
+    finding.findingShort,
+    finding.findingLong,
+    ...finding.recommendations.map(
+      (r) =>
+        `${r.recShort} ${r.recLong} ${r.citations.map((c) => `${c.citationLabel} ${c.citationName} ${c.contentPreview}`).join(' ')}`
+    ),
+    ...finding.findingCitations.map((c) => `${c.citationLabel} ${c.citationName} ${c.contentPreview}`),
+  ]
+    .join(' ')
+    .toLowerCase();
+  return hay.includes(q);
 }
 
 function recomputeCatItemSetCounts(categories: StandardsAssocCatItemCategoryNode[]) {
   let citationSlotCount = 0;
-  let findingLinkCount = 0;
+  let findingCount = 0;
   let recommendationLinkCount = 0;
   for (const cat of categories) {
     for (const item of cat.items) {
-      citationSlotCount += item.citations.length;
-      for (const c of item.citations) {
-        findingLinkCount += c.findings.length;
-        recommendationLinkCount += c.recommendations.length;
+      findingCount += item.findings.length;
+      recommendationLinkCount += item.standaloneRecommendations.length;
+      for (const f of item.findings) {
+        recommendationLinkCount += f.recommendations.length;
+        citationSlotCount += f.findingCitations.length;
+        for (const r of f.recommendations) {
+          citationSlotCount += r.citations.length;
+        }
+      }
+      for (const r of item.standaloneRecommendations) {
+        citationSlotCount += r.citations.length;
       }
     }
   }
-  return { citationSlotCount, findingLinkCount, recommendationLinkCount };
+  return { citationSlotCount, findingCount, recommendationLinkCount };
 }
 
-/** UI filters for Standards Associations Category / Item hierarchy. */
+/** UI filters for Standards Associations Category / Item / Finding hierarchy. */
 export function filterStandardsAssociationsCatItemGroups(
   groups: StandardsAssocCatItemSetGroup[],
   options: { search?: string; hideUnassociated?: boolean }
 ): StandardsAssocCatItemSetGroup[] {
   const q = String(options.search ?? '').trim().toLowerCase();
-  const hideUnassociated = options.hideUnassociated === true;
+  void options.hideUnassociated;
 
-  let result = groups;
+  if (!q) return groups;
 
-  if (hideUnassociated) {
-    result = result
-      .map((g) => {
-        const categories = g.categories
-          .map((cat) => {
-            const items = cat.items
-              .map((item) => ({
-                ...item,
-                citations: item.citations.filter(catItemCitationHasAssociations),
-              }))
-              .filter((item) => item.citations.length > 0);
-            return { ...cat, items };
-          })
-          .filter((cat) => cat.items.length > 0);
-        return { ...g, categories, ...recomputeCatItemSetCounts(categories) };
-      })
-      .filter((g) => g.categories.length > 0);
-  }
-
-  if (!q) return result;
-
-  return result
+  return groups
     .map((g) => {
       const categories = g.categories
         .map((cat) => {
           const items = cat.items
             .map((item) => {
-              const citations = item.citations.filter((c) => {
+              const findings = item.findings.filter((f) =>
+                catItemFindingMatchesSearch(cat, item, f, q)
+              );
+              const standaloneRecommendations = item.standaloneRecommendations.filter((r) => {
                 const hay = [
                   cat.categoryName,
                   item.itemName,
-                  c.citationLabel,
-                  c.citationName,
-                  c.contentPreview,
-                  ...c.findings.map((f) => `${f.findingShort} ${f.findingLong}`),
-                  ...c.recommendations.map((r) => `${r.recShort} ${r.recLong}`),
+                  r.recShort,
+                  r.recLong,
+                  ...r.citations.map((c) => `${c.citationLabel} ${c.citationName} ${c.contentPreview}`),
                 ]
                   .join(' ')
                   .toLowerCase();
                 return hay.includes(q);
               });
-              return { ...item, citations };
+              const includeItem =
+                findings.length > 0 ||
+                standaloneRecommendations.length > 0 ||
+                (!findings.length &&
+                  !standaloneRecommendations.length &&
+                  `${cat.categoryName} ${item.itemName}`.toLowerCase().includes(q));
+              if (!includeItem) return null;
+              return { ...item, findings, standaloneRecommendations };
             })
-            .filter((item) => item.citations.length > 0);
+            .filter((item): item is StandardsAssocCatItemItemNode => item != null);
+          const includeCat =
+            items.length > 0 ||
+            cat.categoryName.toLowerCase().includes(q);
+          if (!includeCat) return null;
           return { ...cat, items };
         })
-        .filter((cat) => cat.items.length > 0);
+        .filter((cat): cat is StandardsAssocCatItemCategoryNode => cat != null);
+      if (categories.length === 0) return null;
       return { ...g, categories, ...recomputeCatItemSetCounts(categories) };
     })
-    .filter((g) => g.categories.length > 0);
+    .filter((g): g is StandardsAssocCatItemSetGroup => g != null);
 }
 
 export function buildStandardsAssociationsReport(input: {

@@ -18,6 +18,9 @@ import {
   type GlossarySetMetadataAuditReport,
   type GlossarySetMetadataAuditRow,
   type GlossarySetMetadataAuditStatus,
+  type StandardsAssocCatItemCitationRow,
+  type StandardsAssocCatItemFindingNode,
+  type StandardsAssocCatItemRecRow,
   type StandardsAssocCatItemSetGroup,
   type StandardsAssocFindingRow,
   type StandardsAssocRecommendationRow,
@@ -572,41 +575,197 @@ function StandardsAssociationsPanel({
   );
 }
 
+function CatItemRecCitationBadge({ count }: { count: number }) {
+  if (count > 0) {
+    return (
+      <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800">
+        {count} citation{count === 1 ? '' : 's'}
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-600">
+      No citations
+    </span>
+  );
+}
+
+function CatItemFindingCitationBadges({ finding }: { finding: StandardsAssocCatItemFindingNode }) {
+  const recCount = finding.recommendations.length;
+  const findingCitCount = finding.findingCitations.length;
+  return (
+    <span className="flex flex-wrap items-center gap-1.5 text-xs font-normal text-zinc-500">
+      <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800">
+        {recCount} recommendation{recCount === 1 ? '' : 's'}
+      </span>
+      {findingCitCount > 0 ? (
+        <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800">
+          {findingCitCount} finding citation{findingCitCount === 1 ? '' : 's'}
+        </span>
+      ) : (
+        <span className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-600">
+          No finding citations
+        </span>
+      )}
+    </span>
+  );
+}
+
+function CatItemCitationList({ citations }: { citations: StandardsAssocCatItemCitationRow[] }) {
+  return (
+    <ul className="space-y-2">
+      {citations.map((c) => (
+        <li
+          key={c.standardId}
+          className="rounded-md border border-blue-100 bg-blue-50/40 px-3 py-2"
+        >
+          <p className="text-sm font-semibold text-zinc-900">{c.citationLabel}</p>
+          {c.citationName ? <p className="text-xs text-zinc-600">{c.citationName}</p> : null}
+          {c.contentPreview ? (
+            <p className="mt-1 text-xs leading-relaxed text-zinc-600">{c.contentPreview}</p>
+          ) : null}
+          <p className="mt-1 font-mono text-[10px] text-zinc-400">{c.standardId}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function CatItemFindingCitationsSection({
+  citations,
+}: {
+  citations: StandardsAssocCatItemCitationRow[];
+}) {
+  return (
+    <div>
+      <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
+        Finding citations / standards
+      </h4>
+      {citations.length === 0 ? (
+        <p className="text-xs italic text-zinc-500">No finding citations</p>
+      ) : (
+        <CatItemCitationList citations={citations} />
+      )}
+    </div>
+  );
+}
+
+function CatItemRecCitationDisclosure({
+  citations,
+}: {
+  citations: StandardsAssocCatItemCitationRow[];
+}) {
+  if (citations.length === 0) return null;
+  return (
+    <details className="group mt-2 rounded-md border border-blue-100 bg-white">
+      <summary className="cursor-pointer list-none px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-800 [&::-webkit-details-marker]:hidden">
+        <span className="inline-flex items-center gap-1">
+          <ChevronRight
+            size={12}
+            className="inline shrink-0 transition-transform group-open:rotate-90"
+          />
+          Recommendation citations ({citations.length})
+        </span>
+      </summary>
+      <div className="border-t border-blue-50 px-2 py-2">
+        <CatItemCitationList citations={citations} />
+      </div>
+    </details>
+  );
+}
+
+function CatItemRecRow({ rec }: { rec: StandardsAssocCatItemRecRow }) {
+  return (
+    <li className="rounded-md border border-zinc-100 bg-zinc-50/80 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-semibold text-zinc-900">
+          {rec.recShort}
+          {rec.missingGlossarySetMetadata ? <MissingSetBadge /> : null}
+        </p>
+        <CatItemRecCitationBadge count={rec.citations.length} />
+      </div>
+      {rec.recLong ? <p className="mt-1 text-xs text-zinc-500 line-clamp-2">{rec.recLong}</p> : null}
+      <p className="mt-1 font-mono text-[10px] text-zinc-400">{rec.recId}</p>
+      <CatItemRecCitationDisclosure citations={rec.citations} />
+    </li>
+  );
+}
+
+function CatItemRecList({ recs }: { recs: StandardsAssocCatItemRecRow[] }) {
+  if (recs.length === 0) {
+    return (
+      <p className="text-xs italic text-zinc-500">No recommendations linked for this finding.</p>
+    );
+  }
+  return (
+    <ul className="space-y-2">
+      {recs.map((r) => (
+        <CatItemRecRow key={r.recId} rec={r} />
+      ))}
+    </ul>
+  );
+}
+
+function CatItemFindingBody({ finding }: { finding: StandardsAssocCatItemFindingNode }) {
+  return (
+    <div className="space-y-4">
+      {finding.findingLong ? (
+        <p className="text-xs leading-relaxed text-zinc-600">{finding.findingLong}</p>
+      ) : null}
+      <p className="font-mono text-[10px] text-zinc-400">ID: {finding.findingId}</p>
+      <CatItemFindingCitationsSection citations={finding.findingCitations} />
+      <div>
+        <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
+          Recommendations ({finding.recommendations.length})
+        </h4>
+        <CatItemRecList recs={finding.recommendations} />
+      </div>
+    </div>
+  );
+}
+
+function countCatItemCitations(
+  findings: StandardsAssocCatItemFindingNode[],
+  standaloneRecommendations: StandardsAssocCatItemRecRow[]
+): number {
+  let n = 0;
+  for (const f of findings) {
+    n += f.findingCitations.length;
+    for (const r of f.recommendations) {
+      n += r.citations.length;
+    }
+  }
+  for (const r of standaloneRecommendations) {
+    n += r.citations.length;
+  }
+  return n;
+}
+
 function StandardsAssociationsCatItemPanel({
   groups,
   search,
-  hideUnassociatedCitations,
   expandedKeys,
   onToggle,
 }: {
   groups: StandardsAssocCatItemSetGroup[];
   search: string;
-  hideUnassociatedCitations: boolean;
   expandedKeys: Set<string>;
   onToggle: (key: string, open: boolean) => void;
 }) {
   const q = search.trim().toLowerCase();
 
   const filtered = useMemo(
-    () =>
-      filterStandardsAssociationsCatItemGroups(groups, {
-        search,
-        hideUnassociated: hideUnassociatedCitations,
-      }),
-    [groups, search, hideUnassociatedCitations]
+    () => filterStandardsAssociationsCatItemGroups(groups, { search }),
+    [groups, search]
   );
 
   if (filtered.length === 0) {
     const emptyMessage =
       groups.length === 0
-        ? 'No standards loaded.'
-        : q && hideUnassociatedCitations
-          ? 'No category/item associations match your search and filters.'
-          : q
-            ? 'No category/item associations match your search.'
-            : hideUnassociatedCitations
-              ? 'No library findings or recommendations are linked to standards. Turn off “Hide citations with no associations” to browse by citation order.'
-              : 'No category/item associations for standards in the library.';
+        ? 'No library findings with a category and item.'
+        : q
+          ? 'No findings match your search (category, item, finding, recommendation, or citation text).'
+          : 'No library findings with a category and item.';
     return (
       <p className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-500">
         {emptyMessage}
@@ -618,17 +777,23 @@ function StandardsAssociationsCatItemPanel({
     <div className="space-y-4">
       {filtered.map((setGroup) => (
         <DetailsSection
-          key={setGroup.setKey}
+          key={setGroup.setKey || '__unassigned__'}
           sectionKey={libraryReportsSectionKeys.standardsCatItemSet(setGroup.setKey)}
           isOpen={expandedKeys.has(libraryReportsSectionKeys.standardsCatItemSet(setGroup.setKey))}
           onToggle={onToggle}
           summary={
             <span className="flex flex-wrap items-center gap-2">
               <span>{setGroup.setLabel}</span>
+              {setGroup.isUnassigned ? (
+                <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                  Unassigned set
+                </span>
+              ) : null}
               <span className="text-xs font-normal text-zinc-500">
-                {setGroup.citationSlotCount} citation
-                {setGroup.citationSlotCount === 1 ? '' : 's'} · {setGroup.findingLinkCount} finding
-                links · {setGroup.recommendationLinkCount} recommendation links
+                {setGroup.findingCount} finding{setGroup.findingCount === 1 ? '' : 's'} ·{' '}
+                {setGroup.recommendationLinkCount} recommendation
+                {setGroup.recommendationLinkCount === 1 ? '' : 's'} · {setGroup.citationSlotCount}{' '}
+                citation{setGroup.citationSlotCount === 1 ? '' : 's'}
               </span>
             </span>
           }
@@ -655,83 +820,88 @@ function StandardsAssociationsCatItemPanel({
                 }
               >
                 <div className="space-y-3">
-                  {cat.items.map((item) => (
-                    <DetailsSection
-                      key={`${setGroup.setKey}-${cat.categoryId}-${item.itemId}`}
-                      sectionKey={libraryReportsSectionKeys.standardsCatItemItem(
-                        setGroup.setKey,
-                        cat.categoryId,
-                        item.itemId
-                      )}
-                      isOpen={expandedKeys.has(
-                        libraryReportsSectionKeys.standardsCatItemItem(
+                  {cat.items.map((item) => {
+                    const itemFindingCount = item.findings.length;
+                    const itemRecCount =
+                      item.findings.reduce((n, f) => n + f.recommendations.length, 0) +
+                      item.standaloneRecommendations.length;
+                    const itemCitCount = countCatItemCitations(
+                      item.findings,
+                      item.standaloneRecommendations
+                    );
+                    return (
+                      <DetailsSection
+                        key={`${setGroup.setKey}-${cat.categoryId}-${item.itemId}`}
+                        sectionKey={libraryReportsSectionKeys.standardsCatItemItem(
                           setGroup.setKey,
                           cat.categoryId,
                           item.itemId
-                        )
-                      )}
-                      onToggle={onToggle}
-                      summary={
-                        <span>
-                          {item.itemName}
-                          <span className="ml-2 text-xs font-normal text-zinc-500">
-                            {item.citations.length} citation
-                            {item.citations.length === 1 ? '' : 's'}
+                        )}
+                        isOpen={expandedKeys.has(
+                          libraryReportsSectionKeys.standardsCatItemItem(
+                            setGroup.setKey,
+                            cat.categoryId,
+                            item.itemId
+                          )
+                        )}
+                        onToggle={onToggle}
+                        summary={
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span>{item.itemName}</span>
+                            <span className="text-xs font-normal text-zinc-500">
+                              {itemFindingCount} finding{itemFindingCount === 1 ? '' : 's'} ·{' '}
+                              {itemRecCount} recommendation{itemRecCount === 1 ? '' : 's'} ·{' '}
+                              {itemCitCount} citation{itemCitCount === 1 ? '' : 's'}
+                            </span>
                           </span>
-                        </span>
-                      }
-                    >
-                      <div className="space-y-3">
-                        {item.citations.map((c) => (
-                          <DetailsSection
-                            key={`${setGroup.setKey}-${cat.categoryId}-${item.itemId}-${c.standardId}`}
-                            sectionKey={libraryReportsSectionKeys.standardsCatItemCitation(
-                              setGroup.setKey,
-                              cat.categoryId,
-                              item.itemId,
-                              c.standardId
-                            )}
-                            isOpen={expandedKeys.has(
-                              libraryReportsSectionKeys.standardsCatItemCitation(
+                        }
+                      >
+                        <div className="space-y-3">
+                          {item.findings.map((finding) => (
+                            <DetailsSection
+                              key={`${setGroup.setKey}-${cat.categoryId}-${item.itemId}-${finding.findingId}`}
+                              sectionKey={libraryReportsSectionKeys.standardsCatItemFinding(
                                 setGroup.setKey,
                                 cat.categoryId,
                                 item.itemId,
-                                c.standardId
-                              )
-                            )}
-                            onToggle={onToggle}
-                            summary={
-                              <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
-                                <span className="font-bold text-zinc-900">{c.citationLabel}</span>
-                                {c.citationName ? (
-                                  <span className="truncate text-xs font-normal text-zinc-500">
-                                    {c.citationName}
+                                finding.findingId
+                              )}
+                              isOpen={expandedKeys.has(
+                                libraryReportsSectionKeys.standardsCatItemFinding(
+                                  setGroup.setKey,
+                                  cat.categoryId,
+                                  item.itemId,
+                                  finding.findingId
+                                )
+                              )}
+                              onToggle={onToggle}
+                              summary={
+                                <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center">
+                                  <span className="font-bold text-zinc-900">
+                                    {finding.findingShort}
+                                    {finding.missingGlossarySetMetadata ? (
+                                      <MissingSetBadge />
+                                    ) : null}
                                   </span>
-                                ) : null}
-                                <span className="text-xs font-normal text-zinc-400">
-                                  {c.findings.length} findings · {c.recommendations.length}{' '}
-                                  recommendations
+                                  <CatItemFindingCitationBadges finding={finding} />
                                 </span>
-                              </span>
-                            }
-                          >
-                            <CitationAssociationsBody
-                              showPathsOnRows={false}
-                              std={{
-                                standardId: c.standardId,
-                                citationLabel: c.citationLabel,
-                                citationName: c.citationName,
-                                contentPreview: c.contentPreview,
-                                relationType: c.relationType,
-                                findings: c.findings,
-                                recommendations: c.recommendations,
-                              }}
-                            />
-                          </DetailsSection>
-                        ))}
-                      </div>
-                    </DetailsSection>
-                  ))}
+                              }
+                            >
+                              <CatItemFindingBody finding={finding} />
+                            </DetailsSection>
+                          ))}
+                          {item.standaloneRecommendations.length > 0 ? (
+                            <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50/60 px-3 py-3">
+                              <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
+                                Item recommendations (not linked to a finding here)
+                              </h4>
+                              <CatItemRecList recs={item.standaloneRecommendations} />
+                            </div>
+                          ) : null}
+                        </div>
+                      </DetailsSection>
+                    );
+                  })}
                 </div>
               </DetailsSection>
             ))}
@@ -1143,18 +1313,20 @@ export function LibraryReports({
               active={standardsAssocViewMode === 'category_item'}
               onClick={() => setStandardsAssocViewMode('category_item')}
               icon={<ListTree size={16} />}
-              label="Category / Item"
+              label="Category / Item / Finding"
             />
           </div>
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700">
-            <input
-              type="checkbox"
-              checked={hideUnassociatedCitations}
-              onChange={(e) => setHideUnassociatedCitations(e.target.checked)}
-              className="h-4 w-4 rounded border-zinc-300 text-zinc-900"
-            />
-            <span>Hide citations with no associations</span>
-          </label>
+          {standardsAssocViewMode === 'citation_order' ? (
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700">
+              <input
+                type="checkbox"
+                checked={hideUnassociatedCitations}
+                onChange={(e) => setHideUnassociatedCitations(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 text-zinc-900"
+              />
+              <span>Hide citations with no associations</span>
+            </label>
+          ) : null}
         </div>
       )}
 
@@ -1163,7 +1335,7 @@ export function LibraryReports({
         <span>
           {mode === 'standards'
             ? standardsAssocViewMode === 'category_item'
-              ? 'Grouped by standard set, then Category → Item → Citation. Each citation lists only findings and recommendations for that category/item pair (a citation may appear under multiple pairs).'
+              ? 'Grouped by glossary set (from master metadata or glossary usage), then Category → Item → Finding → finding citations (fldStandards) → Recommendations (each with its own fldStandards citations). Includes uncited findings and recommendations.'
               : 'Standards are grouped by type and version. Citations use Standards Library order. Findings and recommendations reference each standard via library default citations (fldStandards).'
             : mode === 'glossary_audit'
               ? 'Read-only audit of glossary row set metadata (fldGlossarySetId, fldGlossarySetName, fldGlossaryStandardType, fldGlossaryStandardVersion) vs linked masters. No Firestore writes from this screen.'
@@ -1176,7 +1348,6 @@ export function LibraryReports({
           <StandardsAssociationsCatItemPanel
             groups={standardsCatItemGroups}
             search={search}
-            hideUnassociatedCitations={hideUnassociatedCitations}
             expandedKeys={expandedKeys}
             onToggle={handleSectionToggle}
           />

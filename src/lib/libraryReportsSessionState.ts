@@ -73,12 +73,12 @@ export const libraryReportsSectionKeys = {
     `sc:cat:${setKey}:${categoryId}`,
   standardsCatItemItem: (setKey: string, categoryId: string, itemId: string) =>
     `sc:item:${setKey}:${categoryId}:${itemId}`,
-  standardsCatItemCitation: (
+  standardsCatItemFinding: (
     setKey: string,
     categoryId: string,
     itemId: string,
-    standardId: string
-  ) => `sc:std:${setKey}:${categoryId}:${itemId}:${standardId}`,
+    findingId: string
+  ) => `sc:find:${setKey}:${categoryId}:${itemId}:${findingId}`,
   glossarySet: (setKey: string) => `g:set:${glossarySetKeyPart(setKey)}`,
   glossaryCategory: (setKey: string, categoryId: string) =>
     `g:cat:${glossarySetKeyPart(setKey)}:${categoryId}`,
@@ -112,13 +112,13 @@ export function collectStandardsCatItemExpandedKeys(
         keys.push(
           libraryReportsSectionKeys.standardsCatItemItem(g.setKey, cat.categoryId, item.itemId)
         );
-        for (const c of item.citations) {
+        for (const f of item.findings) {
           keys.push(
-            libraryReportsSectionKeys.standardsCatItemCitation(
+            libraryReportsSectionKeys.standardsCatItemFinding(
               g.setKey,
               cat.categoryId,
               item.itemId,
-              c.standardId
+              f.findingId
             )
           );
         }
