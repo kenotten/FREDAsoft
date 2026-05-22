@@ -6,7 +6,7 @@ import type {
   StandardsAssocViewMode,
 } from './libraryReportsModel';
 
-export type LibraryReportsReportMode = 'standards' | 'glossary';
+export type LibraryReportsReportMode = 'standards' | 'glossary' | 'glossary_audit';
 
 export type LibraryReportsSessionStateV1 = {
   v: 1;
@@ -29,7 +29,7 @@ const EMPTY: LibraryReportsSessionStateV1 = {
 };
 
 function isReportMode(value: unknown): value is LibraryReportsReportMode {
-  return value === 'standards' || value === 'glossary';
+  return value === 'standards' || value === 'glossary' || value === 'glossary_audit';
 }
 
 function isStandardsAssocViewMode(value: unknown): value is StandardsAssocViewMode {
@@ -86,6 +86,7 @@ export const libraryReportsSectionKeys = {
     `g:item:${glossarySetKeyPart(setKey)}:${categoryId}:${itemId}`,
   glossaryFinding: (setKey: string, findingId: string) =>
     `g:find:${glossarySetKeyPart(setKey)}:${findingId}`,
+  glossaryAuditStatus: (status: string) => `a:status:${status}`,
 };
 
 export function collectStandardsExpandedKeys(groups: StandardsAssocSetGroup[]): string[] {
@@ -125,6 +126,10 @@ export function collectStandardsCatItemExpandedKeys(
     }
   }
   return keys;
+}
+
+export function collectGlossarySetMetadataAuditExpandedKeys(statuses: string[]): string[] {
+  return statuses.map((s) => libraryReportsSectionKeys.glossaryAuditStatus(s));
 }
 
 export function collectGlossaryExpandedKeys(groups: GlossaryHierarchySetGroup[]): string[] {

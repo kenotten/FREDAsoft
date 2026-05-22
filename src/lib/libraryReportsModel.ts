@@ -2,8 +2,11 @@ import type { Category, Finding, Glossary, Item, MasterRecommendation, MasterSta
 import {
   GLOSSARY_SET_DEFS,
   GLOSSARY_SET_UNASSIGNED_LABEL,
+  glossaryRowSetMetadataPayload,
   resolveGlossarySetForRecord,
   resolveGlossarySetLabelForKey,
+  type GlossarySetResolveSource,
+  type ResolvedGlossarySet,
 } from './glossarySets';
 import { compareStandardCitations, formatStandardCitationLabel } from './standardCitationLabel';
 
@@ -944,4 +947,359 @@ export function buildGlossaryHierarchyReport(input: {
   }
 
   return groups.filter((g) => g.glossaryRowCount > 0 || g.categories.length > 0);
+}
+
+// --- Glossary Set Metadata Audit (read-only) ---
+
+export type GlossarySetMetadataAuditStatus =
+  | 'ok'
+  | 'derivable'
+  | 'missing'
+  | 'mismatch'
+  | 'partial';
+
+export type GlossarySetMetadataAuditAction =
+  | 'none'
+  | 'backfill'
+  | 'manual_review_mismatch'
+  | 'manual_review_unknown';
+
+export type GlossaryRowSetFieldsSnapshot = {
+  fldGlossarySetId: string;
+  fldGlossarySetName: string;
+  fldGlossaryStandardType: string;
+  fldGlossaryStandardVersion: string;
+};
+
+export type LinkedEntitySetSnapshot = {
+  setKey: string;
+  setLabel: string;
+  source: GlossarySetResolveSource;
+};
+
+export type GlossarySetMetadataAuditRow = {
+  glossaryRowId: string;
+  status: GlossarySetMetadataAuditStatus;
+  suggestedAction: GlossarySetMetadataAuditAction;
+  suggestedActionLabel: string;
+  derivedSetKey: string;
+  derivedSetLabel: string;
+  derivedFrom: 'row' | 'finding' | 'recommendation' | 'none';
+  rowFields: GlossaryRowSetFieldsSnapshot;
+  rowResolved: ResolvedGlossarySet;
+  findingResolved: LinkedEntitySetSnapshot;
+  recommendationResolved: LinkedEntitySetSnapshot;
+  findingId: string;
+  findingShort: string;
+  recId: string;
+  recShort: string;
+  categoryName: string;
+  itemName: string;
+  pathLabel: string;
+};
+
+export type GlossarySetMetadataAuditSummary = {
+  totalRows: number;
+  counts: Record<GlossarySetMetadataAuditStatus, number>;
+};
+
+export type GlossarySetMetadataAuditReport = {
+  summary: GlossarySetMetadataAuditSummary;
+  byStatus: Record<GlossarySetMetadataAuditStatus, GlossarySetMetadataAuditRow[]>;
+};
+
+export const GLOSSARY_SET_METADATA_AUDIT_STATUS_ORDER: GlossarySetMetadataAuditStatus[] = [
+  'mismatch',
+  'missing',
+  'partial',
+  'derivable',
+  'ok',
+];
+
+export const GLOSSARY_SET_METADATA_AUDIT_STATUS_LABELS: Record<
+  GlossarySetMetadataAuditStatus,
+  string
+> = {
+  ok: 'OK',
+  derivable: 'Derivable / Backfillable',
+  missing: 'Missing / Unknown',
+  mismatch: 'Set Mismatch',
+  partial: 'Partial Metadata',
+};
+
+function emptyAuditStatusCounts(): Record<GlossarySetMetadataAuditStatus, number> {
+  return { ok: 0, derivable: 0, missing: 0, mismatch: 0, partial: 0 };
+}
+
+function glossaryRowSetFieldsSnapshot(g: Glossary): GlossaryRowSetFieldsSnapshot {
+  return {
+    fldGlossarySetId: String(g.fldGlossarySetId ?? '').trim(),
+    fldGlossarySetName: String(g.fldGlossarySetName ?? '').trim(),
+    fldGlossaryStandardType: String(g.fldGlossaryStandardType ?? '').trim(),
+    fldGlossaryStandardVersion: String(g.fldGlossaryStandardVersion ?? '').trim(),
+  };
+}
+
+function rowHasAnyGlossarySetField(fields: GlossaryRowSetFieldsSnapshot): boolean {
+  return Boolean(
+    fields.fldGlossarySetId ||
+      fields.fldGlossarySetName ||
+      fields.fldGlossaryStandardType ||
+      fields.fldGlossaryStandardVersion
+  );
+}
+
+function rowMatchesCanonicalSetFields(
+  fields: GlossaryRowSetFieldsSnapshot,
+  setKey: string
+): boolean {
+  if (!setKey) return false;
+  const canonical = glossaryRowSetMetadataPayload(setKey);
+  if (!canonical.fldGlossarySetId) return false;
+  return (
+    fields.fldGlossarySetId === canonical.fldGlossarySetId &&
+    fields.fldGlossarySetName === canonical.fldGlossarySetName &&
+    fields.fldGlossaryStandardType === canonical.fldGlossaryStandardType &&
+    fields.fldGlossaryStandardVersion === canonical.fldGlossaryStandardVersion
+  );
+}
+
+function isRowPartialGlossarySetMetadata(fields: GlossaryRowSetFieldsSnapshot): boolean {
+  if (!rowHasAnyGlossarySetField(fields)) return false;
+  if (fields.fldGlossarySetId) {
+    if (!fields.fldGlossarySetName || !fields.fldGlossaryStandardType || !fields.fldGlossaryStandardVersion) {
+      return true;
+    }
+  } else if (fields.fldGlossarySetName || fields.fldGlossaryStandardType) {
+    return true;
+  }
+  const rowKey = resolveGlossarySetForRecord(fields).setKey;
+  if (rowKey && !rowMatchesCanonicalSetFields(fields, rowKey)) return true;
+  if (!rowKey && rowHasAnyGlossarySetField(fields)) return true;
+  return false;
+}
+
+function entitySetKeysForAudit(
+  glossaryRow: Glossary,
+  finding: Finding | undefined,
+  rec: MasterRecommendation | undefined
+): string[] {
+  return [
+    resolveGlossarySetForRecord(glossaryRow).setKey,
+    resolveGlossarySetForRecord(finding).setKey,
+    resolveGlossarySetForRecord(rec).setKey,
+  ].filter((k) => k !== '');
+}
+
+function hasGlossarySetMismatchForAudit(
+  glossaryRow: Glossary,
+  finding: Finding | undefined,
+  rec: MasterRecommendation | undefined
+): boolean {
+  return new Set(entitySetKeysForAudit(glossaryRow, finding, rec)).size > 1;
+}
+
+function deriveConfidentGlossarySetForAudit(
+  glossaryRow: Glossary,
+  finding: Finding | undefined,
+  rec: MasterRecommendation | undefined
+): { setKey: string; setLabel: string; derivedFrom: GlossarySetMetadataAuditRow['derivedFrom'] } {
+  const fromRow = resolveGlossarySetForRecord(glossaryRow);
+  if (fromRow.setKey) {
+    return { setKey: fromRow.setKey, setLabel: fromRow.setLabel, derivedFrom: 'row' };
+  }
+  const fromFinding = resolveGlossarySetForRecord(finding);
+  const fromRec = resolveGlossarySetForRecord(rec);
+  if (fromFinding.setKey && fromRec.setKey && fromFinding.setKey === fromRec.setKey) {
+    return {
+      setKey: fromFinding.setKey,
+      setLabel: fromFinding.setLabel,
+      derivedFrom: 'finding',
+    };
+  }
+  if (fromFinding.setKey) {
+    return { setKey: fromFinding.setKey, setLabel: fromFinding.setLabel, derivedFrom: 'finding' };
+  }
+  if (fromRec.setKey) {
+    return { setKey: fromRec.setKey, setLabel: fromRec.setLabel, derivedFrom: 'recommendation' };
+  }
+  return {
+    setKey: '',
+    setLabel: GLOSSARY_SET_UNASSIGNED_LABEL,
+    derivedFrom: 'none',
+  };
+}
+
+function toLinkedEntitySnapshot(
+  entity: Parameters<typeof resolveGlossarySetForRecord>[0]
+): LinkedEntitySetSnapshot {
+  const r = resolveGlossarySetForRecord(entity);
+  return { setKey: r.setKey, setLabel: r.setLabel, source: r.source };
+}
+
+function suggestedActionForAuditRow(
+  status: GlossarySetMetadataAuditStatus,
+  derivedSetKey: string
+): { action: GlossarySetMetadataAuditAction; label: string } {
+  if (status === 'ok') return { action: 'none', label: 'No action' };
+  if (status === 'mismatch') {
+    return { action: 'manual_review_mismatch', label: 'Manual review: mismatch' };
+  }
+  if (status === 'missing') {
+    return { action: 'manual_review_unknown', label: 'Manual review: unknown' };
+  }
+  if (derivedSetKey) {
+    return {
+      action: 'backfill',
+      label: `Backfill row set metadata to ${resolveGlossarySetLabelForKey(derivedSetKey)}`,
+    };
+  }
+  return { action: 'manual_review_unknown', label: 'Manual review: unknown' };
+}
+
+function classifyGlossaryRowSetMetadataAudit(
+  glossaryRow: Glossary,
+  finding: Finding | undefined,
+  rec: MasterRecommendation | undefined
+): GlossarySetMetadataAuditStatus {
+  if (hasGlossarySetMismatchForAudit(glossaryRow, finding, rec)) return 'mismatch';
+  const fields = glossaryRowSetFieldsSnapshot(glossaryRow);
+  const { setKey } = deriveConfidentGlossarySetForAudit(glossaryRow, finding, rec);
+  if (!setKey) return 'missing';
+  if (isRowPartialGlossarySetMetadata(fields)) return 'partial';
+  if (rowMatchesCanonicalSetFields(fields, setKey)) return 'ok';
+  return 'derivable';
+}
+
+function compareGlossaryAuditRows(a: GlossarySetMetadataAuditRow, b: GlossarySetMetadataAuditRow): number {
+  const path = a.pathLabel.localeCompare(b.pathLabel, undefined, { sensitivity: 'base' });
+  if (path !== 0) return path;
+  return a.glossaryRowId.localeCompare(b.glossaryRowId, undefined, { sensitivity: 'base' });
+}
+
+export function buildGlossarySetMetadataAuditReport(input: {
+  glossary: Glossary[];
+  findings: Finding[];
+  recommendations: MasterRecommendation[];
+  categories: Category[];
+  items: Item[];
+}): GlossarySetMetadataAuditReport {
+  const { glossary, findings, recommendations, categories, items } = input;
+  const findingById = new Map(findings.map((f) => [normId(f.fldFindID), f]));
+  const recById = new Map(recommendations.map((r) => [normId(r.fldRecID), r]));
+  const catById = new Map(categories.map((c) => [normId(c.fldCategoryID), c]));
+  const itemById = new Map(items.map((i) => [normId(i.fldItemID), i]));
+
+  const byStatus: Record<GlossarySetMetadataAuditStatus, GlossarySetMetadataAuditRow[]> = {
+    ok: [],
+    derivable: [],
+    missing: [],
+    mismatch: [],
+    partial: [],
+  };
+
+  for (const g of glossary) {
+    if (g.fldDeleted || g.fldIsDeleted) continue;
+    const glossaryRowId = String(g.fldGlosId ?? g.id ?? '').trim();
+    if (!glossaryRowId) continue;
+
+    const finding = findingById.get(normId(g.fldFind));
+    const rec = recById.get(normId(g.fldRec));
+    const cat = catById.get(normId(g.fldCat));
+    const item = itemById.get(normId(g.fldItem));
+    const categoryName = cat?.fldCategoryName ?? '(unknown category)';
+    const itemName = item?.fldItemName ?? '(unknown item)';
+    const findingShort = finding?.fldFindShort ?? '(unknown finding)';
+    const recShort = rec?.fldRecShort ?? '(unknown recommendation)';
+    const pathLabel = `${categoryName} → ${itemName} → ${findingShort} → ${recShort}`;
+
+    const status = classifyGlossaryRowSetMetadataAudit(g, finding, rec);
+    const derived = deriveConfidentGlossarySetForAudit(g, finding, rec);
+    const { action, label } = suggestedActionForAuditRow(status, derived.setKey);
+
+    byStatus[status].push({
+      glossaryRowId,
+      status,
+      suggestedAction: action,
+      suggestedActionLabel: label,
+      derivedSetKey: derived.setKey,
+      derivedSetLabel: derived.setLabel,
+      derivedFrom: derived.derivedFrom,
+      rowFields: glossaryRowSetFieldsSnapshot(g),
+      rowResolved: resolveGlossarySetForRecord(g),
+      findingResolved: toLinkedEntitySnapshot(finding),
+      recommendationResolved: toLinkedEntitySnapshot(rec),
+      findingId: String(g.fldFind ?? finding?.fldFindID ?? '').trim(),
+      findingShort,
+      recId: String(g.fldRec ?? rec?.fldRecID ?? '').trim(),
+      recShort,
+      categoryName,
+      itemName,
+      pathLabel,
+    });
+  }
+
+  for (const status of GLOSSARY_SET_METADATA_AUDIT_STATUS_ORDER) {
+    byStatus[status].sort(compareGlossaryAuditRows);
+  }
+
+  const counts = emptyAuditStatusCounts();
+  let totalRows = 0;
+  for (const status of GLOSSARY_SET_METADATA_AUDIT_STATUS_ORDER) {
+    counts[status] = byStatus[status].length;
+    totalRows += counts[status];
+  }
+
+  return {
+    summary: { totalRows, counts },
+    byStatus,
+  };
+}
+
+export function filterGlossarySetMetadataAuditReport(
+  report: GlossarySetMetadataAuditReport,
+  search: string
+): GlossarySetMetadataAuditReport {
+  const q = String(search ?? '').trim().toLowerCase();
+  if (!q) return report;
+
+  const byStatus: Record<GlossarySetMetadataAuditStatus, GlossarySetMetadataAuditRow[]> = {
+    ok: [],
+    derivable: [],
+    missing: [],
+    mismatch: [],
+    partial: [],
+  };
+
+  for (const status of GLOSSARY_SET_METADATA_AUDIT_STATUS_ORDER) {
+    byStatus[status] = report.byStatus[status].filter((row) => {
+      const hay = [
+        row.glossaryRowId,
+        row.pathLabel,
+        row.status,
+        row.derivedSetLabel,
+        row.suggestedActionLabel,
+        row.rowFields.fldGlossarySetId,
+        row.rowFields.fldGlossarySetName,
+        row.rowFields.fldGlossaryStandardType,
+        row.rowFields.fldGlossaryStandardVersion,
+        row.findingResolved.setLabel,
+        row.recommendationResolved.setLabel,
+        row.findingId,
+        row.recId,
+      ]
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  const counts = emptyAuditStatusCounts();
+  let totalRows = 0;
+  for (const status of GLOSSARY_SET_METADATA_AUDIT_STATUS_ORDER) {
+    counts[status] = byStatus[status].length;
+    totalRows += counts[status];
+  }
+
+  return { summary: { totalRows, counts }, byStatus };
 }

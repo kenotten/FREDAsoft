@@ -1,16 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookMarked, ChevronRight, ListTree, Search, Shield } from 'lucide-react';
+import { BookMarked, ChevronRight, FileSearch, ListTree, Search, Shield } from 'lucide-react';
 import type { Category, Finding, Glossary, Item, MasterRecommendation, MasterStandard } from '../types';
 import { cn } from '../lib/utils';
 import {
   buildGlossaryHierarchyReport,
+  buildGlossarySetMetadataAuditReport,
   buildStandardsAssociationsCatItemReport,
   buildStandardsAssociationsReport,
+  filterGlossarySetMetadataAuditReport,
   filterStandardsAssociationsCatItemGroups,
   filterStandardsAssociationsGroups,
+  GLOSSARY_SET_METADATA_AUDIT_STATUS_LABELS,
+  GLOSSARY_SET_METADATA_AUDIT_STATUS_ORDER,
   standardsAssocCitationHasAssociations,
   type GlossaryHierarchySetGroup,
   type GlossarySetAssociationStatus,
+  type GlossarySetMetadataAuditReport,
+  type GlossarySetMetadataAuditRow,
+  type GlossarySetMetadataAuditStatus,
   type StandardsAssocCatItemSetGroup,
   type StandardsAssocFindingRow,
   type StandardsAssocRecommendationRow,
@@ -20,6 +27,7 @@ import {
 } from '../lib/libraryReportsModel';
 import {
   collectGlossaryExpandedKeys,
+  collectGlossarySetMetadataAuditExpandedKeys,
   collectStandardsCatItemExpandedKeys,
   collectStandardsExpandedKeys,
   libraryReportsSectionKeys,
@@ -42,6 +50,14 @@ function mergeExpandedKeysForGlossary(all: Set<string>, glossaryKeys: string[]):
     Array.from(all).filter((k) => k.startsWith('s:') || k.startsWith('sc:'))
   );
   for (const k of glossaryKeys) next.add(k);
+  return next;
+}
+
+function mergeExpandedKeysForGlossaryAudit(all: Set<string>, auditKeys: string[]): Set<string> {
+  const next = new Set(
+    Array.from(all).filter((k) => k.startsWith('s:') || k.startsWith('sc:') || k.startsWith('g:'))
+  );
+  for (const k of auditKeys) next.add(k);
   return next;
 }
 
@@ -108,6 +124,189 @@ function GlossarySetStatusBadge({ status }: { status: GlossarySetAssociationStat
   if (status === 'missing') return <MissingSetBadge />;
   if (status === 'mismatch') return <SetMismatchBadge />;
   return null;
+}
+
+const AUDIT_STATUS_BADGE_CLASS: Record<GlossarySetMetadataAuditStatus, string> = {
+  ok: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  derivable: 'border-blue-200 bg-blue-50 text-blue-800',
+  missing: 'border-amber-200 bg-amber-50 text-amber-800',
+  mismatch: 'border-rose-200 bg-rose-50 text-rose-800',
+  partial: 'border-orange-200 bg-orange-50 text-orange-800',
+};
+
+function AuditStatusBadge({ status }: { status: GlossarySetMetadataAuditStatus }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+        AUDIT_STATUS_BADGE_CLASS[status]
+      )}
+    >
+      {GLOSSARY_SET_METADATA_AUDIT_STATUS_LABELS[status]}
+    </span>
+  );
+}
+
+function SetFieldsBlock({
+  title,
+  fields,
+}: {
+  title: string;
+  fields: {
+    fldGlossarySetId: string;
+    fldGlossarySetName: string;
+    fldGlossaryStandardType: string;
+    fldGlossaryStandardVersion: string;
+  };
+}) {
+  const empty = '(empty)';
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{title}</p>
+      <dl className="mt-1 grid gap-0.5 font-mono text-[10px] text-zinc-600">
+        <div>
+          <dt className="inline text-zinc-400">fldGlossarySetId: </dt>
+          <dd className="inline">{fields.fldGlossarySetId || empty}</dd>
+        </div>
+        <div>
+          <dt className="inline text-zinc-400">fldGlossarySetName: </dt>
+          <dd className="inline">{fields.fldGlossarySetName || empty}</dd>
+        </div>
+        <div>
+          <dt className="inline text-zinc-400">fldGlossaryStandardType: </dt>
+          <dd className="inline">{fields.fldGlossaryStandardType || empty}</dd>
+        </div>
+        <div>
+          <dt className="inline text-zinc-400">fldGlossaryStandardVersion: </dt>
+          <dd className="inline">{fields.fldGlossaryStandardVersion || empty}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+function LinkedSetBlock({ title, snapshot }: { title: string; snapshot: GlossarySetMetadataAuditRow['findingResolved'] }) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{title}</p>
+      <p className="mt-1 text-xs text-zinc-700">
+        {snapshot.setLabel}
+        <span className="ml-1 font-mono text-[10px] text-zinc-400">
+          {snapshot.setKey ? `(${snapshot.setKey}, ${snapshot.source})` : `(none, ${snapshot.source})`}
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function GlossarySetMetadataAuditPanel({
+  report,
+  search,
+  expandedKeys,
+  onToggle,
+}: {
+  report: GlossarySetMetadataAuditReport;
+  search: string;
+  expandedKeys: Set<string>;
+  onToggle: (key: string, open: boolean) => void;
+}) {
+  const filtered = useMemo(
+    () => filterGlossarySetMetadataAuditReport(report, search),
+    [report, search]
+  );
+  const { summary } = filtered;
+
+  if (summary.totalRows === 0) {
+    return (
+      <p className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-500">
+        {search.trim() ? 'No glossary rows match your search.' : 'No glossary records loaded.'}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Total rows</p>
+          <p className="mt-1 text-2xl font-bold text-zinc-900">{summary.totalRows}</p>
+        </div>
+        {GLOSSARY_SET_METADATA_AUDIT_STATUS_ORDER.map((status) => (
+          <div
+            key={status}
+            className="rounded-lg border border-zinc-200 bg-white px-4 py-3"
+          >
+            <p className="text-xs font-semibold text-zinc-600">
+              {GLOSSARY_SET_METADATA_AUDIT_STATUS_LABELS[status]}
+            </p>
+            <p className="mt-1 text-2xl font-bold text-zinc-900">{summary.counts[status]}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-4">
+        {GLOSSARY_SET_METADATA_AUDIT_STATUS_ORDER.map((status) => {
+          const rows = filtered.byStatus[status];
+          if (rows.length === 0) return null;
+          const sectionKey = libraryReportsSectionKeys.glossaryAuditStatus(status);
+          return (
+            <DetailsSection
+              key={status}
+              sectionKey={sectionKey}
+              isOpen={expandedKeys.has(sectionKey)}
+              onToggle={onToggle}
+              summary={
+                <span className="flex flex-wrap items-center gap-2">
+                  <AuditStatusBadge status={status} />
+                  <span className="text-xs font-normal text-zinc-500">
+                    {rows.length} row{rows.length === 1 ? '' : 's'}
+                  </span>
+                </span>
+              }
+            >
+              <ul className="space-y-3">
+                {rows.map((row) => (
+                  <li
+                    key={row.glossaryRowId}
+                    className="rounded-md border border-zinc-100 bg-zinc-50/80 px-3 py-3"
+                  >
+                    <p className="text-sm font-semibold text-zinc-900">{row.pathLabel}</p>
+                    <p className="mt-1 font-mono text-[10px] text-zinc-400">{row.glossaryRowId}</p>
+                    <p className="mt-2 text-xs text-zinc-600">
+                      Derived set:{' '}
+                      <span className="font-semibold text-zinc-800">{row.derivedSetLabel}</span>
+                      {row.derivedSetKey ? (
+                        <span className="font-mono text-[10px] text-zinc-400">
+                          {' '}
+                          ({row.derivedSetKey} from {row.derivedFrom})
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-2 text-xs font-medium text-zinc-700">
+                      Suggested action: {row.suggestedActionLabel}
+                    </p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <SetFieldsBlock title="Glossary row fields" fields={row.rowFields} />
+                      <div className="space-y-3">
+                        <LinkedSetBlock title="Linked finding set" snapshot={row.findingResolved} />
+                        <LinkedSetBlock
+                          title="Linked recommendation set"
+                          snapshot={row.recommendationResolved}
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 font-mono text-[10px] text-zinc-400">
+                      finding: {row.findingId || '—'} · rec: {row.recId || '—'}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </DetailsSection>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function ExpandControls({
@@ -787,6 +986,18 @@ export function LibraryReports({
     [glossary, findings, recommendations, categories, items]
   );
 
+  const glossarySetMetadataAudit = useMemo(
+    () =>
+      buildGlossarySetMetadataAuditReport({
+        glossary,
+        findings,
+        recommendations,
+        categories,
+        items,
+      }),
+    [glossary, findings, recommendations, categories, items]
+  );
+
   const handleSectionToggle = useCallback((key: string, open: boolean) => {
     setExpandedKeys((prev) => {
       const next = new Set(prev);
@@ -818,6 +1029,18 @@ export function LibraryReports({
     standardsAssocViewMode === 'category_item' ? 'sc:' : 's:';
 
   const handleExpandAll = useCallback(() => {
+    if (mode === 'glossary_audit') {
+      const statusesWithRows = GLOSSARY_SET_METADATA_AUDIT_STATUS_ORDER.filter(
+        (s) => glossarySetMetadataAudit.byStatus[s].length > 0
+      );
+      setExpandedKeys((prev) =>
+        mergeExpandedKeysForGlossaryAudit(
+          prev,
+          collectGlossarySetMetadataAuditExpandedKeys(statusesWithRows)
+        )
+      );
+      return;
+    }
     if (mode === 'glossary') {
       setExpandedKeys((prev) =>
         mergeExpandedKeysForGlossary(prev, collectGlossaryExpandedKeys(glossaryGroups))
@@ -836,9 +1059,14 @@ export function LibraryReports({
     visibleStandardsGroups,
     visibleStandardsCatItemGroups,
     glossaryGroups,
+    glossarySetMetadataAudit,
   ]);
 
   const handleCollapseAll = useCallback(() => {
+    if (mode === 'glossary_audit') {
+      setExpandedKeys((prev) => mergeExpandedKeysForGlossaryAudit(prev, []));
+      return;
+    }
     if (mode === 'glossary') {
       setExpandedKeys((prev) => mergeExpandedKeysForGlossary(prev, []));
       return;
@@ -879,6 +1107,12 @@ export function LibraryReports({
           onClick={() => setMode('glossary')}
           icon={<ListTree size={16} />}
           label="Glossary Hierarchy"
+        />
+        <ReportTabButton
+          active={mode === 'glossary_audit'}
+          onClick={() => setMode('glossary_audit')}
+          icon={<FileSearch size={16} />}
+          label="Glossary Set Metadata Audit"
         />
       </div>
 
@@ -931,7 +1165,9 @@ export function LibraryReports({
             ? standardsAssocViewMode === 'category_item'
               ? 'Grouped by standard set, then Category → Item → Citation. Each citation lists only findings and recommendations for that category/item pair (a citation may appear under multiple pairs).'
               : 'Standards are grouped by type and version. Citations use Standards Library order. Findings and recommendations reference each standard via library default citations (fldStandards).'
-            : 'Hierarchy is built from glossary rows (fldGlosId), grouped by glossary set, then Category → Item → Finding → Recommendation.'}
+            : mode === 'glossary_audit'
+              ? 'Read-only audit of glossary row set metadata (fldGlossarySetId, fldGlossarySetName, fldGlossaryStandardType, fldGlossaryStandardVersion) vs linked masters. No Firestore writes from this screen.'
+              : 'Hierarchy is built from glossary rows (fldGlosId), grouped by glossary set, then Category → Item → Finding → Recommendation.'}
         </span>
       </div>
 
@@ -953,6 +1189,13 @@ export function LibraryReports({
             onToggle={handleSectionToggle}
           />
         )
+      ) : mode === 'glossary_audit' ? (
+        <GlossarySetMetadataAuditPanel
+          report={glossarySetMetadataAudit}
+          search={search}
+          expandedKeys={expandedKeys}
+          onToggle={handleSectionToggle}
+        />
       ) : (
         <GlossaryHierarchyPanel
           groups={glossaryGroups}
