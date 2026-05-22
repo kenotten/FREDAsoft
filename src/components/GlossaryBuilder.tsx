@@ -1383,7 +1383,8 @@ export function GlossaryBuilder({
           fldOrder: formData.findOrder === '' ? 999 : (parseInt(formData.findOrder) || 999),
           fldUnitType: formData.fldUnitType || '', 
           fldStandards: [],
-          fldSuggestedRecs: []
+          fldSuggestedRecs: [],
+          ...glossarySetMetadataForId(selectedGlossarySetId),
         });
         await firestoreService.save('findings', findingPayload, findId);
       }
@@ -1396,7 +1397,8 @@ export function GlossaryBuilder({
         fldOrder: formData.recOrder === '' ? 999 : (parseInt(formData.recOrder) || 999),
         fldUnit: Number(formData.unit) || 0, 
         fldUOM: formData.uom || 'EA', 
-        fldStandards: []
+        fldStandards: [],
+        ...glossarySetMetadataForId(selectedGlossarySetId),
       });
       
       // ✅ DECIDED: Write exclusively to master_recommendations
@@ -1489,7 +1491,8 @@ export function GlossaryBuilder({
           if (raw === undefined || raw === null || raw === '') return [];
           return [raw];
         })(),
-        fldStandards: editingId ? normalizeStringArray(findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(id || "").toLowerCase().trim())?.fldStandards) : []
+        fldStandards: editingId ? normalizeStringArray(findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(id || "").toLowerCase().trim())?.fldStandards) : [],
+        ...(!editingId ? glossarySetMetadataForId(selectedGlossarySetId) : {}),
       });
       await firestoreService.save('findings', payload, id);
       setNewType(null);
@@ -1515,7 +1518,8 @@ export function GlossaryBuilder({
         fldOrder: formData.recOrder === '' ? 999 : (parseInt(formData.recOrder) || 999),
         fldUnit: Number(formData.unit) || 0, 
         fldUOM: formData.uom,
-        fldStandards: editingId ? normalizeStringArray(masterRecommendations?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (id || "").toLowerCase().trim())?.fldStandards) : []
+        fldStandards: editingId ? normalizeStringArray(masterRecommendations?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (id || "").toLowerCase().trim())?.fldStandards) : [],
+        ...(!editingId ? glossarySetMetadataForId(selectedGlossarySetId) : {}),
       });
       
       await firestoreService.masterRecommendations.save(payload, id);
@@ -2184,6 +2188,7 @@ export function GlossaryBuilder({
         fldUnit: Number(relatedNewRecUnit) || 0,
         fldUOM: relatedNewRecUom || 'EA',
         fldStandards: [],
+        ...glossarySetMetadataForId(selectedGlossarySetId),
       });
 
       await firestoreService.masterRecommendations.save(recPayload, newRecId);
