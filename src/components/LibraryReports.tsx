@@ -4,12 +4,23 @@ import type { Category, Finding, Glossary, Item, MasterRecommendation, MasterSta
 import { cn } from '../lib/utils';
 import {
   buildGlossaryHierarchyReport,
+  buildStandardsAssociationsCatItemReport,
   buildStandardsAssociationsReport,
+  filterStandardsAssociationsCatItemGroups,
+  filterStandardsAssociationsGroups,
+  standardsAssocCitationHasAssociations,
   type GlossaryHierarchySetGroup,
+  type GlossarySetAssociationStatus,
+  type StandardsAssocCatItemSetGroup,
+  type StandardsAssocFindingRow,
+  type StandardsAssocRecommendationRow,
   type StandardsAssocSetGroup,
+  type StandardsAssocStandardNode,
+  type StandardsAssocViewMode,
 } from '../lib/libraryReportsModel';
 import {
   collectGlossaryExpandedKeys,
+  collectStandardsCatItemExpandedKeys,
   collectStandardsExpandedKeys,
   libraryReportsSectionKeys,
   loadLibraryReportsSessionState,
@@ -26,15 +37,23 @@ export interface LibraryReportsProps {
   items: Item[];
 }
 
-function mergeExpandedKeysForMode(
-  mode: LibraryReportsReportMode,
+function mergeExpandedKeysForGlossary(all: Set<string>, glossaryKeys: string[]): Set<string> {
+  const next = new Set(
+    Array.from(all).filter((k) => k.startsWith('s:') || k.startsWith('sc:'))
+  );
+  for (const k of glossaryKeys) next.add(k);
+  return next;
+}
+
+function mergeExpandedKeysForStandardsView(
   all: Set<string>,
-  modeKeys: string[]
+  activePrefix: 's:' | 'sc:',
+  viewKeys: string[]
 ): Set<string> {
-  const prefix = mode === 'standards' ? 's:' : 'g:';
-  const otherPrefix = mode === 'standards' ? 'g:' : 's:';
-  const next = new Set(Array.from(all).filter((k) => k.startsWith(otherPrefix)));
-  for (const k of modeKeys) next.add(k);
+  const next = new Set(
+    Array.from(all).filter((k) => !k.startsWith(activePrefix))
+  );
+  for (const k of viewKeys) next.add(k);
   return next;
 }
 
@@ -67,11 +86,28 @@ function MissingSetBadge() {
   return (
     <span
       className="ml-2 inline-flex rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800"
-      title="Missing glossary set metadata on this library record"
+      title="Glossary set cannot be derived from id, name, or standard type/version on this record"
     >
       Missing set
     </span>
   );
+}
+
+function SetMismatchBadge() {
+  return (
+    <span
+      className="ml-2 inline-flex rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-800"
+      title="Glossary row and master finding/recommendation resolve to different glossary sets"
+    >
+      Set mismatch
+    </span>
+  );
+}
+
+function GlossarySetStatusBadge({ status }: { status: GlossarySetAssociationStatus }) {
+  if (status === 'missing') return <MissingSetBadge />;
+  if (status === 'mismatch') return <SetMismatchBadge />;
+  return null;
 }
 
 function ExpandControls({
@@ -98,6 +134,117 @@ function ExpandControls({
         Collapse all
       </button>
     </div>
+  );
+}
+
+function AssocFindingList({
+  standardId,
+  findings,
+  showCatItemPath,
+}: {
+  standardId: string;
+  findings: StandardsAssocFindingRow[];
+  showCatItemPath?: boolean;
+}) {
+  if (findings.length === 0) {
+    return <p className="text-xs text-zinc-400">No library findings cite this standard.</p>;
+  }
+  return (
+    <ul className="space-y-2">
+      {findings.map((f) => (
+        <li
+          key={`${standardId}-${f.findingId}`}
+          className="rounded-md border border-zinc-100 bg-zinc-50/80 px-3 py-2"
+        >
+          <p className="text-sm font-semibold text-zinc-900">
+            {f.findingShort}
+            {f.missingGlossarySetMetadata ? <MissingSetBadge /> : null}
+          </p>
+          {showCatItemPath ? (
+            <p className="text-xs text-zinc-500">
+              {f.path.categoryName} → {f.path.itemName}
+            </p>
+          ) : null}
+          {f.findingLong ? (
+            <p className="mt-1 text-xs text-zinc-500 line-clamp-2">{f.findingLong}</p>
+          ) : null}
+          <p className="mt-1 font-mono text-[10px] text-zinc-400">{f.findingId}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function AssocRecommendationList({
+  standardId,
+  recommendations,
+  showCatItemPath,
+}: {
+  standardId: string;
+  recommendations: StandardsAssocRecommendationRow[];
+  showCatItemPath?: boolean;
+}) {
+  if (recommendations.length === 0) {
+    return <p className="text-xs text-zinc-400">No library recommendations cite this standard.</p>;
+  }
+  return (
+    <ul className="space-y-2">
+      {recommendations.map((r) => (
+        <li
+          key={`${standardId}-${r.recId}`}
+          className="rounded-md border border-zinc-100 bg-zinc-50/80 px-3 py-2"
+        >
+          <p className="text-sm font-semibold text-zinc-900">
+            {r.recShort}
+            {r.missingGlossarySetMetadata ? <MissingSetBadge /> : null}
+          </p>
+          {showCatItemPath ? (
+            <p className="text-xs text-zinc-500">
+              {r.path.categoryName} → {r.path.itemName}
+            </p>
+          ) : null}
+          {r.recLong ? <p className="mt-1 text-xs text-zinc-500 line-clamp-2">{r.recLong}</p> : null}
+          <p className="mt-1 font-mono text-[10px] text-zinc-400">{r.recId}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function CitationAssociationsBody({
+  std,
+  showPathsOnRows = true,
+}: {
+  std: StandardsAssocStandardNode;
+  showPathsOnRows?: boolean;
+}) {
+  return (
+    <>
+      {std.contentPreview ? (
+        <p className="mb-3 text-xs leading-relaxed text-zinc-600">{std.contentPreview}</p>
+      ) : null}
+      <p className="mb-2 font-mono text-[10px] text-zinc-400">ID: {std.standardId}</p>
+      <div className="mb-4">
+        <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
+          Findings ({std.findings.length})
+        </h4>
+        <AssocFindingList
+          standardId={std.standardId}
+          findings={std.findings}
+          showCatItemPath={showPathsOnRows}
+        />
+      </div>
+      <div>
+        <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
+          Recommendations ({std.recommendations.length})
+        </h4>
+        <AssocRecommendationList
+          standardId={std.standardId}
+          recommendations={std.recommendations}
+          showCatItemPath={showPathsOnRows}
+        />
+      </div>
+    </>
   );
 }
 
@@ -137,41 +284,41 @@ function DetailsSection({
 function StandardsAssociationsPanel({
   groups,
   search,
+  hideUnassociatedCitations,
   expandedKeys,
   onToggle,
 }: {
   groups: StandardsAssocSetGroup[];
   search: string;
+  hideUnassociatedCitations: boolean;
   expandedKeys: Set<string>;
   onToggle: (key: string, open: boolean) => void;
 }) {
   const q = search.trim().toLowerCase();
 
-  const filtered = useMemo(() => {
-    if (!q) return groups;
-    return groups
-      .map((g) => ({
-        ...g,
-        standards: g.standards.filter((s) => {
-          const hay = [
-            s.citationLabel,
-            s.citationName,
-            s.contentPreview,
-            ...s.findings.map((f) => `${f.path.categoryName} ${f.path.itemName} ${f.findingShort}`),
-            ...s.recommendations.map((r) => `${r.path.categoryName} ${r.path.itemName} ${r.recShort}`),
-          ]
-            .join(' ')
-            .toLowerCase();
-          return hay.includes(q);
-        }),
-      }))
-      .filter((g) => g.standards.length > 0);
-  }, [groups, q]);
+  const filtered = useMemo(
+    () =>
+      filterStandardsAssociationsGroups(groups, {
+        search,
+        hideUnassociated: hideUnassociatedCitations,
+      }),
+    [groups, search, hideUnassociatedCitations]
+  );
 
   if (filtered.length === 0) {
+    const emptyMessage =
+      groups.length === 0
+        ? 'No standards loaded.'
+        : q && hideUnassociatedCitations
+          ? 'No citations with library associations match your search and filters.'
+          : q
+            ? 'No standards match your search.'
+            : hideUnassociatedCitations
+              ? 'No citations with library findings or recommendations. Turn off “Hide citations with no associations” to see all citations.'
+              : 'No standards loaded.';
     return (
       <p className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-500">
-        {q ? 'No standards match your search.' : 'No standards loaded.'}
+        {emptyMessage}
       </p>
     );
   }
@@ -209,73 +356,183 @@ function StandardsAssociationsPanel({
                     ) : null}
                     <span className="text-xs font-normal text-zinc-400">
                       {std.findings.length} findings · {std.recommendations.length} recommendations
+                      {!standardsAssocCitationHasAssociations(std) ? (
+                        <span className="ml-1 font-semibold text-amber-700">· 0 associations</span>
+                      ) : null}
                     </span>
                   </span>
                 }
               >
-                {std.contentPreview ? (
-                  <p className="mb-3 text-xs leading-relaxed text-zinc-600">{std.contentPreview}</p>
-                ) : null}
-                <p className="mb-2 font-mono text-[10px] text-zinc-400">ID: {std.standardId}</p>
+                <CitationAssociationsBody std={std} />
+              </DetailsSection>
+            ))}
+          </div>
+        </DetailsSection>
+      ))}
+    </div>
+  );
+}
 
-                <div className="mb-4">
-                  <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
-                    Findings ({std.findings.length})
-                  </h4>
-                  {std.findings.length === 0 ? (
-                    <p className="text-xs text-zinc-400">No library findings cite this standard.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {std.findings.map((f) => (
-                        <li
-                          key={`${std.standardId}-${f.findingId}`}
-                          className="rounded-md border border-zinc-100 bg-zinc-50/80 px-3 py-2"
-                        >
-                          <p className="text-sm font-semibold text-zinc-900">
-                            {f.findingShort}
-                            {f.missingGlossarySetMetadata ? <MissingSetBadge /> : null}
-                          </p>
-                          <p className="text-xs text-zinc-500">
-                            {f.path.categoryName} → {f.path.itemName}
-                          </p>
-                          {f.findingLong ? (
-                            <p className="mt-1 text-xs text-zinc-500 line-clamp-2">{f.findingLong}</p>
-                          ) : null}
-                          <p className="mt-1 font-mono text-[10px] text-zinc-400">{f.findingId}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+function StandardsAssociationsCatItemPanel({
+  groups,
+  search,
+  hideUnassociatedCitations,
+  expandedKeys,
+  onToggle,
+}: {
+  groups: StandardsAssocCatItemSetGroup[];
+  search: string;
+  hideUnassociatedCitations: boolean;
+  expandedKeys: Set<string>;
+  onToggle: (key: string, open: boolean) => void;
+}) {
+  const q = search.trim().toLowerCase();
 
-                <div>
-                  <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-500">
-                    Recommendations ({std.recommendations.length})
-                  </h4>
-                  {std.recommendations.length === 0 ? (
-                    <p className="text-xs text-zinc-400">No library recommendations cite this standard.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {std.recommendations.map((r) => (
-                        <li
-                          key={`${std.standardId}-${r.recId}`}
-                          className="rounded-md border border-zinc-100 bg-zinc-50/80 px-3 py-2"
-                        >
-                          <p className="text-sm font-semibold text-zinc-900">
-                            {r.recShort}
-                            {r.missingGlossarySetMetadata ? <MissingSetBadge /> : null}
-                          </p>
-                          <p className="text-xs text-zinc-500">
-                            {r.path.categoryName} → {r.path.itemName}
-                          </p>
-                          {r.recLong ? (
-                            <p className="mt-1 text-xs text-zinc-500 line-clamp-2">{r.recLong}</p>
-                          ) : null}
-                          <p className="mt-1 font-mono text-[10px] text-zinc-400">{r.recId}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+  const filtered = useMemo(
+    () =>
+      filterStandardsAssociationsCatItemGroups(groups, {
+        search,
+        hideUnassociated: hideUnassociatedCitations,
+      }),
+    [groups, search, hideUnassociatedCitations]
+  );
+
+  if (filtered.length === 0) {
+    const emptyMessage =
+      groups.length === 0
+        ? 'No standards loaded.'
+        : q && hideUnassociatedCitations
+          ? 'No category/item associations match your search and filters.'
+          : q
+            ? 'No category/item associations match your search.'
+            : hideUnassociatedCitations
+              ? 'No library findings or recommendations are linked to standards. Turn off “Hide citations with no associations” to browse by citation order.'
+              : 'No category/item associations for standards in the library.';
+    return (
+      <p className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-500">
+        {emptyMessage}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {filtered.map((setGroup) => (
+        <DetailsSection
+          key={setGroup.setKey}
+          sectionKey={libraryReportsSectionKeys.standardsCatItemSet(setGroup.setKey)}
+          isOpen={expandedKeys.has(libraryReportsSectionKeys.standardsCatItemSet(setGroup.setKey))}
+          onToggle={onToggle}
+          summary={
+            <span className="flex flex-wrap items-center gap-2">
+              <span>{setGroup.setLabel}</span>
+              <span className="text-xs font-normal text-zinc-500">
+                {setGroup.citationSlotCount} citation
+                {setGroup.citationSlotCount === 1 ? '' : 's'} · {setGroup.findingLinkCount} finding
+                links · {setGroup.recommendationLinkCount} recommendation links
+              </span>
+            </span>
+          }
+        >
+          <div className="space-y-3">
+            {setGroup.categories.map((cat) => (
+              <DetailsSection
+                key={`${setGroup.setKey}-${cat.categoryId}`}
+                sectionKey={libraryReportsSectionKeys.standardsCatItemCategory(
+                  setGroup.setKey,
+                  cat.categoryId
+                )}
+                isOpen={expandedKeys.has(
+                  libraryReportsSectionKeys.standardsCatItemCategory(setGroup.setKey, cat.categoryId)
+                )}
+                onToggle={onToggle}
+                summary={
+                  <span>
+                    {cat.categoryName}
+                    <span className="ml-2 text-xs font-normal text-zinc-500">
+                      {cat.items.length} items
+                    </span>
+                  </span>
+                }
+              >
+                <div className="space-y-3">
+                  {cat.items.map((item) => (
+                    <DetailsSection
+                      key={`${setGroup.setKey}-${cat.categoryId}-${item.itemId}`}
+                      sectionKey={libraryReportsSectionKeys.standardsCatItemItem(
+                        setGroup.setKey,
+                        cat.categoryId,
+                        item.itemId
+                      )}
+                      isOpen={expandedKeys.has(
+                        libraryReportsSectionKeys.standardsCatItemItem(
+                          setGroup.setKey,
+                          cat.categoryId,
+                          item.itemId
+                        )
+                      )}
+                      onToggle={onToggle}
+                      summary={
+                        <span>
+                          {item.itemName}
+                          <span className="ml-2 text-xs font-normal text-zinc-500">
+                            {item.citations.length} citation
+                            {item.citations.length === 1 ? '' : 's'}
+                          </span>
+                        </span>
+                      }
+                    >
+                      <div className="space-y-3">
+                        {item.citations.map((c) => (
+                          <DetailsSection
+                            key={`${setGroup.setKey}-${cat.categoryId}-${item.itemId}-${c.standardId}`}
+                            sectionKey={libraryReportsSectionKeys.standardsCatItemCitation(
+                              setGroup.setKey,
+                              cat.categoryId,
+                              item.itemId,
+                              c.standardId
+                            )}
+                            isOpen={expandedKeys.has(
+                              libraryReportsSectionKeys.standardsCatItemCitation(
+                                setGroup.setKey,
+                                cat.categoryId,
+                                item.itemId,
+                                c.standardId
+                              )
+                            )}
+                            onToggle={onToggle}
+                            summary={
+                              <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
+                                <span className="font-bold text-zinc-900">{c.citationLabel}</span>
+                                {c.citationName ? (
+                                  <span className="truncate text-xs font-normal text-zinc-500">
+                                    {c.citationName}
+                                  </span>
+                                ) : null}
+                                <span className="text-xs font-normal text-zinc-400">
+                                  {c.findings.length} findings · {c.recommendations.length}{' '}
+                                  recommendations
+                                </span>
+                              </span>
+                            }
+                          >
+                            <CitationAssociationsBody
+                              showPathsOnRows={false}
+                              std={{
+                                standardId: c.standardId,
+                                citationLabel: c.citationLabel,
+                                citationName: c.citationName,
+                                contentPreview: c.contentPreview,
+                                relationType: c.relationType,
+                                findings: c.findings,
+                                recommendations: c.recommendations,
+                              }}
+                            />
+                          </DetailsSection>
+                        ))}
+                      </div>
+                    </DetailsSection>
+                  ))}
                 </div>
               </DetailsSection>
             ))}
@@ -352,7 +609,6 @@ function GlossaryHierarchyPanel({
               <span className="text-xs font-normal text-zinc-500">
                 {setGroup.glossaryRowCount} glossary rows · {setGroup.categories.length} categories
               </span>
-              {setGroup.isUnassigned ? <MissingSetBadge /> : null}
             </span>
           }
         >
@@ -444,7 +700,7 @@ function GlossaryHierarchyPanel({
                                   >
                                     <p className="text-sm font-semibold text-zinc-900">
                                       {r.recShort}
-                                      {r.missingGlossarySetMetadata ? <MissingSetBadge /> : null}
+                                      <GlossarySetStatusBadge status={r.setAssociationStatus} />
                                     </p>
                                     {r.recLong ? (
                                       <p className="mt-1 text-xs text-zinc-500 line-clamp-2">{r.recLong}</p>
@@ -488,6 +744,12 @@ export function LibraryReports({
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
     () => new Set(initialSession.expandedKeys)
   );
+  const [hideUnassociatedCitations, setHideUnassociatedCitations] = useState(
+    initialSession.hideUnassociatedCitations
+  );
+  const [standardsAssocViewMode, setStandardsAssocViewMode] = useState<StandardsAssocViewMode>(
+    initialSession.standardsAssocViewMode
+  );
   const standardsGroups = useMemo(
     () =>
       buildStandardsAssociationsReport({
@@ -498,6 +760,19 @@ export function LibraryReports({
         items,
       }),
     [standards, findings, recommendations, categories, items]
+  );
+
+  const standardsCatItemGroups = useMemo(
+    () =>
+      buildStandardsAssociationsCatItemReport({
+        standards,
+        findings,
+        recommendations,
+        glossary,
+        categories,
+        items,
+      }),
+    [standards, findings, recommendations, glossary, categories, items]
   );
 
   const glossaryGroups = useMemo(
@@ -521,17 +796,55 @@ export function LibraryReports({
     });
   }, []);
 
+  const visibleStandardsGroups = useMemo(
+    () =>
+      filterStandardsAssociationsGroups(standardsGroups, {
+        search,
+        hideUnassociated: hideUnassociatedCitations,
+      }),
+    [standardsGroups, search, hideUnassociatedCitations]
+  );
+
+  const visibleStandardsCatItemGroups = useMemo(
+    () =>
+      filterStandardsAssociationsCatItemGroups(standardsCatItemGroups, {
+        search,
+        hideUnassociated: hideUnassociatedCitations,
+      }),
+    [standardsCatItemGroups, search, hideUnassociatedCitations]
+  );
+
+  const standardsExpandPrefix: 's:' | 'sc:' =
+    standardsAssocViewMode === 'category_item' ? 'sc:' : 's:';
+
   const handleExpandAll = useCallback(() => {
+    if (mode === 'glossary') {
+      setExpandedKeys((prev) =>
+        mergeExpandedKeysForGlossary(prev, collectGlossaryExpandedKeys(glossaryGroups))
+      );
+      return;
+    }
     const keys =
-      mode === 'standards'
-        ? collectStandardsExpandedKeys(standardsGroups)
-        : collectGlossaryExpandedKeys(glossaryGroups);
-    setExpandedKeys((prev) => mergeExpandedKeysForMode(mode, prev, keys));
-  }, [mode, standardsGroups, glossaryGroups]);
+      standardsAssocViewMode === 'category_item'
+        ? collectStandardsCatItemExpandedKeys(visibleStandardsCatItemGroups)
+        : collectStandardsExpandedKeys(visibleStandardsGroups);
+    setExpandedKeys((prev) => mergeExpandedKeysForStandardsView(prev, standardsExpandPrefix, keys));
+  }, [
+    mode,
+    standardsAssocViewMode,
+    standardsExpandPrefix,
+    visibleStandardsGroups,
+    visibleStandardsCatItemGroups,
+    glossaryGroups,
+  ]);
 
   const handleCollapseAll = useCallback(() => {
-    setExpandedKeys((prev) => mergeExpandedKeysForMode(mode, prev, []));
-  }, [mode]);
+    if (mode === 'glossary') {
+      setExpandedKeys((prev) => mergeExpandedKeysForGlossary(prev, []));
+      return;
+    }
+    setExpandedKeys((prev) => mergeExpandedKeysForStandardsView(prev, standardsExpandPrefix, []));
+  }, [mode, standardsExpandPrefix]);
 
   useEffect(() => {
     saveLibraryReportsSessionState({
@@ -539,8 +852,10 @@ export function LibraryReports({
       mode,
       search,
       expandedKeys: Array.from(expandedKeys),
+      hideUnassociatedCitations,
+      standardsAssocViewMode,
     });
-  }, [mode, search, expandedKeys]);
+  }, [mode, search, expandedKeys, hideUnassociatedCitations, standardsAssocViewMode]);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
@@ -581,22 +896,63 @@ export function LibraryReports({
         <ExpandControls onExpandAll={handleExpandAll} onCollapseAll={handleCollapseAll} />
       </div>
 
+      {mode === 'standards' && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-100/80 p-1">
+            <ReportTabButton
+              active={standardsAssocViewMode === 'citation_order'}
+              onClick={() => setStandardsAssocViewMode('citation_order')}
+              icon={<Shield size={16} />}
+              label="Citation order"
+            />
+            <ReportTabButton
+              active={standardsAssocViewMode === 'category_item'}
+              onClick={() => setStandardsAssocViewMode('category_item')}
+              icon={<ListTree size={16} />}
+              label="Category / Item"
+            />
+          </div>
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700">
+            <input
+              type="checkbox"
+              checked={hideUnassociatedCitations}
+              onChange={(e) => setHideUnassociatedCitations(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-300 text-zinc-900"
+            />
+            <span>Hide citations with no associations</span>
+          </label>
+        </div>
+      )}
+
       <div className="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50/80 px-4 py-3 text-xs text-blue-900">
         <BookMarked size={16} className="mt-0.5 shrink-0" />
         <span>
           {mode === 'standards'
-            ? 'Standards are grouped by type and version. Findings and recommendations listed under each citation reference that standard via library default citations (fldStandards).'
+            ? standardsAssocViewMode === 'category_item'
+              ? 'Grouped by standard set, then Category → Item → Citation. Each citation lists only findings and recommendations for that category/item pair (a citation may appear under multiple pairs).'
+              : 'Standards are grouped by type and version. Citations use Standards Library order. Findings and recommendations reference each standard via library default citations (fldStandards).'
             : 'Hierarchy is built from glossary rows (fldGlosId), grouped by glossary set, then Category → Item → Finding → Recommendation.'}
         </span>
       </div>
 
       {mode === 'standards' ? (
-        <StandardsAssociationsPanel
-          groups={standardsGroups}
-          search={search}
-          expandedKeys={expandedKeys}
-          onToggle={handleSectionToggle}
-        />
+        standardsAssocViewMode === 'category_item' ? (
+          <StandardsAssociationsCatItemPanel
+            groups={standardsCatItemGroups}
+            search={search}
+            hideUnassociatedCitations={hideUnassociatedCitations}
+            expandedKeys={expandedKeys}
+            onToggle={handleSectionToggle}
+          />
+        ) : (
+          <StandardsAssociationsPanel
+            groups={standardsGroups}
+            search={search}
+            hideUnassociatedCitations={hideUnassociatedCitations}
+            expandedKeys={expandedKeys}
+            onToggle={handleSectionToggle}
+          />
+        )
       ) : (
         <GlossaryHierarchyPanel
           groups={glossaryGroups}
