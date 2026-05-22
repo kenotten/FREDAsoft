@@ -287,6 +287,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           items={items}
           findings={findings}
           recommendations={recommendations as any}
+          glossary={glossary}
           standards={standards}
           onDirtyChange={(props as any).onLibraryDirtyChange}
         />

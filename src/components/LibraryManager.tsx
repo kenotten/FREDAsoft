@@ -32,6 +32,14 @@ import { Category, Item, Finding, MasterRecommendation, MasterStandard } from '.
 import { UnsavedChangesModal } from './modals/UnsavedChangesModal';
 import { StandardsBrowser } from './StandardsBrowser';
 import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
+import {
+  buildLibraryMasterUsageIndex,
+  formatLibraryMasterUsageSummaryLine,
+  lookupFindingUsage,
+  lookupRecUsage,
+  type LibraryMasterUsageSummary,
+} from '../lib/libraryMasterUsage';
+import type { Glossary } from '../types';
 
 const LIBRARY_GLOSSARY_CTX_FIELDS = [
   'fldGlossarySetId',
@@ -96,10 +104,70 @@ interface LibraryManagerProps {
   items: Item[];
   findings: Finding[];
   recommendations: MasterRecommendation[];
+  /** Glossary rows for read-only master usage counts (fldFind / fldRec references). */
+  glossary?: Glossary[];
   /** Same master standards list as Data Entry / StandardsBrowser */
   standards?: MasterStandard[];
   onDirtyChange?: (isDirty: boolean) => void;
   onNavigateAway?: (nextTab: string) => void;
+}
+
+function LibraryMasterUsagePanel({
+  summary,
+  kind,
+}: {
+  summary: LibraryMasterUsageSummary | undefined;
+  kind: 'finding' | 'recommendation';
+}) {
+  const line = formatLibraryMasterUsageSummaryLine(summary);
+  const unused = !summary || summary.glossaryRowCount === 0;
+
+  if (unused) {
+    return (
+      <p className="text-[10px] font-medium text-zinc-400" title="No active glossary rows reference this master">
+        Unused
+      </p>
+    );
+  }
+
+  return (
+    <details className="group/usage rounded-md border border-sky-100 bg-sky-50/40">
+      <summary className="cursor-pointer list-none px-2 py-1.5 text-[10px] font-semibold text-sky-900 [&::-webkit-details-marker]:hidden">
+        <span className="inline-flex items-center gap-1">
+          <ChevronRight
+            size={12}
+            className="shrink-0 text-sky-600 transition-transform group-open/usage:rotate-90"
+          />
+          {line}
+        </span>
+      </summary>
+      <ul className="space-y-2 border-t border-sky-100 px-2 py-2">
+        {summary.rows.map((row) => (
+          <li
+            key={row.glossaryRowId}
+            className="rounded border border-white/80 bg-white/90 px-2 py-1.5 text-[10px] text-zinc-700"
+          >
+            <p className="font-semibold text-zinc-800">{row.setLabel}</p>
+            <p className="text-zinc-600">
+              {row.categoryName} → {row.itemName}
+            </p>
+            <p className="text-zinc-500">
+              {kind === 'finding' ? (
+                <>
+                  Rec: <span className="text-zinc-700">{row.pairedRecShort}</span>
+                </>
+              ) : (
+                <>
+                  Finding: <span className="text-zinc-700">{row.pairedFindingShort}</span>
+                </>
+              )}
+            </p>
+            <p className="mt-0.5 font-mono text-[9px] text-zinc-400">{row.glossaryRowId}</p>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 type LibraryTab = 'categories' | 'items' | 'findings' | 'recommendations';
@@ -109,6 +177,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   items, 
   findings, 
   recommendations,
+  glossary = [],
   standards = [],
   onDirtyChange,
   onNavigateAway
@@ -430,6 +499,18 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     
     return parts;
   }, [selectedCatId, selectedItemId, navigationCategories, navigationItems]);
+
+  const masterUsageIndex = useMemo(
+    () =>
+      buildLibraryMasterUsageIndex({
+        glossary,
+        findings,
+        recommendations,
+        categories,
+        items,
+      }),
+    [glossary, findings, recommendations, categories, items]
+  );
 
   const isGroupedMode = activeTab === 'findings' && !!selectedCatId && !selectedItemId;
 
@@ -900,6 +981,18 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               <div className="mt-0.5 text-[9px] font-bold text-red-500 uppercase tracking-widest flex items-center">
                 <AlertCircle size={10} className="mr-1" /> Limit Exceeded
               </div>
+            )}
+            {isFinding && (
+              <LibraryMasterUsagePanel
+                kind="finding"
+                summary={lookupFindingUsage(masterUsageIndex, record.id)}
+              />
+            )}
+            {isRec && (
+              <LibraryMasterUsagePanel
+                kind="recommendation"
+                summary={lookupRecUsage(masterUsageIndex, record.id)}
+              />
             )}
           </div>
         )}
