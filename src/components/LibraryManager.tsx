@@ -20,13 +20,16 @@ import {
   Settings,
   MoreVertical,
   Quote,
+  Copy,
   X
 } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 import { Button, Card, Select } from './ui/core';
 import { cn, sortEntities, MEASUREMENT_UNITS } from '../lib/utils';
 import { doc, writeBatch, deleteField } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'sonner';
+import { firestoreService, handleFirestoreError, OperationType } from '../services/firestoreService';
 import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { Category, Item, Finding, MasterRecommendation, MasterStandard } from '../types';
 import { UnsavedChangesModal } from './modals/UnsavedChangesModal';
@@ -43,6 +46,16 @@ import {
   type LibraryMasterUsageSummary,
   type MasterEditImpactItem,
 } from '../lib/libraryMasterUsage';
+import {
+  buildFindingCopyDraft,
+  buildRecommendationCopyDraft,
+  findingCopyCreatePayload,
+  glossarySetLabelFromEntity,
+  LIBRARY_MASTER_COPY_HELP,
+  recommendationCopyCreatePayload,
+  type FindingCopyDraft,
+  type RecommendationCopyDraft,
+} from '../lib/libraryMasterCopy';
 import type { Glossary } from '../types';
 
 const LIBRARY_GLOSSARY_CTX_FIELDS = [
@@ -295,6 +308,148 @@ function LibraryMasterSaveConfirmModal({
 
 type LibraryTab = 'categories' | 'items' | 'findings' | 'recommendations';
 
+type LibraryCopyModalState =
+  | {
+      kind: 'finding';
+      sourceId: string;
+      sourceShort: string;
+      draft: FindingCopyDraft;
+      usageLine: string;
+      contextLine: string;
+    }
+  | {
+      kind: 'recommendation';
+      sourceId: string;
+      sourceShort: string;
+      draft: RecommendationCopyDraft;
+      usageLine: string;
+      contextLine: string;
+    };
+
+function LibraryMasterCopyModal({
+  state,
+  isSaving,
+  onClose,
+  onDraftChange,
+  onConfirm,
+}: {
+  state: LibraryCopyModalState;
+  isSaving: boolean;
+  onClose: () => void;
+  onDraftChange: (draft: FindingCopyDraft | RecommendationCopyDraft) => void;
+  onConfirm: () => void;
+}) {
+  const isFinding = state.kind === 'finding';
+  const draft = state.draft;
+  const shortVal = isFinding
+    ? (draft as FindingCopyDraft).fldFindShort
+    : (draft as RecommendationCopyDraft).fldRecShort;
+  const longVal = isFinding
+    ? (draft as FindingCopyDraft).fldFindLong
+    : (draft as RecommendationCopyDraft).fldRecLong;
+  const shortLen = shortVal.length;
+
+  return (
+    <div
+      className="fixed inset-0 z-[150] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="library-master-copy-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+        aria-label="Cancel copy"
+        onClick={onClose}
+      />
+      <Card className="relative z-10 flex max-h-[min(92vh,720px)] w-full max-w-lg flex-col overflow-hidden border-zinc-200 p-0 shadow-2xl">
+        <div className="shrink-0 border-b border-violet-100 bg-violet-50/80 px-5 py-4">
+          <h2 id="library-master-copy-title" className="text-base font-black text-zinc-900">
+            {isFinding ? 'Copy as new finding' : 'Copy as new recommendation'}
+          </h2>
+          <p className="mt-2 text-sm leading-snug text-zinc-700">{LIBRARY_MASTER_COPY_HELP}</p>
+          <p className="mt-2 text-[11px] text-zinc-500">{state.usageLine}</p>
+        </div>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <div className="rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-xs text-zinc-600">
+            <p>
+              <span className="font-bold text-zinc-800">Source:</span> {state.sourceShort}
+            </p>
+            <p className="mt-1 font-mono text-[10px] text-zinc-400">{state.sourceId}</p>
+            {state.contextLine ? (
+              <p className="mt-1 text-[11px] text-zinc-500">{state.contextLine}</p>
+            ) : null}
+          </div>
+          <div>
+            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">
+              Short text
+            </label>
+            <input
+              type="text"
+              value={shortVal}
+              onChange={(e) =>
+                onDraftChange(
+                  isFinding
+                    ? { ...(draft as FindingCopyDraft), fldFindShort: e.target.value }
+                    : { ...(draft as RecommendationCopyDraft), fldRecShort: e.target.value }
+                )
+              }
+              className={cn(
+                'mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm font-bold text-zinc-900 outline-none focus:ring-2 focus:ring-violet-500/20',
+                shortLen > 120 && 'border-red-300'
+              )}
+            />
+            <p className={cn('mt-1 text-[10px]', shortLen > 120 ? 'text-red-600' : 'text-zinc-400')}>
+              {shortLen} / 120 characters
+            </p>
+          </div>
+          <div>
+            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">
+              Long description
+            </label>
+            <textarea
+              rows={4}
+              value={longVal}
+              onChange={(e) =>
+                onDraftChange(
+                  isFinding
+                    ? { ...(draft as FindingCopyDraft), fldFindLong: e.target.value }
+                    : { ...(draft as RecommendationCopyDraft), fldRecLong: e.target.value }
+                )
+              }
+              className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 outline-none focus:ring-2 focus:ring-violet-500/20"
+            />
+          </div>
+          <p className="text-[10px] leading-snug text-zinc-500">
+            Citations, glossary set, measurement/unit (findings), and cost fields (recommendations) are
+            copied from the source. Suggested-recommendation links are not copied—pair the new master in
+            Glossary Builder when ready.
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2 border-t border-zinc-100 bg-zinc-50 px-5 py-4">
+          <Button
+            type="button"
+            variant="ghost"
+            className="flex-1 text-[10px] font-black uppercase tracking-widest"
+            onClick={onClose}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="flex-1 bg-violet-700 text-[10px] font-black uppercase tracking-widest text-white hover:bg-violet-800"
+            onClick={onConfirm}
+            disabled={isSaving || !shortVal.trim() || shortLen > 120}
+          >
+            {isSaving ? 'Creating…' : 'Create copy'}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerProps>(({ 
   categories, 
   items, 
@@ -326,6 +481,9 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     []
   );
   const savePromiseResolveRef = React.useRef<((success: boolean) => void) | null>(null);
+  const [copyModal, setCopyModal] = useState<LibraryCopyModalState | null>(null);
+  const [isCopySaving, setIsCopySaving] = useState(false);
+  const [highlightMasterId, setHighlightMasterId] = useState<string | null>(null);
 
   // Intercept navigation
   const [pendingAction, setPendingAction] = useState<{ type: 'tab' | 'cat' | 'item' | 'away', value: string } | null>(null);
@@ -536,6 +694,150 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       return edits[id][field];
     }
     return entity[field];
+  };
+
+  const mergeFindingWithEdits = (recordId: string): Finding | undefined => {
+    const entity = findings.find((f) => libNormId(f.fldFindID || f.id) === libNormId(recordId));
+    if (!entity) return undefined;
+    const patch = edits[recordId];
+    return patch ? ({ ...entity, ...patch } as Finding) : entity;
+  };
+
+  const mergeRecommendationWithEdits = (recordId: string): MasterRecommendation | undefined => {
+    const entity = recommendations.find(
+      (r) => libNormId(r.fldRecID || r.id) === libNormId(recordId)
+    );
+    if (!entity) return undefined;
+    const patch = edits[recordId];
+    return patch ? ({ ...entity, ...patch } as MasterRecommendation) : entity;
+  };
+
+  const openFindingCopyModal = (recordId: string) => {
+    const entity = mergeFindingWithEdits(recordId);
+    if (!entity) {
+      toast.error('Finding not found.');
+      return;
+    }
+    const usage = lookupFindingUsage(masterUsageIndex, recordId);
+    const usageLine =
+      usage && usage.glossaryRowCount > 0
+        ? `The original is used in ${usage.glossaryRowCount} glossary row${usage.glossaryRowCount === 1 ? '' : 's'}. Copying will not change those rows.`
+        : 'The original is not used in any active glossary rows.';
+    const item = items.find((i) => libNormId(i.fldItemID || (i as { id?: string }).id) === libNormId(entity.fldItem));
+    const cat = categories.find((c) =>
+      libNormId(c.fldCategoryID || (c as { id?: string }).id) === libNormId(item?.fldCatID)
+    );
+    const contextParts = [
+      cat?.fldCategoryName,
+      item?.fldItemName,
+      glossarySetLabelFromEntity(entity),
+    ].filter(Boolean);
+    setCopyModal({
+      kind: 'finding',
+      sourceId: recordId,
+      sourceShort: String(entity.fldFindShort || recordId).trim(),
+      draft: buildFindingCopyDraft(entity),
+      usageLine,
+      contextLine: contextParts.length ? contextParts.join(' · ') : '',
+    });
+  };
+
+  const openRecommendationCopyModal = (recordId: string) => {
+    const entity = mergeRecommendationWithEdits(recordId);
+    if (!entity) {
+      toast.error('Recommendation not found.');
+      return;
+    }
+    const usage = lookupRecUsage(masterUsageIndex, recordId);
+    const usageLine =
+      usage && usage.glossaryRowCount > 0
+        ? `The original is used in ${usage.glossaryRowCount} glossary row${usage.glossaryRowCount === 1 ? '' : 's'}. Copying will not change those rows.`
+        : 'The original is not used in any active glossary rows.';
+    const item = entity.fldItem
+      ? items.find((i) => libNormId(i.fldItemID || (i as { id?: string }).id) === libNormId(entity.fldItem))
+      : undefined;
+    const cat = item
+      ? categories.find((c) =>
+          libNormId(c.fldCategoryID || (c as { id?: string }).id) === libNormId(item?.fldCatID)
+        )
+      : undefined;
+    const contextParts = [
+      cat?.fldCategoryName,
+      item?.fldItemName,
+      glossarySetLabelFromEntity(entity),
+    ].filter(Boolean);
+    setCopyModal({
+      kind: 'recommendation',
+      sourceId: recordId,
+      sourceShort: String(entity.fldRecShort || recordId).trim(),
+      draft: buildRecommendationCopyDraft(entity),
+      usageLine,
+      contextLine: contextParts.length ? contextParts.join(' · ') : '',
+    });
+  };
+
+  const focusCopiedMaster = (kind: 'finding' | 'recommendation', newId: string, draft: FindingCopyDraft | RecommendationCopyDraft) => {
+    setHighlightMasterId(newId);
+    const shortText =
+      kind === 'finding'
+        ? (draft as FindingCopyDraft).fldFindShort
+        : (draft as RecommendationCopyDraft).fldRecShort;
+    setSearchTerm(shortText.trim());
+    if (kind === 'finding') {
+      const itemId = String((draft as FindingCopyDraft).fldItem || '').trim();
+      if (itemId) {
+        const it = items.find((i) => libNormId(i.fldItemID || (i as { id?: string }).id) === libNormId(itemId));
+        if (it?.fldCatID) setSelectedCatId(it.fldCatID);
+        setSelectedItemId(itemId);
+      }
+      const setId = String((draft as FindingCopyDraft).fldGlossarySetId || '').trim();
+      if (setId) setGlossarySetFilter(setId);
+    } else {
+      const setId = String((draft as RecommendationCopyDraft).fldGlossarySetId || '').trim();
+      if (setId) setGlossarySetFilter(setId);
+      else if (!setId) setGlossarySetFilter('ALL');
+    }
+    window.setTimeout(() => setHighlightMasterId(null), 8000);
+  };
+
+  const handleConfirmCopy = async () => {
+    if (!copyModal) return;
+    const shortText =
+      copyModal.kind === 'finding'
+        ? copyModal.draft.fldFindShort.trim()
+        : (copyModal.draft as RecommendationCopyDraft).fldRecShort.trim();
+    if (!shortText) {
+      toast.error('Short text is required.');
+      return;
+    }
+    if (shortText.length > 120) {
+      toast.error('Short text must be 120 characters or fewer.');
+      return;
+    }
+
+    setIsCopySaving(true);
+    try {
+      const newId = uuidv4();
+      if (copyModal.kind === 'finding') {
+        const payload = findingCopyCreatePayload(newId, copyModal.draft);
+        await firestoreService.save('findings', payload, newId);
+        focusCopiedMaster('finding', newId, copyModal.draft);
+        toast.success('New finding created. Original finding and glossary links are unchanged.');
+      } else {
+        const payload = recommendationCopyCreatePayload(
+          newId,
+          copyModal.draft as RecommendationCopyDraft
+        );
+        await firestoreService.masterRecommendations.save(payload, newId);
+        focusCopiedMaster('recommendation', newId, copyModal.draft);
+        toast.success('New recommendation created. Original recommendation and glossary links are unchanged.');
+      }
+      setCopyModal(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, copyModal.kind === 'finding' ? 'findings' : 'recommendations');
+    } finally {
+      setIsCopySaving(false);
+    }
   };
 
   const libraryRowGlossaryBadgeLabel = (record: any): string => {
@@ -987,8 +1289,16 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       findingUnitVal !== '' &&
       MEASUREMENT_UNITS.includes(findingUnitVal as (typeof MEASUREMENT_UNITS)[number]);
 
+    const isHighlighted = highlightMasterId === record.id;
+
     return (
-      <div key={record.id} className="flex flex-col gap-1.5 p-3 hover:bg-zinc-50 transition-all group border-b border-zinc-100 last:border-0">
+      <div
+        key={record.id}
+        className={cn(
+          'flex flex-col gap-1.5 p-3 hover:bg-zinc-50 transition-all group border-b border-zinc-100 last:border-0',
+          isHighlighted && 'bg-violet-50/80 ring-2 ring-inset ring-violet-300'
+        )}
+      >
         <div className="flex items-center gap-3">
           <div className="w-14 text-center">
             <input 
@@ -1060,7 +1370,20 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
           <div className="w-40 text-[9px] font-mono text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded truncate border border-zinc-100">
             {record.id}
           </div>
-          <div className="w-20 flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="w-28 flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+            {(isFinding || isRec) && (
+              <button
+                type="button"
+                title={isFinding ? 'Copy as new finding' : 'Copy as new recommendation'}
+                onClick={() =>
+                  isFinding ? openFindingCopyModal(record.id) : openRecommendationCopyModal(record.id)
+                }
+                disabled={isCopySaving}
+                className="p-1 hover:bg-violet-100 rounded text-violet-600 hover:text-violet-900 disabled:opacity-30"
+              >
+                <Copy size={12} />
+              </button>
+            )}
             <button 
               onClick={() => reorderAndNormalize(record.id, index, list)}
               disabled={index === 0}
@@ -1507,7 +1830,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               <div className="w-14 text-center">Order</div>
               <div className="flex-1">Display Name / Short Text</div>
               <div className="w-40">ID (ReadOnly)</div>
-              <div className="w-20 text-right pr-2">Reorder</div>
+              <div className="w-28 text-right pr-2">Actions</div>
             </div>
 
             <div className="flex-1 overflow-y-auto divide-y divide-zinc-100">
@@ -1701,6 +2024,24 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
         onConfirm={() => void handleMasterSaveConfirm()}
         onCancel={handleMasterSaveCancel}
       />
+
+      {copyModal ? (
+        <LibraryMasterCopyModal
+          state={copyModal}
+          isSaving={isCopySaving}
+          onClose={() => !isCopySaving && setCopyModal(null)}
+          onDraftChange={(draft) => {
+            setCopyModal((prev) => {
+              if (!prev) return null;
+              if (prev.kind === 'finding') {
+                return { ...prev, draft: draft as FindingCopyDraft };
+              }
+              return { ...prev, draft: draft as RecommendationCopyDraft };
+            });
+          }}
+          onConfirm={() => void handleConfirmCopy()}
+        />
+      ) : null}
 
       <UnsavedChangesModal 
         isOpen={!!pendingAction}
