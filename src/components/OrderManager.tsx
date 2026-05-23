@@ -17,6 +17,17 @@ import { doc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'sonner';
 import { Category, Item, Finding } from '../types';
+import { GLOSSARY_SET_DEFS } from '../lib/glossarySets';
+import {
+  findingGlossarySetLabel,
+  findingMatchesGlossarySetFilter,
+  GLOSSARY_SET_UNASSIGNED_LABEL,
+  itemScopeHasMultipleGlossarySets,
+  SEQUENCE_FINDING_SET_FILTER_ALL,
+  SEQUENCE_FINDING_SET_FILTER_UNASSIGNED,
+  SEQUENCE_INITIAL_FINDING_SET_FILTER,
+  sequenceFindingsEmptyStateMessage,
+} from '../lib/sequenceManagerFindingScope';
 
 interface OrderManagerProps {
   categories: Category[];
@@ -26,17 +37,27 @@ interface OrderManagerProps {
 
 type TabType = 'categories' | 'items' | 'findings';
 
+type VisibleOrderRow = {
+  id: string;
+  name: string;
+  order: number;
+  setLabel?: string;
+};
+
 const SEQUENCE_HELPER_BY_TAB: Record<TabType, string> = {
   categories: 'Category order is global and affects all selection views.',
   items: 'Select a category to reorder items within that scope. Changes apply on Save Changes.',
   findings:
-    'Select a category and item to reorder findings within that scope. Changes apply on Save Changes.',
+    'Choose a glossary set, then category and item to reorder findings within that set. Changes apply on Save Changes.',
 };
 
 export function OrderManager({ categories, items, findings }: OrderManagerProps) {
   const [activeTab, setActiveTab] = useState<TabType>('categories');
   const [selectedCatId, setSelectedCatId] = useState<string>('');
   const [selectedItemId, setSelectedItemId] = useState<string>('');
+  const [selectedFindingSetFilter, setSelectedFindingSetFilter] = useState<string>(
+    SEQUENCE_INITIAL_FINDING_SET_FILTER
+  );
 
   const [localOrders, setLocalOrders] = useState<Record<string, number>>({});
   const [isDirty, setIsDirty] = useState(false);
@@ -48,7 +69,7 @@ export function OrderManager({ categories, items, findings }: OrderManagerProps)
 
   useEffect(() => {
     setActiveOrderEdit(null);
-  }, [activeTab, selectedCatId, selectedItemId]);
+  }, [activeTab, selectedCatId, selectedItemId, selectedFindingSetFilter]);
 
   useEffect(() => {
     setLocalOrders((prev) => {
@@ -81,12 +102,11 @@ export function OrderManager({ categories, items, findings }: OrderManagerProps)
     if (!isSaving) setIsDirty(false);
   }, [categories, items, findings]);
 
-  const visibleData = useMemo(() => {
+  const visibleData = useMemo((): VisibleOrderRow[] => {
     if (activeTab === 'categories') {
       return [...categories]
         .map((c) => ({
-          ...c,
-          id: c.fldCategoryID || c.id,
+          id: String(c.fldCategoryID || c.id || ''),
           name: c.fldCategoryName,
           order: localOrders[c.fldCategoryID || c.id || ''] ?? 999,
         }))
@@ -98,8 +118,7 @@ export function OrderManager({ categories, items, findings }: OrderManagerProps)
       return [...items]
         .filter((i) => i.fldCatID === selectedCatId)
         .map((i) => ({
-          ...i,
-          id: i.fldItemID || i.id,
+          id: String(i.fldItemID || i.id || ''),
           name: i.fldItemName,
           order: localOrders[i.fldItemID || i.id || ''] ?? 999,
         }))
@@ -109,18 +128,34 @@ export function OrderManager({ categories, items, findings }: OrderManagerProps)
     if (activeTab === 'findings') {
       if (!selectedItemId) return [];
       return [...findings]
-        .filter((f) => f.fldItem === selectedItemId)
+        .filter((f) => String(f.fldItem ?? '').trim() === selectedItemId)
+        .filter((f) => findingMatchesGlossarySetFilter(f, selectedFindingSetFilter))
         .map((f) => ({
-          ...f,
-          id: f.fldFindID || f.id,
+          id: String(f.fldFindID || f.id || ''),
           name: f.fldFindShort,
           order: localOrders[f.fldFindID || f.id || ''] ?? 999,
+          setLabel: findingGlossarySetLabel(f),
         }))
         .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
     }
 
     return [];
-  }, [activeTab, categories, items, findings, selectedCatId, selectedItemId, localOrders]);
+  }, [
+    activeTab,
+    categories,
+    items,
+    findings,
+    selectedCatId,
+    selectedItemId,
+    selectedFindingSetFilter,
+    localOrders,
+  ]);
+
+  const findingsAllSetsWarning =
+    activeTab === 'findings' &&
+    selectedItemId &&
+    selectedFindingSetFilter === SEQUENCE_FINDING_SET_FILTER_ALL &&
+    itemScopeHasMultipleGlossarySets(findings, selectedItemId);
 
   const reorderAndNormalize = (id: string, newPosition: number) => {
     const currentList = [...visibleData];
@@ -316,7 +351,58 @@ export function OrderManager({ categories, items, findings }: OrderManagerProps)
         </Button>
       </div>
 
-      {scopeRequired ? (
+      {activeTab === 'findings' ? (
+        <div className="flex shrink-0 flex-wrap items-end gap-3 border-b border-zinc-100 bg-white/80 px-4 py-1.5">
+          <div className="min-w-[10rem] flex-1 space-y-0.5">
+            <label className="pl-0.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">
+              Glossary set
+            </label>
+            <Select
+              value={selectedFindingSetFilter}
+              onChange={(e) => setSelectedFindingSetFilter(e.target.value)}
+              options={[
+                ...GLOSSARY_SET_DEFS.map((d) => ({ value: d.id, label: d.name })),
+                { value: SEQUENCE_FINDING_SET_FILTER_UNASSIGNED, label: GLOSSARY_SET_UNASSIGNED_LABEL },
+                { value: SEQUENCE_FINDING_SET_FILTER_ALL, label: 'All sets' },
+              ]}
+            />
+          </div>
+          <div className="min-w-[10rem] flex-1 space-y-0.5">
+            <label className="pl-0.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">
+              Category
+            </label>
+            <Select
+              value={selectedCatId}
+              onChange={(e) => {
+                setSelectedCatId(e.target.value);
+                setSelectedItemId('');
+              }}
+              options={sortEntities(categories, 'fldCategoryName').map((c) => ({
+                value: c.fldCategoryID || c.id || '',
+                label: c.fldCategoryName,
+              }))}
+            />
+          </div>
+          <div className="min-w-[10rem] flex-1 space-y-0.5">
+            <label className="pl-0.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">
+              Item
+            </label>
+            <Select
+              disabled={!selectedCatId}
+              value={selectedItemId}
+              onChange={(e) => setSelectedItemId(e.target.value)}
+              options={sortEntities(
+                items.filter((i) => i.fldCatID === selectedCatId),
+                'fldItemName'
+              ).map((i) => ({
+                value: i.fldItemID || i.id || '',
+                label: i.fldItemName,
+              }))}
+            />
+          </div>
+        </div>
+      ) : null}
+      {activeTab === 'items' ? (
         <div className="flex shrink-0 flex-wrap items-end gap-3 border-b border-zinc-100 bg-white/80 px-4 py-1.5">
           <div className="min-w-[10rem] flex-1 space-y-0.5">
             <label className="pl-0.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">
@@ -334,26 +420,15 @@ export function OrderManager({ categories, items, findings }: OrderManagerProps)
               }))}
             />
           </div>
-          {activeTab === 'findings' ? (
-            <div className="min-w-[10rem] flex-1 space-y-0.5">
-              <label className="pl-0.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">
-                Item scope
-              </label>
-              <Select
-                disabled={!selectedCatId}
-                value={selectedItemId}
-                onChange={(e) => setSelectedItemId(e.target.value)}
-                options={sortEntities(
-                  items.filter((i) => i.fldCatID === selectedCatId),
-                  'fldItemName'
-                ).map((i) => ({
-                  value: i.fldItemID || i.id || '',
-                  label: i.fldItemName,
-                }))}
-              />
-            </div>
-          ) : null}
         </div>
+      ) : null}
+
+      {findingsAllSetsWarning ? (
+        <p className="shrink-0 border-b border-amber-100 bg-amber-50/90 px-4 py-1.5 text-[10px] leading-snug text-amber-900">
+          <span className="font-bold">Multiple glossary sets combined.</span> Findings from different
+          sets share one order list — prefer sequencing within a single set. Set badges identify each
+          row.
+        </p>
       ) : null}
 
       <p className="shrink-0 px-4 py-1 text-[10px] leading-snug text-zinc-500">
@@ -414,7 +489,17 @@ export function OrderManager({ categories, items, findings }: OrderManagerProps)
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-bold text-zinc-900">{item.name}</div>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-bold text-zinc-900">{item.name}</span>
+                      {item.setLabel ? (
+                        <span
+                          className="shrink-0 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide text-violet-800"
+                          title={`Glossary set: ${item.setLabel}`}
+                        >
+                          {item.setLabel}
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="truncate font-mono text-[10px] text-zinc-400">{item.id}</div>
                   </div>
                   <div className="flex w-24 items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -444,9 +529,15 @@ export function OrderManager({ categories, items, findings }: OrderManagerProps)
               <List size={40} className="mb-3 opacity-20" />
               <p className="text-sm font-medium text-zinc-600">No records found for the current selection.</p>
               <p className="mt-1 text-[10px] text-zinc-500">
-                {scopeRequired
-                  ? 'Select the scope above to view and edit order values.'
-                  : 'No categories available.'}
+                {activeTab === 'findings'
+                  ? sequenceFindingsEmptyStateMessage({
+                      selectedCatId,
+                      selectedItemId,
+                      selectedFindingSetFilter,
+                    })
+                  : scopeRequired
+                    ? 'Select the scope above to view and edit order values.'
+                    : 'No categories available.'}
               </p>
             </div>
           )}
