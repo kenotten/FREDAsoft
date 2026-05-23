@@ -102,7 +102,12 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
   );
 
   return (
-    <div className={cn("flex-1 overflow-y-auto scroll-smooth flex flex-col", activeTab === 'library_manager' ? "p-0" : "p-8")}>
+    <div
+      className={cn(
+        'flex-1 overflow-y-auto scroll-smooth flex flex-col',
+        activeTab === 'library_manager' || activeTab === 'sequence_manager' ? 'p-0' : 'p-8'
+      )}
+    >
       {activeTab === 'setup' && (
         <PortfolioView 
           selectionProps={selectionProps}
@@ -266,13 +271,20 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           standards={standards}
         />
       </div>
-      {activeTab === 'sequence_manager' && (
-        <OrderManager 
+      <div
+        className={cn(
+          activeTab === 'sequence_manager'
+            ? 'flex min-h-0 w-full flex-1 flex-col'
+            : 'hidden'
+        )}
+        data-tab-panel="sequence_manager"
+      >
+        <OrderManager
           categories={categories}
           items={items}
           findings={findings}
         />
-      )}
+      </div>
       <div
         className={cn(
           activeTab === 'library_manager'
