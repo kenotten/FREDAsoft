@@ -112,6 +112,22 @@ function libNormId(value: unknown): string {
     .toLowerCase();
 }
 
+/** Persisted short/name fields only — used for list sort/search so typing does not reorder or hide rows. */
+function libraryPersistedSortLabel(entity: {
+  fldFindShort?: string;
+  fldRecShort?: string;
+  fldCategoryName?: string;
+  fldItemName?: string;
+}): string {
+  return (
+    entity.fldFindShort ||
+    entity.fldRecShort ||
+    entity.fldCategoryName ||
+    entity.fldItemName ||
+    ''
+  );
+}
+
 function libraryCitationDisplayLabel(standard: MasterStandard | undefined, idFallback: string): string {
   if (standard) {
     const t = String(standard.fldStandardType ?? '').trim();
@@ -1330,6 +1346,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
         ...c,
         id: c.fldCategoryID || c.id,
         displayName: getValue(c, 'fldCategoryName'),
+        sortLabel: libraryPersistedSortLabel(c),
         order: getValue(c, 'fldOrder') ?? 999
       }));
     } else if (activeTab === 'items') {
@@ -1342,6 +1359,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
           ...i,
           id: i.fldItemID || i.id,
           displayName: getValue(i, 'fldItemName'),
+          sortLabel: libraryPersistedSortLabel(i),
           order: getValue(i, 'fldOrder') ?? 999,
           parentId: i.fldCatID
         }));
@@ -1356,6 +1374,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
             ...f,
             id: f.fldFindID || f.id,
             displayName: getValue(f, 'fldFindShort'),
+            sortLabel: libraryPersistedSortLabel(f),
             order: getValue(f, 'fldOrder') ?? 999,
             parentId: f.fldItem,
           }));
@@ -1378,6 +1397,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
             ...f,
             id: f.fldFindID || f.id,
             displayName: getValue(f, 'fldFindShort'),
+            sortLabel: libraryPersistedSortLabel(f),
             order: getValue(f, 'fldOrder') ?? 999,
             parentId: f.fldItem,
           }));
@@ -1387,6 +1407,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
         ...r,
         id: r.fldRecID || r.id,
         displayName: getValue(r, 'fldRecShort'),
+        sortLabel: libraryPersistedSortLabel(r),
         order: getValue(r, 'fldOrder') ?? 999,
       }));
       if (recommendationViewFilter === 'unused') {
@@ -1400,10 +1421,10 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     if (searchTerm.trim()) {
       const lowerSearch = searchTerm.toLowerCase();
       base = base.filter(item => {
-        const name = (item.displayName || '').toLowerCase();
+        const name = (item.sortLabel || libraryPersistedSortLabel(item)).toLowerCase();
         const id = (item.id || '').toLowerCase();
-        // Also check long fields if they exist
-        const longField = (getValue(item, 'fldFindLong') || getValue(item, 'fldRecLong') || '').toLowerCase();
+        // Persisted long text only — pending edits must not hide rows while typing
+        const longField = String(item.fldFindLong || item.fldRecLong || '').toLowerCase();
         return name.includes(lowerSearch) || id.includes(lowerSearch) || longField.includes(lowerSearch);
       });
     }
@@ -1419,8 +1440,14 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       });
     }
 
-    // Sort by order then name
-    return base.sort((a, b) => a.order - b.order || (a.displayName || '').localeCompare(b.displayName || ''));
+    // Sort by order then persisted name — not pending short-text edits (avoids row remount / focus loss)
+    return base.sort(
+      (a, b) =>
+        a.order - b.order ||
+        (a.sortLabel || libraryPersistedSortLabel(a)).localeCompare(
+          b.sortLabel || libraryPersistedSortLabel(b)
+        )
+    );
   }, [
     activeTab,
     categories,
@@ -1695,7 +1722,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       isCopySaving;
 
     const shortField = isFinding ? 'fldFindShort' : isRec ? 'fldRecShort' : activeTab === 'categories' ? 'fldCategoryName' : 'fldItemName';
-    const shortValue = record.displayName || '';
+    const shortValue = getValue(record, shortField) || '';
     const charCount = shortValue.length;
     
     // Zone identification for findings/recs
@@ -1737,7 +1764,6 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
 
     return (
       <div
-        key={record.id}
         className={cn(
           'flex flex-col gap-1.5 p-3 hover:bg-zinc-50 transition-all group border-b border-zinc-100 last:border-0',
           isHighlighted && 'bg-violet-50/80 ring-2 ring-inset ring-violet-300'
@@ -2474,12 +2500,20 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                         </span>
                       </div>
                       <div className="divide-y divide-zinc-100/50">
-                        {group.findings.map((record, index) => renderRecord(record, index, group.findings))}
+                        {group.findings.map((record, index) => (
+                          <React.Fragment key={record.id}>
+                            {renderRecord(record, index, group.findings)}
+                          </React.Fragment>
+                        ))}
                       </div>
                     </div>
                   ))
                 ) : (
-                  visibleData.map((record, index) => renderRecord(record, index, visibleData))
+                  visibleData.map((record, index) => (
+                    <React.Fragment key={record.id}>
+                      {renderRecord(record, index, visibleData)}
+                    </React.Fragment>
+                  ))
                 )
               ) : (
                 <div className="flex flex-col items-center justify-center p-12 text-zinc-400 text-center">
