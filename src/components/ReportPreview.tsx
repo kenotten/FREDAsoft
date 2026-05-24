@@ -33,8 +33,17 @@ import {
   buildStandardTextPaginationParts,
   standardTypeKey,
   type AddendumEntry,
+  type FinancialTableRow,
   type ReportRecordSortOrder,
-  type StandardSnapshot
+  type StandardSnapshot,
+  getFinancialLocationGroupPresentation,
+  financialRecordCellBorderStyle,
+  financialRecordDataCellClassName,
+  FINANCIAL_DATA_ROW_CLASS,
+  FINANCIAL_TABLE_CLASS,
+  FINANCIAL_SUBTOTAL_CELL_CLASS,
+  FINANCIAL_SUBTOTAL_BORDER_STYLE,
+  FINANCIAL_CATEGORY_HEADER_CELL_CLASS
 } from '../lib/reportPreviewShared';
 import type { ReportSectionSelection } from './ReportSectionSelectionDialog';
 
@@ -351,66 +360,93 @@ const FIN_PAGINATION_ROW_GAP_PX = 2;
 /** Reserve space on the last financial page(s) for Grand Total tfoot (py-4 row + border). */
 const FIN_PAGINATION_GRAND_TOTAL_RESERVE_PX = 42;
 
-/** Mirrors visible Financial Summary tbody rows so measured heights match printed rows (both sort modes). */
-function FinancialMeasurementBodyRow({
+function financialTableGlobalRowIndex(
+  financialPages: FinancialTableRow[][],
+  pageIndex: number,
+  rowIndexOnPage: number
+): number {
+  let idx = 0;
+  for (let p = 0; p < pageIndex; p++) idx += financialPages[p].length;
+  return idx + rowIndexOnPage;
+}
+
+/** Financial Summary tbody row — shared by measurement mirror and printed pages. */
+function FinancialTableBodyRow({
   row,
-  recordSortOrder
+  rowIndex,
+  allRows,
+  recordSortOrder,
+  forMeasurement
 }: {
-  row: { type: string; content?: unknown; groupHeading?: string; subtotal?: number };
+  row: FinancialTableRow;
+  rowIndex: number;
+  allRows: FinancialTableRow[];
   recordSortOrder: ReportRecordSortOrder;
+  forMeasurement?: boolean;
 }) {
+  const measureAttr = forMeasurement ? { 'data-measure-type': 'fin' as const } : {};
+
   if (row.type === 'header') {
     return (
-      <tr data-measure-type="fin" className="bg-zinc-100 break-inside-avoid">
-        <td colSpan={5} className="py-2 px-3 text-xs font-black text-zinc-900 uppercase tracking-tight">
-          {String(row.content ?? '')}
+      <tr {...measureAttr} className="break-inside-avoid">
+        <td colSpan={5} className={FINANCIAL_CATEGORY_HEADER_CELL_CLASS}>
+          {row.content}
         </td>
       </tr>
     );
   }
   if (row.type === 'record') {
-    const rec = row.content as {
-      categoryName?: string;
-      itemName?: string;
-      locationName?: string;
-      fldQTY?: number;
-      displayUnitType?: string;
-      displayUnitCost?: number;
-      totalCost?: number;
-    };
+    const rec = row.content;
+    const presentation = getFinancialLocationGroupPresentation(allRows, rowIndex);
+    if (!presentation) return null;
+    const cellBorderStyle = financialRecordCellBorderStyle();
+    const recordCell = (variant: 'body' | 'location' | 'total', alignRight = false) => ({
+      className: financialRecordDataCellClassName(presentation, variant, alignRight),
+      style: cellBorderStyle
+    });
     if (recordSortOrder === 'location_category_item') {
       return (
-        <tr data-measure-type="fin" className="text-xs break-inside-avoid">
-          <td className="py-2 px-3 text-zinc-700">{rec.categoryName ?? ''}</td>
-          <td className="py-2 px-3 text-zinc-700">{rec.itemName ?? ''}</td>
-          <td className="py-2 px-3 text-right text-zinc-700">
+        <tr {...measureAttr} className={FINANCIAL_DATA_ROW_CLASS}>
+          <td {...recordCell('body')}>{rec.categoryName ?? ''}</td>
+          <td {...recordCell('body')}>{rec.itemName ?? ''}</td>
+          <td {...recordCell('body', true)}>
             {rec.fldQTY ?? 0} {rec.displayUnitType ?? ''}
           </td>
-          <td className="py-2 px-3 text-right text-zinc-700">{formatCurrency(rec.displayUnitCost ?? 0)}</td>
-          <td className="py-2 px-3 text-right font-bold text-zinc-900">{formatCurrency(rec.totalCost ?? 0)}</td>
+          <td {...recordCell('body', true)}>{formatCurrency(rec.displayUnitCost ?? 0)}</td>
+          <td {...recordCell('total', true)}>{formatCurrency(rec.totalCost ?? 0)}</td>
         </tr>
       );
     }
     return (
-      <tr data-measure-type="fin" className="text-xs break-inside-avoid">
-        <td className="py-2 px-3 text-zinc-700">{rec.itemName ?? ''}</td>
-        <td className="py-2 px-3 text-zinc-500 italic">{rec.locationName ?? ''}</td>
-        <td className="py-2 px-3 text-right text-zinc-700">
+      <tr {...measureAttr} className={FINANCIAL_DATA_ROW_CLASS}>
+        <td {...recordCell('body')}>{rec.itemName ?? ''}</td>
+        <td {...recordCell('location')}>{rec.locationName ?? ''}</td>
+        <td {...recordCell('body', true)}>
           {rec.fldQTY ?? 0} {rec.displayUnitType ?? ''}
         </td>
-        <td className="py-2 px-3 text-right text-zinc-700">{formatCurrency(rec.displayUnitCost ?? 0)}</td>
-        <td className="py-2 px-3 text-right font-bold text-zinc-900">{formatCurrency(rec.totalCost ?? 0)}</td>
+        <td {...recordCell('body', true)}>{formatCurrency(rec.displayUnitCost ?? 0)}</td>
+        <td {...recordCell('total', true)}>{formatCurrency(rec.totalCost ?? 0)}</td>
       </tr>
     );
   }
   if (row.type === 'subtotal') {
     return (
-      <tr data-measure-type="fin" className="bg-zinc-50 break-inside-avoid">
-        <td colSpan={4} className="py-2 px-3 text-right text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-          Subtotal {row.groupHeading ?? ''}:
+      <tr {...measureAttr} className="break-inside-avoid text-xs">
+        <td
+          colSpan={4}
+          className={cn(
+            FINANCIAL_SUBTOTAL_CELL_CLASS,
+            'text-right text-[10px] font-bold text-zinc-600 uppercase tracking-widest'
+          )}
+          style={FINANCIAL_SUBTOTAL_BORDER_STYLE}
+        >
+          Subtotal {row.groupHeading}:
         </td>
-        <td className="py-2 px-3 text-right font-black text-zinc-900 border-t border-zinc-200">
-          {formatCurrency(row.subtotal ?? 0)}
+        <td
+          className={cn(FINANCIAL_SUBTOTAL_CELL_CLASS, 'text-right font-black text-zinc-900')}
+          style={FINANCIAL_SUBTOTAL_BORDER_STYLE}
+        >
+          {formatCurrency(row.subtotal)}
         </td>
       </tr>
     );
@@ -862,7 +898,7 @@ export function ReportPreview({
 
   const financialRows = useMemo(() => {
     if (!sectionSel.financial) return [];
-    const rows: any[] = [];
+    const rows: FinancialTableRow[] = [];
     financialData.forEach((group) => {
       rows.push({ type: 'header', content: group.heading });
       group.records.forEach((rec) => {
@@ -1329,7 +1365,7 @@ export function ReportPreview({
           </>
         )}
         {sectionSel.financial && financialRows.length > 0 ? (
-          <table className="w-full text-left border-collapse">
+          <table className={FINANCIAL_TABLE_CLASS}>
             <thead>
               <tr className="bg-zinc-100 border-y border-zinc-200">
                 {sectionSel.recordSortOrder === 'location_category_item' ? (
@@ -1351,12 +1387,15 @@ export function ReportPreview({
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100">
+            <tbody>
               {financialRows.map((row, idx) => (
-                <FinancialMeasurementBodyRow
+                <FinancialTableBodyRow
                   key={idx}
                   row={row}
+                  rowIndex={idx}
+                  allRows={financialRows}
                   recordSortOrder={sectionSel.recordSortOrder}
+                  forMeasurement
                 />
               ))}
             </tbody>
@@ -1573,7 +1612,7 @@ export function ReportPreview({
                       </h2>
                     )}
                     <div className="flex-1 flex flex-col">
-                      <table className="w-full text-left border-collapse">
+                      <table className={FINANCIAL_TABLE_CLASS}>
                         <thead>
                           <tr className="bg-zinc-100 border-y border-zinc-200">
                             {sectionSel.recordSortOrder === 'location_category_item' ? (
@@ -1595,54 +1634,16 @@ export function ReportPreview({
                             )}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                          {pageRows.map((row, rIdx) => {
-                            if (row.type === 'header') {
-                              return (
-                                <tr key={rIdx} className="bg-zinc-100 break-inside-avoid">
-                                  <td colSpan={5} className="py-2 px-3 text-xs font-black text-zinc-900 uppercase tracking-tight">
-                                    {row.content}
-                                  </td>
-                                </tr>
-                              );
-                            }
-                            if (row.type === 'record') {
-                              const rec = row.content;
-                              if (sectionSel.recordSortOrder === 'location_category_item') {
-                                return (
-                                  <tr key={rIdx} className="text-xs break-inside-avoid">
-                                    <td className="py-2 px-3 text-zinc-700">{rec.categoryName}</td>
-                                    <td className="py-2 px-3 text-zinc-700">{rec.itemName}</td>
-                                    <td className="py-2 px-3 text-right text-zinc-700">{rec.fldQTY} {rec.displayUnitType}</td>
-                                    <td className="py-2 px-3 text-right text-zinc-700">{formatCurrency(rec.displayUnitCost)}</td>
-                                    <td className="py-2 px-3 text-right font-bold text-zinc-900">{formatCurrency(rec.totalCost)}</td>
-                                  </tr>
-                                );
-                              }
-                              return (
-                                <tr key={rIdx} className="text-xs break-inside-avoid">
-                                  <td className="py-2 px-3 text-zinc-700">{rec.itemName}</td>
-                                  <td className="py-2 px-3 text-zinc-500 italic">{rec.locationName}</td>
-                                  <td className="py-2 px-3 text-right text-zinc-700">{rec.fldQTY} {rec.displayUnitType}</td>
-                                  <td className="py-2 px-3 text-right text-zinc-700">{formatCurrency(rec.displayUnitCost)}</td>
-                                  <td className="py-2 px-3 text-right font-bold text-zinc-900">{formatCurrency(rec.totalCost)}</td>
-                                </tr>
-                              );
-                            }
-                            if (row.type === 'subtotal') {
-                              return (
-                                <tr key={rIdx} className="bg-zinc-50 break-inside-avoid">
-                                  <td colSpan={4} className="py-2 px-3 text-right text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                                    Subtotal {row.groupHeading}:
-                                  </td>
-                                  <td className="py-2 px-3 text-right font-black text-zinc-900 border-t border-zinc-200">
-                                    {formatCurrency(row.subtotal)}
-                                  </td>
-                                </tr>
-                              );
-                            }
-                            return null;
-                          })}
+                        <tbody>
+                          {pageRows.map((row, rIdx) => (
+                            <FinancialTableBodyRow
+                              key={rIdx}
+                              row={row}
+                              rowIndex={financialTableGlobalRowIndex(financialPages, pIdx, rIdx)}
+                              allRows={financialRows}
+                              recordSortOrder={sectionSel.recordSortOrder}
+                            />
+                          ))}
                         </tbody>
                         {pIdx === financialPages.length - 1 && (
                           <tfoot>

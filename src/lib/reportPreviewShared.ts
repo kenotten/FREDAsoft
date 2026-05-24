@@ -10,6 +10,7 @@ import type {
   MasterStandard
 } from '../types';
 import { compareStandardCitations, formatStandardCitationLabel, type StandardCitationSortInput } from './standardCitationLabel';
+import { cn } from './utils';
 
 export interface StandardSnapshot {
   fldStandardType: string;
@@ -382,6 +383,246 @@ export function resolveFacilityReportNarrative(
       : undefined;
   return perFacility ?? project.fldNarrative ?? fallback;
 }
+
+/** Financial Summary table row (Report Preview pagination). */
+export type FinancialTableRow =
+  | { type: 'header'; content: string }
+  | {
+      type: 'record';
+      content: {
+        categoryName?: string;
+        itemName?: string;
+        locationName?: string;
+        fldQTY?: number;
+        displayUnitType?: string;
+        displayUnitCost?: number;
+        totalCost?: number;
+      };
+    }
+  | { type: 'subtotal'; groupHeading: string; subtotal: number };
+
+export function normalizeFinancialLocation(location: string | undefined | null): string {
+  const key = String(location ?? '').trim().toLowerCase();
+  return key || 'n/a';
+}
+
+export function financialRecordLocationFromRow(row: FinancialTableRow): string | null {
+  if (row.type !== 'record') return null;
+  return normalizeFinancialLocation(row.content.locationName);
+}
+
+export type FinancialLocationGroupPresentation = {
+  locationGroupIndex: number;
+  isFirstRowInLocationGroup: boolean;
+  isLastRowInLocationGroup: boolean;
+  /** Entire location group uses light blue when group index is odd (0 = no fill). */
+  alternateBackground: boolean;
+  hasPriorRecordInCategory: boolean;
+  /** Prior record row ended a different location group (thick bottom already drawn there). */
+  previousRecordEndedDifferentLocationGroup: boolean;
+  shouldDrawGroupTopBoundary: boolean;
+  shouldDrawGroupBottomBoundary: boolean;
+};
+
+function findPreviousRecordRowIndex(
+  rows: FinancialTableRow[],
+  rowIndex: number,
+  sectionStart: number
+): number | null {
+  for (let i = rowIndex - 1; i > sectionStart; i--) {
+    if (rows[i].type === 'record') return i;
+  }
+  return null;
+}
+
+function isLastRecordRowInLocationGroup(
+  rows: FinancialTableRow[],
+  recordRowIndex: number,
+  sectionEnd: number
+): boolean {
+  const row = rows[recordRowIndex];
+  if (row.type !== 'record') return false;
+  const loc = normalizeFinancialLocation(row.content.locationName);
+  for (let i = recordRowIndex + 1; i < sectionEnd; i++) {
+    const scanRow = rows[i];
+    if (scanRow.type !== 'record') continue;
+    return normalizeFinancialLocation(scanRow.content.locationName) === loc;
+  }
+  return true;
+}
+
+function financialCategorySectionBounds(
+  rows: FinancialTableRow[],
+  rowIndex: number
+): { sectionStart: number; sectionEnd: number } {
+  let sectionStart = 0;
+  for (let i = rowIndex; i >= 0; i--) {
+    if (rows[i].type === 'header') {
+      sectionStart = i;
+      break;
+    }
+  }
+  let sectionEnd = rows.length;
+  for (let i = rowIndex + 1; i < rows.length; i++) {
+    if (rows[i].type === 'subtotal') {
+      sectionEnd = i;
+      break;
+    }
+  }
+  return { sectionStart, sectionEnd };
+}
+
+/**
+ * Striping and dividers for financial data rows by location group within the current category.
+ * Location group index resets at each category header; uses global row index for pagination.
+ */
+export function getFinancialLocationGroupPresentation(
+  rows: FinancialTableRow[],
+  rowIndex: number
+): FinancialLocationGroupPresentation | null {
+  const row = rows[rowIndex];
+  if (row.type !== 'record') return null;
+
+  const { sectionStart, sectionEnd } = financialCategorySectionBounds(rows, rowIndex);
+  const currentLoc = normalizeFinancialLocation(row.content.locationName);
+
+  let locationGroupIndex = 0;
+  let prevRecordLoc: string | null = null;
+  let isFirstRowInLocationGroup = true;
+
+  for (let i = sectionStart + 1; i <= rowIndex; i++) {
+    const scanRow = rows[i];
+    if (scanRow.type !== 'record') continue;
+    const loc = normalizeFinancialLocation(scanRow.content.locationName);
+
+    if (prevRecordLoc !== null && loc !== prevRecordLoc) {
+      locationGroupIndex += 1;
+    }
+
+    if (i === rowIndex) {
+      isFirstRowInLocationGroup = prevRecordLoc === null || loc !== prevRecordLoc;
+    }
+
+    prevRecordLoc = loc;
+  }
+
+  let isLastRowInLocationGroup = true;
+  for (let i = rowIndex + 1; i < sectionEnd; i++) {
+    const scanRow = rows[i];
+    if (scanRow.type !== 'record') continue;
+    isLastRowInLocationGroup =
+      normalizeFinancialLocation(scanRow.content.locationName) === currentLoc;
+    break;
+  }
+
+  const alternateBackground = locationGroupIndex % 2 === 1;
+
+  const prevRecordIdx = findPreviousRecordRowIndex(rows, rowIndex, sectionStart);
+  const hasPriorRecordInCategory = prevRecordIdx !== null;
+
+  let previousRecordEndedDifferentLocationGroup = false;
+  if (prevRecordIdx !== null) {
+    const prevRow = rows[prevRecordIdx];
+    if (prevRow.type === 'record') {
+      const prevLoc = normalizeFinancialLocation(prevRow.content.locationName);
+      if (
+        prevLoc !== currentLoc &&
+        isLastRecordRowInLocationGroup(rows, prevRecordIdx, sectionEnd)
+      ) {
+        previousRecordEndedDifferentLocationGroup = true;
+      }
+    }
+  }
+
+  const shouldDrawGroupBottomBoundary = isLastRowInLocationGroup;
+  const shouldDrawGroupTopBoundary =
+    isFirstRowInLocationGroup &&
+    !(hasPriorRecordInCategory && previousRecordEndedDifferentLocationGroup);
+
+  return {
+    locationGroupIndex,
+    isFirstRowInLocationGroup,
+    isLastRowInLocationGroup,
+    alternateBackground,
+    hasPriorRecordInCategory,
+    previousRecordEndedDifferentLocationGroup,
+    shouldDrawGroupTopBoundary,
+    shouldDrawGroupBottomBoundary
+  };
+}
+
+/** Category header row (e.g. PARKING, DOORS) — only table rows that use black fill. */
+export const FINANCIAL_CATEGORY_HEADER_CELL_CLASS =
+  'py-2 px-3 text-xs font-black uppercase tracking-tight bg-zinc-900 text-white [print-color-adjust:exact]';
+
+/** Financial Summary table — separate borders avoid collapsed-border hairlines in print/PDF. */
+export const FINANCIAL_TABLE_CLASS = 'w-full text-left border-separate border-spacing-0';
+
+/** Data `<tr>` — layout/print only; background and borders live on `<td>`. */
+export const FINANCIAL_DATA_ROW_CLASS = 'text-xs break-inside-avoid [print-color-adjust:exact]';
+
+const FINANCIAL_BORDER_THICK = '2px solid #d4d4d8';
+const FINANCIAL_BORDER_NONE = 'none';
+
+export type FinancialRecordCellBorderStyle = {
+  border?: string;
+  borderTop: string;
+  borderBottom: string;
+  borderLeft: string;
+  borderRight: string;
+  boxShadow?: string;
+  outline?: string;
+};
+
+/** Alternating location-group fill on data cells (~20% sky tint; print-color-adjust on cell base). */
+export const FINANCIAL_LOCATION_GROUP_ALT_BG_CLASS = 'bg-sky-100/50';
+
+/** Financial data cells are borderless; location groups are separated by background only. */
+export function financialRecordCellBorderStyle(): FinancialRecordCellBorderStyle {
+  return {
+    border: 'none',
+    borderTop: 'none',
+    borderBottom: 'none',
+    borderLeft: 'none',
+    borderRight: 'none',
+    boxShadow: 'none',
+    outline: 'none'
+  };
+}
+
+/** Base classes for financial data cells (background + padding). */
+export const FINANCIAL_DATA_CELL_BASE_CLASS = 'py-2 px-3 [print-color-adjust:exact]';
+
+export type FinancialRecordCellTextVariant = 'body' | 'location' | 'total';
+
+export function financialRecordCellTextClassName(variant: FinancialRecordCellTextVariant): string {
+  if (variant === 'location') return 'text-zinc-500 italic';
+  if (variant === 'total') return 'font-bold text-zinc-900';
+  return 'text-zinc-700';
+}
+
+export function financialRecordDataCellClassName(
+  presentation: Pick<FinancialLocationGroupPresentation, 'alternateBackground'>,
+  variant: FinancialRecordCellTextVariant,
+  alignRight = false
+): string {
+  return cn(
+    FINANCIAL_DATA_CELL_BASE_CLASS,
+    alignRight && 'text-right',
+    financialRecordCellTextClassName(variant),
+    presentation.alternateBackground && FINANCIAL_LOCATION_GROUP_ALT_BG_CLASS
+  );
+}
+
+/** Subtotal row: normal height, no fill, thick top/bottom on cells (inline borders). */
+export const FINANCIAL_SUBTOTAL_CELL_CLASS = 'py-2 px-3 [print-color-adjust:exact]';
+
+export const FINANCIAL_SUBTOTAL_BORDER_STYLE: FinancialRecordCellBorderStyle = {
+  borderTop: FINANCIAL_BORDER_THICK,
+  borderBottom: FINANCIAL_BORDER_THICK,
+  borderLeft: FINANCIAL_BORDER_NONE,
+  borderRight: FINANCIAL_BORDER_NONE
+};
 
 export function getReportSectionAvailability(
   projectData: ProjectData[],
