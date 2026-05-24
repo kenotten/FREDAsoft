@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import { 
   Save, 
@@ -38,7 +38,7 @@ import { StandardsBrowser } from './StandardsBrowser';
 import { cn, sortEntities, formatCurrency, COST_UNIT_TYPES, MEASUREMENT_UNITS, compareEntities } from '../lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { resizeImage } from '../lib/imageUtils';
-import { normalizeId } from '../lib/idUtils';
+import { normalizeId, idsEqual } from '../lib/idUtils';
 import { toFraction, fromFraction } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
@@ -131,6 +131,15 @@ function getGlossaryContextForNav(d: any, glossaryList: any[]) {
     const byId = String(g.id || '').trim().toLowerCase() === cleanKey;
     return byGlos || byId;
   });
+}
+
+/** True when projectData should use custom Data Entry path (not glossary-row linkage). */
+function isCustomProjectDataRecord(rec: any): boolean {
+  if (!rec) return false;
+  const fldDataBlank = !(rec.fldData || '').trim();
+  const hasPDataCatItem =
+    !!(rec.fldPDataCategoryID || '').trim() && !!(rec.fldPDataItemID || '').trim();
+  return rec.fldRecordSource === 'custom' || (fldDataBlank && hasPDataCatItem);
 }
 
 function getRecordContextForNav(d: any, glossaryList: any[]) {
@@ -251,11 +260,22 @@ export default function ProjectDataEntry({
   pendingCloneSeed = null,
   onPendingCloneSeedConsumed
 }: any) {
+  const resolveProjectDataRecordForJumpSelection = useCallback(
+    (targetId: string) => {
+      const want = normalizeId(targetId);
+      if (!want) return null;
+      return (
+        (projectData || []).find((d: any) => normalizeId(d?.fldPDataID) === want) || null
+      );
+    },
+    [projectData]
+  );
+
   // Localized state management for the active record
   const activeRecord = useMemo(() => {
     if (!selections.editingRecordId) return null;
-    return (projectData || []).find((d: any) => d.fldPDataID === selections.editingRecordId) || null;
-  }, [projectData, selections.editingRecordId]);
+    return resolveProjectDataRecordForJumpSelection(String(selections.editingRecordId));
+  }, [selections.editingRecordId, resolveProjectDataRecordForJumpSelection]);
 
   const editingRecordId = selections.editingRecordId;
 
@@ -275,6 +295,9 @@ export default function ProjectDataEntry({
 
   /** After resuming a localStorage draft, skip one activeRecord hydration so form fields are not reset to server state. */
   const skipHydrationAfterDraftRef = useRef(false);
+  /** Suppress false dirty during programmatic record hydration (jump / explorer / layout hydrate). */
+  const isHydratingFromRecordRef = useRef(false);
+  const lastHydratedRecordIdRef = useRef('');
   const isFormDirtyRef = useRef(false);
   const isSavingRef = useRef(false);
   const clonePersistRef = useRef<{
@@ -496,7 +519,7 @@ export default function ProjectDataEntry({
 
   const navIndex = useMemo(() => {
     if (!editingRecordId) return -1;
-    return navRecords.findIndex((d: any) => d.fldPDataID === editingRecordId);
+    return navRecords.findIndex((d: any) => idsEqual(d.fldPDataID, editingRecordId));
   }, [navRecords, editingRecordId]);
 
   /** Dropdown options: same order as `navRecords` (project/facility scope; excludes soft-deleted via upstream `projectData`). */
@@ -576,6 +599,7 @@ export default function ProjectDataEntry({
   const [fldRecLong, setFldRecLong] = useState('');
   const [fldLocation, setFldLocation] = useState(selections.locationId || '');
   const [isDirty, setIsDirty] = useState(false);
+  const [isHydratingRecord, setIsHydratingRecord] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
   const CITATIONS_CLEARED_NO_GLOSSARY_ROW_MSG =
@@ -633,6 +657,7 @@ export default function ProjectDataEntry({
   });
 
   const isFormDirty = useMemo(() => {
+    if (isHydratingRecord || isHydratingFromRecordRef.current) return false;
     if (activeRecord) {
       const init = initialSelectionRef.current;
       const localMeas = fldMeasurement === '' ? null : Number(fldMeasurement);
@@ -678,6 +703,7 @@ export default function ProjectDataEntry({
       );
     }
   }, [
+    isHydratingRecord,
     activeRecord, selections.categoryId, selections.itemId, selections.findId, selections.recId,
     fldFindShort, fldFindLong, fldRecShort, fldRecLong,
     fldQTY, fldMeasurement, fldMeasurementType, fldMeasurementUnit, fldUnitType, fldUnitCost, fldLocation, fldImages, fldStandards
@@ -834,6 +860,7 @@ export default function ProjectDataEntry({
     setShowRecoveryModal(false);
     setSavedDraft(null);
     clonePersistRef.current = null;
+    lastHydratedRecordIdRef.current = '';
     isFormDirtyRef.current = false;
     setIsDirty(false);
     initialSelectionRef.current = {
@@ -904,6 +931,7 @@ export default function ProjectDataEntry({
   // Existing records preserve projectData.fldStandards (handled in activeRecord hydration).
   useEffect(() => {
     if (selections.dataEntryMode !== 'custom') return;
+    if (isHydratingFromRecordRef.current || isHydratingRecord) return;
     const hadGlossaryLinks = Boolean(
       (selections.findId || '').trim() ||
       (selections.recId || '').trim() ||
@@ -934,6 +962,7 @@ export default function ProjectDataEntry({
     selections.findId,
     selections.recId,
     selections.glosId,
+    isHydratingRecord,
     clearFldStandardsBecauseNoGlossaryRow
   ]);
 
@@ -1085,12 +1114,7 @@ export default function ProjectDataEntry({
       };
       return;
     }
-    const fldDataBlank = !(rec.fldData || '').trim();
-    const hasPDataCatItem =
-      !!(rec.fldPDataCategoryID || '').trim() && !!(rec.fldPDataItemID || '').trim();
-    const isCustom =
-      rec.fldRecordSource === 'custom' ||
-      (fldDataBlank && hasPDataCatItem);
+    const isCustom = isCustomProjectDataRecord(rec);
     let newSelections: any;
     if (isCustom) {
       newSelections = {
@@ -1126,12 +1150,7 @@ export default function ProjectDataEntry({
   const buildHydrationSelectionsFromRecord = useCallback(
     (rec: any, prev: any) => {
       if (!rec) return prev;
-      const fldDataBlank = !(rec.fldData || '').trim();
-      const hasPDataCatItem =
-        !!(rec.fldPDataCategoryID || '').trim() && !!(rec.fldPDataItemID || '').trim();
-      const isCustom =
-        rec.fldRecordSource === 'custom' ||
-        (fldDataBlank && hasPDataCatItem);
+      const isCustom = isCustomProjectDataRecord(rec);
       if (isCustom) {
         return {
           ...prev,
@@ -1163,6 +1182,104 @@ export default function ProjectDataEntry({
     },
     [glossary]
   );
+
+  /**
+   * Hydrate local form state + selection keys from a saved projectData row.
+   * Returns the selections object to pass to onSelectionChange (caller merges editingRecordId).
+   */
+  const hydrateProjectDataFormFromRecord = useCallback(
+    (rec: any, baseSelections: any, options?: { markDirty?: boolean }) => {
+      if (!rec) return baseSelections;
+      const markDirty = options?.markDirty ?? false;
+      const isCustom = isCustomProjectDataRecord(rec);
+      let newSelections: any;
+
+      if (isCustom) {
+        newSelections = {
+          ...baseSelections,
+          dataEntryMode: 'custom',
+          locationId: rec.fldLocation || baseSelections.locationId,
+          categoryId: rec.fldPDataCategoryID || baseSelections.categoryId || '',
+          itemId: rec.fldPDataItemID || baseSelections.itemId || '',
+          findId: '',
+          recId: '',
+          glosId: '',
+          isDirty: false
+        };
+        setCustomMasterRecId(rec.fldPDataMasterRecID || '');
+        setCustomMasterFindId(rec.fldPDataMasterFindID || '');
+      } else {
+        const targetId = (rec.fldData || '').trim().toLowerCase();
+        const glos = (glossary || []).find(
+          (g: any) => (g.id || g.fldGlosId || '').trim().toLowerCase() === targetId
+        );
+        newSelections = {
+          ...baseSelections,
+          dataEntryMode: 'glossary',
+          locationId: rec.fldLocation || baseSelections.locationId,
+          categoryId: glos?.fldCat || rec.fldPDataCategoryID || baseSelections.categoryId || '',
+          itemId: glos?.fldItem || rec.fldPDataItemID || baseSelections.itemId || '',
+          findId: glos?.fldFind || '',
+          recId: glos?.fldRec || glos?.fldRecID || '',
+          glosId: glos?.fldGlosId || glos?.id || '',
+          isDirty: false
+        };
+        setCustomMasterRecId('');
+        setCustomMasterFindId('');
+      }
+
+      initialSelectionRef.current = {
+        categoryId: newSelections.categoryId || '',
+        itemId: newSelections.itemId || '',
+        findId: newSelections.findId || '',
+        recId: newSelections.recId || '',
+        glosId: newSelections.glosId || ''
+      };
+
+      setFldFindShort(rec.fldFindShort || '');
+      setFldFindLong(rec.fldFindLong || '');
+      setFldRecShort(rec.fldRecShort || '');
+      setFldRecLong(rec.fldRecLong || '');
+      setFldQTY(rec.fldQTY || 0);
+      setFldMeasurement(rec.fldMeasurement ?? '');
+      setFldMeasurementType(rec.fldMeasurementType || '');
+      setFldMeasurementUnit(rec.fldMeasurementUnit || '');
+      setFldUnitType(rec.fldUnitType || 'Decimal');
+      setFldUnitCost(rec.fldUnitCost || 0);
+      setFldTotalCost(rec.fldTotalCost || 0);
+      setFldLocation(rec.fldLocation || '');
+      setFldImages(Array.isArray(rec.fldImages) ? rec.fldImages : []);
+
+      if (!isCustom) {
+        const savedStd = safeArray(rec.fldStandards);
+        const glosForStd = (glossary || []).find(
+          (g: any) =>
+            (g.id || g.fldGlosId || '').trim().toLowerCase() ===
+            (rec.fldData || '').trim().toLowerCase()
+        );
+        setFldStandards(
+          savedStd.length > 0
+            ? savedStd
+            : glosForStd
+              ? standardsIdsFromGlossaryRow(glosForStd, findings || [], masterRecommendations || [])
+              : []
+        );
+      } else {
+        setFldStandards(safeArray(rec.fldStandards));
+      }
+
+      setIsDirty(markDirty);
+      return newSelections;
+    },
+    [glossary, findings, masterRecommendations]
+  );
+
+  const finishRecordHydration = useCallback(() => {
+    queueMicrotask(() => {
+      isHydratingFromRecordRef.current = false;
+      setIsHydratingRecord(false);
+    });
+  }, []);
 
   const applyCloneFromSeed = useCallback(
     (seed: ProjectDataCloneSeed) => {
@@ -1413,95 +1530,15 @@ export default function ProjectDataEntry({
     toast.info('Draft discarded');
   };
 
-  useEffect(() => {
+  /** Hydrate before paint when editingRecordId changes (explorer edit, etc.). Jump nav hydrates synchronously via performRecordNavigation. */
+  useLayoutEffect(() => {
     if (skipHydrationAfterDraftRef.current) {
       skipHydrationAfterDraftRef.current = false;
       return;
     }
-    if (activeRecord) {
-      console.log("Hydrating Form with:", activeRecord);
-      const fldDataBlank = !(activeRecord.fldData || '').trim();
-      const hasPDataCatItem =
-        !!(activeRecord.fldPDataCategoryID || '').trim() && !!(activeRecord.fldPDataItemID || '').trim();
-      const isCustom =
-        activeRecord.fldRecordSource === 'custom' ||
-        (fldDataBlank && hasPDataCatItem);
-      let newSelections: any = { ...selections };
-      if (isCustom) {
-        newSelections = {
-          ...selections,
-          dataEntryMode: 'custom',
-          locationId: activeRecord.fldLocation || selections.locationId,
-          categoryId: activeRecord.fldPDataCategoryID || selections.categoryId || '',
-          itemId: activeRecord.fldPDataItemID || selections.itemId || '',
-          findId: '',
-          recId: '',
-          glosId: ''
-        };
-        setCustomMasterRecId(activeRecord.fldPDataMasterRecID || '');
-        setCustomMasterFindId(activeRecord.fldPDataMasterFindID || '');
-      } else {
-        // BLUEPRINT-ACCURATE POPULATION (Glossary)
-        const targetId = (activeRecord.fldData || "").trim().toLowerCase();
-        const glos = (glossary || []).find((g: any) => (g.id || g.fldGlosId || "").trim().toLowerCase() === targetId);
-        newSelections = {
-          ...selections,
-          dataEntryMode: 'glossary',
-          locationId: activeRecord.fldLocation || selections.locationId,
-          categoryId: glos?.fldCat || selections.categoryId || '',
-          itemId: glos?.fldItem || selections.itemId || '',
-          findId: glos?.fldFind || selections.findId || '',
-          recId: glos?.fldRec || glos?.fldRecID || selections.recId || '',
-          glosId: glos?.fldGlosId || glos?.id || ''
-        };
-        setCustomMasterRecId('');
-        setCustomMasterFindId('');
-      }
-
-      initialSelectionRef.current = {
-        categoryId: newSelections.categoryId || '',
-        itemId: newSelections.itemId || '',
-        findId: newSelections.findId || '',
-        recId: newSelections.recId || '',
-        glosId: newSelections.glosId || ''
-      };
-
-      onSelectionChange(newSelections);
-      console.log("Selections set to:", newSelections);
-
-      setFldFindShort(activeRecord.fldFindShort || '');
-      setFldFindLong(activeRecord.fldFindLong || '');
-      setFldRecShort(activeRecord.fldRecShort || '');
-      setFldRecLong(activeRecord.fldRecLong || '');
-      setFldQTY(activeRecord.fldQTY || 0);
-      setFldMeasurement(activeRecord.fldMeasurement ?? '');
-      setFldMeasurementType(activeRecord.fldMeasurementType || '');
-      setFldMeasurementUnit(activeRecord.fldMeasurementUnit || '');
-      setFldUnitType(activeRecord.fldUnitType || 'Decimal');
-      setFldUnitCost(activeRecord.fldUnitCost || 0);
-      setFldTotalCost(activeRecord.fldTotalCost || 0);
-      setFldLocation(activeRecord.fldLocation || '');
-      setFldImages(Array.isArray(activeRecord.fldImages) ? activeRecord.fldImages : []);
-      // Existing records preserve saved projectData.fldStandards; backfill from glossary when empty
-      if (!isCustom) {
-        const savedStd = safeArray(activeRecord.fldStandards);
-        const glosForStd = (glossary || []).find(
-          (g: any) =>
-            (g.id || g.fldGlosId || '').trim().toLowerCase() ===
-            (activeRecord.fldData || '').trim().toLowerCase()
-        );
-        setFldStandards(
-          savedStd.length > 0
-            ? savedStd
-            : glosForStd
-              ? standardsIdsFromGlossaryRow(glosForStd, findings || [], masterRecommendations || [])
-              : []
-        );
-      } else {
-        setFldStandards(safeArray(activeRecord.fldStandards));
-      }
-      setIsDirty(false);
-    } else {
+    const rid = normalizeId(selections.editingRecordId);
+    if (!rid) {
+      lastHydratedRecordIdRef.current = '';
       initialSelectionRef.current = {
         categoryId: '',
         itemId: '',
@@ -1509,19 +1546,42 @@ export default function ProjectDataEntry({
         recId: '',
         glosId: ''
       };
-      // Inheritance Lock: Initialize from selections if new record
       if (selections.locationId) setFldLocation(selections.locationId);
+      return;
     }
+    if (lastHydratedRecordIdRef.current === rid) return;
+
+    const record = resolveProjectDataRecordForJumpSelection(rid);
+    if (!record) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn(
+          '[ProjectDataEntry] Hydration: editingRecordId has no matching projectData row',
+          { rid, projectId: selections.projectId, facilityId: selections.facilityId }
+        );
+      }
+      return;
+    }
+
+    isHydratingFromRecordRef.current = true;
+    setIsHydratingRecord(true);
+    lastHydratedRecordIdRef.current = rid;
+    const newSel = hydrateProjectDataFormFromRecord(
+      record,
+      { ...selections, editingRecordId: record.fldPDataID, isDirty: false },
+      { markDirty: false }
+    );
+    onSelectionChange(newSel);
+    finishRecordHydration();
   }, [
-    activeRecord?.fldPDataID,
-    activeRecord?.fldRecordSource,
-    activeRecord?.fldData,
-    activeRecord?.fldPDataCategoryID,
-    activeRecord?.fldPDataItemID,
-    activeRecord?.fldPDataMasterRecID,
-    activeRecord?.fldPDataMasterFindID,
-    activeRecord?.fldMeasurementType,
-    glossary
+    selections.editingRecordId,
+    selections.locationId,
+    selections.projectId,
+    selections.facilityId,
+    projectData,
+    resolveProjectDataRecordForJumpSelection,
+    hydrateProjectDataFormFromRecord,
+    onSelectionChange,
+    finishRecordHydration
   ]);
 
   // Live calculation logic
@@ -1718,16 +1778,46 @@ export default function ProjectDataEntry({
     }
   };
 
+  const performRecordNavigation = useCallback(
+    (targetId: string) => {
+      const record = resolveProjectDataRecordForJumpSelection(targetId);
+      if (!record?.fldPDataID) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[ProjectDataEntry] Record navigation: projectData row not found', {
+            targetId,
+            projectId: selections.projectId,
+            facilityId: selections.facilityId
+          });
+        }
+        toast.error('Could not load the selected record.');
+        return;
+      }
+      const rid = normalizeId(record.fldPDataID);
+      isHydratingFromRecordRef.current = true;
+      setIsHydratingRecord(true);
+      lastHydratedRecordIdRef.current = rid;
+      const newSel = hydrateProjectDataFormFromRecord(
+        record,
+        { ...selections, editingRecordId: record.fldPDataID, isDirty: false },
+        { markDirty: false }
+      );
+      onSelectionChange(newSel);
+      finishRecordHydration();
+    },
+    [
+      resolveProjectDataRecordForJumpSelection,
+      hydrateProjectDataFormFromRecord,
+      selections,
+      onSelectionChange,
+      finishRecordHydration
+    ]
+  );
+
   const navigateToRecord = (targetId: string) => {
     confirmAction(
       'Switch record',
       'You have unsaved changes. Switching records will discard unsaved edits unless you save first. Continue?',
-      () =>
-        onSelectionChange({
-          ...selections,
-          editingRecordId: targetId,
-          isDirty: false
-        })
+      () => performRecordNavigation(targetId)
     );
   };
 
@@ -1786,6 +1876,7 @@ export default function ProjectDataEntry({
     setSavedDraft(null);
     draftRecoveryOfferedSigRef.current = '';
     clonePersistRef.current = null;
+    lastHydratedRecordIdRef.current = '';
     setCustomMasterRecId('');
     setCustomMasterFindId('');
     onSelectionChange({
@@ -2309,6 +2400,7 @@ export default function ProjectDataEntry({
 
   // Handle auto-selection of recommendation when exactly one glossary-backed option exists
   useEffect(() => {
+    if (isHydratingFromRecordRef.current || isHydratingRecord) return;
     if (!selections.findId || selections.recId || recommendationOptions.length !== 1) return;
     const only = recommendationOptions[0];
     let gRow = rowsForPath.find(
@@ -2320,7 +2412,7 @@ export default function ProjectDataEntry({
       );
     }
     if (gRow) applyGlossaryRecommendationRow(gRow, false);
-  }, [selections.findId, selections.recId, recommendationOptions, rowsForPath, glossary]);
+  }, [isHydratingRecord, selections.findId, selections.recId, recommendationOptions, rowsForPath, glossary]);
 
   const sortedCategories = useMemo(
     () =>
@@ -2725,7 +2817,7 @@ export default function ProjectDataEntry({
     : !canNavStep || navIndex < 0 || navIndex >= navCount - 1;
 
   const jumpSelectValue =
-    editingRecordIdNorm && navRecords.some((d: any) => d.fldPDataID === editingRecordIdNorm)
+    editingRecordIdNorm && navRecords.some((d: any) => idsEqual(d.fldPDataID, editingRecordIdNorm))
       ? editingRecordIdNorm
       : '';
 
