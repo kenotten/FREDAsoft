@@ -46,6 +46,8 @@ import {
 } from '../lib/crossSetTargetPreview';
 import { CrossSetTargetPreviewPanel } from './CrossSetTargetPreviewPanel';
 import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
+import { glossarySetLabelFromEntity } from '../lib/libraryMasterCopy';
+import { isActiveLibraryMaster } from '../lib/libraryManagerFindings';
 import { 
   Category, 
   Item, 
@@ -132,6 +134,73 @@ function masterMatchesSelectedGlossarySet(master: any, selectedSetKey: string): 
 
 function glossaryRowRecId(g: any): string {
   return String(g?.fldRec || g?.fldRecID || '').trim().toLowerCase();
+}
+
+const FINDING_SEARCH_RESULT_CAP = 50;
+
+type FindingSearchScope = 'current_item' | 'current_glossary_set' | 'all';
+
+const FINDING_SEARCH_SCOPE_OPTIONS: { value: FindingSearchScope; label: string }[] = [
+  { value: 'current_item', label: 'Current item' },
+  { value: 'current_glossary_set', label: 'Current glossary set' },
+  { value: 'all', label: 'All findings' },
+];
+
+function findingMatchesSearchScope(
+  finding: Finding,
+  scope: FindingSearchScope,
+  selectedItem: string,
+  selectedSetKey: string
+): boolean {
+  if (scope === 'all') return true;
+  if (scope === 'current_item') {
+    return (
+      String(finding.fldItem ?? '')
+        .toLowerCase()
+        .trim() === String(selectedItem ?? '').toLowerCase().trim()
+    );
+  }
+  return masterMatchesSelectedGlossarySet(finding, selectedSetKey);
+}
+
+const USE_EXISTING_FINDING_CROSS_CONTEXT_CONFIRM =
+  'This existing finding belongs to a different item/set. The glossary row will use this finding under the current category/item. Continue?';
+
+function resolveFindingCatItemPath(
+  finding: Finding,
+  categories: Category[],
+  items: Item[]
+): { categoryName: string; itemName: string } {
+  const itemId = String(finding.fldItem ?? '').trim();
+  const item = items.find(
+    (i) =>
+      String(i.fldItemID || (i as { id?: string }).id || '')
+        .toLowerCase()
+        .trim() === itemId.toLowerCase()
+  );
+  const catId = String(item?.fldCatID ?? '').trim();
+  const cat = categories.find(
+    (c) =>
+      String(c.fldCategoryID || (c as { id?: string }).id || '')
+        .toLowerCase()
+        .trim() === catId.toLowerCase()
+  );
+  return {
+    categoryName: cat?.fldCategoryName || '(unknown category)',
+    itemName: item?.fldItemName || '(unknown item)',
+  };
+}
+
+function findingSearchContextDiffers(
+  finding: Finding,
+  selectedItem: string,
+  currentSetKey: string
+): boolean {
+  const sourceItem = String(finding.fldItem ?? '').trim().toLowerCase();
+  const currentItem = String(selectedItem ?? '').trim().toLowerCase();
+  const itemDiffers = Boolean(sourceItem && currentItem && sourceItem !== currentItem);
+  const setDiffers = masterLibrarySetKey(finding) !== currentSetKey;
+  return itemDiffers || setDiffers;
 }
 
 type LibraryDraftSnapshot = {
@@ -1116,10 +1185,19 @@ export function GlossaryBuilder({
     selections.editingGlossaryId
   ]);
 
-  const [newType, setNewType] = useState<'category' | 'item' | 'finding' | 'recommendation' | 'glossary_record' | 'link_recommendation' | null>(null);
+  const [newType, setNewType] = useState<
+    | 'category'
+    | 'item'
+    | 'finding'
+    | 'recommendation'
+    | 'glossary_record'
+    | 'link_recommendation'
+    | 'link_finding'
+    | null
+  >(null);
 
   const [formData, setFormData] = useState({
-    catName: '', catOrder: '', itemName: '', itemOrder: '', findShort: '', findLong: '', findOrder: '', fldUnitType: '', recShort: '', recLong: '', recOrder: '', unit: '', uom: '',
+    catName: '', catOrder: '', itemName: '', itemOrder: '', findShort: '', findLong: '', findOrder: '', findMeasurementType: '', fldUnitType: '', recShort: '', recLong: '', recOrder: '', unit: '', uom: '',
     fldUnitCostOverride: '', fldUnitTypeOverride: ''
   });
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1133,7 +1211,13 @@ export function GlossaryBuilder({
   const [relatedNewFindShort, setRelatedNewFindShort] = useState('');
   const [relatedNewFindLong, setRelatedNewFindLong] = useState('');
   const [relatedRecordSaving, setRelatedRecordSaving] = useState(false);
+  const [findingSearchScope, setFindingSearchScope] = useState<FindingSearchScope>('current_item');
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, collection: string, label: string, type: 'delete' | 'unassociate', isAssociated?: boolean } | null>(null);
+
+  const openFindingSearchModal = () => {
+    setFindingSearchScope('current_item');
+    setNewType('link_finding');
+  };
 
   const handleDeleteAction = async () => {
     if (!confirmDelete) return;
@@ -1506,14 +1590,43 @@ export function GlossaryBuilder({
   };
 
   const saveNewFinding = async () => {
+    const trimmedShort = formData.findShort.trim();
+    if (!trimmedShort) {
+      toast.error('Finding short title cannot be blank.');
+      return;
+    }
+
+    if (!editingId) {
+      const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
+      const candidateNorm = normalizeForDeterministicMatch(trimmedShort);
+      const duplicateMaster = (findings || []).some((f: Finding) => {
+        if (!masterMatchesSelectedGlossarySet(f, selectedSetKeyUi)) return false;
+        if (
+          String(f.fldItem || '').toLowerCase().trim() !==
+          String(selectedItem || '').toLowerCase().trim()
+        ) {
+          return false;
+        }
+        return normalizeForDeterministicMatch(f.fldFindShort) === candidateNorm;
+      });
+      if (duplicateMaster) {
+        toast.error(
+          'A finding with this short title already exists for this glossary set and item context. Use a distinct title.'
+        );
+        return;
+      }
+    }
+
     try {
       const id = editingId || uuidv4();
+      const measurementType = String(formData.findMeasurementType ?? '').trim();
       const payload = sanitizeData({ 
         fldFindID: id, 
         fldItem: selectedItem, 
-        fldFindShort: formData.findShort, 
+        fldFindShort: trimmedShort, 
         fldFindLong: formData.findLong, 
         fldOrder: formData.findOrder === '' ? 999 : Number(formData.findOrder),
+        ...(measurementType ? { fldMeasurementType: measurementType } : {}),
         fldUnitType: formData.fldUnitType,
         fldSuggestedRecs: (() => {
           const raw = editingId ? (findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(id || "").toLowerCase().trim())?.fldSuggestedRecs) : [];
@@ -1599,6 +1712,44 @@ export function GlossaryBuilder({
       console.error('Update Finding Error:', error);
       handleFirestoreError(error, OperationType.UPDATE, `findings/${findId}`);
     }
+  };
+
+  const applyUseExistingFinding = (findId: string) => {
+    const finding = findings?.find(
+      (f: Finding) =>
+        String(f.id || f.fldFindID || '').trim() === String(findId || '').trim()
+    );
+    if (!finding) {
+      toast.error('Finding not found in local state.');
+      return;
+    }
+
+    if (
+      findingSearchContextDiffers(
+        finding,
+        selectedItem,
+        normalizeGlossaryRecordSetKey(selectedGlossarySetId)
+      )
+    ) {
+      const ok = window.confirm(USE_EXISTING_FINDING_CROSS_CONTEXT_CONFIRM);
+      if (!ok) return;
+    }
+
+    setNewType(null);
+    setSelectedFind(String(finding.fldFindID || finding.id || findId));
+  };
+
+  const applyUseFindingAsTemplate = (finding: Finding) => {
+    setEditingId(null);
+    setFormData((prev) => ({
+      ...prev,
+      findShort: String(finding.fldFindShort ?? ''),
+      findLong: String(finding.fldFindLong ?? ''),
+      findOrder: '',
+      findMeasurementType: String(finding.fldMeasurementType ?? ''),
+      fldUnitType: String(finding.fldUnitType ?? ''),
+    }));
+    setNewType('finding');
   };
 
   const handleLinkRecommendation = async (recId: string) => {
@@ -1694,7 +1845,14 @@ export function GlossaryBuilder({
     } else if (type === 'finding' && selectedFind) {
       const f = findings.find((f: any) => (f.id || f.fldFindID) === selectedFind);
       if (f) {
-        setFormData({ ...formData, findShort: f.fldFindShort, findLong: f.fldFindLong, findOrder: f.fldOrder?.toString() || '', fldUnitType: f.fldUnitType || '' });
+        setFormData({
+          ...formData,
+          findShort: f.fldFindShort,
+          findLong: f.fldFindLong,
+          findOrder: f.fldOrder?.toString() || '',
+          findMeasurementType: f.fldMeasurementType || '',
+          fldUnitType: f.fldUnitType || '',
+        });
         setEditingId(selectedFind);
       }
     } else if (type === 'recommendation' && selectedRec) {
@@ -1717,14 +1875,22 @@ export function GlossaryBuilder({
       if (i) setFormData({ ...formData, itemName: i.fldItemName + ' (Copy)', itemOrder: (i.fldOrder || 0).toString() });
     } else if (type === 'finding' && selectedFind) {
       const f = findings.find((f: any) => (f.id || f.fldFindID) === selectedFind);
-      if (f) setFormData({ ...formData, findShort: f.fldFindShort + ' (Copy)', findLong: f.fldFindLong, findOrder: (f.fldOrder || 0).toString(), fldUnitType: f.fldUnitType || '' });
+      if (f)
+        setFormData({
+          ...formData,
+          findShort: f.fldFindShort + ' (Copy)',
+          findLong: f.fldFindLong,
+          findOrder: (f.fldOrder || 0).toString(),
+          findMeasurementType: f.fldMeasurementType || '',
+          fldUnitType: f.fldUnitType || '',
+        });
     } else if (type === 'recommendation' && selectedRec) {
       const r = masterRecsSource.find((r: any) => (r.id || r.fldRecID || "").toLowerCase() === (selectedRec || "").toLowerCase());
       if (r) setFormData({ ...formData, recShort: r.fldRecShort + ' (Copy)', recLong: r.fldRecLong, recOrder: (r.fldOrder || 0).toString(), unit: r.fldUnit?.toString() || '0', uom: r.fldUOM || 'EA' });
     } else {
       setFormData({ 
         catName: '', catOrder: '', itemName: '', itemOrder: '', 
-        findShort: '', findLong: '', findOrder: '', fldUnitType: '', 
+        findShort: '', findLong: '', findOrder: '', findMeasurementType: '', fldUnitType: '', 
         recShort: '', recLong: '', recOrder: '', 
         unit: '', uom: '',
         fldUnitCostOverride: '', fldUnitTypeOverride: '' 
@@ -1747,6 +1913,7 @@ export function GlossaryBuilder({
       findShort: find?.fldFindShort || '', 
       findLong: find?.fldFindLong || '', 
       findOrder: (find?.fldOrder ?? 999).toString(),
+      findMeasurementType: find?.fldMeasurementType || '',
       fldUnitType: find?.fldUnitType || '', 
       recShort: rec?.fldRecShort || '', 
       recLong: rec?.fldRecLong || '', 
@@ -1822,6 +1989,49 @@ export function GlossaryBuilder({
       )
       .slice(0, 50);
   }, [masterRecsSource, formData.recShort, glossarySetKeyUi]);
+
+  const findingSearchScopedPool = useMemo(() => {
+    return (findings || [])
+      .filter((f: Finding) => isActiveLibraryMaster(f))
+      .filter((f) =>
+        findingMatchesSearchScope(f, findingSearchScope, selectedItem, glossarySetKeyUi)
+      );
+  }, [findings, findingSearchScope, selectedItem, glossarySetKeyUi]);
+
+  const filteredMasterFindings = useMemo(() => {
+    const term = (formData.findShort || '').toLowerCase().trim();
+    const filtered = term
+      ? findingSearchScopedPool.filter(
+          (f) =>
+            (f.fldFindShort?.toLowerCase() || '').includes(term) ||
+            (f.fldFindLong?.toLowerCase() || '').includes(term)
+        )
+      : findingSearchScopedPool;
+    return sortEntities(filtered, 'fldFindShort').slice(0, FINDING_SEARCH_RESULT_CAP);
+  }, [findingSearchScopedPool, formData.findShort]);
+
+  const currentGlossarySetLabel = useMemo(() => {
+    if (!selectedGlossarySetId) return 'Unassigned / Legacy';
+    return glossarySetById(selectedGlossarySetId)?.name || String(selectedGlossarySetId).trim();
+  }, [selectedGlossarySetId]);
+
+  const currentCatItemPathLabel = useMemo(() => {
+    const cat = categories?.find(
+      (c: Category) =>
+        String(c.fldCategoryID || (c as { id?: string }).id || '')
+          .toLowerCase()
+          .trim() === String(selectedCat || '').toLowerCase().trim()
+    );
+    const item = items?.find(
+      (i: Item) =>
+        String(i.fldItemID || (i as { id?: string }).id || '')
+          .toLowerCase()
+          .trim() === String(selectedItem || '').toLowerCase().trim()
+    );
+    const catName = cat?.fldCategoryName || selectedCat || '(category)';
+    const itemName = item?.fldItemName || selectedItem || '(item)';
+    return `${catName} → ${itemName}`;
+  }, [categories, items, selectedCat, selectedItem]);
 
   const itemFilteredMasterRecs = useMemo(() => {
     if (!masterRecsSource || masterRecsSource.length === 0) return [];
@@ -3185,15 +3395,28 @@ export function GlossaryBuilder({
           </div>
 
           <div className="flex gap-2 items-end">
-            <Select 
-              className="flex-1" 
-              label="Finding" 
-              disabled={!selectedItem} 
-              value={selectedFind} 
-              highlight={true} 
-              onChange={(e: any) => setSelectedFind(e.target.value)} 
-              options={findingsOptionsWithContext || []} 
-            />
+            <div className="flex-1 flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Finding</label>
+              <div className="flex gap-2">
+                <Select 
+                  className="flex-1" 
+                  disabled={!selectedItem} 
+                  value={selectedFind} 
+                  highlight={true} 
+                  onChange={(e: any) => setSelectedFind(e.target.value)} 
+                  options={findingsOptionsWithContext || []} 
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={openFindingSearchModal}
+                  disabled={!selectedItem}
+                  title="Search existing findings"
+                >
+                  <Search size={14} />
+                </Button>
+              </div>
+            </div>
             <div className="flex gap-1 items-end">
               <Button variant="secondary" size="sm" className="mb-1" disabled={!selectedItem} onClick={() => openNewWithTemplate('finding')}><Plus size={14} /></Button>
               <Button variant="secondary" size="sm" className="mb-1" disabled={!selectedFind} onClick={() => openEdit('finding')}><Edit2 size={14} /></Button>
@@ -3400,7 +3623,9 @@ export function GlossaryBuilder({
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden">
             <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
               <h2 className="text-lg font-bold text-zinc-900 uppercase tracking-tight">
-                {editingId ? 'Edit' : 'Add New'} {newType.replace('_', ' ')}
+                {newType === 'link_finding'
+                  ? 'Search Existing Findings'
+                  : `${editingId ? 'Edit' : 'Add New'} ${newType.replace(/_/g, ' ')}`}
               </h2>
               <button onClick={() => { setNewType(null); setEditingId(null); }} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
                 <Plus size={20} className="rotate-45 text-zinc-400" />
@@ -3493,6 +3718,144 @@ export function GlossaryBuilder({
                   </div>
                 </div>
               )}
+              {newType === 'link_finding' && (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600 leading-snug">
+                    <span className="font-semibold text-zinc-800">Current context:</span>{' '}
+                    {currentCatItemPathLabel}
+                    <span className="mx-1">·</span>
+                    <span className="font-semibold text-zinc-800">{currentGlossarySetLabel}</span>
+                  </div>
+                  <fieldset className="space-y-2">
+                    <legend className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                      Search scope
+                    </legend>
+                    <div className="flex flex-wrap gap-4">
+                      {FINDING_SEARCH_SCOPE_OPTIONS.map((opt) => (
+                        <label
+                          key={opt.value}
+                          className="flex items-center gap-2 text-xs text-zinc-700 cursor-pointer"
+                        >
+                          <input
+                            type="radio"
+                            name="finding-search-scope"
+                            value={opt.value}
+                            checked={findingSearchScope === opt.value}
+                            onChange={() => setFindingSearchScope(opt.value)}
+                            className="accent-indigo-600"
+                          />
+                          {opt.label}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <Input
+                    label="Search existing findings"
+                    placeholder="Type to filter by short or long text..."
+                    value={formData.findShort}
+                    onChange={(e) => setFormData({ ...formData, findShort: e.target.value })}
+                    autoFocus
+                  />
+                  <div className="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto pr-2">
+                    {filteredMasterFindings.length > 0 ? (
+                      filteredMasterFindings.map((f) => {
+                        const findId = String(f.fldFindID || f.id || '').trim();
+                        const path = resolveFindingCatItemPath(f, categories, items);
+                        const setLabel = glossarySetLabelFromEntity(f);
+                        const citationCount = normalizeStringArray(f.fldStandards).length;
+                        const contextDiffers = findingSearchContextDiffers(
+                          f,
+                          selectedItem,
+                          glossarySetKeyUi
+                        );
+                        return (
+                          <div
+                            key={findId}
+                            className="flex flex-col gap-2 p-3 border border-zinc-100 rounded-xl bg-white"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <span className="text-sm font-bold text-zinc-900">
+                                {f.fldFindShort || findId}
+                              </span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                {setLabel}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-500 line-clamp-2">
+                              {f.fldFindLong || '—'}
+                            </p>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-zinc-500">
+                              <span>
+                                <span className="font-semibold text-zinc-600">Path:</span>{' '}
+                                {path.categoryName} → {path.itemName}
+                              </span>
+                              <span>
+                                <span className="font-semibold text-zinc-600">Citations:</span>{' '}
+                                {citationCount}
+                              </span>
+                            </div>
+                            {contextDiffers && (
+                              <p className="text-[10px] leading-snug text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
+                                Source differs from current context ({currentCatItemPathLabel} ·{' '}
+                                {currentGlossarySetLabel}). Reuse links this master id under the
+                                current path; template creates a new finding under the current item
+                                and set only.
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="secondary"
+                                className="h-7 text-[10px]"
+                                onClick={() => applyUseExistingFinding(findId)}
+                              >
+                                Use existing finding
+                              </Button>
+                              <Button
+                                type="button"
+                                size="xs"
+                                className="h-7 text-[10px]"
+                                onClick={() => applyUseFindingAsTemplate(f)}
+                              >
+                                Use as template
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="p-8 text-center border border-dashed border-zinc-200 rounded-xl space-y-2">
+                        <p className="text-sm text-zinc-500">
+                          {findingSearchScopedPool.length === 0
+                            ? 'No findings in this scope.'
+                            : 'No matching findings for your search text.'}
+                        </p>
+                        {findingSearchScopedPool.length === 0 &&
+                          findingSearchScope === 'current_item' && (
+                            <p className="text-xs text-zinc-400 leading-snug">
+                              Try switching scope to{' '}
+                              <span className="font-semibold text-zinc-600">Current glossary set</span> or{' '}
+                              <span className="font-semibold text-zinc-600">All findings</span>.
+                            </p>
+                          )}
+                        {findingSearchScopedPool.length === 0 &&
+                          findingSearchScope === 'current_glossary_set' && (
+                            <p className="text-xs text-zinc-400 leading-snug">
+                              Try switching scope to{' '}
+                              <span className="font-semibold text-zinc-600">All findings</span> to search
+                              across items.
+                            </p>
+                          )}
+                        {findingSearchScopedPool.length > 0 &&
+                          (formData.findShort || '').trim() !== '' && (
+                            <p className="text-xs text-zinc-400">Clear the search text or try another scope.</p>
+                          )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {newType === 'link_recommendation' && (
                 <div className="space-y-4">
                   <Input 
@@ -3532,7 +3895,7 @@ export function GlossaryBuilder({
 
             <div className="p-6 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => { setNewType(null); setEditingId(null); }}>Cancel</Button>
-              {newType !== 'link_recommendation' && (
+              {newType !== 'link_recommendation' && newType !== 'link_finding' && (
                 <Button onClick={() => {
                   if (newType === 'category') saveNewCategory();
                   if (newType === 'item') saveNewItem();
@@ -3540,7 +3903,7 @@ export function GlossaryBuilder({
                   if (newType === 'recommendation') saveNewRecommendation();
                   if (newType === 'glossary_record') saveNewGlossaryRecord();
                 }}>
-                  {editingId ? 'Update' : 'Save'} {newType.replace('_', ' ')}
+                  {editingId ? 'Update' : 'Save'} {newType.replace(/_/g, ' ')}
                 </Button>
               )}
             </div>

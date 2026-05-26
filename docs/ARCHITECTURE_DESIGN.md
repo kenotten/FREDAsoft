@@ -635,6 +635,8 @@ Future copy tools may help create equivalent records across standards, but copyi
 
 ✅ DECIDED: The legacy Glossary Builder **COPY & EDIT** control was removed (Phase 1 safety). It is replaced by explicit workflows—eventually a **Create Related Glossary Record** flow—and by existing safe controls (+ Finding, + Recommendation, Search/link, **SAVE RECORD**, Glossary Set template, **Prepare Target Set Records**).
 
+✅ DECIDED: **Glossary Builder finding search** supports reuse vs template creation. **Search existing findings** (enabled when category/item context is selected) searches all active master findings by short/long text. **Use existing finding** selects the source master id (clears recommendation), does not write to Firestore, and requires confirmation when source item or glossary set differs from the current builder context. **Use as template** prefills the new-finding modal with wording fields only (`fldFindShort`, `fldFindLong`, `fldMeasurementType`, `fldUnitType`); the admin saves to create a new independent master finding in the **current** item and glossary set context with `fldStandards: []` and no functional linkage or provenance fields to the source.
+
 ### Master library vs glossary records
 
 | Layer | What it is | Shared across glossary rows? |
