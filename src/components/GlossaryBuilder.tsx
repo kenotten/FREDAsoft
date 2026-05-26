@@ -146,26 +146,6 @@ const FINDING_SEARCH_SCOPE_OPTIONS: { value: FindingSearchScope; label: string }
   { value: 'all', label: 'All findings' },
 ];
 
-function findingMatchesSearchScope(
-  finding: Finding,
-  scope: FindingSearchScope,
-  selectedItem: string,
-  selectedSetKey: string
-): boolean {
-  if (scope === 'all') return true;
-  if (scope === 'current_item') {
-    return (
-      String(finding.fldItem ?? '')
-        .toLowerCase()
-        .trim() === String(selectedItem ?? '').toLowerCase().trim()
-    );
-  }
-  return masterMatchesSelectedGlossarySet(finding, selectedSetKey);
-}
-
-const USE_EXISTING_FINDING_CROSS_CONTEXT_CONFIRM =
-  'This existing finding belongs to a different item/set. The glossary row will use this finding under the current category/item. Continue?';
-
 function resolveFindingCatItemPath(
   finding: Finding,
   categories: Category[],
@@ -1212,10 +1192,12 @@ export function GlossaryBuilder({
   const [relatedNewFindLong, setRelatedNewFindLong] = useState('');
   const [relatedRecordSaving, setRelatedRecordSaving] = useState(false);
   const [findingSearchScope, setFindingSearchScope] = useState<FindingSearchScope>('current_item');
+  const [findingSearchQuery, setFindingSearchQuery] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, collection: string, label: string, type: 'delete' | 'unassociate', isAssociated?: boolean } | null>(null);
 
   const openFindingSearchModal = () => {
     setFindingSearchScope('current_item');
+    setFindingSearchQuery('');
     setNewType('link_finding');
   };
 
@@ -1714,31 +1696,6 @@ export function GlossaryBuilder({
     }
   };
 
-  const applyUseExistingFinding = (findId: string) => {
-    const finding = findings?.find(
-      (f: Finding) =>
-        String(f.id || f.fldFindID || '').trim() === String(findId || '').trim()
-    );
-    if (!finding) {
-      toast.error('Finding not found in local state.');
-      return;
-    }
-
-    if (
-      findingSearchContextDiffers(
-        finding,
-        selectedItem,
-        normalizeGlossaryRecordSetKey(selectedGlossarySetId)
-      )
-    ) {
-      const ok = window.confirm(USE_EXISTING_FINDING_CROSS_CONTEXT_CONFIRM);
-      if (!ok) return;
-    }
-
-    setNewType(null);
-    setSelectedFind(String(finding.fldFindID || finding.id || findId));
-  };
-
   const applyUseFindingAsTemplate = (finding: Finding) => {
     setEditingId(null);
     setFormData((prev) => ({
@@ -1990,25 +1947,65 @@ export function GlossaryBuilder({
       .slice(0, 50);
   }, [masterRecsSource, formData.recShort, glossarySetKeyUi]);
 
-  const findingSearchScopedPool = useMemo(() => {
-    return (findings || [])
-      .filter((f: Finding) => isActiveLibraryMaster(f))
-      .filter((f) =>
-        findingMatchesSearchScope(f, findingSearchScope, selectedItem, glossarySetKeyUi)
+  /** Same masters as the Finding dropdown for current item + glossary set (canonical reuse). */
+  const findingDropdownContextIds = useMemo(() => {
+    const out = new Set<string>();
+    for (const f of findingsForSelectedSet) {
+      const id = String(f.fldFindID || f.id || '').trim().toLowerCase();
+      if (id) out.add(id);
+    }
+    return out;
+  }, [findingsForSelectedSet]);
+
+  const findingSearchScopedPoolRaw = useMemo(() => {
+    const active = (findings || []).filter((f: Finding) => isActiveLibraryMaster(f));
+    if (findingSearchScope === 'all') {
+      return active;
+    }
+    if (findingSearchScope === 'current_item') {
+      const itemKey = String(selectedItem ?? '').toLowerCase().trim();
+      return active.filter(
+        (f) => String(f.fldItem ?? '').toLowerCase().trim() === itemKey
       );
+    }
+    return active.filter((f) => masterMatchesSelectedGlossarySet(f, glossarySetKeyUi));
   }, [findings, findingSearchScope, selectedItem, glossarySetKeyUi]);
 
+  const findingSearchTemplatePool = useMemo(() => {
+    return findingSearchScopedPoolRaw.filter((f) => {
+      const id = String(f.fldFindID || f.id || '').trim().toLowerCase();
+      return !findingDropdownContextIds.has(id);
+    });
+  }, [findingSearchScopedPoolRaw, findingDropdownContextIds]);
+
   const filteredMasterFindings = useMemo(() => {
-    const term = (formData.findShort || '').toLowerCase().trim();
+    const term = findingSearchQuery.toLowerCase().trim();
     const filtered = term
-      ? findingSearchScopedPool.filter(
+      ? findingSearchTemplatePool.filter(
           (f) =>
             (f.fldFindShort?.toLowerCase() || '').includes(term) ||
             (f.fldFindLong?.toLowerCase() || '').includes(term)
         )
-      : findingSearchScopedPool;
+      : findingSearchTemplatePool;
     return sortEntities(filtered, 'fldFindShort').slice(0, FINDING_SEARCH_RESULT_CAP);
-  }, [findingSearchScopedPool, formData.findShort]);
+  }, [findingSearchTemplatePool, findingSearchQuery]);
+
+  const findingSearchOnlyDropdownMatches = useMemo(() => {
+    const term = findingSearchQuery.toLowerCase().trim();
+    const textMatches = term
+      ? findingSearchScopedPoolRaw.filter(
+          (f) =>
+            (f.fldFindShort?.toLowerCase() || '').includes(term) ||
+            (f.fldFindLong?.toLowerCase() || '').includes(term)
+        )
+      : findingSearchScopedPoolRaw;
+    if (textMatches.length === 0) return false;
+    return textMatches.every((f) =>
+      findingDropdownContextIds.has(
+        String(f.fldFindID || f.id || '').trim().toLowerCase()
+      )
+    );
+  }, [findingSearchScopedPoolRaw, findingDropdownContextIds, findingSearchQuery]);
 
   const currentGlossarySetLabel = useMemo(() => {
     if (!selectedGlossarySetId) return 'Unassigned / Legacy';
@@ -3411,7 +3408,7 @@ export function GlossaryBuilder({
                   size="sm"
                   onClick={openFindingSearchModal}
                   disabled={!selectedItem}
-                  title="Search existing findings"
+                  title="Search existing findings to use as a template"
                 >
                   <Search size={14} />
                 </Button>
@@ -3624,7 +3621,7 @@ export function GlossaryBuilder({
             <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
               <h2 className="text-lg font-bold text-zinc-900 uppercase tracking-tight">
                 {newType === 'link_finding'
-                  ? 'Search Existing Findings'
+                  ? 'Search Findings as Template'
                   : `${editingId ? 'Edit' : 'Add New'} ${newType.replace(/_/g, ' ')}`}
               </h2>
               <button onClick={() => { setNewType(null); setEditingId(null); }} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
@@ -3720,6 +3717,12 @@ export function GlossaryBuilder({
               )}
               {newType === 'link_finding' && (
                 <div className="space-y-4">
+                  <p className="text-xs text-zinc-600 leading-relaxed">
+                    To use an existing finding already assigned to this item and glossary set,
+                    select it from the <span className="font-semibold text-zinc-800">Finding</span>{' '}
+                    dropdown. Use this search to copy wording from another finding into a new
+                    finding for the current item and glossary set.
+                  </p>
                   <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600 leading-snug">
                     <span className="font-semibold text-zinc-800">Current context:</span>{' '}
                     {currentCatItemPathLabel}
@@ -3749,11 +3752,17 @@ export function GlossaryBuilder({
                       ))}
                     </div>
                   </fieldset>
+                  {findingSearchScope === 'all' && !findingSearchQuery.trim() && (
+                    <p className="text-[11px] text-zinc-500 leading-snug">
+                      All findings searches every active master across all glossary sets and
+                      items (up to {FINDING_SEARCH_RESULT_CAP} results). Type to narrow results.
+                    </p>
+                  )}
                   <Input
-                    label="Search existing findings"
+                    label="Search existing findings to use as a template"
                     placeholder="Type to filter by short or long text..."
-                    value={formData.findShort}
-                    onChange={(e) => setFormData({ ...formData, findShort: e.target.value })}
+                    value={findingSearchQuery}
+                    onChange={(e) => setFindingSearchQuery(e.target.value)}
                     autoFocus
                   />
                   <div className="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto pr-2">
@@ -3796,22 +3805,11 @@ export function GlossaryBuilder({
                             </div>
                             {contextDiffers && (
                               <p className="text-[10px] leading-snug text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
-                                Source differs from current context ({currentCatItemPathLabel} ·{' '}
-                                {currentGlossarySetLabel}). Reuse links this master id under the
-                                current path; template creates a new finding under the current item
-                                and set only.
+                                Template source differs from current context. New finding will be
+                                created under the current item and glossary set.
                               </p>
                             )}
                             <div className="flex flex-wrap gap-2 pt-1">
-                              <Button
-                                type="button"
-                                size="xs"
-                                variant="secondary"
-                                className="h-7 text-[10px]"
-                                onClick={() => applyUseExistingFinding(findId)}
-                              >
-                                Use existing finding
-                              </Button>
                               <Button
                                 type="button"
                                 size="xs"
@@ -3826,31 +3824,42 @@ export function GlossaryBuilder({
                       })
                     ) : (
                       <div className="p-8 text-center border border-dashed border-zinc-200 rounded-xl space-y-2">
-                        <p className="text-sm text-zinc-500">
-                          {findingSearchScopedPool.length === 0
-                            ? 'No findings in this scope.'
-                            : 'No matching findings for your search text.'}
-                        </p>
-                        {findingSearchScopedPool.length === 0 &&
-                          findingSearchScope === 'current_item' && (
-                            <p className="text-xs text-zinc-400 leading-snug">
-                              Try switching scope to{' '}
-                              <span className="font-semibold text-zinc-600">Current glossary set</span> or{' '}
-                              <span className="font-semibold text-zinc-600">All findings</span>.
+                        {findingSearchOnlyDropdownMatches ? (
+                          <p className="text-sm text-zinc-500 leading-snug">
+                            Matching findings already assigned to this item and glossary set are
+                            available in the Finding dropdown.
+                          </p>
+                        ) : (
+                          <>
+                            <p className="text-sm text-zinc-500">
+                              {findingSearchTemplatePool.length === 0
+                                ? 'No findings in this scope.'
+                                : 'No matching findings for your search text.'}
                             </p>
-                          )}
-                        {findingSearchScopedPool.length === 0 &&
-                          findingSearchScope === 'current_glossary_set' && (
-                            <p className="text-xs text-zinc-400 leading-snug">
-                              Try switching scope to{' '}
-                              <span className="font-semibold text-zinc-600">All findings</span> to search
-                              across items.
-                            </p>
-                          )}
-                        {findingSearchScopedPool.length > 0 &&
-                          (formData.findShort || '').trim() !== '' && (
-                            <p className="text-xs text-zinc-400">Clear the search text or try another scope.</p>
-                          )}
+                            {findingSearchTemplatePool.length === 0 &&
+                              findingSearchScope === 'current_item' && (
+                                <p className="text-xs text-zinc-400 leading-snug">
+                                  Try switching scope to{' '}
+                                  <span className="font-semibold text-zinc-600">Current glossary set</span>{' '}
+                                  or <span className="font-semibold text-zinc-600">All findings</span>.
+                                </p>
+                              )}
+                            {findingSearchTemplatePool.length === 0 &&
+                              findingSearchScope === 'current_glossary_set' && (
+                                <p className="text-xs text-zinc-400 leading-snug">
+                                  Try switching scope to{' '}
+                                  <span className="font-semibold text-zinc-600">All findings</span> to
+                                  search across items.
+                                </p>
+                              )}
+                            {findingSearchTemplatePool.length > 0 &&
+                              findingSearchQuery.trim() !== '' && (
+                                <p className="text-xs text-zinc-400">
+                                  Clear the search text or try another scope.
+                                </p>
+                              )}
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
