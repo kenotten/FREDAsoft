@@ -15,7 +15,7 @@ import { Button, Input, Select, Card } from './ui/core';
 import { ImagePreviewModal } from './ui/ImagePreviewModal';
 import { StandardCitationPreviewModal } from './ui/StandardCitationPreviewModal';
 import type { MasterStandard } from '../types';
-import { cn, sortEntities, compareEntities } from '../lib/utils';
+import { cn, sortEntities, sortCategoriesForDropdown, sortItemsForDropdown, compareEntities } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -526,7 +526,7 @@ export function DataExplorer({
             }}
           >
             <option value="">All Categories</option>
-            {sortEntities(categories || [], 'fldCategoryName').filter((c: any) => c.fldCategoryID).map((c: any, idx: number) => <option key={`${c.fldCategoryID}-${idx}`} value={c.fldCategoryID}>{c.fldCategoryName}</option>)}
+            {sortCategoriesForDropdown(categories || []).filter((c: any) => c.fldCategoryID).map((c: any, idx: number) => <option key={`${c.fldCategoryID}-${idx}`} value={c.fldCategoryID}>{c.fldCategoryName}</option>)}
           </select>
           <select 
             className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
@@ -537,7 +537,7 @@ export function DataExplorer({
             }}
           >
             <option value="">All Items</option>
-            {sortEntities(items.filter((i: any) => !filterCategory || i.fldCatID === filterCategory), 'fldItemName').map((i: any, idx: number) => (
+            {sortItemsForDropdown(items.filter((i: any) => !filterCategory || i.fldCatID === filterCategory)).map((i: any, idx: number) => (
               <option key={`${i.fldItemID}-${idx}`} value={i.fldItemID}>{i.fldItemName}</option>
             ))}
           </select>

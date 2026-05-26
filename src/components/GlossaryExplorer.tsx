@@ -21,7 +21,7 @@ import {
   Pencil
 } from 'lucide-react';
 import { Button, Input, Select, Card } from './ui/core';
-import { cn } from '../lib/utils';
+import { cn, sortCategoriesForDropdown, sortItemsForDropdown } from '../lib/utils';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import { firestoreService } from '../services/firestoreService';
@@ -703,28 +703,12 @@ export default function GlossaryExplorer({
     });
   }, [resolvedGlossary, searchTerm, selectedCategoryId, selectedItemId, selectedGlossarySetFilter, sortMode, showMissingOnly, columnFilters]);
 
-  const sortedCategories = useMemo(() => {
-    return [...categories].sort((a, b) => {
-      if (sortMode === 'order') {
-        const valA = a.fldOrder ?? Infinity;
-        const valB = b.fldOrder ?? Infinity;
-        if (valA !== valB) return valA - valB;
-      }
-      return (a.fldCategoryName || '').localeCompare(b.fldCategoryName || '');
-    });
-  }, [categories, sortMode]);
+  const sortedCategories = useMemo(() => sortCategoriesForDropdown(categories), [categories]);
 
   const sortedItems = useMemo(() => {
     const base = selectedCategoryId ? items.filter((i: any) => i.fldCatID === selectedCategoryId) : items;
-    return [...base].sort((a, b) => {
-      if (sortMode === 'order') {
-        const valA = a.fldOrder ?? Infinity;
-        const valB = b.fldOrder ?? Infinity;
-        if (valA !== valB) return valA - valB;
-      }
-      return (a.fldItemName || '').localeCompare(b.fldItemName || '');
-    });
-  }, [items, selectedCategoryId, sortMode]);
+    return sortItemsForDropdown(base);
+  }, [items, selectedCategoryId]);
 
   const glossarySetFilterOptions = useMemo(() => {
     const dynamicIds = new Set<string>();

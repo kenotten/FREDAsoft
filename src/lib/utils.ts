@@ -115,3 +115,27 @@ export function formatCurrency(value: number | undefined | null) {
 export function sortEntities<T>(array: T[], displayNameField: keyof T): T[] {
   return [...array].sort((a: any, b: any) => compareEntities(a, b, displayNameField as string));
 }
+
+function compareDropdownNames(aName: unknown, bName: unknown): number {
+  const a = String(aName ?? '').trim();
+  const b = String(bName ?? '').trim();
+
+  const aEmpty = a.length === 0;
+  const bEmpty = b.length === 0;
+  if (aEmpty && !bEmpty) return 1;
+  if (!aEmpty && bEmpty) return -1;
+
+  return a.toLowerCase().localeCompare(b.toLowerCase());
+}
+
+/** Category dropdown/select: fldCategoryName alphabetic (case-insensitive). */
+export function sortCategoriesForDropdown<T extends { fldCategoryName?: string }>(
+  array: T[]
+): T[] {
+  return [...array].sort((a, b) => compareDropdownNames(a?.fldCategoryName, b?.fldCategoryName));
+}
+
+/** Item dropdown/select: fldItemName alphabetic (case-insensitive). */
+export function sortItemsForDropdown<T extends { fldItemName?: string }>(array: T[]): T[] {
+  return [...array].sort((a, b) => compareDropdownNames(a?.fldItemName, b?.fldItemName));
+}

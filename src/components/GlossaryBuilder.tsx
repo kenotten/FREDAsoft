@@ -26,7 +26,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { cn, sanitizeData, sortEntities, compareEntities } from '../lib/utils';
+import { cn, sanitizeData, sortEntities, sortCategoriesForDropdown, sortItemsForDropdown, compareEntities } from '../lib/utils';
 import { releaseInactiveTabPanelFocus } from '../lib/releaseInactiveTabPanelFocus';
 import { Button, Select, Card, Input, Modal } from './ui/core';
 import { toast } from 'sonner';
@@ -1308,7 +1308,7 @@ export function GlossaryBuilder({
       seen.add(id);
       return true;
     });
-    return sortEntities(filtered, 'fldCategoryName').map((c: any) => ({
+    return sortCategoriesForDropdown(filtered).map((c: any) => ({
       value: c.fldCategoryID,
       label: c.fldCategoryName,
     }));
@@ -1322,7 +1322,7 @@ export function GlossaryBuilder({
       seen.add(id);
       return true;
     });
-    return sortEntities(filtered, 'fldItemName').map((i: any) => ({
+    return sortItemsForDropdown(filtered).map((i: any) => ({
       value: i.fldItemID,
       label: i.fldItemName,
     }));

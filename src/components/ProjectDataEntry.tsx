@@ -35,7 +35,7 @@ import { Select } from './ui/select';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { StandardsBrowser } from './StandardsBrowser';
-import { cn, sortEntities, formatCurrency, COST_UNIT_TYPES, MEASUREMENT_UNITS, compareEntities } from '../lib/utils';
+import { cn, sortEntities, sortCategoriesForDropdown, sortItemsForDropdown, formatCurrency, COST_UNIT_TYPES, MEASUREMENT_UNITS, compareEntities } from '../lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { resizeImage } from '../lib/imageUtils';
 import { normalizeId, idsEqual } from '../lib/idUtils';
@@ -2416,11 +2416,10 @@ export default function ProjectDataEntry({
 
   const sortedCategories = useMemo(
     () =>
-      sortEntities(
+      sortCategoriesForDropdown(
         (Array.isArray(mergedCategories) ? mergedCategories : []).filter((c: any) =>
           approvedCategoryIds.has(normalizeId(c.fldCategoryID || c.fldCatID))
-        ),
-        'fldCategoryName'
+        )
       ),
     [mergedCategories, approvedCategoryIds]
   );
@@ -2433,11 +2432,10 @@ export default function ProjectDataEntry({
         .map((g: any) => normalizeId(g.fldItem))
         .filter(Boolean)
     );
-    return sortEntities(
+    return sortItemsForDropdown(
       (Array.isArray(items) ? items : []).filter(
         (i: any) => i && approvedItemIds.has(normalizeId(i.fldItemID || i.id))
-      ),
-      'fldItemName'
+      )
     );
   }, [items, selectedCat, glossaryRowsForDataEntry]);
 
@@ -2473,7 +2471,7 @@ export default function ProjectDataEntry({
       (c: any) => normalizeId(c.fldCategoryID || c.fldCatID) === cid
     );
     if (!add) return sortedCategories;
-    return sortEntities([...sortedCategories, add], 'fldCategoryName');
+    return sortCategoriesForDropdown([...sortedCategories, add]);
   }, [sortedCategories, selections.categoryId, selections.dataEntryMode, mergedCategories]);
 
   const sortedItemsWithContext = useMemo(() => {
@@ -2482,7 +2480,7 @@ export default function ProjectDataEntry({
     if (sortedItems.some((i: any) => normalizeId(i.fldItemID || i.id) === iid)) return sortedItems;
     const add = (items || []).find((i: any) => normalizeId(i.fldItemID || i.id) === iid);
     if (!add) return sortedItems;
-    return sortEntities([...sortedItems, add], 'fldItemName');
+    return sortItemsForDropdown([...sortedItems, add]);
   }, [sortedItems, selections.itemId, selections.dataEntryMode, items]);
 
   const sortedFindingsWithContext = useMemo(() => {
@@ -3019,7 +3017,7 @@ export default function ProjectDataEntry({
                         disabled={!hasRequiredContext}
                         selectClassName={cn(focusClasses, '!py-1.5')}
                         options={(dataEntryMode === 'custom'
-                          ? sortEntities(mergedCategories || [], 'fldCategoryName')
+                          ? sortCategoriesForDropdown(mergedCategories || [])
                           : sortedCategoriesWithContext
                         ).map((c: any, index: number) => ({
                           value: c.fldCategoryID || c.fldCatID || `missing-${index}`,
@@ -3045,9 +3043,8 @@ export default function ProjectDataEntry({
                         onChange={(e: any) => setSelectedItem(e.target.value)}
                         selectClassName={cn(focusClasses, '!py-1.5')}
                         options={(dataEntryMode === 'custom'
-                          ? sortEntities(
-                              (items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat),
-                              'fldItemName'
+                          ? sortItemsForDropdown(
+                              (items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat)
                             )
                           : sortedItemsWithContext
                         ).map((i: any, index: number) => ({
@@ -3119,7 +3116,7 @@ export default function ProjectDataEntry({
                       disabled={!hasRequiredContext}
                       selectClassName={cn(focusClasses, '!py-1.5')}
                       options={(dataEntryMode === 'custom'
-                        ? sortEntities(mergedCategories || [], 'fldCategoryName')
+                        ? sortCategoriesForDropdown(mergedCategories || [])
                         : sortedCategoriesWithContext
                       ).map((c: any, index: number) => ({
                         value: c.fldCategoryID || c.fldCatID || `missing-${index}`,
@@ -3145,9 +3142,8 @@ export default function ProjectDataEntry({
                       onChange={(e: any) => setSelectedItem(e.target.value)}
                       selectClassName={cn(focusClasses, '!py-1.5')}
                       options={(dataEntryMode === 'custom'
-                        ? sortEntities(
-                            (items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat),
-                            'fldItemName'
+                        ? sortItemsForDropdown(
+                            (items || []).filter((i: any) => !selectedCat || i.fldCatID === selectedCat)
                           )
                         : sortedItemsWithContext
                       ).map((i: any, index: number) => ({
