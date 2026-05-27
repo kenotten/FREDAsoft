@@ -15,6 +15,9 @@ import {
   filterReportProjectForPreview,
   getRecordStandardIds,
   formatGroupedStandardCitations,
+  compareReportRecordSortKeys,
+  compareReportRecordSortKeysLocationFirst,
+  getReportRecordSortKeys,
   type ReportRecordSortOrder
 } from './reportPreviewShared';
 
@@ -189,7 +192,7 @@ function buildRecordViews(
   );
 }
 
-function resolveRecordIds(
+export function resolveWebReportRecordDimensionIds(
   record: WebReportEnrichedRecord,
   glossary: Glossary[]
 ): { catId: string; itemId: string } {
@@ -199,6 +202,55 @@ function resolveRecordIds(
     catId: glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '') || '__none__',
     itemId: glos?.fldItem || (isCustom ? record?.fldPDataItemID || '' : '') || '__none__'
   };
+}
+
+export function resolveWebReportLocationId(record: WebReportEnrichedRecord): string {
+  return String(record.fldLocation || '__none__').trim() || '__none__';
+}
+
+/** Full facility report records (deduped, enriched). Sort order is canonical; re-sort for display separately. */
+export function getWebReportFacilityRecords(
+  projectData: ProjectData[],
+  project: Project,
+  facility: Facility,
+  glossary: Glossary[],
+  categories: Category[],
+  items: Item[],
+  locations: Location[],
+  findings: Finding[]
+): WebReportEnrichedRecord[] {
+  return filterReportProjectForPreview(
+    projectData,
+    project,
+    facility,
+    glossary,
+    categories,
+    items,
+    locations,
+    findings,
+    CANONICAL_WEB_REPORT_SORT_ORDER
+  ) as WebReportEnrichedRecord[];
+}
+
+export function sortWebReportRecordsForDisplay(
+  records: WebReportEnrichedRecord[],
+  sortOrder: ReportRecordSortOrder,
+  glossary: Glossary[],
+  categories: Category[],
+  items: Item[],
+  locations: Location[],
+  findings: Finding[]
+): WebReportEnrichedRecord[] {
+  const compare =
+    sortOrder === 'location_category_item'
+      ? compareReportRecordSortKeysLocationFirst
+      : compareReportRecordSortKeys;
+
+  return [...records].sort((a, b) => {
+    const ka = getReportRecordSortKeys(a, glossary, categories, items, locations, findings);
+    const kb = getReportRecordSortKeys(b, glossary, categories, items, locations, findings);
+    return compare(ka, kb);
+  });
 }
 
 function groupRecordsCategoryLocationItem(
@@ -217,8 +269,8 @@ function groupRecordsCategoryLocationItem(
   const catMap = new Map<string, CatBucket>();
 
   for (const view of views) {
-    const { catId, itemId } = resolveRecordIds(view.record, glossary);
-    const locId = String(view.record.fldLocation || '__none__').trim() || '__none__';
+    const { catId, itemId } = resolveWebReportRecordDimensionIds(view.record, glossary);
+    const locId = resolveWebReportLocationId(view.record);
 
     const cat = categories.find((c) => c.fldCategoryID === catId);
     const catOrder = cat?.fldOrder ?? 999;
@@ -294,8 +346,8 @@ function groupRecordsLocationCategoryItem(
   const locMap = new Map<string, LocBucket>();
 
   for (const view of views) {
-    const { catId, itemId } = resolveRecordIds(view.record, glossary);
-    const locId = String(view.record.fldLocation || '__none__').trim() || '__none__';
+    const { catId, itemId } = resolveWebReportRecordDimensionIds(view.record, glossary);
+    const locId = resolveWebReportLocationId(view.record);
 
     const cat = categories.find((c) => c.fldCategoryID === catId);
     const catOrder = cat?.fldOrder ?? 999;
@@ -359,6 +411,40 @@ function groupRecordsLocationCategoryItem(
   return topGroups;
 }
 
+export function buildWebReportDocumentationTreeFromRecords(
+  facilityRecords: WebReportEnrichedRecord[],
+  glossary: Glossary[],
+  categories: Category[],
+  items: Item[],
+  locations: Location[],
+  findings: Finding[],
+  standards: MasterStandard[],
+  sortOrder: ReportRecordSortOrder
+): WebReportDocumentationTree {
+  const sorted = sortWebReportRecordsForDisplay(
+    facilityRecords,
+    sortOrder,
+    glossary,
+    categories,
+    items,
+    locations,
+    findings
+  );
+
+  const views = buildRecordViews(sorted, glossary, categories, items, locations, standards);
+
+  const topGroups =
+    sortOrder === 'location_category_item'
+      ? groupRecordsLocationCategoryItem(views, glossary, categories, items)
+      : groupRecordsCategoryLocationItem(views, glossary, categories, items);
+
+  return {
+    sortOrder,
+    topGroups,
+    recordCount: facilityRecords.length
+  };
+}
+
 export function buildWebReportDocumentationTree(
   projectData: ProjectData[],
   project: Project,
@@ -371,7 +457,7 @@ export function buildWebReportDocumentationTree(
   standards: MasterStandard[],
   sortOrder: ReportRecordSortOrder
 ): WebReportDocumentationTree {
-  const filtered = filterReportProjectForPreview(
+  const facilityRecords = getWebReportFacilityRecords(
     projectData,
     project,
     facility,
@@ -379,22 +465,18 @@ export function buildWebReportDocumentationTree(
     categories,
     items,
     locations,
+    findings
+  );
+  return buildWebReportDocumentationTreeFromRecords(
+    facilityRecords,
+    glossary,
+    categories,
+    items,
+    locations,
     findings,
+    standards,
     sortOrder
-  ) as WebReportEnrichedRecord[];
-
-  const views = buildRecordViews(filtered, glossary, categories, items, locations, standards);
-
-  const topGroups =
-    sortOrder === 'location_category_item'
-      ? groupRecordsLocationCategoryItem(views, glossary, categories, items)
-      : groupRecordsCategoryLocationItem(views, glossary, categories, items);
-
-  return {
-    sortOrder,
-    topGroups,
-    recordCount: filtered.length
-  };
+  );
 }
 
 export type WebReportHeadingContext = {

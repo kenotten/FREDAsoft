@@ -1506,6 +1506,10 @@ This prevents removed record-level citations from reappearing in reports.
 
 ✅ DECIDED (Web Report Viewer — Phase 1): Internal **Web Report Viewer** tab provides **separate read-only web rendering** (Option B) using **live Firestore-backed data** already loaded in the app shell. **No auth/client portal**, **no published snapshots**, **no print**, and **no changes to `ReportPreview.tsx`**. Phase 1 sections: **heading** (always included), **narrative**, and **documentation** with the same two hierarchy modes as PDF reports. **Section toggles** control included on-screen content (and future print/export); **accordion collapse is screen-only** and does not affect inclusion. Financial summary, referenced standards addendum, and photo addendum are deferred.
 
+✅ DECIDED (Web Report Viewer — content filters): **Category**, **location**, and **item** filters are **inclusion controls** on the full facility report dataset (options derived from records for the selected project/facility only). Filters combine with **AND** logic, default to **all options selected**, and define displayed documentation (and future web print/export inclusion). **Canonical record numbers** remain fixed from the full facility set (filtered views may show gaps). **Accordion collapse** stays screen-only. **`ReportPreview.tsx` / PDF path unchanged** on this branch.
+
+- Future enhancement: When item-level groups are collapsed in the Web Report Viewer, item group headers may show compact record summaries for fast scanning (canonical record number + short finding + short recommendation). This is screen-scanning assistance only (does not replace expanded record cards) and may later be used to generate a spreadsheet-style summary export.
+
 ---
 
 ## 28. Future Citation Drift / Refresh Workflow
