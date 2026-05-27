@@ -10,6 +10,7 @@ import { SettingsPage } from '../SettingsPage';
 import { OrderManager } from '../OrderManager';
 import { LibraryManager } from '../LibraryManager';
 import { LibraryReports } from '../LibraryReports';
+import { WebReportViewer } from '../webReport/WebReportViewer';
 import { Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { releaseInactiveTabPanelFocus } from '../../lib/releaseInactiveTabPanelFocus';
@@ -197,6 +198,24 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           onDeleteRecord={handleDeleteRecord}
         />
       </div>
+      {activeTab === 'web_report' && (
+        <WebReportViewer
+          clients={clients}
+          facilities={facilities}
+          projects={projects}
+          inspectors={inspectors}
+          rawProjectData={projectProps.rawProjectData}
+          subscribedProjectId={selections.projectId || ''}
+          glossary={glossary}
+          categories={categories}
+          items={items}
+          locations={locations}
+          findings={findings}
+          standards={standards}
+          defaultProjectId={selections.projectId || ''}
+          defaultFacilityId={selections.facilityId || ''}
+        />
+      )}
       {activeTab === 'maintenance' && (
         <GlossaryView 
           categories={categories}

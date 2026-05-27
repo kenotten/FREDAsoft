@@ -18,7 +18,8 @@ import {
   ChevronDown,
   ShieldAlert,
   Hash,
-  Loader2
+  Loader2,
+  Layers
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { FREDASOFT_DRAFT_LOCAL_STORAGE_KEY } from '../../lib/storageKeys';
@@ -361,6 +362,7 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
             <NavSection label="Project Data">
               <NavItem active={activeTab === 'data'} onClick={() => handleGuardedTabSwitch('data')} icon={<ClipboardList size={18} />} label="Project Data Entry" />
               <NavItem active={activeTab === 'explorer'} onClick={() => handleGuardedTabSwitch('explorer')} icon={<Table size={18} />} label="Data Explorer" />
+              <NavItem active={activeTab === 'web_report'} onClick={() => handleGuardedTabSwitch('web_report')} icon={<Layers size={18} />} label="Web Report Viewer" />
             </NavSection>
 
             <NavSection label="Glossaries">

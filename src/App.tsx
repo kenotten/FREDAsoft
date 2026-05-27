@@ -117,6 +117,7 @@ const tabNames: Record<string, string> = {
   sequence_manager: 'Sequence Manager',
   data: 'Project Data Entry',
   explorer: 'Data Explorer',
+  web_report: 'Web Report Viewer',
   library_manager: 'Library Manager',
   library_reports: 'Library Reports',
   documents: 'Documents',

@@ -1504,6 +1504,8 @@ This prevents removed record-level citations from reappearing in reports.
 
 ✅ DECIDED (report preview): The same dialog offers **report record sort** (default **Category → Location → Item**; optional **Location → Category → Item**). It drives **`filterReportProjectForPreview`** (Documentation order). **Financial Summary** follows the same choice: default mode groups by category with columns Item \| Location \| …; location-first mode groups by location with columns Category \| Item \| …. It is not persisted. **Referenced standards** addendum ordering stays citation-driven. **Photo addendum** keeps location-first display; `filteredData` order may only affect tie-breaks within the same location label.
 
+✅ DECIDED (Web Report Viewer — Phase 1): Internal **Web Report Viewer** tab provides **separate read-only web rendering** (Option B) using **live Firestore-backed data** already loaded in the app shell. **No auth/client portal**, **no published snapshots**, **no print**, and **no changes to `ReportPreview.tsx`**. Phase 1 sections: **heading** (always included), **narrative**, and **documentation** with the same two hierarchy modes as PDF reports. **Section toggles** control included on-screen content (and future print/export); **accordion collapse is screen-only** and does not affect inclusion. Financial summary, referenced standards addendum, and photo addendum are deferred.
+
 ---
 
 ## 28. Future Citation Drift / Refresh Workflow
