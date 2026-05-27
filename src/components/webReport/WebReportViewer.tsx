@@ -153,6 +153,9 @@ function CollapseToggle({
   );
 }
 
+const WR_CARD_LABEL_CELL =
+  'flex w-24 shrink-0 items-center self-stretch border-r border-zinc-200 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase text-zinc-500';
+
 function WebReportFindingCard({
   view,
   reportNumber
@@ -165,8 +168,8 @@ function WebReportFindingCard({
 
   return (
     <Card className="overflow-hidden border border-zinc-200">
-      <div className="flex flex-col md:flex-row">
-        <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex flex-col items-stretch md:flex-row">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex items-stretch border-b border-zinc-200 bg-zinc-50 text-[10px] font-bold uppercase tracking-wider">
             <div className="flex w-10 shrink-0 items-center justify-center border-r border-zinc-200 text-lg font-black text-zinc-900">
               {reportNumber ?? '—'}
@@ -187,23 +190,19 @@ function WebReportFindingCard({
             </div>
           </div>
 
-          <div className="flex border-b border-zinc-200 text-xs">
-            <span className="w-24 shrink-0 border-r border-zinc-200 bg-zinc-50 px-2 py-2 font-bold uppercase text-[9px] text-zinc-500">
-              Location
-            </span>
-            <span className="min-w-0 flex-1 truncate px-2 py-2 font-medium text-zinc-900">
+          <div className="flex items-stretch border-b border-zinc-200 text-xs">
+            <div className={WR_CARD_LABEL_CELL}>Location</div>
+            <span className="flex min-w-0 flex-1 items-center truncate px-2 py-2 font-medium text-zinc-900">
               {view.locationName}
             </span>
-            <span className="shrink-0 px-3 py-2 text-xs font-bold text-blue-600">
+            <span className="flex shrink-0 items-center px-3 py-2 text-xs font-bold text-blue-600">
               Est. {formatCurrency(record.totalCost ?? 0)}
             </span>
           </div>
 
-          <div className="flex border-b border-zinc-200">
-            <span className="w-24 shrink-0 border-r border-zinc-200 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase text-zinc-500">
-              Finding
-            </span>
-            <div className="min-w-0 flex-1 px-2 py-2 text-[11px] leading-snug text-zinc-800 whitespace-pre-line">
+          <div className="flex items-stretch border-b border-zinc-200">
+            <div className={WR_CARD_LABEL_CELL}>Finding</div>
+            <div className="flex min-h-0 min-w-0 flex-1 items-center px-2 py-2 text-[11px] leading-snug text-zinc-800 whitespace-pre-line">
               {record.fldFindLong || view.findingShort}
             </div>
             <div className="w-28 shrink-0 border-l border-zinc-200 bg-zinc-50 text-center">
@@ -216,21 +215,17 @@ function WebReportFindingCard({
             </div>
           </div>
 
-          <div className="flex border-b border-zinc-200">
-            <span className="w-24 shrink-0 border-r border-zinc-200 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase text-zinc-500">
-              Recommendation
-            </span>
-            <div className="min-w-0 flex-1 px-2 py-2 text-[11px] leading-snug text-zinc-800 whitespace-pre-line">
+          <div className="flex min-h-0 flex-1 items-stretch border-b border-zinc-200">
+            <div className={WR_CARD_LABEL_CELL}>Recommendation</div>
+            <div className="flex min-h-0 min-w-0 flex-1 items-center px-2 py-2 text-[11px] leading-snug text-zinc-800 whitespace-pre-line">
               {record.fldRecLong || record.fldRecShort}
             </div>
           </div>
 
           {view.citationsLabel ? (
-            <div className="flex">
-              <span className="w-24 shrink-0 border-r border-zinc-200 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase text-zinc-500">
-                Reference
-              </span>
-              <div className="min-w-0 flex-1 px-2 py-2 text-xs font-semibold text-zinc-700">
+            <div className="flex shrink-0 items-stretch">
+              <div className={WR_CARD_LABEL_CELL}>Reference</div>
+              <div className="flex min-h-0 min-w-0 flex-1 items-center px-2 py-2 text-xs font-semibold text-zinc-700">
                 {view.citationsLabel}
               </div>
             </div>
@@ -923,9 +918,6 @@ export function WebReportViewer({
             </p>
           </div>
         </div>
-        <p className="mt-3 text-xs text-zinc-500">
-          Pilot QA: Harris Center → Accessibility Assessment → Admin Building (select by name; IDs are not hardcoded).
-        </p>
       </div>
 
       <Card className="space-y-4 border-dashed bg-zinc-50/80 p-4">
