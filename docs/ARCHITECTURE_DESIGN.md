@@ -70,6 +70,8 @@ Francine has no authority to:
 - Do not assume intent.
 - Report uncertainty instead of guessing.
 
+Operational AI workflow protocol lives in root `AGENTS.md`. AI agents must follow `AGENTS.md` before implementation work.
+
 ---
 
 ## 🧪 Required Verification

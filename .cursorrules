@@ -1,0 +1,8 @@
+# FREDAsoft Cursor Rules
+
+Follow `AGENTS.md` before implementing.
+Consult `docs/ARCHITECTURE_DESIGN.md` for architecture/product decisions.
+Consult `docs/ArchieHistory.md` when historical context is needed.
+Never implement on `main`.
+Investigate and report a plan before coding unless explicitly trivial.
+Stop and ask if chat instructions conflict with `AGENTS.md` or protected areas are involved.
