@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, FileText, Layers } from 'lucide-react';
 import type {
   Client,
@@ -48,11 +48,21 @@ import {
   webReportAccordionLevelIds,
   webReportHierarchyLevelLabels
 } from '../../lib/webReportAccordion';
+import {
+  areCollapsedKeySetsEqual,
+  createDefaultWebReportSessionState,
+  DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED,
+  DEFAULT_WEB_REPORT_NARRATIVE_EXPANDED,
+  loadWebReportSessionState,
+  readWebReportSessionForScope,
+  recordInclusionOverrideFromSession,
+  saveWebReportSessionControls,
+  saveWebReportSessionState,
+  webReportSessionMatchesScope,
+  type WebReportSectionInclusion
+} from '../../lib/webReportSessionState';
 
-export type WebReportSectionInclusion = {
-  narrative: boolean;
-  documentation: boolean;
-};
+export type { WebReportSectionInclusion };
 
 const DEFAULT_SECTION_INCLUSION: WebReportSectionInclusion = {
   narrative: true,
@@ -666,13 +676,27 @@ export function WebReportViewer({
 }: WebReportViewerProps) {
   const [localProjectId, setLocalProjectId] = useState(defaultProjectId);
   const [localFacilityId, setLocalFacilityId] = useState(defaultFacilityId);
-  const [sortOrder, setSortOrder] = useState<ReportRecordSortOrder>('category_location_item');
-  const [sectionInclusion, setSectionInclusion] = useState<WebReportSectionInclusion>(
-    DEFAULT_SECTION_INCLUSION
+
+  const initialSession = useMemo(
+    () => readWebReportSessionForScope(defaultProjectId, defaultFacilityId),
+    [defaultProjectId, defaultFacilityId]
   );
-  const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set());
-  const [narrativeExpanded, setNarrativeExpanded] = useState(true);
-  const [documentationExpanded, setDocumentationExpanded] = useState(true);
+
+  const [sortOrder, setSortOrder] = useState<ReportRecordSortOrder>(
+    () => initialSession?.sortOrder ?? 'category_location_item'
+  );
+  const [sectionInclusion, setSectionInclusion] = useState<WebReportSectionInclusion>(
+    () => initialSession?.sectionInclusion ?? DEFAULT_SECTION_INCLUSION
+  );
+  const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(
+    () => new Set(initialSession?.collapsedKeys ?? [])
+  );
+  const [narrativeExpanded, setNarrativeExpanded] = useState(
+    () => initialSession?.narrativeExpanded ?? DEFAULT_WEB_REPORT_NARRATIVE_EXPANDED
+  );
+  const [documentationExpanded, setDocumentationExpanded] = useState(
+    () => initialSession?.documentationExpanded ?? DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED
+  );
   const [recordInclusionOverride, setRecordInclusionOverride] = useState<WebReportRecordInclusion | null>(
     null
   );
@@ -765,25 +789,141 @@ export function WebReportViewer({
     [facilityRecords, glossary, categories, items, locations]
   );
 
-  const filterScopeKey = useMemo(() => {
-    if (!localProjectId || !localFacilityId) return '';
-    return [
-      localProjectId,
-      localFacilityId,
-      filterOptions.categories.map((o) => o.id).join('\0'),
-      filterOptions.locations.map((o) => o.id).join('\0'),
-      filterOptions.items.map((o) => o.id).join('\0')
-    ].join('|');
-  }, [localProjectId, localFacilityId, filterOptions]);
-
-  useEffect(() => {
-    setRecordInclusionOverride(null);
-  }, [filterScopeKey]);
-
   const defaultRecordInclusion = useMemo(
     () => createDefaultWebReportRecordInclusion(filterOptions),
     [filterOptions]
   );
+
+  const viewerScopeKey = useMemo(() => {
+    if (!localProjectId || !localFacilityId) return '';
+    return `${String(localProjectId).trim()}|${String(localFacilityId).trim()}`;
+  }, [localProjectId, localFacilityId]);
+
+  const filterOptionsKey = useMemo(
+    () =>
+      [
+        filterOptions.categories.map((o) => o.id).join('\0'),
+        filterOptions.locations.map((o) => o.id).join('\0'),
+        filterOptions.items.map((o) => o.id).join('\0')
+      ].join('|'),
+    [filterOptions]
+  );
+
+  const prevViewerScopeKeyRef = useRef('');
+
+  const canPersistSession =
+    Boolean(viewerScopeKey) &&
+    dataInScope &&
+    Boolean(selectedProject) &&
+    Boolean(selectedFacility);
+
+  const sessionControlsForPersist = useCallback(
+    () => ({
+      projectId: localProjectId,
+      facilityId: localFacilityId,
+      sortOrder,
+      sectionInclusion,
+      inclusion: recordInclusionOverride ?? defaultRecordInclusion,
+      narrativeExpanded,
+      documentationExpanded
+    }),
+    [
+      localProjectId,
+      localFacilityId,
+      sortOrder,
+      sectionInclusion,
+      recordInclusionOverride,
+      defaultRecordInclusion,
+      narrativeExpanded,
+      documentationExpanded
+    ]
+  );
+
+  const persistCollapsedKeys = useCallback(
+    (keys: Set<string>) => {
+      if (!canPersistSession) return;
+      saveWebReportSessionControls(sessionControlsForPersist(), { collapsedKeys: keys });
+    },
+    [canPersistSession, sessionControlsForPersist]
+  );
+
+  const applyCollapsedKeys = useCallback(
+    (next: Set<string>) => {
+      setCollapsedKeys(next);
+      persistCollapsedKeys(next);
+    },
+    [persistCollapsedKeys]
+  );
+
+  const resetViewerControlsToDefaults = useCallback(() => {
+    setSortOrder('category_location_item');
+    setSectionInclusion(DEFAULT_SECTION_INCLUSION);
+    setRecordInclusionOverride(null);
+    setNarrativeExpanded(DEFAULT_WEB_REPORT_NARRATIVE_EXPANDED);
+    setDocumentationExpanded(DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED);
+    setCollapsedKeys(new Set());
+  }, []);
+
+  const resetSessionStorageToDefaultsForScope = useCallback(
+    (projectId: string, facilityId: string, options: WebReportFilterOptions) => {
+      saveWebReportSessionState(createDefaultWebReportSessionState(projectId, facilityId, options));
+    },
+    []
+  );
+
+  useLayoutEffect(() => {
+    if (!viewerScopeKey || !dataInScope) return;
+
+    const prevScope = prevViewerScopeKeyRef.current;
+    const scopeChanged = prevScope !== viewerScopeKey;
+    if (!scopeChanged) return;
+
+    const isRemountHydrate = prevScope === '';
+    prevViewerScopeKeyRef.current = viewerScopeKey;
+
+    const saved = loadWebReportSessionState();
+    const matchScope =
+      Boolean(saved) &&
+      webReportSessionMatchesScope(saved, localProjectId, localFacilityId);
+
+    if (isRemountHydrate && matchScope) {
+      setSortOrder(saved!.sortOrder);
+      setSectionInclusion(saved!.sectionInclusion);
+      setRecordInclusionOverride(recordInclusionOverrideFromSession(saved!, filterOptions));
+      setNarrativeExpanded(saved!.narrativeExpanded);
+      setDocumentationExpanded(saved!.documentationExpanded);
+      setCollapsedKeys(new Set(saved!.collapsedKeys));
+    } else {
+      resetViewerControlsToDefaults();
+      if (selectedProject && selectedFacility) {
+        resetSessionStorageToDefaultsForScope(
+          localProjectId,
+          localFacilityId,
+          filterOptions
+        );
+      }
+    }
+  }, [
+    viewerScopeKey,
+    dataInScope,
+    localProjectId,
+    localFacilityId,
+    filterOptions,
+    selectedProject,
+    selectedFacility,
+    resetViewerControlsToDefaults,
+    resetSessionStorageToDefaultsForScope
+  ]);
+
+  useEffect(() => {
+    if (!viewerScopeKey || !dataInScope) return;
+
+    setRecordInclusionOverride((prev) => {
+      if (!prev) return null;
+      const pruned = pruneWebReportRecordInclusion(prev, filterOptions);
+      return isWebReportRecordInclusionAllSelected(pruned, filterOptions) ? null : pruned;
+    });
+  }, [viewerScopeKey, filterOptionsKey, dataInScope, filterOptions]);
 
   const activeRecordInclusion = useMemo(() => {
     const base = recordInclusionOverride ?? defaultRecordInclusion;
@@ -877,16 +1017,42 @@ export function WebReportViewer({
   );
 
   useEffect(() => {
-    setCollapsedKeys((prev) => reconcileWebReportCollapsedKeys(prev, accordionNodeIds));
-  }, [accordionNodeIds]);
-
-  const toggleCollapsed = (key: string) => {
+    if (accordionNodeIds.all.length === 0) return;
     setCollapsedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      const next = reconcileWebReportCollapsedKeys(prev, accordionNodeIds);
+      if (areCollapsedKeySetsEqual(prev, next)) return prev;
+      persistCollapsedKeys(next);
       return next;
     });
+  }, [accordionNodeIds, persistCollapsedKeys]);
+
+  useEffect(() => {
+    if (!canPersistSession) return;
+    saveWebReportSessionControls(sessionControlsForPersist());
+  }, [canPersistSession, sessionControlsForPersist]);
+
+  const handleSortOrderChange = useCallback(
+    (next: ReportRecordSortOrder) => {
+      if (next === sortOrder) return;
+      setSortOrder(next);
+      setCollapsedKeys(new Set());
+      if (!canPersistSession) return;
+      saveWebReportSessionControls(
+        {
+          ...sessionControlsForPersist(),
+          sortOrder: next
+        },
+        { collapsedKeys: [] }
+      );
+    },
+    [sortOrder, canPersistSession, sessionControlsForPersist]
+  );
+
+  const toggleCollapsed = (key: string) => {
+    const next = new Set(collapsedKeys);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    applyCollapsedKeys(next);
   };
 
   const projectOptions = useMemo(
@@ -925,14 +1091,20 @@ export function WebReportViewer({
           <Select
             label="Project"
             value={localProjectId}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLocalProjectId(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+              setLocalProjectId(e.target.value);
+              resetViewerControlsToDefaults();
+            }}
             options={projectOptions}
             placeholder="Select project…"
           />
           <Select
             label="Facility"
             value={localFacilityId}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLocalFacilityId(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+              setLocalFacilityId(e.target.value);
+              resetViewerControlsToDefaults();
+            }}
             options={facilityOptions.map((f) => ({
               value: f.fldFacID,
               label: f.fldFacName,
@@ -951,7 +1123,7 @@ export function WebReportViewer({
                 type="radio"
                 name="web-report-sort"
                 checked={sortOrder === 'category_location_item'}
-                onChange={() => setSortOrder('category_location_item')}
+                onChange={() => handleSortOrderChange('category_location_item')}
                 className="h-4 w-4 border-zinc-300 text-indigo-600"
               />
               Category → Location → Item
@@ -961,7 +1133,7 @@ export function WebReportViewer({
                 type="radio"
                 name="web-report-sort"
                 checked={sortOrder === 'location_category_item'}
-                onChange={() => setSortOrder('location_category_item')}
+                onChange={() => handleSortOrderChange('location_category_item')}
                 className="h-4 w-4 border-zinc-300 text-indigo-600"
               />
               Location → Category → Item
@@ -1203,22 +1375,24 @@ export function WebReportViewer({
                     <WebReportDocumentationAccordionToolbar
                       sortOrder={sortOrder}
                       nodeIds={accordionNodeIds}
-                      onExpandAll={() => setCollapsedKeys(applyWebReportAccordionExpandAll())}
+                      onExpandAll={() =>
+                        applyCollapsedKeys(applyWebReportAccordionExpandAll())
+                      }
                       onCollapseAll={() =>
-                        setCollapsedKeys(applyWebReportAccordionCollapseAll(accordionNodeIds))
+                        applyCollapsedKeys(applyWebReportAccordionCollapseAll(accordionNodeIds))
                       }
                       onExpandLevel={(level) =>
-                        setCollapsedKeys((prev) =>
+                        applyCollapsedKeys(
                           applyWebReportAccordionExpandLevel(
-                            prev,
+                            collapsedKeys,
                             webReportAccordionLevelIds(accordionNodeIds, level)
                           )
                         )
                       }
                       onCollapseLevel={(level) =>
-                        setCollapsedKeys((prev) =>
+                        applyCollapsedKeys(
                           applyWebReportAccordionCollapseLevel(
-                            prev,
+                            collapsedKeys,
                             webReportAccordionLevelIds(accordionNodeIds, level)
                           )
                         )

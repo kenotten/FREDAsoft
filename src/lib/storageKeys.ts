@@ -18,3 +18,6 @@ export const STANDARDS_BROWSER_SELECTION_STORAGE_PREFIX = 'fredasoft_standards_b
 
 /** sessionStorage: Library Reports UI (mode, search, expanded accordion keys). */
 export const LIBRARY_REPORTS_SESSION_STORAGE_KEY = 'fredasoft.libraryReports.state.v1';
+
+/** sessionStorage: Web Report Viewer controls for current project/facility scope. */
+export const WEB_REPORT_SESSION_STORAGE_KEY = 'fredasoft.webReport.state.v1';

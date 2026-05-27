@@ -1512,6 +1512,8 @@ This prevents removed record-level citations from reappearing in reports.
 
 - Future enhancement: When item-level groups are collapsed in the Web Report Viewer, item group headers may show compact record summaries for fast scanning (canonical record number + short finding + short recommendation). This is screen-scanning assistance only (does not replace expanded record cards) and may later be used to generate a spreadsheet-style summary export.
 
+✅ DECIDED (Web Report Viewer — session controls): **Sort hierarchy**, **section inclusion** (narrative / documentation), **record inclusion filters** (category / location / item IDs), and **Narrative/Documentation section expand UI** persist via a **controls-only** session write that **preserves** stored `collapsedKeys` for the same project/facility. **Documentation accordion collapsed keys** are written **explicitly** on collapse/expand (toggle, toolbar, reconcile) so remount never overwrites them with an empty Set. Single payload (`fredasoft.webReport.state.v1`) per **current project + facility**. Survives tab navigation and **browser refresh** in the same tab session. **Changing project or facility** resets to defaults and replaces storage (v1 does **not** restore prior facility when A → B → A). **Logout** clears the session key. **Scroll position** not persisted. Collapsed keys **reconciled** when the documentation tree changes. Filter IDs **pruned** on restore/option changes without wiping user filters. No Firestore / `localStorage` / `ReportPreview.tsx` changes.
+
 ---
 
 ## 28. Future Citation Drift / Refresh Workflow
