@@ -85,6 +85,29 @@ function formatInspectionDate(dateStr: string | undefined): string {
   return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+function toSingleLineSnippet(value: string | undefined, maxLen: number): string {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized.length <= maxLen) return normalized;
+  return `${normalized.slice(0, Math.max(1, maxLen - 3)).trimEnd()}...`;
+}
+
+function resolveFindingSummary(view: WebReportRecordView): string {
+  const shortFinding = toSingleLineSnippet(view.findingShort, 90);
+  if (shortFinding) return shortFinding;
+  const longFinding = toSingleLineSnippet(view.record.fldFindLong, 90);
+  if (longFinding) return longFinding;
+  return 'Finding not specified';
+}
+
+function resolveRecommendationSummary(view: WebReportRecordView): string {
+  const shortRec = toSingleLineSnippet(view.record.fldRecShort, 90);
+  if (shortRec) return shortRec;
+  const longRec = toSingleLineSnippet(view.record.fldRecLong, 90);
+  if (longRec) return longRec;
+  return 'Recommendation not specified';
+}
+
 function CollapseToggle({
   expanded,
   onToggle,
@@ -235,39 +258,60 @@ function WebReportFindingCard({
 
 function WebReportItemGroupBlock({
   group,
-  midLabel,
-  topLabel,
-  sortOrder,
   collapsedKeys,
   toggleCollapsed,
   canonicalReportNumbers
 }: {
   group: WebReportItemGroup;
-  midLabel: string;
-  topLabel: string;
-  sortOrder: ReportRecordSortOrder;
   collapsedKeys: Set<string>;
   toggleCollapsed: (key: string) => void;
   canonicalReportNumbers: Map<string, number>;
 }) {
   const expanded = !collapsedKeys.has(group.key);
-  const hierarchyHint =
-    sortOrder === 'category_location_item'
-      ? `${topLabel} → ${midLabel} → ${group.itemName}`
-      : `${topLabel} → ${midLabel} → ${group.itemName}`;
+  const summaryRows = group.records.map((view) => {
+    const reportNumber = getCanonicalReportNumber(canonicalReportNumbers, view.record.fldPDataID);
+    return {
+      id: view.record.fldPDataID,
+      reportLabel: reportNumber !== null ? `#${reportNumber}` : '#-',
+      finding: resolveFindingSummary(view),
+      recommendation: resolveRecommendationSummary(view)
+    };
+  });
 
   return (
     <div className="space-y-2">
-      <CollapseToggle
-        level="item"
-        label={group.itemName}
-        subtitle={`${group.records.length} record${group.records.length === 1 ? '' : 's'}`}
-        expanded={expanded}
-        onToggle={() => toggleCollapsed(group.key)}
-      />
+      <div className="grid grid-cols-[13rem_minmax(0,1fr)] items-start gap-x-2 gap-y-1 pl-8">
+        <button
+          type="button"
+          onClick={() => toggleCollapsed(group.key)}
+          className="flex min-w-0 items-center gap-2 rounded-lg py-2 text-left transition-colors hover:bg-zinc-100"
+        >
+          {expanded ? (
+            <ChevronDown size={16} className="shrink-0 text-zinc-500" />
+          ) : (
+            <ChevronRight size={16} className="shrink-0 text-zinc-500" />
+          )}
+          <span className="truncate text-xs font-semibold text-zinc-700">{group.itemName}</span>
+        </button>
+        {summaryRows[0] ? (
+          <p className="truncate py-2 text-[11px] leading-snug text-zinc-600">
+            <span className="font-bold text-zinc-700">{summaryRows[0].reportLabel}</span>{' '}
+            <span>{summaryRows[0].finding}</span>{' '}
+            <span className="text-zinc-400">{'->'}</span>{' '}
+            <span>{summaryRows[0].recommendation}</span>
+          </p>
+        ) : null}
+        {summaryRows.slice(1).map((row) => (
+          <p key={row.id} className="col-start-2 truncate text-[11px] leading-snug text-zinc-600">
+            <span className="font-bold text-zinc-700">{row.reportLabel}</span>{' '}
+            <span>{row.finding}</span>{' '}
+            <span className="text-zinc-400">{'->'}</span>{' '}
+            <span>{row.recommendation}</span>
+          </p>
+        ))}
+      </div>
       {expanded ? (
         <div className="space-y-3 pl-10">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">{hierarchyHint}</p>
           {group.records.map((view) => (
             <WebReportFindingCard
               key={view.record.fldPDataID}
@@ -316,9 +360,6 @@ function WebReportMidGroupBlock({
             <WebReportItemGroupBlock
               key={itemGroup.key}
               group={itemGroup}
-              topLabel={topLabel}
-              midLabel={group.label}
-              sortOrder={sortOrder}
               collapsedKeys={collapsedKeys}
               toggleCollapsed={toggleCollapsed}
               canonicalReportNumbers={canonicalReportNumbers}
