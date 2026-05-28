@@ -647,6 +647,8 @@ Future copy tools may help create equivalent records across standards, but copyi
 | **Master Recommendation** (`master_recommendations`) | Library recommendation text, unit/cost defaults, rec-level standards | One rec id can be linked from multiple findings / glossary rows. |
 | **Glossary record** (`glossary`) | Approved **five-tuple** snapshot: Category + Item + Finding + Recommendation + **Glossary Set**, plus glossary-level citations, images, and unit/cost overrides | One row per exact five-tuple; independently editable from library after snapshot. |
 
+✅ DECIDED: **Master finding / recommendation archive (Library Manager Phase 1)** uses `fldIsArchived` on `findings` and `recommendations` documents — **not** `fldDeleted` / `fldIsDeleted`. Archive hides masters from active Library Manager lists (`Show archived` toggle for review/restore). Archiving is allowed even when glossary rows reference the master; the archive modal warns with glossary usage counts. Archive does **not** mutate glossary rows or projectData. Restore sets `fldIsArchived: false`. Archived rows are read-only in Library Manager until restored. Data Entry / Glossary Builder selection filtering and `(archived)` display labels are deferred to a later phase.
+
 The UI must always make clear which action the user is taking:
 
 1. **Edit/reuse** an existing shared master finding or recommendation (same id).

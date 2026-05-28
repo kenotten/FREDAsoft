@@ -112,6 +112,8 @@ export interface Finding {
   fldSourceCopiedAt?: any;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
+  /** Library archive: hidden from active selection; distinct from soft delete */
+  fldIsArchived?: boolean;
 }
 
 export interface UnitType {
@@ -150,6 +152,8 @@ export interface MasterRecommendation {
   fldSourceCopiedAt?: any;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
+  /** Library archive: hidden from active selection; distinct from soft delete */
+  fldIsArchived?: boolean;
 }
 
 export interface Recommendation extends MasterRecommendation {

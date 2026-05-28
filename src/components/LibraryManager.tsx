@@ -22,6 +22,7 @@ import {
   Quote,
   Copy,
   Archive,
+  RefreshCw,
   X
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -58,12 +59,14 @@ import {
   type RecommendationCopyDraft,
 } from '../lib/libraryMasterCopy';
 import {
-  LIBRARY_MASTER_ARCHIVE_UNUSED_HELP,
-  libraryMasterArchiveBlockedMessage,
+  LIBRARY_MASTER_ARCHIVE_HELP,
   libraryMasterArchiveConfirmLabel,
   libraryMasterArchiveModalTitle,
+  libraryMasterArchiveUsageWarning,
   masterArchiveFirestorePayload,
+  masterRestoreFirestorePayload,
 } from '../lib/libraryMasterArchive';
+import { isArchivedLibraryMaster } from '../lib/libraryMasterLifecycle';
 import {
   countUnassignedFindings,
   isActiveLibraryMaster,
@@ -681,6 +684,7 @@ type LibraryArchiveModalState = {
   kind: 'finding' | 'recommendation';
   recordId: string;
   displayShort: string;
+  usageSummary?: LibraryMasterUsageSummary;
 };
 
 function LibraryMasterArchiveModal({
@@ -696,6 +700,7 @@ function LibraryMasterArchiveModal({
 }) {
   const title = libraryMasterArchiveModalTitle(state.kind);
   const confirmLabel = libraryMasterArchiveConfirmLabel(state.kind);
+  const usageWarning = libraryMasterArchiveUsageWarning(state.kind, state.usageSummary);
 
   return (
     <div
@@ -715,15 +720,20 @@ function LibraryMasterArchiveModal({
           <h2 id="library-master-archive-title" className="text-base font-black text-zinc-900">
             {title}
           </h2>
-          <p className="mt-2 text-sm leading-snug text-zinc-700">{LIBRARY_MASTER_ARCHIVE_UNUSED_HELP}</p>
+          <p className="mt-2 text-sm leading-snug text-zinc-700">{LIBRARY_MASTER_ARCHIVE_HELP}</p>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-3">
           <div className="rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2 text-xs text-zinc-600">
             <p>
               <span className="font-bold text-zinc-800">Item:</span> {state.displayShort}
             </p>
             <p className="mt-1 font-mono text-[10px] text-zinc-400">{state.recordId}</p>
           </div>
+          {usageWarning ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2.5 text-xs leading-snug text-amber-950">
+              {usageWarning}
+            </div>
+          ) : null}
         </div>
         <div className="flex shrink-0 gap-2 border-t border-zinc-100 bg-zinc-50 px-5 py-4">
           <Button
@@ -769,7 +779,9 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   /** Recommendations tab: all vs cleanup filters (default All). */
   const [recommendationViewFilter, setRecommendationViewFilter] =
     useState<LibraryRecommendationViewFilter>('all');
-  
+  /** Findings / recommendations: show archived masters only when enabled. */
+  const [showArchived, setShowArchived] = useState(false);
+
   // Local working state for edits
   // Map of id -> partial document update
   const [edits, setEdits] = useState<Record<string, any>>({});
@@ -842,6 +854,18 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
 
     if (invalidEntries.length > 0) {
       toast.error(`Cannot save: ${invalidEntries.length} record(s) exceed the 120 character limit for short text.`);
+      return false;
+    }
+
+    const archivedMasterEditIds = Object.keys(edits).filter((id) => {
+      const finding = findings.find((f) => (f.fldFindID || f.id) === id);
+      if (finding && isArchivedLibraryMaster(finding)) return true;
+      const rec = recommendations.find((r) => (r.fldRecID || r.id) === id);
+      if (rec && isArchivedLibraryMaster(rec)) return true;
+      return false;
+    });
+    if (archivedMasterEditIds.length > 0) {
+      toast.error('Cannot save edits to archived library masters. Restore the record first.');
       return false;
     }
 
@@ -1148,8 +1172,6 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   };
 
   const openFindingArchiveModal = (recordId: string) => {
-    const usage = lookupFindingUsage(masterUsageIndex, recordId);
-    if (usage && usage.glossaryRowCount > 0) return;
     const entity = mergeFindingWithEdits(recordId);
     if (!entity) {
       toast.error('Finding not found.');
@@ -1159,12 +1181,11 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       kind: 'finding',
       recordId,
       displayShort: String(entity.fldFindShort || recordId).trim(),
+      usageSummary: lookupFindingUsage(masterUsageIndex, recordId),
     });
   };
 
   const openRecommendationArchiveModal = (recordId: string) => {
-    const usage = lookupRecUsage(masterUsageIndex, recordId);
-    if (usage && usage.glossaryRowCount > 0) return;
     const entity = mergeRecommendationWithEdits(recordId);
     if (!entity) {
       toast.error('Recommendation not found.');
@@ -1174,22 +1195,12 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       kind: 'recommendation',
       recordId,
       displayShort: String(entity.fldRecShort || recordId).trim(),
+      usageSummary: lookupRecUsage(masterUsageIndex, recordId),
     });
   };
 
   const handleConfirmArchive = async () => {
     if (!archiveModal) return;
-    const usage =
-      archiveModal.kind === 'finding'
-        ? lookupFindingUsage(masterUsageIndex, archiveModal.recordId)
-        : lookupRecUsage(masterUsageIndex, archiveModal.recordId);
-    if (usage && usage.glossaryRowCount > 0) {
-      toast.error(
-        libraryMasterArchiveBlockedMessage(archiveModal.kind, usage)
-      );
-      setArchiveModal(null);
-      return;
-    }
 
     setIsArchiveSaving(true);
     try {
@@ -1222,6 +1233,44 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     } finally {
       setIsArchiveSaving(false);
     }
+  };
+
+  const handleRestoreMaster = async (
+    recordId: string,
+    kind: 'finding' | 'recommendation'
+  ) => {
+    setIsArchiveSaving(true);
+    try {
+      const collection = kind === 'finding' ? 'findings' : 'recommendations';
+      await firestoreService.save(collection, masterRestoreFirestorePayload(), recordId);
+      setEdits((prev) => {
+        const next = { ...prev };
+        delete next[recordId];
+        return next;
+      });
+      if (citationTargetId === recordId) {
+        setCitationTargetId(null);
+      }
+      toast.success(
+        kind === 'finding'
+          ? 'Finding restored. It will appear in active library lists again.'
+          : 'Recommendation restored. It will appear in active library lists again.'
+      );
+    } catch (error) {
+      handleFirestoreError(
+        error,
+        OperationType.UPDATE,
+        kind === 'finding' ? 'findings' : 'recommendations'
+      );
+    } finally {
+      setIsArchiveSaving(false);
+    }
+  };
+
+  const masterRowIsArchived = (record: { id?: string; fldIsArchived?: boolean }) => {
+    const archivedFromEdits = record.id ? edits[record.id]?.fldIsArchived : undefined;
+    if (archivedFromEdits !== undefined) return archivedFromEdits === true;
+    return isArchivedLibraryMaster(record);
   };
 
   const libraryRowGlossaryBadgeLabel = (record: any): string => {
@@ -1440,6 +1489,10 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       });
     }
 
+    if (activeTab === 'findings' || activeTab === 'recommendations') {
+      base = base.filter((item) => masterRowIsArchived(item) === showArchived);
+    }
+
     // Sort by order then persisted name — not pending short-text edits (avoids row remount / focus loss)
     return base.sort(
       (a, b) =>
@@ -1462,6 +1515,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     navigationItems,
     recommendationViewFilter,
     masterUsageIndex,
+    showArchived,
   ]);
 
   // Derived Breadcrumbs
@@ -1705,21 +1759,14 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   const renderRecord = (record: any, index: number, list: any[]) => {
     const isFinding = activeTab === 'findings';
     const isRec = activeTab === 'recommendations';
+    const isRecordArchived = masterRowIsArchived(record);
     const masterUsageSummary = isFinding
       ? lookupFindingUsage(masterUsageIndex, record.id)
       : isRec
         ? lookupRecUsage(masterUsageIndex, record.id)
         : undefined;
     const masterArchiveKind = isFinding ? ('finding' as const) : isRec ? ('recommendation' as const) : null;
-    const archiveBlockedMessage =
-      masterArchiveKind && masterUsageSummary && masterUsageSummary.glossaryRowCount > 0
-        ? libraryMasterArchiveBlockedMessage(masterArchiveKind, masterUsageSummary)
-        : '';
-    const archiveActionDisabled =
-      !masterArchiveKind ||
-      Boolean(masterUsageSummary && masterUsageSummary.glossaryRowCount > 0) ||
-      isArchiveSaving ||
-      isCopySaving;
+    const rowReadOnly = Boolean(isRecordArchived && (isFinding || isRec));
 
     const shortField = isFinding ? 'fldFindShort' : isRec ? 'fldRecShort' : activeTab === 'categories' ? 'fldCategoryName' : 'fldItemName';
     const shortValue = getValue(record, shortField) || '';
@@ -1766,7 +1813,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       <div
         className={cn(
           'flex flex-col gap-1.5 p-3 hover:bg-zinc-50 transition-all group border-b border-zinc-100 last:border-0',
-          isHighlighted && 'bg-violet-50/80 ring-2 ring-inset ring-violet-300'
+          isHighlighted && 'bg-violet-50/80 ring-2 ring-inset ring-violet-300',
+          isRecordArchived && 'bg-zinc-50/90'
         )}
       >
         <div className="flex items-center gap-3">
@@ -1778,7 +1826,9 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 const val = e.target.value === '' ? 999 : parseInt(e.target.value);
                 reorderAndNormalize(record.id, isNaN(val) ? 999 : val, list);
               }}
-              className="w-full bg-zinc-100 border border-zinc-200 rounded-lg py-1 px-1.5 text-center font-mono text-[11px] focus:bg-white focus:ring-2 focus:ring-black/5 outline-none"
+              disabled={rowReadOnly}
+              readOnly={rowReadOnly}
+              className="w-full bg-zinc-100 border border-zinc-200 rounded-lg py-1 px-1.5 text-center font-mono text-[11px] focus:bg-white focus:ring-2 focus:ring-black/5 outline-none disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
           <div className="flex-1 min-w-0 relative">
@@ -1786,8 +1836,10 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               type="text"
               value={shortValue}
               onChange={(e) => handleEdit(record.id, shortField, e.target.value)}
+              disabled={rowReadOnly}
+              readOnly={rowReadOnly}
               className={cn(
-                "w-full bg-transparent border-b border-transparent hover:border-zinc-200 focus:border-zinc-900 focus:outline-none py-0.5 font-bold text-zinc-900 text-sm transition-all",
+                "w-full bg-transparent border-b border-transparent hover:border-zinc-200 focus:border-zinc-900 focus:outline-none py-0.5 font-bold text-zinc-900 text-sm transition-all disabled:cursor-not-allowed disabled:opacity-70",
                 isOverLimit && "text-red-600 border-red-500 hover:border-red-500 focus:border-red-600"
               )}
             />
@@ -1799,6 +1851,11 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 <span className="inline-flex rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-violet-800">
                   Master library
                 </span>
+                {isRecordArchived ? (
+                  <span className="inline-flex rounded border border-zinc-300 bg-zinc-200 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-zinc-700">
+                    Archived
+                  </span>
+                ) : null}
                 <span
                   className={cn(
                     'inline-flex max-w-[11rem] truncate rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-widest',
@@ -1812,7 +1869,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 <select
                   value={String(getValue(record, 'fldGlossarySetId') || '').trim()}
                   onChange={(e) => applyLibraryGlossarySetToRecord(record.id, e.target.value)}
-                  className="max-w-[10rem] rounded-md border border-zinc-200 bg-white py-0.5 pl-1.5 pr-6 text-[9px] font-bold text-zinc-700 outline-none focus:ring-1 focus:ring-blue-500"
+                  disabled={rowReadOnly}
+                  className="max-w-[10rem] rounded-md border border-zinc-200 bg-white py-0.5 pl-1.5 pr-6 text-[9px] font-bold text-zinc-700 outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <option value="">Unassigned</option>
                   {GLOSSARY_SET_DEFS.map((d) => (
@@ -1843,14 +1901,14 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
           <div className="w-20 flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
             <button 
               onClick={() => reorderAndNormalize(record.id, index, list)}
-              disabled={index === 0}
+              disabled={index === 0 || rowReadOnly}
               className="p-1 hover:bg-zinc-200 rounded text-zinc-400 hover:text-black disabled:opacity-30"
             >
               <ArrowUp size={12} />
             </button>
             <button 
               onClick={() => reorderAndNormalize(record.id, index + 2, list)}
-              disabled={index === list.length - 1}
+              disabled={index === list.length - 1 || rowReadOnly}
               className="p-1 hover:bg-zinc-200 rounded text-zinc-400 hover:text-black disabled:opacity-30"
             >
               <ArrowDown size={12} />
@@ -1860,40 +1918,51 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
 
         {(isFinding || isRec) && (
           <div className="ml-16 mr-20 flex flex-wrap items-center gap-2 pb-1">
-            <button
-              type="button"
-              title={isFinding ? 'Copy as new finding' : 'Copy as new recommendation'}
-              onClick={() =>
-                isFinding ? openFindingCopyModal(record.id) : openRecommendationCopyModal(record.id)
-              }
-              disabled={isCopySaving || isArchiveSaving}
-              className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-violet-800 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Copy size={12} aria-hidden />
-              Copy
-            </button>
-            <button
-              type="button"
-              title={
-                archiveBlockedMessage ||
-                (isFinding ? 'Archive unused finding' : 'Archive unused recommendation')
-              }
-              onClick={() =>
-                isFinding
-                  ? openFindingArchiveModal(record.id)
-                  : openRecommendationArchiveModal(record.id)
-              }
-              disabled={archiveActionDisabled}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider transition-colors disabled:cursor-not-allowed',
-                archiveBlockedMessage
-                  ? 'border-zinc-200 bg-zinc-50 text-zinc-400'
-                  : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 disabled:opacity-40'
-              )}
-            >
-              <Archive size={12} aria-hidden />
-              {archiveBlockedMessage ? 'Archive blocked' : 'Archive'}
-            </button>
+            {!isRecordArchived ? (
+              <button
+                type="button"
+                title={isFinding ? 'Copy as new finding' : 'Copy as new recommendation'}
+                onClick={() =>
+                  isFinding ? openFindingCopyModal(record.id) : openRecommendationCopyModal(record.id)
+                }
+                disabled={isCopySaving || isArchiveSaving}
+                className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-violet-800 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Copy size={12} aria-hidden />
+                Copy
+              </button>
+            ) : null}
+            {isRecordArchived && masterArchiveKind ? (
+              <button
+                type="button"
+                title={
+                  masterArchiveKind === 'finding'
+                    ? 'Restore finding to active library lists'
+                    : 'Restore recommendation to active library lists'
+                }
+                onClick={() => void handleRestoreMaster(record.id, masterArchiveKind)}
+                disabled={isArchiveSaving}
+                className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-900 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <RefreshCw size={12} aria-hidden />
+                Restore
+              </button>
+            ) : masterArchiveKind ? (
+              <button
+                type="button"
+                title={isFinding ? 'Archive finding' : 'Archive recommendation'}
+                onClick={() =>
+                  isFinding
+                    ? openFindingArchiveModal(record.id)
+                    : openRecommendationArchiveModal(record.id)
+                }
+                disabled={isArchiveSaving || isCopySaving}
+                className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Archive size={12} aria-hidden />
+                Archive
+              </button>
+            ) : null}
           </div>
         )}
 
@@ -1905,7 +1974,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 summary={masterUsageSummary}
               />
             ) : null}
-            {isFinding && isUnassignedFindingsView ? (
+            {isFinding && isUnassignedFindingsView && !rowReadOnly ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 space-y-2">
                 <p className="text-[9px] font-black uppercase tracking-widest text-amber-800">
                   Assign to category / item
@@ -1957,7 +2026,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 </p>
               </div>
             ) : null}
-            {isRec && activeTab === 'recommendations' ? (
+            {isRec && activeTab === 'recommendations' && !rowReadOnly ? (
               <LibraryRecommendationAssociatedItemsPanel
                 recordId={record.id}
                 rec={record as MasterRecommendation}
@@ -1978,8 +2047,10 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 const field = isFinding ? 'fldFindLong' : 'fldRecLong';
                 handleEdit(record.id, field, e.target.value);
               }}
+              disabled={rowReadOnly}
+              readOnly={rowReadOnly}
               placeholder="Long description (auto-expands)..."
-              className="w-full bg-zinc-50/50 hover:bg-zinc-50 focus:bg-white border border-transparent hover:border-zinc-200 focus:border-zinc-300 rounded text-[11px] text-zinc-600 p-2 transition-all min-h-[60px] max-h-[300px] overflow-y-auto resize-none leading-normal"
+              className="w-full bg-zinc-50/50 hover:bg-zinc-50 focus:bg-white border border-transparent hover:border-zinc-200 focus:border-zinc-300 rounded text-[11px] text-zinc-600 p-2 transition-all min-h-[60px] max-h-[300px] overflow-y-auto resize-none leading-normal disabled:cursor-not-allowed disabled:opacity-70"
               onInput={(e) => {
                 const target = e.target as HTMLTextAreaElement;
                 target.style.height = 'auto';
@@ -1994,8 +2065,10 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                     type="text"
                     value={getValue(record, 'fldMeasurementType') ?? ''}
                     onChange={(e) => handleEdit(record.id, 'fldMeasurementType', e.target.value)}
+                    disabled={rowReadOnly}
+                    readOnly={rowReadOnly}
                     placeholder="Slope, Width, Height, Count, Area, Clearance"
-                    className="w-full bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -2003,7 +2076,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                   <select
                     value={findingUnitVal}
                     onChange={(e) => handleEdit(record.id, 'fldUnitType', e.target.value)}
-                    className="w-full bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    disabled={rowReadOnly}
+                    className="w-full bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <option value="">Select unit</option>
                     {MEASUREMENT_UNITS.map((u) => (
@@ -2026,7 +2100,9 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                     type="number"
                     value={getValue(record, 'fldUnit') ?? 0}
                     onChange={(e) => handleEdit(record.id, 'fldUnit', Number(e.target.value))}
-                    className="flex-1 bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    disabled={rowReadOnly}
+                    readOnly={rowReadOnly}
+                    className="flex-1 bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -2035,7 +2111,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                     <select
                       value={getValue(record, 'fldUOM') || ''}
                       onChange={(e) => handleEdit(record.id, 'fldUOM', e.target.value)}
-                      className="w-20 bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
+                      disabled={rowReadOnly}
+                      className="w-20 bg-zinc-100 border border-zinc-200 rounded py-1 px-2 text-[11px] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <option value="">(None)</option>
                       <option value="EA">EA</option>
@@ -2051,8 +2128,9 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               <button
                 type="button"
                 onClick={() => setCitationTargetId(record.id)}
+                disabled={rowReadOnly}
                 className={cn(
-                  'inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest transition-colors',
+                  'inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest transition-colors disabled:cursor-not-allowed disabled:opacity-40',
                   citationTargetId === record.id
                     ? 'border-blue-400 bg-blue-50 text-blue-800'
                     : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50'
@@ -2106,11 +2184,6 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
             {isRec && (
               <LibraryMasterUsagePanel kind="recommendation" summary={masterUsageSummary} />
             )}
-            {archiveBlockedMessage ? (
-              <p className="text-[10px] leading-snug text-amber-900/90 rounded border border-amber-100 bg-amber-50/80 px-2 py-1.5">
-                {archiveBlockedMessage}
-              </p>
-            ) : null}
           </div>
         )}
       </div>
@@ -2238,6 +2311,26 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               </select>
               <ChevronRight size={12} className="absolute right-2 top-1/2 -translate-y-1/2 rotate-90 text-zinc-400 pointer-events-none" />
             </div>
+          )}
+
+          {(activeTab === 'findings' || activeTab === 'recommendations') && (
+            <Button
+              type="button"
+              variant={showArchived ? 'primary' : 'secondary'}
+              size="sm"
+              className="h-8 shrink-0 px-3 text-[10px] font-black uppercase tracking-widest"
+              onClick={() => {
+                setShowArchived((prev) => !prev);
+                setCitationTargetId(null);
+              }}
+              title={
+                showArchived
+                  ? 'Showing archived masters only'
+                  : 'Show archived master findings and recommendations'
+              }
+            >
+              {showArchived ? 'Showing Archived' : 'Show Archived'}
+            </Button>
           )}
 
           {breadcrumbs.length > 0 && (
