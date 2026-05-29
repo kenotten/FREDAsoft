@@ -72,6 +72,8 @@ Francine has no authority to:
 
 Operational AI workflow protocol lives in root `AGENTS.md`. AI agents must follow `AGENTS.md` before implementation work.
 
+**Product behavior disclosure:** User-facing behavior changes must be surfaced under the heading **Product behavior implications** before implementation. Full protocol: `AGENTS.md` §11 (Product Behavior Change Disclosure).
+
 ---
 
 ## 🧪 Required Verification

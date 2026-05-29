@@ -77,3 +77,35 @@ Cursor should report:
 - lint/build results
 - manual test results
 - explicit confirmation of protected-file confirmations/not touched
+
+## 11. Product Behavior Change Disclosure
+
+AI agents must explicitly disclose any proposed or implemented change that alters **user-facing behavior**, even when the work is framed as a bug fix or is technically small.
+
+- Behavior changes must **not** be buried in long implementation summaries.
+- Use a clear heading: **Product behavior implications**.
+- Pause for Archie/user approval **before implementing** behavior changes that are not strictly necessary to the requested bug fix.
+
+### Examples (non-exhaustive)
+
+Disclosure is required for changes such as:
+
+- new or changed dropdown behavior
+- local selection diverging from global app context
+- changed fallback or default behavior
+- changed persistence or reset behavior
+- changed visibility of archived or deleted records
+- changed validation or blocking rules
+- changed report contents, ordering, grouping, numbering, filtering, or included records
+- changed save behavior
+- automatic correction, inference, or other “helpful” behavior
+
+### Required report format
+
+Before implementation (and again in the final report if behavior changed), include **Product behavior implications** with:
+
+1. **What behavior changes** — describe what the user will see or experience differently.
+2. **Intentional or incidental** — whether the change is deliberate or a side effect of the fix.
+3. **Scope** — whether it affects only the current surface (e.g. one tab) or app-wide context (header, persistence, other tabs).
+4. **Data impact** — whether it persists data or is view-only.
+5. **Approval** — whether Archie/user approval is needed before implementation (required when the change is not strictly necessary for the requested bug fix).
