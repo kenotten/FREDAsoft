@@ -42,6 +42,15 @@ import { normalizeId, idsEqual } from '../lib/idUtils';
 import { toFraction, fromFraction } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
+import {
+  buildFindingByIdMap,
+  buildRecByIdMap,
+  formatArchivedMasterLabel,
+  glossaryRowHasSelectableMasters,
+  isArchivedLibraryMaster,
+  isSelectableLibraryMaster,
+  masterFindingOptionLabel,
+} from '../lib/libraryMasterLifecycle';
 
 const safeArray = (value: any): string[] => {
   if (Array.isArray(value)) return value;
@@ -254,12 +263,25 @@ function isGlossaryDraftLinkageSafe(parsed: any): boolean {
 
 export default function ProjectDataEntry({ 
   project = {}, facility = {}, inspector = {}, glossary = [], standards = [], projectData = [],
-  onSave, onReset, items = [], findings = [], recommendations = [], masterRecommendations = [],
+  onSave, onReset, items = [], findings = [], resolvableFindings, recommendations = [], masterRecommendations = [],
+  resolvableMasterRecommendations,
   unitTypes = [], mergedCategories = [], locations = [], selections = {}, onSelectionChange, onDirtyChange,
   onDeleteRecord,
   pendingCloneSeed = null,
   onPendingCloneSeedConsumed
 }: any) {
+  const resolvableFindingsList = resolvableFindings ?? findings;
+  const resolvableMasterRecsList = resolvableMasterRecommendations ?? masterRecommendations;
+
+  const findingById = useMemo(
+    () => buildFindingByIdMap(resolvableFindingsList || []),
+    [resolvableFindingsList]
+  );
+  const recById = useMemo(
+    () => buildRecByIdMap(resolvableMasterRecsList || []),
+    [resolvableMasterRecsList]
+  );
+
   const resolveProjectDataRecordForJumpSelection = useCallback(
     (targetId: string) => {
       const want = normalizeId(targetId);
@@ -416,6 +438,12 @@ export default function ProjectDataEntry({
     return activeGlossaryRows.filter((g: any) => normalizeId(g.fldGlossarySetId) === want);
   }, [activeGlossaryRows, activeGlossarySetId, selections.dataEntryMode]);
 
+  const selectableGlossaryRowsForSelection = useMemo(() => {
+    return activeGlossaryRowsForSelection.filter((g: any) =>
+      glossaryRowHasSelectableMasters(g, findingById, recById)
+    );
+  }, [activeGlossaryRowsForSelection, findingById, recById]);
+
   const recordGlossaryContextRow = useMemo(() => {
     if (selections.dataEntryMode === 'custom' || !activeRecord) return null;
     const targetId = String(activeRecord.fldData || '').trim().toLowerCase();
@@ -433,7 +461,7 @@ export default function ProjectDataEntry({
   };
 
   const glossaryRowsForDataEntry = useMemo(() => {
-    const base = activeGlossaryRowsForSelection;
+    const base = selectableGlossaryRowsForSelection;
     const r = recordGlossaryContextRow;
     if (!r || glossaryRowInSelectionList(r, base)) return base;
     if (r?.fldDeleted || r?.fldIsDeleted) return base;
@@ -444,7 +472,7 @@ export default function ProjectDataEntry({
     const recB = normalizeId(r.fldRecID);
     if (!cat || !item || !find || (!recA && !recB)) return base;
     return [...base, r];
-  }, [activeGlossaryRowsForSelection, recordGlossaryContextRow]);
+  }, [selectableGlossaryRowsForSelection, recordGlossaryContextRow]);
 
   /** Open record's glossary row is outside the current Active Glossary filter (selections still valid via context merge). */
   const recordGlossaryOutOfActiveFilter = useMemo(() => {
@@ -2354,12 +2382,16 @@ export default function ProjectDataEntry({
       const glosKey = normalizeId(g.fldGlosId || g.id);
       if (!glosKey || seenGlos.has(glosKey)) continue;
       const recRaw = g.fldRec || g.fldRecID;
-      const rec = (masterRecommendations || []).find((r: any) => recommendationMatches(r, recRaw));
+      const rec = resolvableMasterRecsList.find((r: any) => recommendationMatches(r, recRaw));
       if (!rec) continue;
       seenGlos.add(glosKey);
+      const baseLabel = rec.fldRecShort || 'Recommendation';
+      const label = isArchivedLibraryMaster(rec)
+        ? formatArchivedMasterLabel(baseLabel)
+        : baseLabel;
       out.push({
         value: g.fldGlosId || g.id,
-        label: rec.fldRecShort || 'Recommendation',
+        label,
         key: `rec-gl-${glosKey}`
       });
     }
@@ -2374,16 +2406,21 @@ export default function ProjectDataEntry({
     ) {
       const g = recordGlossaryContextRow;
       const recRaw = g.fldRec || g.fldRecID;
-      const rec = (masterRecommendations || []).find((r: any) => recommendationMatches(r, recRaw));
+      const rec = resolvableMasterRecsList.find((r: any) => recommendationMatches(r, recRaw));
+      const recLabel = rec?.fldRecShort
+        ? isArchivedLibraryMaster(rec)
+          ? formatArchivedMasterLabel(rec.fldRecShort)
+          : rec.fldRecShort
+        : 'Recommendation';
       result.push({
         value: g.fldGlosId || g.id,
-        label: `${rec?.fldRecShort || 'Recommendation'} (record glossary)`,
+        label: `${recLabel} (record glossary)`,
         key: `rec-gl-out-${gid}`,
       });
       result.sort((a, b) => a.label.localeCompare(b.label));
     }
     return result;
-  }, [rowsForPath, masterRecommendations, selections.glosId, selections.dataEntryMode, recordGlossaryContextRow]);
+  }, [rowsForPath, resolvableMasterRecsList, selections.glosId, selections.dataEntryMode, recordGlossaryContextRow]);
 
   const recommendationSelectValue = useMemo(() => {
     const opts = recommendationOptions;
@@ -2487,18 +2524,18 @@ export default function ProjectDataEntry({
     if (selections.dataEntryMode === 'custom' || !selections.findId) return sortedFindings;
     const fid = normalizeId(selections.findId);
     if (sortedFindings.some((f: any) => normalizeId(f.fldFindID || f.id) === fid)) return sortedFindings;
-    const add = (findings || []).find((f: any) => normalizeId(f.fldFindID || f.id) === fid);
+    const add = resolvableFindingsList.find((f: any) => normalizeId(f.fldFindID || f.id) === fid);
     if (!add) return sortedFindings;
     return sortEntities([...sortedFindings, add], 'fldFindShort');
-  }, [sortedFindings, selections.findId, selections.dataEntryMode, findings]);
+  }, [sortedFindings, selections.findId, selections.dataEntryMode, resolvableFindingsList]);
 
   const selectedFinding = useMemo(() => {
     const id = (selections.findId || '').toLowerCase().trim();
     if (!id) return undefined;
-    return (findings || []).find(
+    return resolvableFindingsList.find(
       (f) => (f.fldFindID || f.id || '').toLowerCase().trim() === id
     );
-  }, [findings, selections.findId]);
+  }, [resolvableFindingsList, selections.findId]);
 
   const selectedFindingMeasurementType = selectedFinding?.fldMeasurementType || '';
 
@@ -2521,8 +2558,13 @@ export default function ProjectDataEntry({
   }, [activeRecord, dataEntryMode, selections.findId, findings]);
 
   const activeFindingsList = useMemo(
-    () => (findings || []).filter((f: any) => !f?.fldDeleted && !f?.fldIsDeleted),
+    () => (findings || []).filter((f: any) => isSelectableLibraryMaster(f)),
     [findings]
+  );
+
+  const masterRecsActive = useMemo(
+    () => (masterRecommendations || []).filter((r: any) => isSelectableLibraryMaster(r)),
+    [masterRecommendations]
   );
 
   const customTemplateFinding = useMemo(() => {
@@ -2536,7 +2578,7 @@ export default function ProjectDataEntry({
   /** Library Finding used to backfill fldMeasurementType / fldMeasurementUnit (not glossary cost fldUnitType). */
   const libraryFindingForMeasurementSync = useMemo(() => {
     if (!activeRecord) return undefined;
-    const findingsList = Array.isArray(findings) ? findings : [];
+    const findingsList = Array.isArray(resolvableFindingsList) ? resolvableFindingsList : [];
 
     const fldDataBlank = !String(activeRecord.fldData || '').trim();
     const hasPDataCatItem =
@@ -2562,7 +2604,7 @@ export default function ProjectDataEntry({
     const findFk = normalizeId(gRow.fldFind);
     if (!findFk) return undefined;
     return findingsList.find((f: any) => normalizeId(f?.fldFindID || f?.id) === findFk);
-  }, [activeRecord, glossary, findings, customMasterFindId]);
+  }, [activeRecord, glossary, resolvableFindingsList, customMasterFindId]);
 
   const showSyncMeasurementFromLibrary = useMemo(() => {
     if (!activeRecord) return false;
@@ -2625,11 +2667,6 @@ export default function ProjectDataEntry({
   const usableGlossaryTemplateRows = useMemo(
     () => (glossary || []).filter((g: any) => !g?.fldDeleted && !g?.fldIsDeleted),
     [glossary]
-  );
-
-  const masterRecsActive = useMemo(
-    () => (masterRecommendations || []).filter((r: any) => !r?.fldDeleted && !r?.fldIsDeleted),
-    [masterRecommendations]
   );
 
   const sortFindingsForTemplate = (arr: any[]) =>
@@ -3238,11 +3275,17 @@ export default function ProjectDataEntry({
                    onSelectionChange({...selections, findId: e.target.value, recId: '', glosId: '', isDirty: true});
                 }}
                 selectClassName={cn('!bg-yellow-50', focusClasses)}
-                options={sortedFindingsWithContext.map((f, index) => ({ 
-                  value: f.fldFindID || `missing-find-${index}`, 
-                  label: f.fldFindShort || 'Select Finding', 
-                  key: `find-${f.fldFindID || index}-${index}` 
-                }))}
+                options={sortedFindingsWithContext.map((f, index) => {
+                  const fid = normalizeId(f.fldFindID || f.id);
+                  const inPool = sortedFindings.some(
+                    (x: any) => normalizeId(x.fldFindID || x.id) === fid
+                  );
+                  return {
+                    value: f.fldFindID || `missing-find-${index}`,
+                    label: masterFindingOptionLabel(f, inPool),
+                    key: `find-${f.fldFindID || index}-${index}`,
+                  };
+                })}
               />
             )}
             {dataEntryMode === 'custom' && (

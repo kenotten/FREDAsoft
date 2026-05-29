@@ -47,7 +47,13 @@ import {
 import { CrossSetTargetPreviewPanel } from './CrossSetTargetPreviewPanel';
 import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { glossarySetLabelFromEntity } from '../lib/libraryMasterCopy';
-import { isActiveLibraryMaster } from '../lib/libraryManagerFindings';
+import {
+  isSelectableLibraryMaster,
+  isArchivedLibraryMaster,
+  masterFindingOptionLabel,
+  masterRecOptionLabel,
+  formatArchivedMasterLabel,
+} from '../lib/libraryMasterLifecycle';
 import { 
   Category, 
   Item, 
@@ -445,10 +451,14 @@ interface GlossaryBuilderProps {
   categories: Category[];
   items: Item[];
   findings: Finding[];
+  /** Soft-delete filtered; includes archived masters for existing selection resolution. */
+  resolvableFindings?: Finding[];
   setFindings: React.Dispatch<React.SetStateAction<Finding[]>>;
   recommendations: any[]; // Legacy recommendations
   setRecommendations: React.Dispatch<React.SetStateAction<any[]>>;
   masterRecommendations: MasterRecommendation[];
+  /** Soft-delete filtered; includes archived masters for existing selection resolution. */
+  resolvableMasterRecommendations?: MasterRecommendation[];
   glossary: Glossary[];
   setGlossary: React.Dispatch<React.SetStateAction<Glossary[]>>;
   unitTypes: UnitType[];
@@ -494,10 +504,12 @@ export function GlossaryBuilder({
   categories = [],
   items = [],
   findings = [],
+  resolvableFindings,
   setFindings,
   recommendations = [],
   setRecommendations,
   masterRecommendations = [],
+  resolvableMasterRecommendations,
   glossary = [],
   setGlossary,
   unitTypes = [],
@@ -527,6 +539,8 @@ export function GlossaryBuilder({
   const hasMinimumContext = !!(selectedCat && selectedItem && selectedFind && selectedRec);
 
   const masterRecsSource = Array.isArray(masterRecommendations) ? masterRecommendations : [];
+  const resolvableFindingsList = resolvableFindings ?? findings;
+  const resolvableMasterRecsList = resolvableMasterRecommendations ?? masterRecommendations;
 
   const [draftFindShort, setDraftFindShort] = useState('');
   const [draftFindLong, setDraftFindLong] = useState('');
@@ -537,12 +551,12 @@ export function GlossaryBuilder({
   const normMasterId = (v: any) => String(v ?? '').toLowerCase().trim();
 
   const resolveMatchedFindingForDraft = () =>
-    findings?.find(
+    resolvableFindingsList?.find(
       (f: any) => normMasterId(f.id || f.fldFindID) === normMasterId(selectedFind)
     );
 
   const resolveMatchedRecForDraft = () =>
-    masterRecsSource?.find(
+    resolvableMasterRecsList?.find(
       (r: any) => normMasterId(r.id || r.fldRecID) === normMasterId(selectedRec)
     );
 
@@ -671,12 +685,12 @@ export function GlossaryBuilder({
       return;
     }
 
-    const sourceFinding = findings.find(
+    const sourceFinding = resolvableFindingsList.find(
       (f: any) =>
         String(f.id || f.fldFindID || '').toLowerCase().trim() ===
         String(selectedFind || '').toLowerCase().trim()
     );
-    const sourceRec = masterRecsSource.find(
+    const sourceRec = resolvableMasterRecsList.find(
       (r: any) =>
         String(r.id || r.fldRecID || '').toLowerCase().trim() ===
         String(selectedRec || '').toLowerCase().trim()
@@ -693,21 +707,23 @@ export function GlossaryBuilder({
     const sourceRecLongN = normalizeForDeterministicMatch(sourceRec.fldRecLong);
     const sourceRecItem = String(sourceRec.fldItem || '').trim();
 
-    const findingMatches = (Array.isArray(findings) ? findings : []).filter((f: any) => {
+    const findingMatches = (Array.isArray(resolvableFindingsList) ? resolvableFindingsList : []).filter((f: any) => {
       const setKey = normalizeGlossaryRecordSetKey(f.fldGlossarySetId);
       if (setKey !== targetSet.id) return false;
       if (String(f.fldItem || '').toLowerCase().trim() !== String(selectedItem || '').toLowerCase().trim()) return false;
+      if (!isSelectableLibraryMaster(f)) return false;
       return (
         normalizeForDeterministicMatch(f.fldFindShort) === sourceFindShortN &&
         normalizeForDeterministicMatch(f.fldFindLong) === sourceFindLongN
       );
     });
-    const recMatches = (Array.isArray(masterRecsSource) ? masterRecsSource : []).filter((r: any) => {
+    const recMatches = (Array.isArray(resolvableMasterRecsList) ? resolvableMasterRecsList : []).filter((r: any) => {
       const setKey = normalizeGlossaryRecordSetKey(r.fldGlossarySetId);
       if (setKey !== targetSet.id) return false;
       if (sourceRecItem) {
         if (String(r.fldItem || '').toLowerCase().trim() !== sourceRecItem.toLowerCase().trim()) return false;
       }
+      if (!isSelectableLibraryMaster(r)) return false;
       return (
         normalizeForDeterministicMatch(r.fldRecShort) === sourceRecShortN &&
         normalizeForDeterministicMatch(r.fldRecLong) === sourceRecLongN
@@ -780,11 +796,11 @@ export function GlossaryBuilder({
         toast.success(`Reused existing target-set Recommendation (${targetSet.name})`);
       }
 
-      const targetFinding = findingMatches[0] || findings.find(
+      const targetFinding = findingMatches[0] || resolvableFindingsList.find(
         (f: any) =>
           String(f.id || f.fldFindID || '').toLowerCase().trim() === targetFindingId.toLowerCase().trim()
       );
-      const targetRec = recMatches[0] || masterRecsSource.find(
+      const targetRec = recMatches[0] || resolvableMasterRecsList.find(
         (r: any) =>
           String(r.id || r.fldRecID || '').toLowerCase().trim() === targetRecId.toLowerCase().trim()
       );
@@ -848,7 +864,7 @@ export function GlossaryBuilder({
   const setSelectedFind = (val: string) => {
     if (val === selections.selectedFind) return;
     isUpdatingRef.current = true;
-    const matchedFinding = findings?.find(f => (f.id || f.fldFindID) === val);
+    const matchedFinding = resolvableFindingsList?.find(f => (f.id || f.fldFindID) === val);
     const newS = { 
       ...selections, 
       selectedFind: val, 
@@ -864,7 +880,7 @@ export function GlossaryBuilder({
   const setSelectedRec = (val: string) => {
     if (val === selections.selectedRec) return;
     isUpdatingRef.current = true;
-    const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID) === val);
+    const matchedRec = resolvableMasterRecsList?.find(r => (r.id || r.fldRecID) === val);
     onSelectionChange((prev: any) => {
       const newS = {
         ...prev,
@@ -1014,10 +1030,10 @@ export function GlossaryBuilder({
       selectedSetKeyUi
     );
 
-    const matchedFinding = findings?.find(f =>
+    const matchedFinding = resolvableFindingsList?.find(f =>
       String(f.id || f.fldFindID || '').toLowerCase().trim() === String(selectedFind || '').toLowerCase().trim()
     );
-    const matchedRec = masterRecsSource?.find(r =>
+    const matchedRec = resolvableMasterRecsList?.find(r =>
       String(r.id || r.fldRecID || '').toLowerCase().trim() === String(selectedRec || '').toLowerCase().trim()
     );
 
@@ -1340,7 +1356,7 @@ export function GlossaryBuilder({
       
       // COMMIT STAGED CHANGES TO MASTER LIBRARY
       if (selectedFind) {
-        const finding = findings.find(f => (f.id || f.fldFindID) === selectedFind);
+        const finding = resolvableFindingsList.find(f => (f.id || f.fldFindID) === selectedFind);
         if (finding) {
           const findingPayload = sanitizeData({ 
             fldStandards: normalizeStringArray(stagedFindingStds),
@@ -1352,7 +1368,7 @@ export function GlossaryBuilder({
       }
 
       if (selectedRec) {
-        const recommendation = masterRecsSource.find(r => (r.id || r.fldRecID) === selectedRec);
+        const recommendation = resolvableMasterRecsList.find(r => (r.id || r.fldRecID) === selectedRec);
         if (recommendation) {
           const recPayload = sanitizeData({ 
             fldStandards: normalizeStringArray(stagedRecStds),
@@ -1501,13 +1517,13 @@ export function GlossaryBuilder({
       await firestoreService.masterRecommendations.save(recPayload, recId);
       
       // Link to finding
-      const finding = findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(findId || "").toLowerCase().trim());
+      const finding = resolvableFindingsList?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(findId || "").toLowerCase().trim());
       const suggested = [...(Array.isArray(finding?.fldSuggestedRecs) ? finding.fldSuggestedRecs : []), recId];
       await firestoreService.save('findings', { fldSuggestedRecs: suggested }, findId);
 
       const glosId = uuidv4();
-      const matchedFinding = findings?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
-      const matchedRec = masterRecsSource?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
+      const matchedFinding = resolvableFindingsList?.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
+      const matchedRec = resolvableMasterRecsList?.find(r => (r.id || r.fldRecID || "").toLowerCase().trim() === (selectedRec || "").toLowerCase().trim());
       
       const glosStds = Array.from(new Set([
         ...normalizeStringArray(matchedFinding?.fldStandards),
@@ -1581,7 +1597,7 @@ export function GlossaryBuilder({
     if (!editingId) {
       const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
       const candidateNorm = normalizeForDeterministicMatch(trimmedShort);
-      const duplicateMaster = (findings || []).some((f: Finding) => {
+      const duplicateMaster = (resolvableFindingsList || []).some((f: Finding) => {
         if (!masterMatchesSelectedGlossarySet(f, selectedSetKeyUi)) return false;
         if (
           String(f.fldItem || '').toLowerCase().trim() !==
@@ -1650,7 +1666,7 @@ export function GlossaryBuilder({
       await firestoreService.masterRecommendations.save(payload, id);
       
       if (!editingId && selectedFind) {
-        const finding = findings.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
+        const finding = resolvableFindingsList.find(f => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
         if (finding) {
           const suggested = [...(Array.isArray(finding.fldSuggestedRecs) ? finding.fldSuggestedRecs : []), id];
           await firestoreService.save('findings', { fldSuggestedRecs: suggested }, selectedFind);
@@ -1719,7 +1735,7 @@ export function GlossaryBuilder({
       return;
     }
     try {
-      const finding = findings.find(f => String(f.id || f.fldFindID || '').trim() === String(selectedFind || '').trim());
+      const finding = resolvableFindingsList.find(f => String(f.id || f.fldFindID || '').trim() === String(selectedFind || '').trim());
       if (finding) {
         const rawSuggested = finding.fldSuggestedRecs;
         let currentSuggested: string[] = [];
@@ -1749,7 +1765,7 @@ export function GlossaryBuilder({
   };
 
   const handleUnlinkSuggestion = async (findId: string, recId: string) => {
-    const finding = findings.find(f => (f.id || f.fldFindID) === findId);
+    const finding = resolvableFindingsList.find(f => (f.id || f.fldFindID) === findId);
     if (!finding) return;
 
     // ARCHIE'S LAW: Explicit array enforcement for unlinking
@@ -1800,7 +1816,7 @@ export function GlossaryBuilder({
         setEditingId(selectedItem);
       }
     } else if (type === 'finding' && selectedFind) {
-      const f = findings.find((f: any) => (f.id || f.fldFindID) === selectedFind);
+      const f = resolvableFindingsList.find((f: any) => (f.id || f.fldFindID) === selectedFind);
       if (f) {
         setFormData({
           ...formData,
@@ -1813,7 +1829,7 @@ export function GlossaryBuilder({
         setEditingId(selectedFind);
       }
     } else if (type === 'recommendation' && selectedRec) {
-      const r = masterRecsSource.find((r: any) => (r.id || r.fldRecID || "").toLowerCase() === (selectedRec || "").toLowerCase());
+      const r = resolvableMasterRecsList.find((r: any) => (r.id || r.fldRecID || "").toLowerCase() === (selectedRec || "").toLowerCase());
       if (r) {
         setFormData({ ...formData, recShort: r.fldRecShort, recLong: r.fldRecLong, recOrder: r.fldOrder?.toString() || '', unit: r.fldUnit?.toString() || '0', uom: r.fldUOM || 'EA' });
         setEditingId(selectedRec);
@@ -1831,7 +1847,7 @@ export function GlossaryBuilder({
       const i = items.find((i: any) => (i.id || i.fldItemID) === selectedItem);
       if (i) setFormData({ ...formData, itemName: i.fldItemName + ' (Copy)', itemOrder: (i.fldOrder || 0).toString() });
     } else if (type === 'finding' && selectedFind) {
-      const f = findings.find((f: any) => (f.id || f.fldFindID) === selectedFind);
+      const f = resolvableFindingsList.find((f: any) => (f.id || f.fldFindID) === selectedFind);
       if (f)
         setFormData({
           ...formData,
@@ -1842,7 +1858,7 @@ export function GlossaryBuilder({
           fldUnitType: f.fldUnitType || '',
         });
     } else if (type === 'recommendation' && selectedRec) {
-      const r = masterRecsSource.find((r: any) => (r.id || r.fldRecID || "").toLowerCase() === (selectedRec || "").toLowerCase());
+      const r = resolvableMasterRecsList.find((r: any) => (r.id || r.fldRecID || "").toLowerCase() === (selectedRec || "").toLowerCase());
       if (r) setFormData({ ...formData, recShort: r.fldRecShort + ' (Copy)', recLong: r.fldRecLong, recOrder: (r.fldOrder || 0).toString(), unit: r.fldUnit?.toString() || '0', uom: r.fldUOM || 'EA' });
     } else {
       setFormData({ 
@@ -1859,8 +1875,8 @@ export function GlossaryBuilder({
   const handleAddNewGlossaryFlow = () => {
     const cat = categories?.find((c: any) => String(c.id || c.fldCategoryID || "").toLowerCase().trim() === String(selectedCat || "").toLowerCase().trim());
     const item = items?.find((i: any) => String(i.id || i.fldItemID || "").toLowerCase().trim() === String(selectedItem || "").toLowerCase().trim());
-    const find = findings?.find((f: any) => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
-    const rec = masterRecsSource?.find((r: any) => (r.id || r.fldRecID || "").toLowerCase() === (selectedRec || "").toLowerCase());
+    const find = resolvableFindingsList?.find((f: any) => String(f.id || f.fldFindID || "").toLowerCase().trim() === String(selectedFind || "").toLowerCase().trim());
+    const rec = resolvableMasterRecsList?.find((r: any) => (r.id || r.fldRecID || "").toLowerCase() === (selectedRec || "").toLowerCase());
     
     setFormData({
       catName: cat?.fldCategoryName || '', 
@@ -1901,6 +1917,7 @@ export function GlossaryBuilder({
       }
       const id = f.fldFindID;
       if (!id || seen.has(id)) continue;
+      if (!isSelectableLibraryMaster(f)) continue;
       if (!masterMatchesSelectedGlossarySet(f, setKey)) continue;
       seen.add(id);
       acc.push(f);
@@ -1911,29 +1928,30 @@ export function GlossaryBuilder({
   const findingsOptionsWithContext = useMemo(() => {
     const base = findingsForSelectedSet.map((f: any) => ({
       value: f.fldFindID,
-      label: f.fldFindShort || f.fldFindID,
+      label: masterFindingOptionLabel(f, true),
     }));
     if (!selectedFind) return base;
     const fid = String(selectedFind).toLowerCase().trim();
     if (base.some((o) => String(o.value).toLowerCase().trim() === fid)) return base;
-    const current = (findings || []).find(
+    const current = resolvableFindingsList.find(
       (f: any) => String(f.id || f.fldFindID || '').toLowerCase().trim() === fid
     );
     if (!current?.fldFindID) return base;
-    const suf = ' (outside selected set)';
     return [
       ...base,
       {
         value: current.fldFindID,
-        label: `${String(current.fldFindShort || current.fldFindID).trim()}${suf}`,
+        label: masterFindingOptionLabel(current, false),
       },
     ];
-  }, [findingsForSelectedSet, findings, selectedFind]);
+  }, [findingsForSelectedSet, resolvableFindingsList, selectedFind]);
 
   const filteredMasterRecs = useMemo(() => {
     if (!masterRecsSource || masterRecsSource.length === 0) return [];
     const setKey = glossarySetKeyUi;
-    const pool = masterRecsSource.filter((r) => masterMatchesSelectedGlossarySet(r, setKey));
+    const pool = masterRecsSource.filter(
+      (r) => masterMatchesSelectedGlossarySet(r, setKey) && isSelectableLibraryMaster(r)
+    );
     const term = (formData.recShort || '').toLowerCase();
 
     if (!term) return pool.slice(0, 50);
@@ -1958,7 +1976,7 @@ export function GlossaryBuilder({
   }, [findingsForSelectedSet]);
 
   const findingSearchScopedPoolRaw = useMemo(() => {
-    const active = (findings || []).filter((f: Finding) => isActiveLibraryMaster(f));
+    const active = (findings || []).filter((f: Finding) => isSelectableLibraryMaster(f));
     if (findingSearchScope === 'all') {
       return active;
     }
@@ -2052,7 +2070,7 @@ export function GlossaryBuilder({
     return masterRecsSource.filter((r) => {
       const rid = String(r.id || r.fldRecID || '').toLowerCase().trim();
       if (!recIds.has(rid)) return false;
-      return masterMatchesSelectedGlossarySet(r, setKey);
+      return masterMatchesSelectedGlossarySet(r, setKey) && isSelectableLibraryMaster(r);
     });
   }, [masterRecsSource, glossary, selectedItem, glossarySetKeyUi]);
 
@@ -2180,12 +2198,12 @@ export function GlossaryBuilder({
         String(i.id || i.fldItemID || '').toLowerCase().trim() ===
         String(selectedItem || '').toLowerCase().trim()
     );
-    const find = findings?.find(
+    const find = resolvableFindingsList?.find(
       (f: any) =>
         String(f.id || f.fldFindID || '').toLowerCase().trim() ===
         String(selectedFind || '').toLowerCase().trim()
     );
-    const rec = masterRecsSource?.find(
+    const rec = resolvableMasterRecsList?.find(
       (r: any) =>
         String(r.id || r.fldRecID || '').toLowerCase().trim() ===
         String(selectedRec || '').toLowerCase().trim()
@@ -2251,10 +2269,10 @@ export function GlossaryBuilder({
     const item = items?.find(
       (i: any) => normMasterId(i.id || i.fldItemID) === normMasterId(selectedItem)
     );
-    const find = findings?.find(
+    const find = resolvableFindingsList?.find(
       (f: any) => normMasterId(f.id || f.fldFindID) === normMasterId(selectedFind)
     );
-    const rec = masterRecsSource?.find(
+    const rec = resolvableMasterRecsList?.find(
       (r: any) => normMasterId(r.id || r.fldRecID) === normMasterId(selectedRec)
     );
 
@@ -2270,8 +2288,8 @@ export function GlossaryBuilder({
       itemName: item?.fldItemName || selectedItem,
       sourceFindingShort: find?.fldFindShort || '',
       sourceRecShort: rec?.fldRecShort || '',
-      findings: findings || [],
-      masterRecommendations: masterRecsSource || [],
+      findings: resolvableFindingsList || [],
+      masterRecommendations: resolvableMasterRecsList || [],
       glossary: glossary || [],
     });
   }, [
@@ -2348,12 +2366,12 @@ export function GlossaryBuilder({
 
     const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
 
-    const finding = findings.find(
+    const finding = resolvableFindingsList.find(
       (f: any) =>
         String(f.id || f.fldFindID || '').toLowerCase().trim() ===
         String(selectedFind || '').toLowerCase().trim()
     );
-    const sourceRec = masterRecsSource.find(
+    const sourceRec = resolvableMasterRecsList.find(
       (r: any) =>
         String(r.id || r.fldRecID || '').toLowerCase().trim() ===
         String(selectedRec || '').toLowerCase().trim()
@@ -2373,7 +2391,7 @@ export function GlossaryBuilder({
       return;
     }
 
-    const duplicateMaster = masterRecsSource.some((r: any) => {
+    const duplicateMaster = resolvableMasterRecsList.some((r: any) => {
       if (!masterMatchesSelectedGlossarySet(r, selectedSetKeyUi)) return false;
       if (!masterRecOverlapsSelectedItemContext(r, selectedItem)) return false;
       const rid = String(r.id || r.fldRecID || '').toLowerCase().trim();
@@ -2533,12 +2551,12 @@ export function GlossaryBuilder({
 
     const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
 
-    const sourceFinding = findings.find(
+    const sourceFinding = resolvableFindingsList.find(
       (f: any) =>
         String(f.id || f.fldFindID || '').toLowerCase().trim() ===
         String(selectedFind || '').toLowerCase().trim()
     );
-    const sourceRec = masterRecsSource.find(
+    const sourceRec = resolvableMasterRecsList.find(
       (r: any) =>
         String(r.id || r.fldRecID || '').toLowerCase().trim() ===
         String(selectedRec || '').toLowerCase().trim()
@@ -2558,7 +2576,7 @@ export function GlossaryBuilder({
       return;
     }
 
-    const duplicateMaster = findings.some((f: any) => {
+    const duplicateMaster = resolvableFindingsList.some((f: any) => {
       if (!masterMatchesSelectedGlossarySet(f, selectedSetKeyUi)) return false;
       if (
         String(f.fldItem || '').toLowerCase().trim() !==
@@ -2720,12 +2738,12 @@ export function GlossaryBuilder({
 
     const selectedSetKeyUi = normalizeGlossaryRecordSetKey(selectedGlossarySetId);
 
-    const sourceFinding = findings.find(
+    const sourceFinding = resolvableFindingsList.find(
       (f: any) =>
         String(f.id || f.fldFindID || '').toLowerCase().trim() ===
         String(selectedFind || '').toLowerCase().trim()
     );
-    const sourceRec = masterRecsSource.find(
+    const sourceRec = resolvableMasterRecsList.find(
       (r: any) =>
         String(r.id || r.fldRecID || '').toLowerCase().trim() ===
         String(selectedRec || '').toLowerCase().trim()
@@ -2745,7 +2763,7 @@ export function GlossaryBuilder({
       return;
     }
 
-    const duplicateFinding = findings.some((f: any) => {
+    const duplicateFinding = resolvableFindingsList.some((f: any) => {
       if (!masterMatchesSelectedGlossarySet(f, selectedSetKeyUi)) return false;
       if (
         String(f.fldItem || '').toLowerCase().trim() !==
@@ -2775,7 +2793,7 @@ export function GlossaryBuilder({
       return;
     }
 
-    const duplicateRec = masterRecsSource.some((r: any) => {
+    const duplicateRec = resolvableMasterRecsList.some((r: any) => {
       if (!masterMatchesSelectedGlossarySet(r, selectedSetKeyUi)) return false;
       if (!masterRecOverlapsSelectedItemContext(r, selectedItem)) return false;
       const rid = String(r.id || r.fldRecID || '').toLowerCase().trim();
@@ -2967,7 +2985,7 @@ export function GlossaryBuilder({
     const prefillKey = `same_find_new_rec|${String(selectedRec || '').trim()}`;
     if (relatedPrefillKeyRef.current === prefillKey) return;
 
-    const rec = masterRecsSource.find(
+    const rec = resolvableMasterRecsList.find(
       (r: any) =>
         String(r.id || r.fldRecID || '').toLowerCase().trim() ===
         String(selectedRec || '').toLowerCase().trim()
@@ -2990,7 +3008,7 @@ export function GlossaryBuilder({
     const prefillKey = `new_find_same_rec|${String(selectedFind || '').trim()}`;
     if (relatedPrefillKeyRef.current === prefillKey) return;
 
-    const find = findings?.find(
+    const find = resolvableFindingsList?.find(
       (f: any) =>
         String(f.id || f.fldFindID || '').toLowerCase().trim() ===
         String(selectedFind || '').toLowerCase().trim()
@@ -3001,7 +3019,7 @@ export function GlossaryBuilder({
     const baseShort = String(find.fldFindShort || '').trim();
     setRelatedNewFindShort(baseShort ? `${baseShort} (Copy)` : '(Copy)');
     setRelatedNewFindLong(String(find.fldFindLong || ''));
-  }, [relatedRecordModalOpen, relatedRecordScenario, selectedFind, relatedRecordSaving, findings]);
+  }, [relatedRecordModalOpen, relatedRecordScenario, selectedFind, relatedRecordSaving, resolvableFindingsList]);
 
   useEffect(() => {
     if (!relatedRecordModalOpen || relatedRecordScenario !== 'new_find_new_rec') return;
@@ -3011,12 +3029,12 @@ export function GlossaryBuilder({
     const prefillKey = `new_find_new_rec|${String(selectedFind || '').trim()}|${String(selectedRec || '').trim()}`;
     if (relatedPrefillKeyRef.current === prefillKey) return;
 
-    const find = findings?.find(
+    const find = resolvableFindingsList?.find(
       (f: any) =>
         String(f.id || f.fldFindID || '').toLowerCase().trim() ===
         String(selectedFind || '').toLowerCase().trim()
     );
-    const rec = masterRecsSource.find(
+    const rec = resolvableMasterRecsList.find(
       (r: any) =>
         String(r.id || r.fldRecID || '').toLowerCase().trim() ===
         String(selectedRec || '').toLowerCase().trim()
@@ -3067,9 +3085,10 @@ export function GlossaryBuilder({
         if (!rid || addedIds.has(rid)) return;
         const short = r.fldRecShort || 'No Title';
         const long = r.fldRecLong || '';
+        const displayShort = isArchivedLibraryMaster(r) ? formatArchivedMasterLabel(short) : short;
         allOptions.push({
           value: String(r.id || r.fldRecID),
-          label: pushPairedLabel(short, long),
+          label: pushPairedLabel(displayShort, long),
         });
         addedIds.add(rid);
       });
@@ -3084,7 +3103,7 @@ export function GlossaryBuilder({
     }
 
     if (selectedFind) {
-      const finding = findings?.find(
+      const finding = resolvableFindingsList?.find(
         (f) =>
           String(f.id || f.fldFindID || '').toLowerCase().trim() ===
           String(selectedFind || '').toLowerCase().trim()
@@ -3098,17 +3117,16 @@ export function GlossaryBuilder({
           const cleanId = String(recId).toLowerCase().trim();
           if (addedIds.has(cleanId)) return;
 
-          const r = masterRecsSource?.find(
+          const r = resolvableMasterRecsList?.find(
             (mr) => String(mr.id || mr.fldRecID || '').toLowerCase().trim() === cleanId
           );
           if (r) {
+            if (!isSelectableLibraryMaster(r)) return;
             const inPaired = pairedRecIdsForCurrentSet.has(cleanId);
             if (!masterMatchesSelectedGlossarySet(r, setKey) && !inPaired) return;
-            const short = r.fldRecShort || 'No Title';
-            const long = r.fldRecLong || '';
             allOptions.push({
               value: String(r.id || r.fldRecID),
-              label: `${short} | ${long.substring(0, 60)}${long.length > 60 ? '...' : ''}`,
+              label: masterRecOptionLabel(r, true, { includeLongPreview: true }),
             });
             addedIds.add(cleanId);
           } else if (!setKey) {
@@ -3139,7 +3157,7 @@ export function GlossaryBuilder({
           const long = r.fldRecLong || '';
           allOptions.push({
             value: String(r.id || r.fldRecID),
-            label: `${short} | ${long.substring(0, 60)}${long.length > 60 ? '...' : ''}`,
+            label: masterRecOptionLabel(r, true, { includeLongPreview: true }),
           });
           addedIds.add(rid);
         });
@@ -3149,15 +3167,13 @@ export function GlossaryBuilder({
 
     const selLower = String(selectedRec || '').toLowerCase().trim();
     if (selLower && !addedIds.has(selLower)) {
-      const cur = masterRecsSource.find(
+      const cur = resolvableMasterRecsList.find(
         (r) => String(r.id || r.fldRecID || '').toLowerCase().trim() === selLower
       );
       if (cur) {
-        const short = cur.fldRecShort || 'No Title';
-        const long = cur.fldRecLong || '';
         allOptions.push({
           value: String(cur.id || cur.fldRecID),
-          label: `${short} | ${long.substring(0, 60)}${long.length > 60 ? '...' : ''} (outside selected set)`,
+          label: masterRecOptionLabel(cur, false, { includeLongPreview: true }),
         });
         addedIds.add(selLower);
       } else {
@@ -3172,8 +3188,9 @@ export function GlossaryBuilder({
     return allOptions;
   }, [
     masterRecsSource,
+    resolvableMasterRecsList,
+    resolvableFindingsList,
     selectedFind,
-    findings,
     selectedRec,
     selectedItem,
     pairedRecRowsForDropdown,

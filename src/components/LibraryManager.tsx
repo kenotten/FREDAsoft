@@ -131,6 +131,34 @@ function libraryPersistedSortLabel(entity: {
   );
 }
 
+function libraryPersistedRecSortLabel(entity: {
+  fldRecShort?: string;
+  fldRecID?: string;
+  id?: string;
+}): string {
+  return String(entity.fldRecShort || entity.fldRecID || entity.id || '').trim();
+}
+
+type LibraryTab = 'categories' | 'items' | 'findings' | 'recommendations';
+
+/** Search haystack for findings/recommendations — tab-specific fields (avoid fldFindShort on rec rows). */
+function libraryMasterSearchHaystack(item: Record<string, unknown>, tab: LibraryTab): string {
+  const parts: unknown[] = [item.sortLabel, item.displayName, item.id];
+  if (tab === 'findings') {
+    parts.push(item.fldFindShort, item.fldFindLong, item.fldFindID);
+  } else if (tab === 'recommendations') {
+    parts.push(item.fldRecShort, item.fldRecLong, item.fldRecID);
+  } else {
+    parts.push(item.fldFindShort, item.fldRecShort, item.fldCategoryName, item.fldItemName);
+    parts.push(item.fldFindLong, item.fldRecLong);
+  }
+  return parts
+    .map((v) => String(v ?? '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
 function libraryCitationDisplayLabel(standard: MasterStandard | undefined, idFallback: string): string {
   if (standard) {
     const t = String(standard.fldStandardType ?? '').trim();
@@ -175,6 +203,9 @@ interface LibraryManagerProps {
   items: Item[];
   findings: Finding[];
   recommendations: MasterRecommendation[];
+  /** Soft-delete filtered; includes archived masters. Preferred source for master list/search. */
+  resolvableFindings?: Finding[];
+  resolvableRecommendations?: MasterRecommendation[];
   /** Glossary rows for read-only master usage counts (fldFind / fldRec references). */
   glossary?: Glossary[];
   /** Same master standards list as Data Entry / StandardsBrowser */
@@ -359,8 +390,6 @@ function LibraryMasterSaveConfirmModal({
     </div>
   );
 }
-
-type LibraryTab = 'categories' | 'items' | 'findings' | 'recommendations';
 
 type LibraryCopyModalState =
   | {
@@ -764,11 +793,16 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   items, 
   findings, 
   recommendations,
+  resolvableFindings,
+  resolvableRecommendations,
   glossary = [],
   standards = [],
   onDirtyChange,
   onNavigateAway
 }, ref) => {
+  const masterFindingsList = resolvableFindings ?? findings;
+  const masterRecommendationsList = resolvableRecommendations ?? recommendations;
+
   const [activeTab, setActiveTab] = useState<LibraryTab>('categories');
   const [selectedCatId, setSelectedCatId] = useState<string>('');
   const [selectedItemId, setSelectedItemId] = useState<string>('');
@@ -858,9 +892,9 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     }
 
     const archivedMasterEditIds = Object.keys(edits).filter((id) => {
-      const finding = findings.find((f) => (f.fldFindID || f.id) === id);
+      const finding = masterFindingsList.find((f) => (f.fldFindID || f.id) === id);
       if (finding && isArchivedLibraryMaster(finding)) return true;
-      const rec = recommendations.find((r) => (r.fldRecID || r.id) === id);
+      const rec = masterRecommendationsList.find((r) => (r.fldRecID || r.id) === id);
       if (rec && isArchivedLibraryMaster(rec)) return true;
       return false;
     });
@@ -878,8 +912,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
         let collectionName = '';
         if (categories.some(c => (c.fldCategoryID || c.id) === id)) collectionName = 'categories';
         else if (items.some(i => (i.fldItemID || i.id) === id)) collectionName = 'items';
-        else if (findings.some(f => (f.fldFindID || f.id) === id)) collectionName = 'findings';
-        else if (recommendations.some(r => (r.fldRecID || r.id) === id)) collectionName = 'recommendations';
+        else if (masterFindingsList.some(f => (f.fldFindID || f.id) === id)) collectionName = 'findings';
+        else if (masterRecommendationsList.some(r => (r.fldRecID || r.id) === id)) collectionName = 'recommendations';
 
         if (collectionName) {
           const docRef = doc(db, collectionName, id);
@@ -927,8 +961,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     const impacts = collectMasterEditImpacts(
       edits,
       masterUsageIndex,
-      findings,
-      recommendations
+      masterFindingsList,
+      masterRecommendationsList
     );
 
     if (impacts.length > 0) {
@@ -1028,14 +1062,14 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   };
 
   const mergeFindingWithEdits = (recordId: string): Finding | undefined => {
-    const entity = findings.find((f) => libNormId(f.fldFindID || f.id) === libNormId(recordId));
+    const entity = masterFindingsList.find((f) => libNormId(f.fldFindID || f.id) === libNormId(recordId));
     if (!entity) return undefined;
     const patch = edits[recordId];
     return patch ? ({ ...entity, ...patch } as Finding) : entity;
   };
 
   const mergeRecommendationWithEdits = (recordId: string): MasterRecommendation | undefined => {
-    const entity = recommendations.find(
+    const entity = masterRecommendationsList.find(
       (r) => libNormId(r.fldRecID || r.id) === libNormId(recordId)
     );
     if (!entity) return undefined;
@@ -1302,7 +1336,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       const targetOrder = idx + 1;
       
       // Find original to see if order actually changed
-      const original = [...categories, ...items, ...findings, ...recommendations].find(x => ((x as any).fldCategoryID || (x as any).fldItemID || (x as any).fldFindID || (x as any).fldRecID || (x as any).id) === itemId);
+      const original = [...categories, ...items, ...masterFindingsList, ...masterRecommendationsList].find(x => ((x as any).fldCategoryID || (x as any).fldItemID || (x as any).fldFindID || (x as any).fldRecID || (x as any).id) === itemId);
       
       if (original && (original as any).fldOrder !== targetOrder) {
         nextEdits[itemId] = {
@@ -1322,7 +1356,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       const itemId = item.id;
       const targetOrder = idx + 1;
       
-      const original = [...categories, ...items, ...findings, ...recommendations].find(x => ((x as any).fldCategoryID || (x as any).fldItemID || (x as any).fldFindID || (x as any).fldRecID || (x as any).id) === itemId);
+      const original = [...categories, ...items, ...masterFindingsList, ...masterRecommendationsList].find(x => ((x as any).fldCategoryID || (x as any).fldItemID || (x as any).fldFindID || (x as any).fldRecID || (x as any).id) === itemId);
       
       if (original && (original as any).fldOrder !== targetOrder) {
         nextEdits[itemId] = {
@@ -1354,8 +1388,8 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
   }, [items, edits]);
 
   const unassignedFindingsCount = useMemo(
-    () => countUnassignedFindings(findings, navigationItems, edits),
-    [findings, navigationItems, edits]
+    () => countUnassignedFindings(masterFindingsList, navigationItems, edits),
+    [masterFindingsList, navigationItems, edits]
   );
 
   const isUnassignedFindingsView =
@@ -1368,22 +1402,22 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     () =>
       buildLibraryMasterUsageIndex({
         glossary,
-        findings,
-        recommendations,
+        findings: masterFindingsList,
+        recommendations: masterRecommendationsList,
         categories,
         items,
       }),
-    [glossary, findings, recommendations, categories, items]
+    [glossary, masterFindingsList, masterRecommendationsList, categories, items]
   );
 
   const unusedRecommendationsCount = useMemo(
-    () => countUnusedRecommendations(recommendations, masterUsageIndex),
-    [recommendations, masterUsageIndex]
+    () => countUnusedRecommendations(masterRecommendationsList, masterUsageIndex),
+    [masterRecommendationsList, masterUsageIndex]
   );
 
   const metadataCleanupBreakdown = useMemo(
-    () => countMetadataCleanupBreakdown(recommendations, navigationItems),
-    [recommendations, navigationItems]
+    () => countMetadataCleanupBreakdown(masterRecommendationsList, navigationItems),
+    [masterRecommendationsList, navigationItems]
   );
 
   // Filtered and Sorted Data for display
@@ -1417,7 +1451,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       if (!selectedCatId) return [];
 
       if (selectedCatId === LIBRARY_UNASSIGNED_FINDINGS_CAT_ID) {
-        base = findings
+        base = masterFindingsList
           .filter((f) => isUnassignedFinding(f, navigationItems, edits))
           .map((f) => ({
             ...f,
@@ -1437,7 +1471,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
             .map((i) => i.fldItemID || i.id || '');
         }
 
-        base = findings
+        base = masterFindingsList
           .filter((f) => {
             const itemFk = String(getValue(f, 'fldItem') ?? '').trim();
             return itemIds.some((id) => libNormId(id) === libNormId(itemFk));
@@ -1452,11 +1486,11 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
           }));
       }
     } else if (activeTab === 'recommendations') {
-      base = recommendations.map((r) => ({
+      base = masterRecommendationsList.map((r) => ({
         ...r,
         id: r.fldRecID || r.id,
         displayName: getValue(r, 'fldRecShort'),
-        sortLabel: libraryPersistedSortLabel(r),
+        sortLabel: libraryPersistedRecSortLabel(r),
         order: getValue(r, 'fldOrder') ?? 999,
       }));
       if (recommendationViewFilter === 'unused') {
@@ -1469,13 +1503,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     // Apply Search
     if (searchTerm.trim()) {
       const lowerSearch = searchTerm.toLowerCase();
-      base = base.filter(item => {
-        const name = (item.sortLabel || libraryPersistedSortLabel(item)).toLowerCase();
-        const id = (item.id || '').toLowerCase();
-        // Persisted long text only — pending edits must not hide rows while typing
-        const longField = String(item.fldFindLong || item.fldRecLong || '').toLowerCase();
-        return name.includes(lowerSearch) || id.includes(lowerSearch) || longField.includes(lowerSearch);
-      });
+      base = base.filter((item) => libraryMasterSearchHaystack(item, activeTab).includes(lowerSearch));
     }
 
     if (
@@ -1494,19 +1522,32 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
     }
 
     // Sort by order then persisted name — not pending short-text edits (avoids row remount / focus loss)
+    const persistedRowSortLabel = (row: {
+      sortLabel?: string;
+      fldFindShort?: string;
+      fldRecShort?: string;
+      fldRecID?: string;
+      fldFindID?: string;
+      id?: string;
+      fldCategoryName?: string;
+      fldItemName?: string;
+    }) => {
+      if (row.sortLabel) return row.sortLabel;
+      if (activeTab === 'recommendations') return libraryPersistedRecSortLabel(row);
+      return libraryPersistedSortLabel(row);
+    };
+
     return base.sort(
       (a, b) =>
         a.order - b.order ||
-        (a.sortLabel || libraryPersistedSortLabel(a)).localeCompare(
-          b.sortLabel || libraryPersistedSortLabel(b)
-        )
+        persistedRowSortLabel(a).localeCompare(persistedRowSortLabel(b))
     );
   }, [
     activeTab,
     categories,
     items,
-    findings,
-    recommendations,
+    masterFindingsList,
+    masterRecommendationsList,
     selectedCatId,
     selectedItemId,
     edits,
@@ -1737,7 +1778,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
       group.findings.forEach((rec, idx) => {
         const itemId = rec.id;
         const targetOrder = idx + 1;
-        const original = findings.find(x => (x.fldFindID || x.id) === itemId);
+        const original = masterFindingsList.find(x => (x.fldFindID || x.id) === itemId);
         
         if (original && (original as any).fldOrder !== targetOrder) {
           nextEdits[itemId] = {
@@ -1838,6 +1879,12 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               onChange={(e) => handleEdit(record.id, shortField, e.target.value)}
               disabled={rowReadOnly}
               readOnly={rowReadOnly}
+              placeholder={
+                isFinding ? 'Short finding' : isRec ? 'Short recommendation' : undefined
+              }
+              aria-label={
+                isFinding ? 'Short finding' : isRec ? 'Short recommendation' : undefined
+              }
               className={cn(
                 "w-full bg-transparent border-b border-transparent hover:border-zinc-200 focus:border-zinc-900 focus:outline-none py-0.5 font-bold text-zinc-900 text-sm transition-all disabled:cursor-not-allowed disabled:opacity-70",
                 isOverLimit && "text-red-600 border-red-500 hover:border-red-500 focus:border-red-600"
@@ -2040,7 +2087,14 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 showPersistedProblem={isMetadataCleanupRecommendationsView}
               />
             ) : null}
-            <textarea 
+            <label
+              className="text-[9px] font-black text-zinc-400 uppercase tracking-widest"
+              htmlFor={`library-long-${record.id}`}
+            >
+              {isFinding ? 'Long finding' : 'Long recommendation'}
+            </label>
+            <textarea
+              id={`library-long-${record.id}`}
               rows={3}
               value={getValue(record, isFinding ? 'fldFindLong' : 'fldRecLong') || ''}
               onChange={(e) => {
@@ -2049,7 +2103,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
               }}
               disabled={rowReadOnly}
               readOnly={rowReadOnly}
-              placeholder="Long description (auto-expands)..."
+              placeholder={isFinding ? 'Long finding text…' : 'Long recommendation text…'}
               className="w-full bg-zinc-50/50 hover:bg-zinc-50 focus:bg-white border border-transparent hover:border-zinc-200 focus:border-zinc-300 rounded text-[11px] text-zinc-600 p-2 transition-all min-h-[60px] max-h-[300px] overflow-y-auto resize-none leading-normal disabled:cursor-not-allowed disabled:opacity-70"
               onInput={(e) => {
                 const target = e.target as HTMLTextAreaElement;
@@ -2231,7 +2285,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
           </h1>
         </div>
 
-        <div className="flex-1 flex items-center gap-3 max-w-3xl px-4 border-x border-zinc-100">
+        <div className="flex-1 flex items-center gap-3 max-w-5xl px-4 border-x border-zinc-100">
           <button 
             onClick={() => setIsNavCollapsed(!isNavCollapsed)}
             className="p-1.5 hover:bg-zinc-100 rounded-md text-zinc-400 hover:text-zinc-900 transition-colors shrink-0"
@@ -2254,7 +2308,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
             <ChevronRight size={12} className="absolute right-2 top-1/2 -translate-y-1/2 rotate-90 text-zinc-400 pointer-events-none" />
           </div>
 
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-[10rem]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
             <input 
               type="text"
@@ -2276,7 +2330,7 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
                 title="Recommendation list filter"
               >
                 <option value="all">
-                  {LIBRARY_RECOMMENDATION_FILTER_LABELS.all} ({recommendations.length})
+                  {LIBRARY_RECOMMENDATION_FILTER_LABELS.all} ({masterRecommendationsList.length})
                 </option>
                 <option value="unused">
                   {LIBRARY_RECOMMENDATION_FILTER_LABELS.unused} ({unusedRecommendationsCount})
@@ -2545,7 +2599,11 @@ export const LibraryManager = forwardRef<LibraryManagerHandle, LibraryManagerPro
           <Card className="flex-1 overflow-hidden flex flex-col border-zinc-200 rounded-none border-x-0 border-t-0 shadow-none bg-white min-h-0">
             <div className="flex items-center gap-3 px-4 py-2 bg-zinc-900 text-white text-[9px] font-black uppercase tracking-widest shrink-0">
               <div className="w-14 text-center">Order</div>
-              <div className="flex-1">Display Name / Short Text</div>
+              <div className="flex-1">
+                {activeTab === 'findings' || activeTab === 'recommendations'
+                  ? 'Short text'
+                  : 'Display Name / Short Text'}
+              </div>
               <div className="w-40">ID (ReadOnly)</div>
               <div className="w-28 text-right pr-2">Actions</div>
             </div>

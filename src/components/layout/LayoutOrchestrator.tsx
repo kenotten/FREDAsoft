@@ -77,9 +77,13 @@ export interface MasterDataProps {
   categories: Category[];
   items: Item[];
   findings: Finding[];
+  /** Soft-delete filtered; includes archived masters for resolution / Library Manager. */
+  resolvableFindings: Finding[];
   unitTypes: UnitType[];
   recommendations: MasterRecommendation[];
   masterRecommendations: MasterRecommendation[];
+  /** Soft-delete filtered; includes archived masters for resolution / Library Manager. */
+  resolvableMasterRecommendations: MasterRecommendation[];
   activeGlossary: Glossary[];
   glossary: Glossary[];
   standards: MasterStandard[];

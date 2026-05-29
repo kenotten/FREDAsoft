@@ -44,6 +44,7 @@ import FREDAsoftLogo from './Assets/FREDAsoftLogo.png';
 import { cn, toFraction, formatMeasurement, fromFraction, sanitizeData } from './lib/utils';
 import { FREDASOFT_SELECTIONS_LOCAL_STORAGE_KEY } from './lib/storageKeys';
 import { clearWebReportSessionState } from './lib/webReportSessionState';
+import { isSelectableLibraryMaster } from './lib/libraryMasterLifecycle';
 import { motion, AnimatePresence } from 'motion/react';
 import { entityService } from './services/entityService';
 
@@ -489,10 +490,27 @@ export default function App() {
   const inspectors = useMemo(() => rawInspectors.filter(i => !i.fldDeleted && !i.fldIsDeleted), [rawInspectors]);
   const categories = useMemo(() => rawCategories.filter(c => !c.fldDeleted && !c.fldIsDeleted), [rawCategories]);
   const items = useMemo(() => rawItems.filter(i => !i.fldDeleted && !i.fldIsDeleted), [rawItems]);
-  const findings = useMemo(() => rawFindings.filter(f => !f.fldDeleted && !f.fldIsDeleted), [rawFindings]);
+  const resolvableFindings = useMemo(
+    () => rawFindings.filter((f) => f.fldDeleted !== true && f.fldIsDeleted !== true),
+    [rawFindings]
+  );
+  const resolvableMasterRecommendations = useMemo(
+    () => rawMasterRecommendations.filter((r) => r.fldDeleted !== true && r.fldIsDeleted !== true),
+    [rawMasterRecommendations]
+  );
+  const findings = useMemo(
+    () => resolvableFindings.filter(isSelectableLibraryMaster),
+    [resolvableFindings]
+  );
   const unitTypes = useMemo(() => rawUnitTypes.filter(u => !u.fldDeleted && !u.fldIsDeleted), [rawUnitTypes]);
-  const recommendations = useMemo(() => rawMasterRecommendations.filter(r => !r.fldDeleted && !r.fldIsDeleted), [rawMasterRecommendations]);
-  const masterRecommendations = useMemo(() => rawMasterRecommendations.filter(r => !r.fldDeleted && !r.fldIsDeleted), [rawMasterRecommendations]);
+  const recommendations = useMemo(
+    () => resolvableMasterRecommendations.filter(isSelectableLibraryMaster),
+    [resolvableMasterRecommendations]
+  );
+  const masterRecommendations = useMemo(
+    () => resolvableMasterRecommendations.filter(isSelectableLibraryMaster),
+    [resolvableMasterRecommendations]
+  );
   const activeGlossary = useMemo(() => glossary.filter(g => !g.fldDeleted && !g.fldIsDeleted), [glossary]);
   const allLocations = useMemo(() => rawLocations.filter(l => !l.fldDeleted && !l.fldIsDeleted), [rawLocations]);
   const locations = allLocations; // Alias for compatibility
@@ -715,9 +733,11 @@ export default function App() {
     categories,
     items,
     findings,
+    resolvableFindings,
     unitTypes,
     recommendations,
     masterRecommendations,
+    resolvableMasterRecommendations,
     activeGlossary,
     glossary,
     standards,

@@ -10,10 +10,12 @@ export function GlossaryView({
   categories = [], 
   items = [], 
   findings = [], 
+  resolvableFindings,
   setFindings,
   recommendations = [], 
   setRecommendations,
   masterRecommendations = [],
+  resolvableMasterRecommendations,
   glossary = [], 
   setGlossary,
   unitTypes = [], 
@@ -247,10 +249,12 @@ React.useEffect(() => {
             categories={categories}
             items={items}
             findings={findings}
+            resolvableFindings={resolvableFindings ?? findings}
             setFindings={setFindings}
             recommendations={recommendations}
             setRecommendations={setRecommendations}
             masterRecommendations={masterRecommendations}
+            resolvableMasterRecommendations={resolvableMasterRecommendations ?? masterRecommendations}
             glossary={glossary}
             setGlossary={setGlossary}
             unitTypes={unitTypes}
