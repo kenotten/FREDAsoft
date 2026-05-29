@@ -1520,6 +1520,16 @@ This prevents removed record-level citations from reappearing in reports.
 
 ✅ DECIDED (Web Report Viewer — session controls): **Sort hierarchy**, **section inclusion** (narrative / documentation), **record inclusion filters** (category / location / item IDs), and **Narrative/Documentation section expand UI** persist via a **controls-only** session write that **preserves** stored `collapsedKeys` for the same project/facility. **Documentation accordion collapsed keys** are written **explicitly** on collapse/expand (toggle, toolbar, reconcile) so remount never overwrites them with an empty Set. Single payload (`fredasoft.webReport.state.v1`) per **current project + facility**. Survives tab navigation and **browser refresh** in the same tab session. **Changing project or facility** resets to defaults and replaces storage (v1 does **not** restore prior facility when A → B → A). **Logout** clears the session key. **Scroll position** not persisted. Collapsed keys **reconciled** when the documentation tree changes. Filter IDs **pruned** on restore/option changes without wiping user filters. No Firestore / `localStorage` / `ReportPreview.tsx` changes.
 
+✅ FUTURE FIX (Web Report Viewer — project/facility association consistency): A facility created or selected under an active project context may appear in the global app facility selector but not in the Web Report Viewer facility dropdown if the project’s `fldFacilities` metadata has not been updated. This creates confusion for facilities with no `projectData` records, because the user reasonably expects the facility/project pairing to be valid before inspection records exist.
+
+Future work should investigate and implement a deliberate project/facility association workflow:
+
+- When a facility is created while an active project context is selected, the app should offer to associate that facility with the project, likely by updating `project.fldFacilities`.
+- When an existing same-client facility is intentionally paired with a project, the app should offer a clear “associate facility with project” action rather than waiting for the first `projectData` save to backfill the relationship.
+- Web Report Viewer should remain view-only and must not write or auto-link project/facility metadata.
+- Web Report Viewer must never silently fall back to another facility’s report when the selected facility has no records.
+- A read-only audit may be useful to find facilities used in workspace/report contexts but missing from `project.fldFacilities`.
+
 ---
 
 ## 28. Future Citation Drift / Refresh Workflow
