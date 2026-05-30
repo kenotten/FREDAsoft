@@ -163,8 +163,15 @@ function CollapseToggle({
   );
 }
 
-const WR_CARD_LABEL_CELL =
-  'flex w-24 shrink-0 items-center self-stretch border-r border-zinc-200 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase text-zinc-500';
+/** Header record # width + category meta label width; body label column matches their sum so border-r aligns with the category value cell. */
+const WR_CARD_RECORD_NUM_W = 'w-10';
+const WR_CARD_HEADER_META_LABEL_W = 'w-20';
+const WR_CARD_BODY_LABEL_W = 'w-[7.5rem]';
+
+const WR_CARD_LABEL_CELL = cn(
+  'flex shrink-0 items-center self-stretch border-r border-zinc-200 bg-zinc-50 px-2 py-2 text-[9px] font-bold uppercase text-zinc-500',
+  WR_CARD_BODY_LABEL_W
+);
 
 function WebReportFindingCard({
   view,
@@ -181,12 +188,24 @@ function WebReportFindingCard({
       <div className="flex flex-col items-stretch md:flex-row">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex items-stretch border-b border-zinc-200 bg-zinc-50 text-[10px] font-bold uppercase tracking-wider">
-            <div className="flex w-10 shrink-0 items-center justify-center border-r border-zinc-200 text-lg font-black text-zinc-900">
+            <div
+              className={cn(
+                'flex shrink-0 items-center justify-center border-r border-zinc-200 text-lg font-black text-zinc-900',
+                WR_CARD_RECORD_NUM_W
+              )}
+            >
               {reportNumber ?? '—'}
             </div>
             <div className="grid min-w-0 flex-1 grid-cols-2 gap-px bg-zinc-200">
               <div className="flex bg-white">
-                <span className="w-20 shrink-0 border-r border-zinc-200 px-2 py-1.5 text-zinc-500">Category</span>
+                <span
+                  className={cn(
+                    'shrink-0 border-r border-zinc-200 px-2 py-1.5 text-zinc-500',
+                    WR_CARD_HEADER_META_LABEL_W
+                  )}
+                >
+                  Category
+                </span>
                 <span className="min-w-0 flex-1 truncate bg-zinc-900 px-2 py-1.5 text-white">
                   {view.categoryName}
                 </span>
@@ -243,17 +262,24 @@ function WebReportFindingCard({
         </div>
 
         {images.length > 0 ? (
-          <div className="flex w-full shrink-0 flex-row gap-px bg-zinc-900 md:w-44 md:flex-col">
-            {images.map((url, i) => (
-              <div key={i} className="h-28 flex-1 overflow-hidden bg-white p-1 md:h-32 md:flex-none">
-                <img
-                  src={url}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-            ))}
+          <div
+            className={cn(
+              'flex w-full shrink-0 self-stretch border-l border-zinc-200 md:w-44',
+              'min-h-0'
+            )}
+          >
+            <div className="flex w-full flex-row gap-px self-start bg-zinc-200 md:flex-col">
+              {images.map((url, i) => (
+                <div key={i} className="h-28 flex-1 overflow-hidden bg-white p-1 md:h-32 md:flex-none">
+                  <img
+                    src={url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
       </div>
