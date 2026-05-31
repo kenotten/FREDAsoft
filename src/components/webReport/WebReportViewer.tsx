@@ -30,9 +30,12 @@ import {
 import {
   buildCanonicalReportNumberMap,
   buildWebReportDocumentationTreeFromRecords,
-  facilitiesForProject,
+  facilitiesForWebReport,
+  facilityIdsEqual,
+  facilityMatchesWebReportClientContext,
   getCanonicalReportNumber,
   getWebReportFacilityRecords,
+  mergeWebReportFacilityOptions,
   type WebReportItemGroup,
   type WebReportMidGroup,
   type WebReportRecordView,
@@ -86,6 +89,8 @@ type WebReportViewerProps = {
   /** Defaults only; viewer does not mutate global selections */
   defaultProjectId: string;
   defaultFacilityId: string;
+  /** Workspace client id (selections.clientId) for extra facility inclusion */
+  workspaceClientId: string;
 };
 
 function formatInspectionDate(dateStr: string | undefined): string {
@@ -698,7 +703,8 @@ export function WebReportViewer({
   findings,
   standards,
   defaultProjectId,
-  defaultFacilityId
+  defaultFacilityId,
+  workspaceClientId
 }: WebReportViewerProps) {
   const [localProjectId, setLocalProjectId] = useState(defaultProjectId);
   const [localFacilityId, setLocalFacilityId] = useState(defaultFacilityId);
@@ -740,23 +746,88 @@ export function WebReportViewer({
     [projects, localProjectId]
   );
 
+  const workspaceFacilityIds = useMemo(
+    () =>
+      [...new Set([localFacilityId, defaultFacilityId].map((id) => String(id || '').trim()).filter(Boolean))],
+    [localFacilityId, defaultFacilityId]
+  );
+
   const facilityOptions = useMemo(() => {
     if (!selectedProject) return [];
-    return facilitiesForProject(selectedProject, facilities);
-  }, [selectedProject, facilities]);
+    return facilitiesForWebReport(selectedProject, facilities, {
+      includeFacilityIds: workspaceFacilityIds,
+      workspaceClientId
+    });
+  }, [selectedProject, facilities, workspaceFacilityIds, workspaceClientId]);
 
-  useEffect(() => {
-    if (!selectedProject) return;
-    const valid = facilityOptions.some((f) => f.fldFacID === localFacilityId);
-    if (!valid && facilityOptions.length > 0) {
-      setLocalFacilityId(facilityOptions[0].fldFacID);
+  const resolvedLocalFacility = useMemo(() => {
+    if (!String(localFacilityId || '').trim()) return null;
+    return facilities.find((f) => facilityIdsEqual(f.fldFacID, localFacilityId)) || null;
+  }, [facilities, localFacilityId]);
+
+  const facilityClientMismatch = useMemo(() => {
+    if (!selectedProject || !resolvedLocalFacility) return false;
+    return !facilityMatchesWebReportClientContext(
+      resolvedLocalFacility,
+      selectedProject,
+      workspaceClientId
+    );
+  }, [selectedProject, resolvedLocalFacility, workspaceClientId]);
+
+  const selectedFacility = useMemo(() => {
+    if (!String(localFacilityId || '').trim()) return null;
+    return facilityOptions.find((f) => facilityIdsEqual(f.fldFacID, localFacilityId)) || null;
+  }, [facilityOptions, localFacilityId]);
+
+  const mergedFacilityOptions = useMemo(() => {
+    if (!selectedProject || !resolvedLocalFacility || facilityClientMismatch) {
+      return facilityOptions;
     }
-  }, [selectedProject, facilityOptions, localFacilityId]);
+    if (
+      !facilityMatchesWebReportClientContext(
+        resolvedLocalFacility,
+        selectedProject,
+        workspaceClientId
+      )
+    ) {
+      return facilityOptions;
+    }
+    return mergeWebReportFacilityOptions(facilityOptions, resolvedLocalFacility);
+  }, [
+    facilityOptions,
+    selectedProject,
+    resolvedLocalFacility,
+    facilityClientMismatch,
+    workspaceClientId
+  ]);
 
-  const selectedFacility = useMemo(
-    () => facilityOptions.find((f) => f.fldFacID === localFacilityId) || null,
-    [facilityOptions, localFacilityId]
-  );
+  const effectiveFacility = useMemo(() => {
+    if (facilityClientMismatch) return null;
+    if (selectedFacility) return selectedFacility;
+    if (
+      resolvedLocalFacility &&
+      selectedProject &&
+      facilityMatchesWebReportClientContext(
+        resolvedLocalFacility,
+        selectedProject,
+        workspaceClientId
+      )
+    ) {
+      return resolvedLocalFacility;
+    }
+    return null;
+  }, [
+    facilityClientMismatch,
+    selectedFacility,
+    resolvedLocalFacility,
+    selectedProject,
+    workspaceClientId
+  ]);
+
+  const facilitySelectValue = useMemo(() => {
+    const match = mergedFacilityOptions.find((f) => facilityIdsEqual(f.fldFacID, localFacilityId));
+    return match?.fldFacID ?? localFacilityId;
+  }, [mergedFacilityOptions, localFacilityId]);
 
   const selectedClient = useMemo(() => {
     if (!selectedProject) return null;
@@ -787,11 +858,11 @@ export function WebReportViewer({
   }, [dataInScope, rawProjectData, localProjectId]);
 
   const facilityRecords = useMemo(() => {
-    if (!selectedProject || !selectedFacility || !dataInScope) return [];
+    if (!selectedProject || !effectiveFacility || !dataInScope) return [];
     return getWebReportFacilityRecords(
       activeProjectData,
       selectedProject,
-      selectedFacility,
+      effectiveFacility,
       glossary,
       categories,
       items,
@@ -801,7 +872,7 @@ export function WebReportViewer({
   }, [
     activeProjectData,
     selectedProject,
-    selectedFacility,
+    effectiveFacility,
     dataInScope,
     glossary,
     categories,
@@ -841,7 +912,7 @@ export function WebReportViewer({
     Boolean(viewerScopeKey) &&
     dataInScope &&
     Boolean(selectedProject) &&
-    Boolean(selectedFacility);
+    Boolean(effectiveFacility);
 
   const sessionControlsForPersist = useCallback(
     () => ({
@@ -890,6 +961,30 @@ export function WebReportViewer({
     setCollapsedKeys(new Set());
   }, []);
 
+  const applyLocalProjectSelection = useCallback(
+    (nextProjectId: string) => {
+      setLocalProjectId(nextProjectId);
+      resetViewerControlsToDefaults();
+
+      if (facilities.length === 0) return;
+
+      const nextProject = projects.find((p) => p.fldProjID === nextProjectId) || null;
+      if (!nextProject) return;
+
+      const nextFacilityOptions = facilitiesForWebReport(nextProject, facilities, {
+        includeFacilityIds: workspaceFacilityIds,
+        workspaceClientId
+      });
+      const facilityStillValid = nextFacilityOptions.some((f) =>
+        facilityIdsEqual(f.fldFacID, localFacilityId)
+      );
+      if (!facilityStillValid) {
+        setLocalFacilityId(nextFacilityOptions[0]?.fldFacID ?? '');
+      }
+    },
+    [facilities, projects, localFacilityId, workspaceFacilityIds, workspaceClientId, resetViewerControlsToDefaults]
+  );
+
   const resetSessionStorageToDefaultsForScope = useCallback(
     (projectId: string, facilityId: string, options: WebReportFilterOptions) => {
       saveWebReportSessionState(createDefaultWebReportSessionState(projectId, facilityId, options));
@@ -921,7 +1016,7 @@ export function WebReportViewer({
       setCollapsedKeys(new Set(saved!.collapsedKeys));
     } else {
       resetViewerControlsToDefaults();
-      if (selectedProject && selectedFacility) {
+      if (selectedProject && effectiveFacility) {
         resetSessionStorageToDefaultsForScope(
           localProjectId,
           localFacilityId,
@@ -936,7 +1031,7 @@ export function WebReportViewer({
     localFacilityId,
     filterOptions,
     selectedProject,
-    selectedFacility,
+    effectiveFacility,
     resetViewerControlsToDefaults,
     resetSessionStorageToDefaultsForScope
   ]);
@@ -970,13 +1065,13 @@ export function WebReportViewer({
   const filteredRecordCount = includedRecords.length;
 
   const canonicalReportNumbers = useMemo(() => {
-    if (!selectedProject || !selectedFacility || !dataInScope) {
+    if (!selectedProject || !effectiveFacility || !dataInScope) {
       return new Map<string, number>();
     }
     return buildCanonicalReportNumberMap(
       activeProjectData,
       selectedProject,
-      selectedFacility,
+      effectiveFacility,
       glossary,
       categories,
       items,
@@ -986,7 +1081,7 @@ export function WebReportViewer({
   }, [
     activeProjectData,
     selectedProject,
-    selectedFacility,
+    effectiveFacility,
     dataInScope,
     glossary,
     categories,
@@ -996,7 +1091,7 @@ export function WebReportViewer({
   ]);
 
   const documentationTree = useMemo(() => {
-    if (!selectedProject || !selectedFacility || !dataInScope) return null;
+    if (!selectedProject || !effectiveFacility || !dataInScope) return null;
     return buildWebReportDocumentationTreeFromRecords(
       includedRecords,
       glossary,
@@ -1010,7 +1105,7 @@ export function WebReportViewer({
   }, [
     includedRecords,
     selectedProject,
-    selectedFacility,
+    effectiveFacility,
     dataInScope,
     glossary,
     categories,
@@ -1033,9 +1128,9 @@ export function WebReportViewer({
   const resetContentFilters = () => setRecordInclusionOverride(null);
 
   const narrativeText = useMemo(() => {
-    if (!selectedProject || !selectedFacility) return '';
-    return resolveFacilityReportNarrative(selectedProject, selectedFacility.fldFacID);
-  }, [selectedProject, selectedFacility]);
+    if (!selectedProject || !effectiveFacility) return '';
+    return resolveFacilityReportNarrative(selectedProject, effectiveFacility.fldFacID);
+  }, [selectedProject, effectiveFacility]);
 
   const accordionNodeIds = useMemo(
     () => collectWebReportAccordionNodeIds(documentationTree),
@@ -1118,26 +1213,25 @@ export function WebReportViewer({
             label="Project"
             value={localProjectId}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-              setLocalProjectId(e.target.value);
-              resetViewerControlsToDefaults();
+              applyLocalProjectSelection(e.target.value);
             }}
             options={projectOptions}
             placeholder="Select project…"
           />
           <Select
             label="Facility"
-            value={localFacilityId}
+            value={facilitySelectValue}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
               setLocalFacilityId(e.target.value);
               resetViewerControlsToDefaults();
             }}
-            options={facilityOptions.map((f) => ({
+            options={mergedFacilityOptions.map((f) => ({
               value: f.fldFacID,
               label: f.fldFacName,
               key: `wr-fac-${f.fldFacID}`
             }))}
             placeholder={selectedProject ? 'Select facility…' : 'Select a project first'}
-            disabled={!selectedProject || facilityOptions.length === 0}
+            disabled={!selectedProject || mergedFacilityOptions.length === 0}
           />
         </div>
 
@@ -1167,7 +1261,7 @@ export function WebReportViewer({
           </div>
         </div>
 
-        {dataInScope && selectedProject && selectedFacility ? (
+        {dataInScope && selectedProject && effectiveFacility ? (
           <WebReportContentFilters
             filterOptions={filterOptions}
             inclusion={activeRecordInclusion}
@@ -1270,7 +1364,27 @@ export function WebReportViewer({
         </div>
       </Card>
 
-      {!selectedProject || !selectedFacility ? (
+      {!selectedProject || !localFacilityId ? (
+        <Card className="p-8 text-center text-sm text-zinc-500 italic">
+          Select a project and facility to view the report.
+        </Card>
+      ) : facilities.length > 0 && !resolvedLocalFacility ? (
+        <Card className="border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+          <p className="font-semibold">Selected facility could not be resolved.</p>
+          <p className="mt-2 text-amber-800">
+            Choose a facility from the list above, or select a valid facility in the workspace header.
+          </p>
+        </Card>
+      ) : facilityClientMismatch ? (
+        <Card className="border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+          <p className="font-semibold">Selected facility belongs to a different client than this project.</p>
+          <p className="mt-2 text-amber-800">
+            <strong>{resolvedLocalFacility?.fldFacName || localFacilityId}</strong> cannot be used with{' '}
+            <strong>{selectedProject.fldProjName}</strong>. Choose a matching client/facility/project
+            combination in the workspace header or facility list above.
+          </p>
+        </Card>
+      ) : !effectiveFacility ? (
         <Card className="p-8 text-center text-sm text-zinc-500 italic">
           Select a project and facility to view the report.
         </Card>
@@ -1300,11 +1414,11 @@ export function WebReportViewer({
                 </h3>
                 <InfoRow label="Client" value={selectedClient?.fldClientName || '—'} />
                 <InfoRow label="Project" value={selectedProject.fldProjName} />
-                <InfoRow label="Facility" value={selectedFacility.fldFacName} />
+                <InfoRow label="Facility" value={effectiveFacility.fldFacName} />
                 <InfoRow
                   label="Address"
                   value={
-                    [selectedFacility.fldFacAddress, selectedFacility.fldFacCity, selectedFacility.fldFacState]
+                    [effectiveFacility.fldFacAddress, effectiveFacility.fldFacCity, effectiveFacility.fldFacState]
                       .filter(Boolean)
                       .join(', ') || 'TBD'
                   }
@@ -1326,7 +1440,7 @@ export function WebReportViewer({
                 <InfoRow
                   label="Inspection date"
                   value={formatInspectionDate(
-                    selectedFacility.fldInspectionDate || selectedProject.fldPDDate
+                    effectiveFacility.fldInspectionDate || selectedProject.fldPDDate
                   )}
                 />
                 <InfoRow

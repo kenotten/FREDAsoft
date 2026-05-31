@@ -118,21 +118,100 @@ export type WebReportDocumentationTree = {
   recordCount: number;
 };
 
+function sortFacilitiesByName(list: Facility[]): Facility[] {
+  return [...list].sort((a, b) =>
+    (a.fldFacName || '').localeCompare(b.fldFacName || '', undefined, { sensitivity: 'base' })
+  );
+}
+
+export function normalizeFacilityId(id: string | undefined | null): string {
+  return String(id || '').trim().toLowerCase();
+}
+
+export function facilityIdsEqual(
+  a: string | undefined | null,
+  b: string | undefined | null
+): boolean {
+  return normalizeFacilityId(a) === normalizeFacilityId(b);
+}
+
+function findFacilityById(facilities: Facility[], id: string): Facility | undefined {
+  const key = normalizeFacilityId(id);
+  if (!key) return undefined;
+  return facilities.find((f) => normalizeFacilityId(f.fldFacID) === key);
+}
+
+export function facilityMatchesWebReportClientContext(
+  facility: Facility,
+  project: Project,
+  workspaceClientId?: string
+): boolean {
+  const facClient = String(facility.fldClient || '').trim();
+  const projectClientId = String(project.fldClient || '').trim();
+  const wsClientId = String(workspaceClientId || '').trim();
+  return (
+    facClient === projectClientId || (wsClientId !== '' && facClient === wsClientId)
+  );
+}
+
+export function mergeWebReportFacilityOptions(
+  base: Facility[],
+  extra: Facility | null | undefined
+): Facility[] {
+  if (!extra) return base;
+  if (base.some((f) => facilityIdsEqual(f.fldFacID, extra.fldFacID))) return base;
+  return sortFacilitiesByName([...base, extra]);
+}
+
 export function facilitiesForProject(project: Project, facilities: Facility[]): Facility[] {
   const clientId = String(project.fldClient || '').trim();
   const facIds = Array.isArray(project.fldFacilities) ? project.fldFacilities : [];
-  const legacyFacId = String(project.fldFacID || '').trim();
+  const linkedFacilityIds = new Set(
+    facIds.map((id) => normalizeFacilityId(id)).filter(Boolean)
+  );
+  const legacyFacId = normalizeFacilityId(project.fldFacID);
 
-  return facilities
-    .filter((f) => {
+  return sortFacilitiesByName(
+    facilities.filter((f) => {
       if (String(f.fldClient || '').trim() !== clientId) return false;
-      if (facIds.includes(f.fldFacID)) return true;
-      if (legacyFacId && f.fldFacID === legacyFacId) return true;
+      const facId = normalizeFacilityId(f.fldFacID);
+      if (linkedFacilityIds.has(facId)) return true;
+      if (legacyFacId && facId === legacyFacId) return true;
       return false;
     })
-    .sort((a, b) =>
-      (a.fldFacName || '').localeCompare(b.fldFacName || '', undefined, { sensitivity: 'base' })
+  );
+}
+
+/** Project-linked facilities plus same-client workspace selections for Web Report Viewer. */
+export function facilitiesForWebReport(
+  project: Project,
+  facilities: Facility[],
+  options?: { includeFacilityIds?: string[]; workspaceClientId?: string }
+): Facility[] {
+  const base = facilitiesForProject(project, facilities);
+  const existingIds = new Set(
+    base.map((f) => normalizeFacilityId(f.fldFacID)).filter(Boolean)
+  );
+  const workspaceClientId = String(options?.workspaceClientId || '').trim();
+
+  const extraIds = [
+    ...new Set(
+      (options?.includeFacilityIds ?? [])
+        .map((id) => normalizeFacilityId(id))
+        .filter(Boolean)
+    )
+  ];
+
+  const extras = extraIds
+    .filter((id) => !existingIds.has(id))
+    .map((id) => findFacilityById(facilities, id))
+    .filter(
+      (f): f is Facility =>
+        Boolean(f) &&
+        facilityMatchesWebReportClientContext(f!, project, workspaceClientId)
     );
+
+  return sortFacilitiesByName([...base, ...extras]);
 }
 
 function resolveGlossaryRow(record: ProjectData, glossary: Glossary[]): Glossary | undefined {
