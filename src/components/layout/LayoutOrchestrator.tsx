@@ -19,7 +19,8 @@ import {
   ShieldAlert,
   Hash,
   Loader2,
-  Layers
+  Layers,
+  ClipboardCheck
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { FREDASOFT_DRAFT_LOCAL_STORAGE_KEY } from '../../lib/storageKeys';
@@ -367,6 +368,7 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
               <NavItem active={activeTab === 'data'} onClick={() => handleGuardedTabSwitch('data')} icon={<ClipboardList size={18} />} label="Project Data Entry" />
               <NavItem active={activeTab === 'explorer'} onClick={() => handleGuardedTabSwitch('explorer')} icon={<Table size={18} />} label="Data Explorer" />
               <NavItem active={activeTab === 'web_report'} onClick={() => handleGuardedTabSwitch('web_report')} icon={<Layers size={18} />} label="Web Report Viewer" />
+              <NavItem active={activeTab === 'project_audit'} onClick={() => handleGuardedTabSwitch('project_audit')} icon={<ClipboardCheck size={18} />} label="Project Audit" />
             </NavSection>
 
             <NavSection label="Glossaries">

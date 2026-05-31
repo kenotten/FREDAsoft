@@ -1522,6 +1522,8 @@ This prevents removed record-level citations from reappearing in reports.
 
 ✅ FUTURE FIX (Web Report Viewer — project/facility association consistency): A facility created or selected under an active project context may appear in the global app facility selector but not in the Web Report Viewer facility dropdown if the project’s `fldFacilities` metadata has not been updated. This creates confusion for facilities with no `projectData` records, because the user reasonably expects the facility/project pairing to be valid before inspection records exist.
 
+✅ DECIDED (Project Audit — internal QA v1): **Project Audit** is a new **internal read-only** tab for project-wide QA. It loads **active** `projectData` for the **selected project** across **all facilities** (derived from `fldFacility` on records, not limited to `project.fldFacilities`). Records group by **Finding ID** or **Recommendation ID** with accordion expand/collapse, facility filter, and text search. Each row shows snapshot finding/recommendation text, **raw saved costs** (no cost multiplier), and **effective citations** via `getRecordStandardIds` + citation labels. **Warning flags** surface missing IDs, unresolved lookups, archived/missing masters, snapshot-vs-master text drift, multiple costs/pairings, and inconsistent citation sets. **No Firestore writes**, no PDF/export, no edit/jump-to-record. Does **not** change Web Report Viewer, `ReportPreview.tsx`, PDF output, or Data Entry save behavior.
+
 Future work should investigate and implement a deliberate project/facility association workflow:
 
 - When a facility is created while an active project context is selected, the app should offer to associate that facility with the project, likely by updating `project.fldFacilities`.

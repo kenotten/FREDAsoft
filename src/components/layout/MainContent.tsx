@@ -11,6 +11,7 @@ import { OrderManager } from '../OrderManager';
 import { LibraryManager } from '../LibraryManager';
 import { LibraryReports } from '../LibraryReports';
 import { WebReportViewer } from '../webReport/WebReportViewer';
+import { ProjectAuditReportView } from '../projectAudit/ProjectAuditReportView';
 import { Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { releaseInactiveTabPanelFocus } from '../../lib/releaseInactiveTabPanelFocus';
@@ -216,6 +217,23 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           standards={standards}
           defaultProjectId={selections.projectId || ''}
           defaultFacilityId={selections.facilityId || ''}
+        />
+      )}
+      {activeTab === 'project_audit' && (
+        <ProjectAuditReportView
+          projectId={selections.projectId || ''}
+          project={selectedProject}
+          projectData={projectProps.rawProjectData}
+          facilities={facilities}
+          locations={locations}
+          categories={categories}
+          items={items}
+          glossary={glossary}
+          findings={findings}
+          resolvableFindings={resolvableFindings}
+          masterRecommendations={masterRecommendations}
+          resolvableMasterRecommendations={resolvableMasterRecommendations}
+          standards={standards}
         />
       )}
       {activeTab === 'maintenance' && (
