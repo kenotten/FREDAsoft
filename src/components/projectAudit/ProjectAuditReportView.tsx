@@ -19,6 +19,7 @@ import {
   buildProjectAuditReport,
   CONTENT_AUDIT_WARNING_CODES,
   countAuditWarnings,
+  countRecordsWithReportContentIssues,
   filterProjectAuditGroups,
   getGroupsForMode,
   type AuditMode,
@@ -282,6 +283,16 @@ export function ProjectAuditReportView({
 
   const baseGroups = useMemo(() => getGroupsForMode(built, mode), [built, mode]);
 
+  const scopedGroups = useMemo(
+    () =>
+      filterProjectAuditGroups(baseGroups, {
+        facilityId: facilityFilter,
+        search,
+        contentIssuesOnly: false,
+      }),
+    [baseGroups, facilityFilter, search]
+  );
+
   const filteredGroups = useMemo(
     () =>
       filterProjectAuditGroups(baseGroups, {
@@ -295,6 +306,11 @@ export function ProjectAuditReportView({
   const visibleRecordCount = useMemo(
     () => filteredGroups.reduce((n, g) => n + g.recordCount, 0),
     [filteredGroups]
+  );
+
+  const reportContentIssueCount = useMemo(
+    () => countRecordsWithReportContentIssues(scopedGroups),
+    [scopedGroups]
   );
 
   const visibleWarningCount = useMemo(() => countAuditWarnings(filteredGroups), [filteredGroups]);
@@ -334,19 +350,31 @@ export function ProjectAuditReportView({
         project data or client reports. Costs shown are raw saved values (no cost multiplier applied).
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {[
           {
             label: contentIssuesOnly ? 'Records (filtered)' : 'Records',
             value: contentIssuesOnly ? visibleRecordCount : built.summary.recordCount,
           },
           { label: 'Groups', value: filteredGroups.length },
+          {
+            label: 'Report content issues',
+            value: reportContentIssueCount,
+            highlight: reportContentIssueCount > 0,
+          },
           { label: 'Facilities', value: built.summary.facilityCount },
           { label: 'Warnings', value: visibleWarningCount },
         ].map((stat) => (
           <Card key={stat.label} className="px-4 py-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{stat.label}</p>
-            <p className="text-xl font-black text-zinc-900">{stat.value}</p>
+            <p
+              className={cn(
+                'text-xl font-black',
+                'highlight' in stat && stat.highlight ? 'text-rose-700' : 'text-zinc-900'
+              )}
+            >
+              {stat.value}
+            </p>
           </Card>
         ))}
       </div>
@@ -394,14 +422,17 @@ export function ProjectAuditReportView({
               />
             </div>
           </div>
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-rose-200 bg-rose-50/80 px-3 py-2 text-xs text-rose-950">
+          <label
+            className="flex cursor-pointer items-center gap-2 rounded-lg border border-rose-200 bg-rose-50/80 px-3 py-2 text-xs text-rose-950"
+            title="Shows records missing category, item, location, finding text, or recommendation text."
+          >
             <input
               type="checkbox"
               checked={contentIssuesOnly}
               onChange={(e) => setContentIssuesOnly(e.target.checked)}
               className="rounded border-rose-300 text-rose-700 focus:ring-rose-500"
             />
-            <span className="font-semibold leading-snug">Only blank finding/recommendation text</span>
+            <span className="font-semibold leading-snug">Report content issues only</span>
           </label>
           <div className="flex gap-2">
             <Button type="button" variant="secondary" size="sm" onClick={expandAll}>
@@ -414,8 +445,9 @@ export function ProjectAuditReportView({
         </div>
         {contentIssuesOnly ? (
           <p className="text-[11px] leading-snug text-rose-800">
-            Showing groups with at least one record where saved finding or recommendation snapshot text
-            (short or long) is blank. Metadata-only issues are hidden until this filter is off.
+            Showing groups with at least one record missing category, item, location, finding snapshot
+            text, or recommendation snapshot text. Metadata-only warnings (IDs, glossary row, archived
+            master, snapshot drift, costs, citations) are hidden until this filter is off.
           </p>
         ) : null}
       </Card>
@@ -426,7 +458,7 @@ export function ProjectAuditReportView({
             {built.summary.recordCount === 0
               ? 'No active project records for this project.'
               : contentIssuesOnly
-                ? 'No records with blank finding or recommendation snapshot text match the current filters.'
+                ? 'No records with report content issues match the current filters.'
                 : 'No groups match the current filters.'}
           </p>
         </Card>

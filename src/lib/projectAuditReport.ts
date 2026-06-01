@@ -150,8 +150,23 @@ export const BLANK_SNAPSHOT_TEXT_WARNING_CODES: ReadonlySet<AuditWarningCode> = 
   'missing_recommendation_long',
 ]);
 
+/** Unresolved/missing category, item, location, or blank report snapshot text. */
+export const REPORT_CONTENT_AUDIT_WARNING_CODES: ReadonlySet<AuditWarningCode> = new Set([
+  'unresolved_category',
+  'unresolved_item',
+  'unresolved_location',
+  'missing_finding_short',
+  'missing_finding_long',
+  'missing_recommendation_short',
+  'missing_recommendation_long',
+]);
+
 export function recordHasBlankSnapshotTextWarning(record: ProjectAuditRecordView): boolean {
   return record.warnings.some((w) => BLANK_SNAPSHOT_TEXT_WARNING_CODES.has(w.code));
+}
+
+export function hasProjectAuditReportContentIssue(record: ProjectAuditRecordView): boolean {
+  return record.warnings.some((w) => REPORT_CONTENT_AUDIT_WARNING_CODES.has(w.code));
 }
 
 function normalizeCompareText(value: unknown): string {
@@ -357,13 +372,20 @@ function recordWarnings(
   if (!facilityResolved && !String(record.fldFacility || '').trim()) {
     warnings.push({ code: 'unresolved_facility', message: 'Missing facility ID' });
   }
-  if (!locationResolved && String(record.fldLocation || '').trim()) {
+  const locId = String(record.fldLocation || '').trim();
+  if (!locId) {
+    warnings.push({ code: 'unresolved_location', message: 'Missing location' });
+  } else if (!locationResolved) {
     warnings.push({ code: 'unresolved_location', message: 'Location ID not found' });
   }
-  if (!ctx.categoryResolved && ctx.categoryId) {
+  if (!ctx.categoryId) {
+    warnings.push({ code: 'unresolved_category', message: 'Missing category' });
+  } else if (!ctx.categoryResolved) {
     warnings.push({ code: 'unresolved_category', message: 'Category ID not found' });
   }
-  if (!ctx.itemResolved && ctx.itemId) {
+  if (!ctx.itemId) {
+    warnings.push({ code: 'unresolved_item', message: 'Missing item' });
+  } else if (!ctx.itemResolved) {
     warnings.push({ code: 'unresolved_item', message: 'Item ID not found' });
   }
   if (ctx.missingGlossaryRow) {
@@ -797,7 +819,7 @@ export function filterProjectAuditGroups(
         });
       }
       if (contentOnly) {
-        records = records.filter((r) => recordHasBlankSnapshotTextWarning(r));
+        records = records.filter((r) => hasProjectAuditReportContentIssue(r));
       }
       if (records.length === 0) return null;
 
@@ -895,13 +917,23 @@ export function countAuditWarnings(groups: ProjectAuditGroup[]): number {
   return seen.size;
 }
 
+export function countRecordsWithReportContentIssues(groups: ProjectAuditGroup[]): number {
+  let count = 0;
+  for (const g of groups) {
+    for (const r of g.records) {
+      if (hasProjectAuditReportContentIssue(r)) count += 1;
+    }
+  }
+  return count;
+}
+
 export const AUDIT_WARNING_LABELS: Partial<Record<AuditWarningCode, string>> = {
   missing_finding_id: 'Missing finding ID',
   missing_recommendation_id: 'Missing rec ID',
   unresolved_facility: 'Unresolved facility',
-  unresolved_location: 'Unresolved location',
-  unresolved_category: 'Unresolved category',
-  unresolved_item: 'Unresolved item',
+  unresolved_location: 'Missing location',
+  unresolved_category: 'Missing category',
+  unresolved_item: 'Missing item',
   missing_glossary_row: 'Missing glossary row',
   master_finding_archived: 'Finding archived',
   master_finding_missing: 'Finding missing',
@@ -919,6 +951,6 @@ export const AUDIT_WARNING_LABELS: Partial<Record<AuditWarningCode, string>> = {
   missing_recommendation_long: 'Missing recommendation long',
 };
 
-/** Report-output snapshot text warnings (higher urgency in UI). */
+/** Report-critical content/path warnings (rose styling in UI). */
 export const CONTENT_AUDIT_WARNING_CODES: ReadonlySet<AuditWarningCode> =
-  BLANK_SNAPSHOT_TEXT_WARNING_CODES;
+  REPORT_CONTENT_AUDIT_WARNING_CODES;
