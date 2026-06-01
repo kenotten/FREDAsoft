@@ -10,6 +10,7 @@ import { WEB_REPORT_SESSION_STORAGE_KEY } from './storageKeys';
 
 export type WebReportSectionInclusion = {
   narrative: boolean;
+  financial: boolean;
   documentation: boolean;
 };
 
@@ -23,16 +24,20 @@ export type WebReportSessionStateV1 = {
   locationIds: string[];
   itemIds: string[];
   narrativeExpanded: boolean;
+  financialExpanded: boolean;
   documentationExpanded: boolean;
   collapsedKeys: string[];
+  financialCollapsedKeys: string[];
 };
 
 const DEFAULT_SECTION_INCLUSION: WebReportSectionInclusion = {
   narrative: true,
+  financial: true,
   documentation: true
 };
 
 export const DEFAULT_WEB_REPORT_NARRATIVE_EXPANDED = true;
+export const DEFAULT_WEB_REPORT_FINANCIAL_EXPANDED = true;
 export const DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED = true;
 
 function isSortOrder(value: unknown): value is ReportRecordSortOrder {
@@ -44,6 +49,7 @@ function parseSectionInclusion(value: unknown): WebReportSectionInclusion {
   const o = value as Record<string, unknown>;
   return {
     narrative: typeof o.narrative === 'boolean' ? o.narrative : DEFAULT_SECTION_INCLUSION.narrative,
+    financial: typeof o.financial === 'boolean' ? o.financial : DEFAULT_SECTION_INCLUSION.financial,
     documentation:
       typeof o.documentation === 'boolean'
         ? o.documentation
@@ -98,11 +104,13 @@ export function loadWebReportSessionState(): WebReportSessionStateV1 | null {
       locationIds: parseIdArray(o.locationIds),
       itemIds: parseIdArray(o.itemIds),
       narrativeExpanded: parseBoolean(o.narrativeExpanded, DEFAULT_WEB_REPORT_NARRATIVE_EXPANDED),
+      financialExpanded: parseBoolean(o.financialExpanded, DEFAULT_WEB_REPORT_FINANCIAL_EXPANDED),
       documentationExpanded: parseBoolean(
         o.documentationExpanded,
         DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED
       ),
-      collapsedKeys: parseIdArray(o.collapsedKeys)
+      collapsedKeys: parseIdArray(o.collapsedKeys),
+      financialCollapsedKeys: parseIdArray(o.financialCollapsedKeys)
     };
   } catch {
     return null;
@@ -119,14 +127,17 @@ export function saveWebReportSessionState(state: WebReportSessionStateV1): void 
       sortOrder: state.sortOrder,
       sectionInclusion: {
         narrative: Boolean(state.sectionInclusion.narrative),
+        financial: Boolean(state.sectionInclusion.financial),
         documentation: Boolean(state.sectionInclusion.documentation)
       },
       categoryIds: state.categoryIds.filter((id) => id.trim() !== ''),
       locationIds: state.locationIds.filter((id) => id.trim() !== ''),
       itemIds: state.itemIds.filter((id) => id.trim() !== ''),
       narrativeExpanded: Boolean(state.narrativeExpanded),
+      financialExpanded: Boolean(state.financialExpanded),
       documentationExpanded: Boolean(state.documentationExpanded),
-      collapsedKeys: state.collapsedKeys.filter((key) => key.trim() !== '')
+      collapsedKeys: state.collapsedKeys.filter((key) => key.trim() !== ''),
+      financialCollapsedKeys: state.financialCollapsedKeys.filter((key) => key.trim() !== '')
     };
     sessionStorage.setItem(WEB_REPORT_SESSION_STORAGE_KEY, JSON.stringify(payload));
   } catch {
@@ -194,6 +205,7 @@ export type WebReportSessionControlsInput = {
   sectionInclusion: WebReportSectionInclusion;
   inclusion: WebReportRecordInclusion;
   narrativeExpanded: boolean;
+  financialExpanded: boolean;
   documentationExpanded: boolean;
 };
 
@@ -225,6 +237,26 @@ function resolveCollapsedKeysForSave(
   return [];
 }
 
+function resolveFinancialCollapsedKeysForSave(
+  projectId: string,
+  facilityId: string,
+  sortOrder: ReportRecordSortOrder,
+  explicit?: Iterable<string>
+): string[] {
+  if (explicit !== undefined) {
+    return [...explicit].filter((key) => key.trim() !== '');
+  }
+  const existing = loadWebReportSessionState();
+  if (
+    existing &&
+    webReportSessionMatchesScope(existing, projectId, facilityId) &&
+    existing.sortOrder === sortOrder
+  ) {
+    return existing.financialCollapsedKeys;
+  }
+  return [];
+}
+
 /** Session blob for matching project/facility on mount, or null. */
 export function readWebReportSessionForScope(
   projectId: string,
@@ -240,7 +272,7 @@ export function readWebReportSessionForScope(
 /** Persist viewer controls; preserves stored collapsedKeys unless explicit keys are provided. */
 export function saveWebReportSessionControls(
   controls: WebReportSessionControlsInput,
-  options?: { collapsedKeys?: Iterable<string> }
+  options?: { collapsedKeys?: Iterable<string>; financialCollapsedKeys?: Iterable<string> }
 ): void {
   const collapsedKeys = resolveCollapsedKeysForSave(
     controls.projectId,
@@ -248,10 +280,17 @@ export function saveWebReportSessionControls(
     controls.sortOrder,
     options?.collapsedKeys
   );
+  const financialCollapsedKeys = resolveFinancialCollapsedKeysForSave(
+    controls.projectId,
+    controls.facilityId,
+    controls.sortOrder,
+    options?.financialCollapsedKeys
+  );
   saveWebReportSessionState(
     buildWebReportSessionStatePayload({
       ...controls,
-      collapsedKeys
+      collapsedKeys,
+      financialCollapsedKeys
     })
   );
 }
@@ -263,8 +302,10 @@ export function buildWebReportSessionStatePayload(args: {
   sectionInclusion: WebReportSectionInclusion;
   inclusion: WebReportRecordInclusion;
   narrativeExpanded: boolean;
+  financialExpanded: boolean;
   documentationExpanded: boolean;
   collapsedKeys: Iterable<string>;
+  financialCollapsedKeys: Iterable<string>;
 }): WebReportSessionStateV1 {
   return {
     v: 1,
@@ -273,14 +314,17 @@ export function buildWebReportSessionStatePayload(args: {
     sortOrder: args.sortOrder,
     sectionInclusion: {
       narrative: Boolean(args.sectionInclusion.narrative),
+      financial: Boolean(args.sectionInclusion.financial),
       documentation: Boolean(args.sectionInclusion.documentation)
     },
     categoryIds: [...args.inclusion.categoryIds],
     locationIds: [...args.inclusion.locationIds],
     itemIds: [...args.inclusion.itemIds],
     narrativeExpanded: Boolean(args.narrativeExpanded),
+    financialExpanded: Boolean(args.financialExpanded),
     documentationExpanded: Boolean(args.documentationExpanded),
-    collapsedKeys: [...args.collapsedKeys].filter((key) => key.trim() !== '')
+    collapsedKeys: [...args.collapsedKeys].filter((key) => key.trim() !== ''),
+    financialCollapsedKeys: [...args.financialCollapsedKeys].filter((key) => key.trim() !== '')
   };
 }
 
@@ -297,7 +341,9 @@ export function createDefaultWebReportSessionState(
     sectionInclusion: { ...DEFAULT_SECTION_INCLUSION },
     inclusion,
     narrativeExpanded: DEFAULT_WEB_REPORT_NARRATIVE_EXPANDED,
+    financialExpanded: DEFAULT_WEB_REPORT_FINANCIAL_EXPANDED,
     documentationExpanded: DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED,
-    collapsedKeys: []
+    collapsedKeys: [],
+    financialCollapsedKeys: []
   });
 }
