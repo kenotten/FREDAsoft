@@ -57,6 +57,7 @@ import {
   DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED,
   DEFAULT_WEB_REPORT_FINANCIAL_EXPANDED,
   DEFAULT_WEB_REPORT_NARRATIVE_EXPANDED,
+  DEFAULT_WEB_REPORT_STANDARDS_EXPANDED,
   loadWebReportSessionState,
   readWebReportSessionForScope,
   recordInclusionOverrideFromSession,
@@ -72,13 +73,16 @@ import {
   type WebReportFinancialParentGroup,
   type WebReportFinancialSummary
 } from '../../lib/webReportFinancial';
+import { buildWebReportReferencedStandardsView } from '../../lib/webReportStandards';
+import { WebReportStandardsSection } from './WebReportStandardsSection';
 
 export type { WebReportSectionInclusion };
 
 const DEFAULT_SECTION_INCLUSION: WebReportSectionInclusion = {
   narrative: true,
   financial: true,
-  documentation: true
+  documentation: true,
+  standards: true
 };
 
 type WebReportViewerProps = {
@@ -884,6 +888,9 @@ export function WebReportViewer({
   const [documentationExpanded, setDocumentationExpanded] = useState(
     () => initialSession?.documentationExpanded ?? DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED
   );
+  const [standardsExpanded, setStandardsExpanded] = useState(
+    () => initialSession?.standardsExpanded ?? DEFAULT_WEB_REPORT_STANDARDS_EXPANDED
+  );
   const [recordInclusionOverride, setRecordInclusionOverride] = useState<WebReportRecordInclusion | null>(
     null
   );
@@ -1078,7 +1085,8 @@ export function WebReportViewer({
       inclusion: recordInclusionOverride ?? defaultRecordInclusion,
       narrativeExpanded,
       financialExpanded,
-      documentationExpanded
+      documentationExpanded,
+      standardsExpanded
     }),
     [
       localProjectId,
@@ -1089,7 +1097,8 @@ export function WebReportViewer({
       defaultRecordInclusion,
       narrativeExpanded,
       financialExpanded,
-      documentationExpanded
+      documentationExpanded,
+      standardsExpanded
     ]
   );
 
@@ -1116,6 +1125,7 @@ export function WebReportViewer({
     setNarrativeExpanded(DEFAULT_WEB_REPORT_NARRATIVE_EXPANDED);
     setFinancialExpanded(DEFAULT_WEB_REPORT_FINANCIAL_EXPANDED);
     setDocumentationExpanded(DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED);
+    setStandardsExpanded(DEFAULT_WEB_REPORT_STANDARDS_EXPANDED);
     setCollapsedKeys(new Set());
     setFinancialCollapsedKeys(new Set());
   }, []);
@@ -1173,6 +1183,7 @@ export function WebReportViewer({
       setNarrativeExpanded(saved!.narrativeExpanded);
       setFinancialExpanded(saved!.financialExpanded);
       setDocumentationExpanded(saved!.documentationExpanded);
+      setStandardsExpanded(saved!.standardsExpanded);
       setCollapsedKeys(new Set(saved!.collapsedKeys));
       setFinancialCollapsedKeys(new Set(saved!.financialCollapsedKeys));
     } else {
@@ -1299,6 +1310,11 @@ export function WebReportViewer({
     standards,
     sortOrder
   ]);
+
+  const referencedStandardsView = useMemo(
+    () => buildWebReportReferencedStandardsView(includedRecords, glossary, standards),
+    [includedRecords, glossary, standards]
+  );
 
   const resolveInclusionForUpdate = (): WebReportRecordInclusion =>
     cloneWebReportRecordInclusion(recordInclusionOverride ?? defaultRecordInclusion);
@@ -1599,6 +1615,30 @@ export function WebReportViewer({
                 Documentation
               </label>
             </li>
+            <li className="flex flex-wrap items-center gap-2">
+              <input
+                id="wr-standards"
+                type="checkbox"
+                checked={sectionInclusion.standards}
+                disabled={!referencedStandardsView.hasReferencedStandards}
+                onChange={(e) =>
+                  setSectionInclusion((s) => ({ ...s, standards: e.target.checked }))
+                }
+                className="h-4 w-4 rounded border-zinc-300 text-indigo-600 disabled:opacity-40"
+              />
+              <label
+                htmlFor="wr-standards"
+                className={cn(
+                  'text-sm font-medium text-zinc-800',
+                  !referencedStandardsView.hasReferencedStandards && 'text-zinc-500'
+                )}
+              >
+                Referenced Standards
+              </label>
+              {!referencedStandardsView.hasReferencedStandards ? (
+                <span className="text-xs text-zinc-400">(none in included records)</span>
+              ) : null}
+            </li>
           </ul>
         </div>
       </Card>
@@ -1830,6 +1870,16 @@ export function WebReportViewer({
                 ) : null
               ) : null}
             </div>
+          ) : null}
+
+          {sectionInclusion.standards ? (
+            <WebReportStandardsSection
+              view={referencedStandardsView}
+              expanded={standardsExpanded}
+              onToggleExpanded={() => setStandardsExpanded((v) => !v)}
+              includedRecordCount={filteredRecordCount}
+              filtersRestricted={filtersRestricted}
+            />
           ) : null}
         </>
       )}

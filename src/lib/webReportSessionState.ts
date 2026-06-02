@@ -12,6 +12,7 @@ export type WebReportSectionInclusion = {
   narrative: boolean;
   financial: boolean;
   documentation: boolean;
+  standards: boolean;
 };
 
 export type WebReportSessionStateV1 = {
@@ -26,6 +27,7 @@ export type WebReportSessionStateV1 = {
   narrativeExpanded: boolean;
   financialExpanded: boolean;
   documentationExpanded: boolean;
+  standardsExpanded: boolean;
   collapsedKeys: string[];
   financialCollapsedKeys: string[];
 };
@@ -33,12 +35,14 @@ export type WebReportSessionStateV1 = {
 const DEFAULT_SECTION_INCLUSION: WebReportSectionInclusion = {
   narrative: true,
   financial: true,
-  documentation: true
+  documentation: true,
+  standards: true
 };
 
 export const DEFAULT_WEB_REPORT_NARRATIVE_EXPANDED = true;
 export const DEFAULT_WEB_REPORT_FINANCIAL_EXPANDED = true;
 export const DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED = true;
+export const DEFAULT_WEB_REPORT_STANDARDS_EXPANDED = true;
 
 function isSortOrder(value: unknown): value is ReportRecordSortOrder {
   return value === 'category_location_item' || value === 'location_category_item';
@@ -53,7 +57,8 @@ function parseSectionInclusion(value: unknown): WebReportSectionInclusion {
     documentation:
       typeof o.documentation === 'boolean'
         ? o.documentation
-        : DEFAULT_SECTION_INCLUSION.documentation
+        : DEFAULT_SECTION_INCLUSION.documentation,
+    standards: typeof o.standards === 'boolean' ? o.standards : DEFAULT_SECTION_INCLUSION.standards
   };
 }
 
@@ -109,6 +114,7 @@ export function loadWebReportSessionState(): WebReportSessionStateV1 | null {
         o.documentationExpanded,
         DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED
       ),
+      standardsExpanded: parseBoolean(o.standardsExpanded, DEFAULT_WEB_REPORT_STANDARDS_EXPANDED),
       collapsedKeys: parseIdArray(o.collapsedKeys),
       financialCollapsedKeys: parseIdArray(o.financialCollapsedKeys)
     };
@@ -128,7 +134,8 @@ export function saveWebReportSessionState(state: WebReportSessionStateV1): void 
       sectionInclusion: {
         narrative: Boolean(state.sectionInclusion.narrative),
         financial: Boolean(state.sectionInclusion.financial),
-        documentation: Boolean(state.sectionInclusion.documentation)
+        documentation: Boolean(state.sectionInclusion.documentation),
+        standards: Boolean(state.sectionInclusion.standards)
       },
       categoryIds: state.categoryIds.filter((id) => id.trim() !== ''),
       locationIds: state.locationIds.filter((id) => id.trim() !== ''),
@@ -136,6 +143,7 @@ export function saveWebReportSessionState(state: WebReportSessionStateV1): void 
       narrativeExpanded: Boolean(state.narrativeExpanded),
       financialExpanded: Boolean(state.financialExpanded),
       documentationExpanded: Boolean(state.documentationExpanded),
+      standardsExpanded: Boolean(state.standardsExpanded),
       collapsedKeys: state.collapsedKeys.filter((key) => key.trim() !== ''),
       financialCollapsedKeys: state.financialCollapsedKeys.filter((key) => key.trim() !== '')
     };
@@ -207,6 +215,7 @@ export type WebReportSessionControlsInput = {
   narrativeExpanded: boolean;
   financialExpanded: boolean;
   documentationExpanded: boolean;
+  standardsExpanded: boolean;
 };
 
 export function areCollapsedKeySetsEqual(a: Set<string>, b: Set<string>): boolean {
@@ -304,6 +313,7 @@ export function buildWebReportSessionStatePayload(args: {
   narrativeExpanded: boolean;
   financialExpanded: boolean;
   documentationExpanded: boolean;
+  standardsExpanded: boolean;
   collapsedKeys: Iterable<string>;
   financialCollapsedKeys: Iterable<string>;
 }): WebReportSessionStateV1 {
@@ -315,7 +325,8 @@ export function buildWebReportSessionStatePayload(args: {
     sectionInclusion: {
       narrative: Boolean(args.sectionInclusion.narrative),
       financial: Boolean(args.sectionInclusion.financial),
-      documentation: Boolean(args.sectionInclusion.documentation)
+      documentation: Boolean(args.sectionInclusion.documentation),
+      standards: Boolean(args.sectionInclusion.standards)
     },
     categoryIds: [...args.inclusion.categoryIds],
     locationIds: [...args.inclusion.locationIds],
@@ -323,6 +334,7 @@ export function buildWebReportSessionStatePayload(args: {
     narrativeExpanded: Boolean(args.narrativeExpanded),
     financialExpanded: Boolean(args.financialExpanded),
     documentationExpanded: Boolean(args.documentationExpanded),
+    standardsExpanded: Boolean(args.standardsExpanded),
     collapsedKeys: [...args.collapsedKeys].filter((key) => key.trim() !== ''),
     financialCollapsedKeys: [...args.financialCollapsedKeys].filter((key) => key.trim() !== '')
   };
@@ -343,6 +355,7 @@ export function createDefaultWebReportSessionState(
     narrativeExpanded: DEFAULT_WEB_REPORT_NARRATIVE_EXPANDED,
     financialExpanded: DEFAULT_WEB_REPORT_FINANCIAL_EXPANDED,
     documentationExpanded: DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED,
+    standardsExpanded: DEFAULT_WEB_REPORT_STANDARDS_EXPANDED,
     collapsedKeys: [],
     financialCollapsedKeys: []
   });
