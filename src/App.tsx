@@ -43,6 +43,7 @@ import {
 import FREDAsoftLogo from './Assets/FREDAsoftLogo.png';
 import { cn, toFraction, formatMeasurement, fromFraction, sanitizeData } from './lib/utils';
 import { FREDASOFT_SELECTIONS_LOCAL_STORAGE_KEY } from './lib/storageKeys';
+import { clearProjectAuditSessionState } from './lib/projectAuditSessionState';
 import { clearWebReportSessionState } from './lib/webReportSessionState';
 import { isSelectableLibraryMaster } from './lib/libraryMasterLifecycle';
 import { motion, AnimatePresence } from 'motion/react';
@@ -565,6 +566,7 @@ export default function App() {
 
   const handleLogout = () => {
     clearWebReportSessionState();
+    clearProjectAuditSessionState();
     signOut(auth);
     setIsRestored(false);
     setSelections({ clientId: '', facilityId: '', projectId: '', categoryId: '', itemId: '', findId: '', recId: '', locationId: '', locationName: '', images: [], isDirty: false, editingRecordId: null, dataEntryMode: 'glossary' });

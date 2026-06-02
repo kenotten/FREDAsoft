@@ -21,3 +21,6 @@ export const LIBRARY_REPORTS_SESSION_STORAGE_KEY = 'fredasoft.libraryReports.sta
 
 /** sessionStorage: Web Report Viewer controls for current project/facility scope. */
 export const WEB_REPORT_SESSION_STORAGE_KEY = 'fredasoft.webReport.state.v1';
+
+/** sessionStorage: Project Audit UI/filters keyed by project ID. */
+export const PROJECT_AUDIT_SESSION_STORAGE_KEY = 'fredasoft.projectAudit.state.v1';

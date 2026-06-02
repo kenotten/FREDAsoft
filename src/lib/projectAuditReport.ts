@@ -69,7 +69,8 @@ export type ProjectAuditRecordView = {
   findLong: string;
   recShort: string;
   recLong: string;
-  unitCost: number;
+  /** Raw saved fldUnitCost; null when missing (not coerced to 0 for audit). */
+  unitCost: number | null;
   qty: number;
   totalCost: number;
   citationIds: string[];
@@ -526,9 +527,10 @@ function buildRecordViews(input: ProjectAuditBuildInput): ProjectAuditRecordView
           )
         : '';
 
-    const unitCost = Number(record.fldUnitCost) || 0;
+    const unitCost = parseAuditRecordUnitCost(record.fldUnitCost);
     const qty = Number(record.fldQTY) || 0;
-    const totalCost = Number(record.fldTotalCost) || unitCost * qty;
+    const totalCost =
+      Number(record.fldTotalCost) || (unitCost !== null ? unitCost * qty : 0);
 
     return {
       recordId: record.fldPDataID,
@@ -562,6 +564,105 @@ function buildRecordViews(input: ProjectAuditBuildInput): ProjectAuditRecordView
       ),
     };
   });
+}
+
+function parseAuditRecordUnitCost(raw: unknown): number | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw === 'string' && !raw.trim()) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Cents-rounded unit cost for stable Set comparison (multiple_costs uses unit cost only). */
+export function normalizeUnitCostForComparison(unitCost: number): number {
+  return Math.round(unitCost * 100) / 100;
+}
+
+/** Comparable unit cost from audit record, or null to skip multiple_costs checks. */
+export function auditRecordComparableUnitCost(record: ProjectAuditRecordView): number | null {
+  if (record.unitCost === null || !Number.isFinite(record.unitCost)) return null;
+  return normalizeUnitCostForComparison(record.unitCost);
+}
+
+/**
+ * Stable recommendation bucket for unit-cost checks (never finding-scoped).
+ * Prefers master recommendation ID; includes snapshot text so rows with the same
+ * library rec ID but different report snapshots are not merged into one cost bucket.
+ */
+export function recommendationCostBucketKey(record: ProjectAuditRecordView): string | null {
+  const recId = String(record.recommendationId ?? '').trim();
+  const short = normalizeCompareText(record.recShort);
+  const long = normalizeCompareText(record.recLong);
+  const snap = short || long ? `${short}|${long}` : '';
+
+  if (recId && snap) return `id:${normId(recId)}|snap:${snap}`;
+  if (recId) return `id:${normId(recId)}`;
+  if (snap) return `snap:${snap}`;
+  return null;
+}
+
+/** Distinct unit costs per recommendation bucket (skips null unit costs and no rec identity). */
+export function getRecommendationUnitCostBuckets(
+  records: ProjectAuditRecordView[]
+): Map<string, Set<number>> {
+  const buckets = new Map<string, Set<number>>();
+  for (const r of records) {
+    const key = recommendationCostBucketKey(r);
+    if (!key) continue;
+    const unitCost = auditRecordComparableUnitCost(r);
+    if (unitCost === null) continue;
+    let costs = buckets.get(key);
+    if (!costs) {
+      costs = new Set<number>();
+      buckets.set(key, costs);
+    }
+    costs.add(unitCost);
+  }
+  return buckets;
+}
+
+/** @deprecated Use getRecommendationUnitCostBuckets */
+export const getRecommendationCostBuckets = getRecommendationUnitCostBuckets;
+
+/** True when any recommendation bucket has more than one distinct unit cost. */
+export function hasMultipleUnitCostsForSameRecommendation(
+  records: ProjectAuditRecordView[],
+  mode: AuditMode,
+  masterId: string | null
+): boolean {
+  if (!masterId || records.length === 0) return false;
+
+  if (mode === 'recommendation') {
+    const unitCosts = records
+      .map(auditRecordComparableUnitCost)
+      .filter((c): c is number => c !== null);
+    return new Set(unitCosts).size > 1;
+  }
+
+  for (const unitCosts of getRecommendationUnitCostBuckets(records).values()) {
+    if (unitCosts.size > 1) return true;
+  }
+  return false;
+}
+
+/** @deprecated Use hasMultipleUnitCostsForSameRecommendation */
+export const hasMultipleCostsForSameRecommendation = hasMultipleUnitCostsForSameRecommendation;
+
+function countRecommendationUnitCostBucketsWithVariance(
+  mode: AuditMode,
+  records: ProjectAuditRecordView[]
+): number {
+  if (mode === 'recommendation') {
+    const unitCosts = records
+      .map(auditRecordComparableUnitCost)
+      .filter((c): c is number => c !== null);
+    return new Set(unitCosts).size > 1 ? 1 : 0;
+  }
+  let count = 0;
+  for (const unitCosts of getRecommendationUnitCostBuckets(records).values()) {
+    if (unitCosts.size > 1) count += 1;
+  }
+  return count;
 }
 
 function groupWarnings(
@@ -616,11 +717,14 @@ function groupWarnings(
     });
   }
 
-  const costs = new Set(records.map((r) => r.totalCost));
-  if (costs.size > 1) {
+  if (hasMultipleUnitCostsForSameRecommendation(records, mode, masterId)) {
+    const bucketCount = countRecommendationUnitCostBucketsWithVariance(mode, records);
     warnings.push({
       code: 'multiple_costs',
-      message: `${costs.size} distinct total cost values in group`,
+      message:
+        mode === 'finding'
+          ? `${bucketCount} recommendation(s) with multiple unit cost values in this finding group`
+          : `${new Set(records.map(auditRecordComparableUnitCost).filter((c): c is number => c !== null)).size} distinct unit cost values in group`,
     });
   }
 
@@ -803,11 +907,13 @@ export function filterProjectAuditGroups(
     facilityId: string;
     search: string;
     contentIssuesOnly?: boolean;
+    warningVisibility?: ProjectAuditWarningVisibility;
   }
 ): ProjectAuditGroup[] {
   const term = opts.search.trim().toLowerCase();
   const facFilter = opts.facilityId;
   const contentOnly = Boolean(opts.contentIssuesOnly);
+  const visibility = opts.warningVisibility ?? createDefaultWarningVisibility();
 
   return groups
     .map((group) => {
@@ -824,7 +930,7 @@ export function filterProjectAuditGroups(
       if (records.length === 0) return null;
 
       if (!term) {
-        return recomputeGroup(group, records);
+        return applyWarningVisibilityFilter(group, records, visibility);
       }
 
       const groupHaystack = [
@@ -861,7 +967,7 @@ export function filterProjectAuditGroups(
       if (matchingRecords.length === 0 && !groupHaystack.includes(term)) return null;
 
       const finalRecords = matchingRecords.length > 0 ? matchingRecords : records;
-      return recomputeGroup(group, finalRecords);
+      return applyWarningVisibilityFilter(group, finalRecords, visibility);
     })
     .filter((g): g is ProjectAuditGroup => g !== null);
 }
@@ -929,22 +1035,22 @@ export function countRecordsWithReportContentIssues(groups: ProjectAuditGroup[])
 
 export const AUDIT_WARNING_LABELS: Partial<Record<AuditWarningCode, string>> = {
   missing_finding_id: 'Missing finding ID',
-  missing_recommendation_id: 'Missing rec ID',
-  unresolved_facility: 'Unresolved facility',
+  missing_recommendation_id: 'Missing recommendation ID',
+  unresolved_facility: 'Facility missing or unresolved',
   unresolved_location: 'Missing location',
   unresolved_category: 'Missing category',
   unresolved_item: 'Missing item',
   missing_glossary_row: 'Missing glossary row',
   master_finding_archived: 'Finding archived',
   master_finding_missing: 'Finding missing',
-  master_rec_archived: 'Rec archived',
-  master_rec_missing: 'Rec missing',
-  snapshot_finding_differs: 'Finding text ≠ master',
-  snapshot_rec_differs: 'Rec text ≠ master',
-  multiple_costs: 'Multiple costs',
-  multiple_paired_recommendations: 'Multiple recs',
-  multiple_paired_findings: 'Multiple findings',
-  inconsistent_citations: 'Citation mismatch',
+  master_rec_archived: 'Recommendation archived',
+  master_rec_missing: 'Recommendation missing',
+  snapshot_finding_differs: 'Finding snapshot differs from master',
+  snapshot_rec_differs: 'Recommendation snapshot differs from master',
+  multiple_costs: 'Multiple unit costs',
+  multiple_paired_recommendations: 'Multiple recommendations in group',
+  multiple_paired_findings: 'Multiple findings in group',
+  inconsistent_citations: 'Mixed citation sets in group',
   missing_finding_short: 'Missing finding short',
   missing_finding_long: 'Missing finding long',
   missing_recommendation_short: 'Missing recommendation short',
@@ -954,3 +1060,294 @@ export const AUDIT_WARNING_LABELS: Partial<Record<AuditWarningCode, string>> = {
 /** Report-critical content/path warnings (rose styling in UI). */
 export const CONTENT_AUDIT_WARNING_CODES: ReadonlySet<AuditWarningCode> =
   REPORT_CONTENT_AUDIT_WARNING_CODES;
+
+export type AuditWarningCategoryId =
+  | 'report_content'
+  | 'metadata_linkage'
+  | 'snapshot_drift'
+  | 'group_consistency'
+  | 'lookup_glossary';
+
+export const AUDIT_WARNING_CATEGORY_ORDER: readonly AuditWarningCategoryId[] = [
+  'report_content',
+  'metadata_linkage',
+  'snapshot_drift',
+  'group_consistency',
+  'lookup_glossary',
+] as const;
+
+export const AUDIT_WARNING_CATEGORIES: Record<
+  AuditWarningCategoryId,
+  { label: string; codes: readonly AuditWarningCode[] }
+> = {
+  report_content: {
+    label: 'Report content',
+    codes: [
+      'unresolved_category',
+      'unresolved_item',
+      'unresolved_location',
+      'missing_finding_short',
+      'missing_finding_long',
+      'missing_recommendation_short',
+      'missing_recommendation_long',
+    ],
+  },
+  metadata_linkage: {
+    label: 'Metadata & linkage',
+    codes: [
+      'missing_finding_id',
+      'missing_recommendation_id',
+      'master_finding_archived',
+      'master_finding_missing',
+      'master_rec_archived',
+      'master_rec_missing',
+    ],
+  },
+  snapshot_drift: {
+    label: 'Snapshot drift',
+    codes: ['snapshot_finding_differs', 'snapshot_rec_differs'],
+  },
+  group_consistency: {
+    label: 'Group consistency',
+    codes: [
+      'multiple_costs',
+      'multiple_paired_recommendations',
+      'multiple_paired_findings',
+      'inconsistent_citations',
+    ],
+  },
+  lookup_glossary: {
+    label: 'Lookup & glossary',
+    codes: ['unresolved_facility', 'missing_glossary_row'],
+  },
+};
+
+export const ALL_AUDIT_WARNING_CODES: readonly AuditWarningCode[] = AUDIT_WARNING_CATEGORY_ORDER.flatMap(
+  (id) => AUDIT_WARNING_CATEGORIES[id].codes
+);
+
+export type ProjectAuditWarningVisibility = {
+  enabledCodes: ReadonlySet<AuditWarningCode>;
+  hideCustomLinkageNoise: boolean;
+};
+
+export function createDefaultWarningVisibility(): ProjectAuditWarningVisibility {
+  return {
+    enabledCodes: new Set(ALL_AUDIT_WARNING_CODES),
+    hideCustomLinkageNoise: false,
+  };
+}
+
+/** All warning codes enabled (custom-noise toggle does not affect this). */
+export function isWarningCodeFilterAtDefault(visibility: ProjectAuditWarningVisibility): boolean {
+  if (visibility.enabledCodes.size !== ALL_AUDIT_WARNING_CODES.length) return false;
+  return ALL_AUDIT_WARNING_CODES.every((code) => visibility.enabledCodes.has(code));
+}
+
+/**
+ * When true, groups/records are narrowed to those with at least one visible enabled warning.
+ * False when all codes enabled OR when no codes enabled (badges-only clear state).
+ *
+ * Project Audit filter rules:
+ * 1. Default (all facilities, no search, content-only off, all warning codes) → all records.
+ * 2. Warning codes cleared → all records; badges hidden; warnings count 0.
+ * 3. Partial warning-code selection → only records/groups with ≥1 enabled visible warning.
+ * 4. Report content issues only → report-content records only (separate filter).
+ * 5. Hide custom/unassigned noise → badge visibility only; never removes records.
+ */
+export function isWarningTypeRecordFilterActive(
+  visibility: ProjectAuditWarningVisibility
+): boolean {
+  if (visibility.enabledCodes.size === 0) return false;
+  return !isWarningCodeFilterAtDefault(visibility);
+}
+
+/** True when facility, search, content-only, or partial warning-type filters may hide records. */
+export function isProjectAuditRecordLimitingFilterActive(opts: {
+  facilityId: string;
+  search: string;
+  contentIssuesOnly: boolean;
+  warningVisibility: ProjectAuditWarningVisibility;
+}): boolean {
+  if (opts.contentIssuesOnly) return true;
+  if (isWarningTypeRecordFilterActive(opts.warningVisibility)) return true;
+  if (opts.facilityId && opts.facilityId !== '__all__') return true;
+  if (String(opts.search ?? '').trim()) return true;
+  return false;
+}
+
+/** True when any warning-type filter differs from factory defaults. */
+export function isWarningFilterActive(visibility: ProjectAuditWarningVisibility): boolean {
+  return !isWarningCodeFilterAtDefault(visibility) || visibility.hideCustomLinkageNoise;
+}
+
+export function hasFindingSnapshotText(record: ProjectAuditRecordView): boolean {
+  return !!String(record.findShort || '').trim() || !!String(record.findLong || '').trim();
+}
+
+export function hasRecommendationSnapshotText(record: ProjectAuditRecordView): boolean {
+  return !!String(record.recShort || '').trim() || !!String(record.recLong || '').trim();
+}
+
+/** Custom record with report-path snapshot fields populated (category, item, location, finding, rec). */
+export function hasCustomReportPathSnapshots(record: ProjectAuditRecordView): boolean {
+  return (
+    !!String(record.categoryId || '').trim() &&
+    !!String(record.itemId || '').trim() &&
+    !!String(record.locationId || '').trim() &&
+    hasFindingSnapshotText(record) &&
+    hasRecommendationSnapshotText(record)
+  );
+}
+
+/** Group-level consistency warnings often expected on unassigned catch-all groups. */
+export const UNASSIGNED_GROUP_CONSISTENCY_NOISE_CODES: ReadonlySet<AuditWarningCode> = new Set([
+  'multiple_costs',
+  'multiple_paired_recommendations',
+  'multiple_paired_findings',
+  'inconsistent_citations',
+]);
+
+export function isUnassignedAuditGroup(group: ProjectAuditGroup): boolean {
+  return group.masterId === null;
+}
+
+export function isCustomRecordMetadataNoiseWarning(
+  code: AuditWarningCode,
+  record: ProjectAuditRecordView,
+  hideNoise: boolean
+): boolean {
+  if (!hideNoise || record.recordSource !== 'custom') return false;
+  if (code === 'missing_finding_id' && hasFindingSnapshotText(record)) return true;
+  if (code === 'missing_recommendation_id' && hasRecommendationSnapshotText(record)) return true;
+  if (code === 'missing_glossary_row' && hasCustomReportPathSnapshots(record)) return true;
+  if (code === 'master_finding_missing' && hasFindingSnapshotText(record)) return true;
+  if (code === 'master_rec_missing' && hasRecommendationSnapshotText(record)) return true;
+  return false;
+}
+
+/** @deprecated Use isCustomRecordMetadataNoiseWarning */
+export function isCustomLinkageNoiseWarning(
+  code: AuditWarningCode,
+  record: ProjectAuditRecordView,
+  hideNoise: boolean
+): boolean {
+  return isCustomRecordMetadataNoiseWarning(code, record, hideNoise);
+}
+
+export function isUnassignedGroupConsistencyNoiseWarning(
+  code: AuditWarningCode,
+  group: ProjectAuditGroup,
+  hideNoise: boolean
+): boolean {
+  if (!hideNoise || !isUnassignedAuditGroup(group)) return false;
+  return UNASSIGNED_GROUP_CONSISTENCY_NOISE_CODES.has(code);
+}
+
+/** Visibility-only suppression for the custom/unassigned noise toggle. */
+export function isExpectedCustomUnassignedNoiseWarning(
+  code: AuditWarningCode,
+  context: 'record' | 'group',
+  record: ProjectAuditRecordView | null,
+  group: ProjectAuditGroup | null,
+  hideNoise: boolean
+): boolean {
+  if (!hideNoise) return false;
+  if (context === 'record' && record) {
+    return isCustomRecordMetadataNoiseWarning(code, record, true);
+  }
+  if (context === 'group' && group) {
+    return isUnassignedGroupConsistencyNoiseWarning(code, group, true);
+  }
+  return false;
+}
+
+export function isAuditWarningCodeEnabled(
+  code: AuditWarningCode,
+  visibility: ProjectAuditWarningVisibility
+): boolean {
+  return visibility.enabledCodes.has(code);
+}
+
+export function isAuditWarningVisible(
+  warning: AuditWarning,
+  context: 'record' | 'group',
+  record: ProjectAuditRecordView | null,
+  group: ProjectAuditGroup | null,
+  visibility: ProjectAuditWarningVisibility
+): boolean {
+  if (!isAuditWarningCodeEnabled(warning.code, visibility)) return false;
+  if (
+    isExpectedCustomUnassignedNoiseWarning(
+      warning.code,
+      context,
+      record,
+      group,
+      visibility.hideCustomLinkageNoise
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function filterVisibleAuditWarnings(
+  warnings: AuditWarning[],
+  context: 'record' | 'group',
+  record: ProjectAuditRecordView | null,
+  group: ProjectAuditGroup | null,
+  visibility: ProjectAuditWarningVisibility
+): AuditWarning[] {
+  return warnings.filter((w) => isAuditWarningVisible(w, context, record, group, visibility));
+}
+
+export function recordHasVisibleWarning(
+  record: ProjectAuditRecordView,
+  visibility: ProjectAuditWarningVisibility
+): boolean {
+  return filterVisibleAuditWarnings(record.warnings, 'record', record, null, visibility).length > 0;
+}
+
+export function groupHasVisibleGroupWarning(
+  group: ProjectAuditGroup,
+  visibility: ProjectAuditWarningVisibility
+): boolean {
+  return filterVisibleAuditWarnings(group.warnings, 'group', null, group, visibility).length > 0;
+}
+
+export function countVisibleAuditWarnings(
+  groups: ProjectAuditGroup[],
+  visibility: ProjectAuditWarningVisibility
+): number {
+  const seen = new Set<string>();
+  for (const g of groups) {
+    for (const w of filterVisibleAuditWarnings(g.warnings, 'group', null, g, visibility)) {
+      seen.add(`${g.groupKey}:${w.code}`);
+    }
+    for (const r of g.records) {
+      for (const w of filterVisibleAuditWarnings(r.warnings, 'record', r, g, visibility)) {
+        seen.add(`${r.recordId}:${w.code}`);
+      }
+    }
+  }
+  return seen.size;
+}
+
+function applyWarningVisibilityFilter(
+  group: ProjectAuditGroup,
+  records: ProjectAuditRecordView[],
+  visibility: ProjectAuditWarningVisibility
+): ProjectAuditGroup | null {
+  if (!isWarningTypeRecordFilterActive(visibility)) {
+    return recomputeGroup(group, records);
+  }
+
+  const recomputed = recomputeGroup(group, records);
+  const visibleGroupWarnings = groupHasVisibleGroupWarning(recomputed, visibility);
+  const finalRecords = visibleGroupWarnings
+    ? records
+    : records.filter((r) => recordHasVisibleWarning(r, visibility));
+
+  if (finalRecords.length === 0 && !visibleGroupWarnings) return null;
+  return recomputeGroup(group, finalRecords);
+}
