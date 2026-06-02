@@ -58,6 +58,7 @@ import {
   DEFAULT_WEB_REPORT_FINANCIAL_EXPANDED,
   DEFAULT_WEB_REPORT_NARRATIVE_EXPANDED,
   DEFAULT_WEB_REPORT_STANDARDS_EXPANDED,
+  DEFAULT_WEB_REPORT_PHOTO_ADDENDUM_EXPANDED,
   loadWebReportSessionState,
   readWebReportSessionForScope,
   recordInclusionOverrideFromSession,
@@ -74,7 +75,12 @@ import {
   type WebReportFinancialSummary
 } from '../../lib/webReportFinancial';
 import { buildWebReportReferencedStandardsView } from '../../lib/webReportStandards';
+import {
+  buildWebReportPhotoAddendumView,
+  includedRecordsHavePhotoAddendumPhotos
+} from '../../lib/webReportPhotoAddendum';
 import { WebReportStandardsSection } from './WebReportStandardsSection';
+import { WebReportPhotoAddendumSection } from './WebReportPhotoAddendumSection';
 
 export type { WebReportSectionInclusion };
 
@@ -82,7 +88,8 @@ const DEFAULT_SECTION_INCLUSION: WebReportSectionInclusion = {
   narrative: true,
   financial: true,
   documentation: true,
-  standards: true
+  standards: true,
+  photoAddendum: true
 };
 
 type WebReportViewerProps = {
@@ -891,6 +898,9 @@ export function WebReportViewer({
   const [standardsExpanded, setStandardsExpanded] = useState(
     () => initialSession?.standardsExpanded ?? DEFAULT_WEB_REPORT_STANDARDS_EXPANDED
   );
+  const [photoAddendumExpanded, setPhotoAddendumExpanded] = useState(
+    () => initialSession?.photoAddendumExpanded ?? DEFAULT_WEB_REPORT_PHOTO_ADDENDUM_EXPANDED
+  );
   const [recordInclusionOverride, setRecordInclusionOverride] = useState<WebReportRecordInclusion | null>(
     null
   );
@@ -1086,7 +1096,8 @@ export function WebReportViewer({
       narrativeExpanded,
       financialExpanded,
       documentationExpanded,
-      standardsExpanded
+      standardsExpanded,
+      photoAddendumExpanded
     }),
     [
       localProjectId,
@@ -1098,7 +1109,8 @@ export function WebReportViewer({
       narrativeExpanded,
       financialExpanded,
       documentationExpanded,
-      standardsExpanded
+      standardsExpanded,
+      photoAddendumExpanded
     ]
   );
 
@@ -1126,6 +1138,7 @@ export function WebReportViewer({
     setFinancialExpanded(DEFAULT_WEB_REPORT_FINANCIAL_EXPANDED);
     setDocumentationExpanded(DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED);
     setStandardsExpanded(DEFAULT_WEB_REPORT_STANDARDS_EXPANDED);
+    setPhotoAddendumExpanded(DEFAULT_WEB_REPORT_PHOTO_ADDENDUM_EXPANDED);
     setCollapsedKeys(new Set());
     setFinancialCollapsedKeys(new Set());
   }, []);
@@ -1184,6 +1197,7 @@ export function WebReportViewer({
       setFinancialExpanded(saved!.financialExpanded);
       setDocumentationExpanded(saved!.documentationExpanded);
       setStandardsExpanded(saved!.standardsExpanded);
+      setPhotoAddendumExpanded(saved!.photoAddendumExpanded);
       setCollapsedKeys(new Set(saved!.collapsedKeys));
       setFinancialCollapsedKeys(new Set(saved!.financialCollapsedKeys));
     } else {
@@ -1314,6 +1328,35 @@ export function WebReportViewer({
   const referencedStandardsView = useMemo(
     () => buildWebReportReferencedStandardsView(includedRecords, glossary, standards),
     [includedRecords, glossary, standards]
+  );
+
+  const hasPhotoAddendumPhotos = useMemo(
+    () => includedRecordsHavePhotoAddendumPhotos(includedRecords),
+    [includedRecords]
+  );
+
+  const photoAddendumView = useMemo(
+    () =>
+      buildWebReportPhotoAddendumView(
+        includedRecords,
+        sortOrder,
+        glossary,
+        categories,
+        items,
+        locations,
+        findings,
+        canonicalReportNumbers
+      ),
+    [
+      includedRecords,
+      sortOrder,
+      glossary,
+      categories,
+      items,
+      locations,
+      findings,
+      canonicalReportNumbers
+    ]
   );
 
   const resolveInclusionForUpdate = (): WebReportRecordInclusion =>
@@ -1639,6 +1682,30 @@ export function WebReportViewer({
                 <span className="text-xs text-zinc-400">(none in included records)</span>
               ) : null}
             </li>
+            <li className="flex flex-wrap items-center gap-2">
+              <input
+                id="wr-photo-addendum"
+                type="checkbox"
+                checked={sectionInclusion.photoAddendum}
+                disabled={!hasPhotoAddendumPhotos}
+                onChange={(e) =>
+                  setSectionInclusion((s) => ({ ...s, photoAddendum: e.target.checked }))
+                }
+                className="h-4 w-4 rounded border-zinc-300 text-indigo-600 disabled:opacity-40"
+              />
+              <label
+                htmlFor="wr-photo-addendum"
+                className={cn(
+                  'text-sm font-medium text-zinc-800',
+                  !hasPhotoAddendumPhotos && 'text-zinc-500'
+                )}
+              >
+                Photo Addendum
+              </label>
+              {!hasPhotoAddendumPhotos ? (
+                <span className="text-xs text-zinc-400">(none in included records)</span>
+              ) : null}
+            </li>
           </ul>
         </div>
       </Card>
@@ -1877,6 +1944,16 @@ export function WebReportViewer({
               view={referencedStandardsView}
               expanded={standardsExpanded}
               onToggleExpanded={() => setStandardsExpanded((v) => !v)}
+              includedRecordCount={filteredRecordCount}
+              filtersRestricted={filtersRestricted}
+            />
+          ) : null}
+
+          {sectionInclusion.photoAddendum ? (
+            <WebReportPhotoAddendumSection
+              view={photoAddendumView}
+              expanded={photoAddendumExpanded}
+              onToggleExpanded={() => setPhotoAddendumExpanded((v) => !v)}
               includedRecordCount={filteredRecordCount}
               filtersRestricted={filtersRestricted}
             />

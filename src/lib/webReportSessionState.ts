@@ -13,6 +13,7 @@ export type WebReportSectionInclusion = {
   financial: boolean;
   documentation: boolean;
   standards: boolean;
+  photoAddendum: boolean;
 };
 
 export type WebReportSessionStateV1 = {
@@ -28,6 +29,7 @@ export type WebReportSessionStateV1 = {
   financialExpanded: boolean;
   documentationExpanded: boolean;
   standardsExpanded: boolean;
+  photoAddendumExpanded: boolean;
   collapsedKeys: string[];
   financialCollapsedKeys: string[];
 };
@@ -36,13 +38,15 @@ const DEFAULT_SECTION_INCLUSION: WebReportSectionInclusion = {
   narrative: true,
   financial: true,
   documentation: true,
-  standards: true
+  standards: true,
+  photoAddendum: true
 };
 
 export const DEFAULT_WEB_REPORT_NARRATIVE_EXPANDED = true;
 export const DEFAULT_WEB_REPORT_FINANCIAL_EXPANDED = true;
 export const DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED = true;
 export const DEFAULT_WEB_REPORT_STANDARDS_EXPANDED = true;
+export const DEFAULT_WEB_REPORT_PHOTO_ADDENDUM_EXPANDED = true;
 
 function isSortOrder(value: unknown): value is ReportRecordSortOrder {
   return value === 'category_location_item' || value === 'location_category_item';
@@ -58,7 +62,13 @@ function parseSectionInclusion(value: unknown): WebReportSectionInclusion {
       typeof o.documentation === 'boolean'
         ? o.documentation
         : DEFAULT_SECTION_INCLUSION.documentation,
-    standards: typeof o.standards === 'boolean' ? o.standards : DEFAULT_SECTION_INCLUSION.standards
+    standards: typeof o.standards === 'boolean' ? o.standards : DEFAULT_SECTION_INCLUSION.standards,
+    photoAddendum:
+      typeof o.photoAddendum === 'boolean'
+        ? o.photoAddendum
+        : typeof o.photos === 'boolean'
+          ? o.photos
+          : DEFAULT_SECTION_INCLUSION.photoAddendum
   };
 }
 
@@ -115,6 +125,10 @@ export function loadWebReportSessionState(): WebReportSessionStateV1 | null {
         DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED
       ),
       standardsExpanded: parseBoolean(o.standardsExpanded, DEFAULT_WEB_REPORT_STANDARDS_EXPANDED),
+      photoAddendumExpanded: parseBoolean(
+        o.photoAddendumExpanded ?? o.photosExpanded,
+        DEFAULT_WEB_REPORT_PHOTO_ADDENDUM_EXPANDED
+      ),
       collapsedKeys: parseIdArray(o.collapsedKeys),
       financialCollapsedKeys: parseIdArray(o.financialCollapsedKeys)
     };
@@ -135,7 +149,8 @@ export function saveWebReportSessionState(state: WebReportSessionStateV1): void 
         narrative: Boolean(state.sectionInclusion.narrative),
         financial: Boolean(state.sectionInclusion.financial),
         documentation: Boolean(state.sectionInclusion.documentation),
-        standards: Boolean(state.sectionInclusion.standards)
+        standards: Boolean(state.sectionInclusion.standards),
+        photoAddendum: Boolean(state.sectionInclusion.photoAddendum)
       },
       categoryIds: state.categoryIds.filter((id) => id.trim() !== ''),
       locationIds: state.locationIds.filter((id) => id.trim() !== ''),
@@ -144,6 +159,7 @@ export function saveWebReportSessionState(state: WebReportSessionStateV1): void 
       financialExpanded: Boolean(state.financialExpanded),
       documentationExpanded: Boolean(state.documentationExpanded),
       standardsExpanded: Boolean(state.standardsExpanded),
+      photoAddendumExpanded: Boolean(state.photoAddendumExpanded),
       collapsedKeys: state.collapsedKeys.filter((key) => key.trim() !== ''),
       financialCollapsedKeys: state.financialCollapsedKeys.filter((key) => key.trim() !== '')
     };
@@ -216,6 +232,7 @@ export type WebReportSessionControlsInput = {
   financialExpanded: boolean;
   documentationExpanded: boolean;
   standardsExpanded: boolean;
+  photoAddendumExpanded: boolean;
 };
 
 export function areCollapsedKeySetsEqual(a: Set<string>, b: Set<string>): boolean {
@@ -314,6 +331,7 @@ export function buildWebReportSessionStatePayload(args: {
   financialExpanded: boolean;
   documentationExpanded: boolean;
   standardsExpanded: boolean;
+  photoAddendumExpanded: boolean;
   collapsedKeys: Iterable<string>;
   financialCollapsedKeys: Iterable<string>;
 }): WebReportSessionStateV1 {
@@ -326,7 +344,8 @@ export function buildWebReportSessionStatePayload(args: {
       narrative: Boolean(args.sectionInclusion.narrative),
       financial: Boolean(args.sectionInclusion.financial),
       documentation: Boolean(args.sectionInclusion.documentation),
-      standards: Boolean(args.sectionInclusion.standards)
+      standards: Boolean(args.sectionInclusion.standards),
+      photoAddendum: Boolean(args.sectionInclusion.photoAddendum)
     },
     categoryIds: [...args.inclusion.categoryIds],
     locationIds: [...args.inclusion.locationIds],
@@ -335,6 +354,7 @@ export function buildWebReportSessionStatePayload(args: {
     financialExpanded: Boolean(args.financialExpanded),
     documentationExpanded: Boolean(args.documentationExpanded),
     standardsExpanded: Boolean(args.standardsExpanded),
+    photoAddendumExpanded: Boolean(args.photoAddendumExpanded),
     collapsedKeys: [...args.collapsedKeys].filter((key) => key.trim() !== ''),
     financialCollapsedKeys: [...args.financialCollapsedKeys].filter((key) => key.trim() !== '')
   };
@@ -356,6 +376,7 @@ export function createDefaultWebReportSessionState(
     financialExpanded: DEFAULT_WEB_REPORT_FINANCIAL_EXPANDED,
     documentationExpanded: DEFAULT_WEB_REPORT_DOCUMENTATION_EXPANDED,
     standardsExpanded: DEFAULT_WEB_REPORT_STANDARDS_EXPANDED,
+    photoAddendumExpanded: DEFAULT_WEB_REPORT_PHOTO_ADDENDUM_EXPANDED,
     collapsedKeys: [],
     financialCollapsedKeys: []
   });
