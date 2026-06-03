@@ -309,14 +309,22 @@ export const firestoreService = {
   },
 
   /**
-   * Listen for real-time updates from a collection
+   * Listen for real-time updates from a collection.
+   * Optional constraints (e.g. where()) scope the query; omit for whole-collection snapshots.
    */
-  onSnapshot(collectionName: string, callback: (data: any[]) => void) {
+  onSnapshot(
+    collectionName: string,
+    callback: (data: any[]) => void,
+    constraints: QueryConstraint[] = []
+  ) {
     if (!validCollections.includes(collectionName)) {
       console.error("⛔ SENTRY BLOCK: Hallucinated snapshot attempted:", collectionName);
       return () => {};
     }
-    const q = query(collection(db, collectionName));
+    const q =
+      constraints.length > 0
+        ? query(collection(db, collectionName), ...constraints)
+        : query(collection(db, collectionName));
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
     });
@@ -339,7 +347,8 @@ export const firestoreService = {
     save: (data: any, id?: string) => firestoreService.save('projectData', data, id),
     delete: (id: string) => firestoreService.delete('projectData', id),
     list: () => firestoreService.list('projectData'),
-    onSnapshot: (callback: (data: any[]) => void) => firestoreService.onSnapshot('projectData', callback)
+    onSnapshot: (callback: (data: any[]) => void, constraints: QueryConstraint[] = []) =>
+      firestoreService.onSnapshot('projectData', callback, constraints)
   },
 
   /**

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { where } from 'firebase/firestore';
 import { firestoreService } from '../services/firestoreService';
 import { ProjectData, Location } from '../types';
 
@@ -24,13 +25,17 @@ export function useProjectData(projectId: string | null): ProjectDataResult {
 
     // Subscription dependency rules: The subscription effect depends ONLY on projectId.
     // This eliminates unnecessary churn from unrelated UI state (like activeTab).
-    const unsub = firestoreService.data.onSnapshot((data) => {
-      if (data && Array.isArray(data)) {
-        // App.tsx line 407: Filter out standards derived from legacy projectData imports
-        const validProjectData = data.filter(d => !d.citation_num);
-        setRawProjectData(validProjectData);
-      }
-    });
+    const scopedProjectId = String(projectId).trim();
+    const unsub = firestoreService.data.onSnapshot(
+      (data) => {
+        if (data && Array.isArray(data)) {
+          // Filter out standards derived from legacy projectData imports
+          const validProjectData = data.filter((d) => !d.citation_num);
+          setRawProjectData(validProjectData);
+        }
+      },
+      [where('fldPDataProject', '==', scopedProjectId)]
+    );
 
     const locUnsub = firestoreService.onSnapshot('locations', (data) => {
       setRawLocations(data);
