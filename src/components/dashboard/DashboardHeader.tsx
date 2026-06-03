@@ -49,7 +49,11 @@ export function DashboardHeader({
               variant="secondary" 
               size="sm" 
               onClick={() => {
-                if (window.confirm('This will delete all facilities, projects, and data records that are missing a parent client. Are you sure?')) {
+                if (
+                  window.confirm(
+                    'This will permanently delete facilities and projects that are missing a parent client. Inspection records (projectData) are not affected. Continue?'
+                  )
+                ) {
                   onCleanupOrphans();
                 }
               }}

@@ -226,7 +226,7 @@ userPreferences   → per-user workspace/UI preferences (owner read/write)
 
 ✅ DECIDED (user preferences collection): Durable workspace context and account-tied UI preferences (e.g. `workspaceContext` client/facility/project selections) are stored in **`userPreferences/{uid}`**, not **`users/{uid}`**. Firestore rules allow **owner read/write** on `userPreferences`; `users/{uid}` remains **profile/role** with **admin-only write**. App persistence uses `firestoreService.preferences` → `userPreferences` collection. Legacy preference fields may still exist on old `users/{uid}` docs until manually migrated; new saves create/update `userPreferences` only.
 
-✅ DECIDED: User-initiated deletion of `projectData` inspection records is a **soft delete** (`fldIsDeleted`, `fldDeleted`, `fldDeletedAt`, `fldDeletedBy`). Active views filter these out. Restore clears those flags via `firestoreService.restore('projectData', id)`. Hard document delete remains only for explicit maintenance paths (e.g. orphan cleanup), not for normal user delete.
+✅ DECIDED: User-initiated deletion of `projectData` inspection records is a **soft delete** (`fldIsDeleted`, `fldDeleted`, `fldDeletedAt`, `fldDeletedBy`). Active views filter these out. Restore clears those flags via `firestoreService.restore('projectData', id)`. Hard document delete of `projectData` is **not** performed by in-app **Cleanup Orphans**; use read-only `scripts/maintenance/report-orphans.ts` (and future explicit admin maintenance) for full orphan review.
 
 ---
 
@@ -280,6 +280,8 @@ Scripts that **update** or **backfill** Firestore should **document clearly** in
 **UI-triggered denormalization or repair writes** (for example, propagating stored display labels after a rename so historical rows stay readable) must be **explicit in code and documented** here or in a tightly linked maintenance note, so future readers know the write is intentional denormalization, not accidental duplication of business logic.
 
 **Future abstraction** (e.g. consolidating write paths behind a thinner API) is allowed only **after** the intended **write policy** is documented and **existing behavior** is preserved or called out as an intentional breaking change with migration steps.
+
+✅ DECIDED (in-app Cleanup Orphans): Dashboard **Cleanup Orphans** (admin) may **hard-delete** only **facilities** and **projects** whose parent **client** is missing (global portfolio listeners). It **must not** hard-delete **`projectData`**. Live `projectData` is **project-scoped**; a whole-collection orphan scan is unreliable from the app shell. **`projectData` orphan detection** uses read-only **`scripts/maintenance/report-orphans.ts`** (and future explicit admin maintenance with preview/dry-run), not the in-app button.
 
 ---
 

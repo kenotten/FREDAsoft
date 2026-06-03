@@ -531,17 +531,17 @@ export default function App() {
 
   const onCleanupOrphans = async () => {
     try {
+      // projectData orphan hard-delete intentionally excluded: live listener is project-scoped;
+      // full projectData orphan scan uses scripts/maintenance/report-orphans.ts (read-only).
       const orphanedFacilities = rawFacilities.filter(f => !rawClients.find(c => c.fldClientID === f.fldClient));
       const orphanedProjects = rawProjects.filter(p => !rawClients.find(c => c.fldClientID === p.fldClient));
-      const orphanedData = rawProjectData.filter(d => !rawProjects.find(p => p.fldProjID === d.fldPDataProject));
 
       const batch = writeBatch(db);
       orphanedFacilities.forEach(f => batch.delete(doc(db, 'facilities', f.fldFacID)));
       orphanedProjects.forEach(p => batch.delete(doc(db, 'projects', p.fldProjID)));
-      orphanedData.forEach(d => batch.delete(doc(db, 'projectData', d.fldPDataID)));
 
       await batch.commit();
-      toast.success('Orphaned records cleaned up');
+      toast.success('Orphaned facilities and projects cleaned up');
     } catch (error) {
       toast.error('Failed to cleanup orphans');
     }
