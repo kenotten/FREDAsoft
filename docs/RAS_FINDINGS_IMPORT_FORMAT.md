@@ -16,6 +16,8 @@ This spec supports the workflow decided in **`docs/CONVERT_TO_RAS.md`**: RAS Pla
 
 **This document is planning only.** No application code, Firestore rules, import scripts, or production writes are in scope here.
 
+**Human-facing spreadsheet layout:** column order, valid values, example rows, and authoring checklist are in **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`**. This file remains the authority for Firestore field map and import safety rules.
+
 ---
 
 ## 2. Source workflow
@@ -58,6 +60,8 @@ TAS 2012 source material
 ## 4. Required spreadsheet columns
 
 Authors should use one row per importable RAS comment. Column names below are **canonical for v1**; importers may accept normalized aliases in a future mapping table.
+
+**Concrete template:** tab layout, full column table with formats, example rows, and pre-import checklist → **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`**.
 
 ### Core content (required for import)
 
@@ -287,6 +291,7 @@ Importer dry-run output should include at minimum:
 
 ## Related documentation
 
+- **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`** — human authoring spreadsheet layout, valid values, examples, checklist  
 - **`docs/CONVERT_TO_RAS.md`** — RAS product planning, glossary direction, phased delivery  
 - **`docs/ARCHITECTURE_DESIGN.md`** — durable ✅ DECIDED blocks when RAS is implemented  
 - **`AGENTS.md`** — Firestore write safety, protected areas, behavior disclosure  
