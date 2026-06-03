@@ -7,7 +7,7 @@ interface DashboardHeaderProps {
   isAdmin: boolean;
   showTrash: boolean;
   setShowTrash: (show: boolean) => void;
-  downloadFullBackup: () => void;
+  downloadFullBackup: () => void | Promise<void>;
   exportMasterGlossary: () => void;
   onCleanupOrphans: () => void;
 }

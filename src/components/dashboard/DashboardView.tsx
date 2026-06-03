@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { DashboardHeader } from './DashboardHeader';
 import { TrashBin } from './TrashBin';
 import { StatsGrid } from './StatsGrid';
@@ -8,6 +9,9 @@ import {
   MasterDataProps, 
   ProjectContextProps 
 } from '../layout/LayoutOrchestrator';
+import { firestoreService } from '../../services/firestoreService';
+import { filterDeletedInspectionRecords } from '../../lib/trashProjectData';
+import { ProjectData } from '../../types';
 
 interface DashboardViewProps {
   isAdmin: boolean;
@@ -25,6 +29,59 @@ export function DashboardView({
   projectProps
 }: DashboardViewProps) {
   const [showTrash, setShowTrash] = useState(false);
+  const [deletedInspectionRecords, setDeletedInspectionRecords] = useState<ProjectData[] | null>(
+    null
+  );
+  const [deletedInspectionLoading, setDeletedInspectionLoading] = useState(false);
+  const [deletedInspectionError, setDeletedInspectionError] = useState<string | null>(null);
+
+  const fetchDeletedInspectionRecords = useCallback(async (): Promise<ProjectData[]> => {
+    if (!isAdmin) return [];
+    setDeletedInspectionLoading(true);
+    setDeletedInspectionError(null);
+    try {
+      const rows = (await firestoreService.data.list()) as unknown as ProjectData[];
+      const deleted = filterDeletedInspectionRecords(rows);
+      setDeletedInspectionRecords(deleted);
+      return deleted;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to load deleted inspection records';
+      setDeletedInspectionError(message);
+      setDeletedInspectionRecords(null);
+      return [];
+    } finally {
+      setDeletedInspectionLoading(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (isAdmin && showTrash) {
+      void fetchDeletedInspectionRecords();
+    }
+  }, [isAdmin, showTrash, fetchDeletedInspectionRecords]);
+
+  const trashDeletedRecords = useMemo(
+    () => ({
+      ...entityProps.deletedRecords,
+      projectData: deletedInspectionRecords ?? []
+    }),
+    [entityProps.deletedRecords, deletedInspectionRecords]
+  );
+
+  const handleRestoreProjectData = useCallback(
+    async (id: string) => {
+      try {
+        await entityProps.onRestoreProjectData(id);
+        if (isAdmin && showTrash) {
+          await fetchDeletedInspectionRecords();
+        }
+      } catch {
+        toast.error('Failed to restore inspection record');
+      }
+    },
+    [entityProps, isAdmin, showTrash, fetchDeletedInspectionRecords]
+  );
 
   // Stats calculation
   const stats = {
@@ -104,11 +161,18 @@ export function DashboardView({
     document.body.removeChild(link);
   };
 
-  const downloadFullBackup = () => {
+  const downloadFullBackup = async () => {
+    const deletedProjectData = isAdmin
+      ? await fetchDeletedInspectionRecords()
+      : entityProps.deletedRecords.projectData ?? [];
+
     const backupData = {
       timestamp: new Date().toISOString(),
       activeRecords: stats,
-      deletedRecords: entityProps.deletedRecords
+      deletedRecords: {
+        ...entityProps.deletedRecords,
+        projectData: deletedProjectData
+      }
     };
 
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
@@ -135,12 +199,17 @@ export function DashboardView({
 
       {isAdmin && showTrash && (
         <TrashBin 
-          deletedRecords={entityProps.deletedRecords}
+          deletedRecords={trashDeletedRecords}
           trashInspectionLookup={entityProps.trashInspectionLookup}
+          deletedInspectionLoading={deletedInspectionLoading}
+          deletedInspectionError={deletedInspectionError}
+          onRetryDeletedInspectionFetch={() => {
+            void fetchDeletedInspectionRecords();
+          }}
           onRestoreClient={entityProps.onRestoreClient}
           onRestoreFacility={entityProps.onRestoreFacility}
           onRestoreProject={entityProps.onRestoreProject}
-          onRestoreProjectData={entityProps.onRestoreProjectData}
+          onRestoreProjectData={handleRestoreProjectData}
         />
       )}
 

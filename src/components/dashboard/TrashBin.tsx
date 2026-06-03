@@ -154,6 +154,9 @@ interface TrashBinProps {
     projectData?: any[];
   };
   trashInspectionLookup?: TrashInspectionLookup;
+  deletedInspectionLoading?: boolean;
+  deletedInspectionError?: string | null;
+  onRetryDeletedInspectionFetch?: () => void;
   onRestoreClient: (id: string) => void;
   onRestoreFacility: (id: string) => void;
   onRestoreProject: (id: string) => void;
@@ -163,6 +166,9 @@ interface TrashBinProps {
 export function TrashBin({
   deletedRecords,
   trashInspectionLookup,
+  deletedInspectionLoading = false,
+  deletedInspectionError = null,
+  onRetryDeletedInspectionFetch,
   onRestoreClient,
   onRestoreFacility,
   onRestoreProject,
@@ -184,7 +190,10 @@ export function TrashBin({
           </div>
           <div>
             <h2 className="text-lg font-bold text-red-900">Trash Bin (Soft-Deleted Records)</h2>
-            <p className="text-xs text-red-600">These records are hidden from the app but can be restored.</p>
+            <p className="text-xs text-red-600">
+              These records are hidden from the app but can be restored. Inspection records are loaded
+              across all projects when Trash is opened.
+            </p>
           </div>
         </div>
       </div>
@@ -246,9 +255,30 @@ export function TrashBin({
 
         {/* Deleted inspection / project data records */}
         <div className="min-w-0 space-y-3">
-          <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Inspection records ({deletedProjectRows.length})</h3>
+          <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+            Inspection records (
+            {deletedInspectionLoading ? '…' : deletedProjectRows.length})
+          </h3>
           <div className={inspectionListScrollClass}>
-            {deletedProjectRows
+            {deletedInspectionLoading ? (
+              <p className="text-xs text-zinc-500 italic">Loading deleted inspection records…</p>
+            ) : null}
+            {!deletedInspectionLoading && deletedInspectionError ? (
+              <div className="space-y-2 rounded-xl border border-red-200 bg-red-50/50 p-3">
+                <p className="text-xs text-red-700">{deletedInspectionError}</p>
+                {onRetryDeletedInspectionFetch ? (
+                  <button
+                    type="button"
+                    onClick={onRetryDeletedInspectionFetch}
+                    className="text-[10px] font-medium text-blue-600 hover:underline"
+                  >
+                    Retry load
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            {!deletedInspectionLoading && !deletedInspectionError
+              ? deletedProjectRows
               .filter((d: any) => d && d.fldPDataID)
               .map((d: any) => {
                 const ctx = resolveInspectionRecordContext(d as Record<string, unknown>, lookup);
@@ -280,8 +310,11 @@ export function TrashBin({
                     </div>
                   </div>
                 );
-              })}
-            {deletedProjectRows.length === 0 && (
+              })
+              : null}
+            {!deletedInspectionLoading &&
+              !deletedInspectionError &&
+              deletedProjectRows.length === 0 && (
               <p className="text-xs text-zinc-400 italic">No deleted inspection records.</p>
             )}
           </div>
