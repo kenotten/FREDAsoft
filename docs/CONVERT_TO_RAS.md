@@ -174,6 +174,8 @@ Internal storage may reuse existing `projectData` fields where possible; RAS mod
   1. Develop RAS comments in **spreadsheet batches** derived from TAS
   2. Review, edit, and vet internally
   3. **Import approved rows** into **`rasFindings`** (new collection or equivalent)
+
+**Import format spec:** column definitions, Firestore field map, dry-run rules, and validation report shape are in **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`** (Phase 2 planning; no importer yet).
 - Existing TAS findings may be **reference/seed** content only; RAS library becomes **independent first-class** content.
 
 ### Identity and metadata (planning)
@@ -327,7 +329,7 @@ Sequential phases; scope and timing require Archie/user approval each phase. **N
 | Phase | Focus | Outcomes |
 |-------|--------|----------|
 | **1** | Finalize RAS **data/report architecture** document | Project type, report instance model, field map, header metadata binding |
-| **2** | Define RAS findings **spreadsheet / import format** | Column spec, validation rules, dry-run contract |
+| **2** | Define RAS findings **spreadsheet / import format** | Column spec, validation rules, dry-run contract — **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`** |
 | **3** | Build / import curated **`rasFindings`** library in batches | Vetted Plan Review comments in Firestore |
 | **4** | Add project-level type **`assessment` \| `ras`** | Default assessment; RAS → TAS 2012 only |
 | **5** | Add **RAS report instance** model | Division, report kind, scoped records |
@@ -366,6 +368,7 @@ Research backlog — confirm against official sources and sample deliverables:
 
 ## Related documentation
 
+- **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`** — spreadsheet columns, target **`rasFindings`** shape, import safety, dry-run report (Phase 2; planning only)
 - `docs/ARCHITECTURE_DESIGN.md` — durable ✅ DECIDED blocks (add RAS decisions when implementation begins)
 - `AGENTS.md` — protected areas, behavior disclosure, Firestore data safety
 
