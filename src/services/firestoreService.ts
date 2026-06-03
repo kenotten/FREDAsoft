@@ -353,12 +353,14 @@ export const firestoreService = {
   },
 
   /**
-   * User Preferences specific operations
+   * User preferences (workspace context, UI prefs). Uses userPreferences/{uid} per Firestore rules
+   * (owner read/write). users/{uid} is reserved for profile/role and is admin-write only.
    */
   preferences: {
-    save: (uid: string, preferences: any) => firestoreService.save('users', preferences, uid),
+    save: (uid: string, preferences: any) =>
+      firestoreService.save('userPreferences', preferences, uid),
     get: async (uid: string) => {
-      const docRef = doc(db, 'users', uid);
+      const docRef = doc(db, 'userPreferences', uid);
       const directDoc = await getDoc(docRef);
       if (directDoc.exists()) {
         firestoreService.incrementReads(1);
@@ -367,7 +369,7 @@ export const firestoreService = {
       return null;
     },
     onSnapshot: (uid: string, callback: (data: any) => void) => {
-      const docRef = doc(db, 'users', uid);
+      const docRef = doc(db, 'userPreferences', uid);
       return onSnapshot(docRef, (snapshot) => {
         if (snapshot.exists()) {
           callback(snapshot.data());

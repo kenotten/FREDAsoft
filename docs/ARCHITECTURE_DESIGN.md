@@ -194,8 +194,11 @@ categories        → library categories
 items             → library items
 findings          → library findings
 recommendations   → library recommendations / master recommendations
-users             → roles and identity
+users             → roles and identity (admin-controlled profile; not app preference writes)
+userPreferences   → per-user workspace/UI preferences (owner read/write)
 ```
+
+✅ DECIDED (user preferences collection): Durable workspace context and account-tied UI preferences (e.g. `workspaceContext` client/facility/project selections) are stored in **`userPreferences/{uid}`**, not **`users/{uid}`**. Firestore rules allow **owner read/write** on `userPreferences`; `users/{uid}` remains **profile/role** with **admin-only write**. App persistence uses `firestoreService.preferences` → `userPreferences` collection. Legacy preference fields may still exist on old `users/{uid}` docs until manually migrated; new saves create/update `userPreferences` only.
 
 ✅ DECIDED: User-initiated deletion of `projectData` inspection records is a **soft delete** (`fldIsDeleted`, `fldDeleted`, `fldDeletedAt`, `fldDeletedBy`). Active views filter these out. Restore clears those flags via `firestoreService.restore('projectData', id)`. Hard document delete remains only for explicit maintenance paths (e.g. orphan cleanup), not for normal user delete.
 
@@ -209,9 +212,11 @@ FREDAsoft uses more than one persistence mechanism. Each layer **owns** specific
 
 ### Firestore user preferences
 
+- Collection: **`userPreferences/{uid}`** (document ID = Firebase Auth UID).
 - Owns **durable workspace context** and **user preference restoration** tied to the account (where implemented).
 - Examples include active client, facility, project, and related workspace selections persisted for cross-session use.
 - Intended to survive normal session boundaries and, where supported, browser or device changes for the same user.
+- **`users/{uid}`** is not used for preference writes; it is for identity/role (admin write per rules).
 
 ### localStorage
 
