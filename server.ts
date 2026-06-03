@@ -1,7 +1,9 @@
+import 'dotenv/config';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { registerGeminiRoute } from './server/geminiRoute.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +14,8 @@ async function startServer() {
 
   console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode`);
 
+  app.use(express.json({ limit: '1mb' }));
+
   // Health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({ 
@@ -21,6 +25,8 @@ async function startServer() {
       timestamp: new Date().toISOString() 
     });
   });
+
+  registerGeminiRoute(app);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
