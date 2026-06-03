@@ -137,6 +137,10 @@ CI — lint, Vitest, and build on PRs and main
 Vitest helper tests for `projectAuditReport`, `webReportFilters`, and `reportPreviewShared`
 User preferences persisted in `userPreferences/{uid}` (not `users/{uid}`)
 Gemini API proxied server-side via Express `POST /api/gemini`
+Live projectData listener scoped by `fldPDataProject` (`useProjectData`)
+Live locations listener scoped by `fldProjectID` (`useProjectData`)
+Admin Trash — on-demand all-project deleted inspection fetch (live listener stays project-scoped)
+In-app Cleanup Orphans excludes projectData hard-delete
 ```
 
 Known ongoing risk areas:
@@ -259,6 +263,20 @@ FREDAsoft uses more than one persistence mechanism. Each layer **owns** specific
 
 ---
 
+## Firestore live listener query scoping
+
+✅ DECIDED (live **projectData** listener): **`useProjectData(projectId)`** subscribes to **`projectData`** with **`where('fldPDataProject', '==', projectId)`** when a project is selected; when **`projectId`** is null, arrays clear and no subscription runs. **`firestoreService.onSnapshot`** / **`firestoreService.data.onSnapshot`** accept optional **`QueryConstraint[]`**; callers without constraints retain **whole-collection** behavior. **App-level** filters (`fldPDataProject`, soft-delete flags, `fldPDataID`, legacy **`citation_num`**) remain **defensive** client-side checks. **Soft-delete predicates are not in Firestore queries** (legacy rows may lack delete flags). **Facility** scoping (`fldFacility`) is **client-side only**—not in Firestore queries.
+
+✅ DECIDED (live **locations** listener): The same hook subscribes to **`locations`** with **`where('fldProjectID', '==', projectId)`**. **Facility** filtering (`fldFacID`) remains **client-side** (Data Entry, Data Explorer, reports). This preserves **same-project cross-facility** location lists and **orphan `fldLocation` label** resolution within the current project. **`locations`** documents missing **`fldProjectID`** are **legacy/data-quality** issues—they will not appear in the scoped listener and require **maintenance review** (e.g. **`scripts/maintenance/report-orphans.ts`**). New locations are stamped with **`fldProjectID`** on create in Data Entry.
+
+✅ DECIDED (admin **Trash** — inspection records): The live **`projectData`** listener stays **project-scoped**. Admin **Trash Bin** **inspection records** use an explicit **on-demand** all-project fetch (**`firestoreService.data.list()`** when Trash opens—not a continuous listener): soft-deleted rows across all projects, excluding legacy **`citation_num`** rows. Restore refetches the trash list. **Download Full Backup** (admin) uses the same **all-project deleted-inspection** fetch. Trash columns for **clients / facilities / projects** remain on **global** portfolio listeners.
+
+✅ DECIDED (**Cleanup Orphans** — in-app): Dashboard **Cleanup Orphans** (admin) **must not** hard-delete **`projectData`**. It may hard-delete only **facilities** and **projects** missing a parent **client** (global portfolio listeners). **`projectData` orphan review** belongs to read-only **`scripts/maintenance/report-orphans.ts`** and future explicit admin maintenance (preview/dry-run)—not the in-app button. See also **Firestore Write Boundaries** below.
+
+✅ DECIDED (query scoping vs **Firestore rules**): Project-scoped live queries reduce **read volume** and **cross-project in-memory exposure**. Current rules still allow any **authenticated** user to read/write **`projectData`** and **`locations`**; **query scoping is not a security boundary** until rules add **membership/role** constraints (future client portal / project team model).
+
+---
+
 ## Firestore Write Boundaries and Maintenance Script Safety
 
 **Firestore writes are part of the system’s integrity boundary.** Any path that mutates stored documents — whether from the app, a batch API, or a script — can affect compliance data, auditability, and user trust. Treat writes as governed behavior, not implementation detail.
@@ -281,7 +299,7 @@ Scripts that **update** or **backfill** Firestore should **document clearly** in
 
 **Future abstraction** (e.g. consolidating write paths behind a thinner API) is allowed only **after** the intended **write policy** is documented and **existing behavior** is preserved or called out as an intentional breaking change with migration steps.
 
-✅ DECIDED (in-app Cleanup Orphans): Dashboard **Cleanup Orphans** (admin) may **hard-delete** only **facilities** and **projects** whose parent **client** is missing (global portfolio listeners). It **must not** hard-delete **`projectData`**. Live `projectData` is **project-scoped**; a whole-collection orphan scan is unreliable from the app shell. **`projectData` orphan detection** uses read-only **`scripts/maintenance/report-orphans.ts`** (and future explicit admin maintenance with preview/dry-run), not the in-app button.
+✅ DECIDED (in-app Cleanup Orphans): See **Firestore live listener query scoping — Cleanup Orphans** above. Dashboard button may **hard-delete** only **facilities** and **projects** whose parent **client** is missing. **`scripts/maintenance/report-orphans.ts`** is the read-only path for **`projectData`** orphan buckets.
 
 ---
 
@@ -2144,6 +2162,8 @@ Project data records may store image arrays, but reporting should eventually sup
 
 ✅ DECIDED (Gemini API access): Gemini **generateContent** is accessed **server-side only** via Express **`POST /api/gemini`** (`server/geminiRoute.ts`, registered in `server.ts`). The **`GEMINI_API_KEY`** lives in server environment only (see `.env.example`); it is **never bundled into the client**. Client features that need Gemini must call the proxy route, not the Google API directly.
 
+✅ DECIDED (query scoping vs rules): Live **project-scoped** Firestore listeners improve cost and in-memory isolation; they do **not** replace **Firestore security rules**. Tighter **membership/role** rules remain future work—see **Firestore live listener query scoping**.
+
 ---
 
 Firestore behavior must follow these principles:
@@ -2304,7 +2324,7 @@ Facilities are the working entity for buildings and other built-environment area
 
 Locations remain a flexible project-defined label for now. Structured location fields may be added later, but current workflows should support disciplined naming conventions.
 
-✅ DECIDED: Locations are **facility-scoped** in the app (`fldProjectID` + `fldFacID`). Data Entry and Data Explorer location pickers list only locations for the **selected project and facility**. **Deleting** a location is **blocked** when **active** (non-deleted, non-archived) `projectData` in the same project/facility scope references that location; there is **no cascade delete** of inspection records. Location removal remains **soft delete** only.
+✅ DECIDED: Locations are **facility-scoped** in the app (`fldProjectID` + `fldFacID`). The live **`locations`** listener is **project-scoped** (`fldProjectID`); facility narrowing is client-side. Data Entry and Data Explorer location pickers list only locations for the **selected project and facility**. **Deleting** a location is **blocked** when **active** (non-deleted, non-archived) `projectData` in the same project/facility scope references that location; there is **no cascade delete** of inspection records. Location removal remains **soft delete** only.
 
 Hard delete is reserved for admin cleanup of erroneous entries and should require strict proof that no active dependent records exist.
 
