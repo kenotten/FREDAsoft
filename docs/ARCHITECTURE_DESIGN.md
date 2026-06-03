@@ -88,6 +88,25 @@ For implementation tasks, verify:
 
 Known unrelated lint/type issues should be reported separately and not hidden.
 
+### CI pipeline
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and on pull requests:
+
+```text
+npm ci
+npm run lint
+npm run test
+npm run build
+```
+
+### Vitest helper tests
+
+Targeted unit tests under `src/lib/__tests__/` cover shared report and audit helpers:
+
+- `projectAuditReport.test.ts` — `projectAuditReport` warning visibility, custom/unassigned noise, and multiple unit-cost helpers
+- `webReportFilters.test.ts` — `webReportFilters` inclusion and reconciliation logic
+- `reportPreviewShared.test.ts` — `reportPreviewShared` preview filtering and sort helpers
+
 ---
 
 ## 🚦 Current Work State
@@ -111,6 +130,13 @@ Measurement metadata repair completed
 Data Entry UI cleanup
 Glossary Set metadata planning
 Library citation defaults for findings and recommendations
+Web Report Viewer — Financial, Referenced Standards, and Photo Addendum sections
+Web Report Viewer — presentational component split (`WebReportControls`, section components, `webReportRecordSummaries`)
+Project Audit — filter UI presentational split (`ProjectAuditWarningFilters`, `ProjectAuditFilterControls`, `ProjectAuditSummaryCards`, `ProjectAuditEmptyState`)
+CI — lint, Vitest, and build on PRs and main
+Vitest helper tests for `projectAuditReport`, `webReportFilters`, and `reportPreviewShared`
+User preferences persisted in `userPreferences/{uid}` (not `users/{uid}`)
+Gemini API proxied server-side via Express `POST /api/gemini`
 ```
 
 Known ongoing risk areas:
@@ -752,7 +778,7 @@ When the user selects a master finding and master recommendation from their libr
 |----------|------------------------|---------------|---------------------|
 | **2B** — Same finding + new recommendation | Hydrate from the **reused** master finding only | New recommendation: `fldStandards: []` | Do **not** copy `fldStandards` from the source/host/template glossary row |
 | **2C** — New finding + same recommendation | Hydrate from the **reused** master recommendation only | New finding: `fldStandards: []` | Do **not** copy `fldStandards` from the source/host/template glossary row |
-| **2D** — New finding + new recommendation (not implemented) | No hydration at creation | New finding and new recommendation: `fldStandards: []`; new glossary row: `fldStandards: []` | Do **not** copy `fldStandards` from the source/host/template glossary row |
+| **2D** — New finding + new recommendation (✅ Phase 2D) | No hydration at creation | New finding and new recommendation: `fldStandards: []`; new glossary row: `fldStandards: []` | Do **not** copy `fldStandards` from the source/host/template glossary row |
 | **Cross-glossary-set** (template / Prepare Target Set Records) | No standards hydrate **across** glossary sets | Per target-set master create/reuse rules | Do **not** copy source-set `fldStandards`; new glossary row standards start empty unless later set by normal user action |
 
 **Important distinction**
@@ -1517,13 +1543,13 @@ This prevents removed record-level citations from reappearing in reports.
 
 ✅ DECIDED (report preview): The same dialog offers **report record sort** (default **Category → Location → Item**; optional **Location → Category → Item**). It drives **`filterReportProjectForPreview`** (Documentation order). **Financial Summary** follows the same choice: default mode groups by category with columns Item \| Location \| …; location-first mode groups by location with columns Category \| Item \| …. It is not persisted. **Referenced standards** addendum ordering stays citation-driven. **Photo addendum** keeps location-first display; `filteredData` order may only affect tie-breaks within the same location label.
 
-✅ DECIDED (Web Report Viewer — Phase 1): Internal **Web Report Viewer** tab provides **separate read-only web rendering** (Option B) using **live Firestore-backed data** already loaded in the app shell. **No auth/client portal**, **no published snapshots**, **no print**, and **no changes to `ReportPreview.tsx`**. Phase 1 sections: **heading** (always included), **narrative**, and **documentation** with the same two hierarchy modes as PDF reports. **Section toggles** control included on-screen content (and future print/export); **accordion collapse is screen-only** and does not affect inclusion. Financial summary, referenced standards addendum, and photo addendum are deferred.
+✅ DECIDED (Web Report Viewer — foundation): Internal **Web Report Viewer** tab provides **separate read-only web rendering** (Option B) using **live Firestore-backed data** already loaded in the app shell. **No auth/client portal**, **no published snapshots**, **no print**, and **no changes to `ReportPreview.tsx`**. Initial sections: **heading** (always included), **narrative**, and **documentation** with the same two hierarchy modes as PDF reports. **Financial**, **Referenced Standards**, and **Photo Addendum** are implemented (see v1 blocks below). Full on-screen order: Narrative → Financial → Documentation → Referenced Standards → Photo Addendum. **Section toggles** control included on-screen content (and future print/export); **accordion collapse is screen-only** and does not affect inclusion.
 
-✅ DECIDED (Web Report Viewer — content filters): **Category**, **location**, and **item** filters are **inclusion controls** on the full facility report dataset (options derived from records for the selected project/facility only). Filters combine with **AND** logic, default to **all options selected**, and define displayed documentation (and future web print/export inclusion). **Canonical record numbers** remain fixed from the full facility set (filtered views may show gaps). **Accordion collapse** stays screen-only. **`ReportPreview.tsx` / PDF path unchanged** on this branch.
+✅ DECIDED (Web Report Viewer — content filters): **Category**, **location**, and **item** filters are **inclusion controls** on the full facility report dataset (options derived from records for the selected project/facility only). Filters combine with **AND** logic, default to **all options selected**, and define displayed documentation (and future web print/export inclusion). **Canonical record numbers** remain fixed from the full facility set (filtered views may show gaps). **Accordion collapse** stays screen-only. **`ReportPreview.tsx` / PDF path unchanged** in Web Report Viewer work.
 
-- Future enhancement: When item-level groups are collapsed in the Web Report Viewer, item group headers may show compact record summaries for fast scanning (canonical record number + short finding + short recommendation). This is screen-scanning assistance only (does not replace expanded record cards) and may later be used to generate a spreadsheet-style summary export.
+✅ DECIDED (Web Report Viewer — collapsed item summaries): When item-level groups are collapsed, item group headers show compact record summaries (canonical record number + short finding + short recommendation) via `webReportRecordSummaries` helpers. Screen-scanning assistance only; does not replace expanded record cards. Spreadsheet-style export remains future work.
 
-✅ DECIDED (Web Report Viewer — session controls): **Sort hierarchy**, **section inclusion** (narrative / documentation), **record inclusion filters** (category / location / item IDs), and **Narrative/Documentation section expand UI** persist via a **controls-only** session write that **preserves** stored `collapsedKeys` for the same project/facility. **Documentation accordion collapsed keys** are written **explicitly** on collapse/expand (toggle, toolbar, reconcile) so remount never overwrites them with an empty Set. Single payload (`fredasoft.webReport.state.v1`) per **current project + facility**. Survives tab navigation and **browser refresh** in the same tab session. **Changing project or facility** resets to defaults and replaces storage (v1 does **not** restore prior facility when A → B → A). **Logout** clears the session key. **Scroll position** not persisted. Collapsed keys **reconciled** when the documentation tree changes. Filter IDs **pruned** on restore/option changes without wiping user filters. No Firestore / `localStorage` / `ReportPreview.tsx` changes.
+✅ DECIDED (Web Report Viewer — session controls): **Sort hierarchy**, **section inclusion** (narrative / financial / documentation / referenced standards / photo addendum), **record inclusion filters** (category / location / item IDs), and **section expand UI** (narrative, documentation, financial, standards, photo addendum) persist via a **controls-only** session write that **preserves** stored `collapsedKeys` and `financialCollapsedKeys` for the same project/facility. **Documentation accordion collapsed keys** are written **explicitly** on collapse/expand (toggle, toolbar, reconcile) so remount never overwrites them with an empty Set. Single payload (`fredasoft.webReport.state.v1`) per **current project + facility**. Survives tab navigation and **browser refresh** in the same tab session. **Changing project or facility** resets to defaults and replaces storage (v1 does **not** restore prior facility when A → B → A). **Logout** clears the session key. **Scroll position** not persisted. Collapsed keys **reconciled** when the documentation tree changes. Filter IDs **pruned** on restore/option changes without wiping user filters. No Firestore / `localStorage` / `ReportPreview.tsx` changes.
 
 ✅ DECIDED (Web Report Viewer — empty/current facility selection): Web Report Viewer facility selection is **local to the Web Report tab**. It may include the **current active workspace facility** as a **view-only option** when that facility belongs to the **current client context**, even if the facility is **not listed in `project.fldFacilities`** and has **no `projectData` records**. This prevents **silent fallback** to another facility’s report and allows an empty facility to remain selected with a clear **“No documentation records”** state. The Web Report Viewer **must not write Firestore**, **must not auto-link** facilities to `project.fldFacilities`, and **must not change** the global active facility from its local dropdown.
 
@@ -1532,6 +1558,8 @@ This prevents removed record-level citations from reappearing in reports.
 ✅ DECIDED (Web Report Viewer — Referenced Standards section v1): **Referenced Standards** is a read-only Web Report section rendered **after Documentation** (order: Narrative → Financial → Documentation → Referenced Standards). It uses **currently included/filtered** documentation records (same category/location/item inclusion as Financial/Documentation; documentation accordion collapse does not affect included standards). Content is built via shared **`buildReferencedAddendumEntries()`** / citation formatting helpers (not duplicated from `ReportPreview.tsx`). Section inclusion and top-level expand state persist in **`fredasoft.webReport.state.v1`** (`standards`, `standardsExpanded`; legacy missing values default to on/expanded). Toggle is **disabled** when no referenced standards exist for included records; enabled empty state explains filter scope. **`ReportPreview.tsx` / PDF unchanged.**
 
 ✅ DECIDED (Web Report Viewer — Photo Addendum section v1): **Photo Addendum** is a read-only Web Report section rendered **after Referenced Standards** (order: Narrative → Financial → Documentation → Referenced Standards → Photo Addendum). It shows **supplemental photographs** from included records (`fldImages` index **2+**, matching PDF addendum convention; indices 0–1 remain on documentation cards). Uses the **same included/filtered** records as Financial/Documentation/Referenced Standards; documentation accordion collapse does not affect photo inclusion. Section inclusion and top-level expand persist in **`fredasoft.webReport.state.v1`** (`photoAddendum` / legacy `photos`, `photoAddendumExpanded` / legacy `photosExpanded`; missing values default to on/expanded). Toggle is **disabled** when no supplemental photos exist for included records. **`ReportPreview.tsx` / PDF unchanged.**
+
+✅ DECIDED (Web Report Viewer — presentational split): `WebReportViewer.tsx` orchestrates session state, filters, and enrichment. Presentational UI lives under `src/components/webReport/`: **`WebReportControls`**, **`WebReportDocumentationSection`**, **`WebReportFinancialSection`**, **`WebReportStandardsSection`**, **`WebReportPhotoAddendumSection`**, **`WebReportFindingCard`**, **`WebReportCollapseToggle`**, and **`webReportRecordSummaries.ts`** (compact collapsed-row labels). Split is maintainability-only; user-facing behavior is unchanged from the prior monolith.
 
 ✅ FUTURE FIX (Web Report Viewer — project/facility association consistency): The **broader project/facility association workflow** remains future work. When a facility is created or intentionally paired with a project, the app should eventually offer a **deliberate workflow** to update `project.fldFacilities` or prompt the user. That association must happen **outside Web Report Viewer**, which stays view-only.
 
@@ -1544,6 +1572,8 @@ This prevents removed record-level citations from reappearing in reports.
 ✅ DECIDED (Project Audit — session UI state): Project Audit **filters and UI state** persist in **`sessionStorage`** (`fredasoft.projectAudit.state.v1`) **per project ID** (mode, facility filter, search, report-content shortcut, warning panel open, enabled warning codes, hide expected custom/unassigned noise toggle, collapsed group keys). **Logout** clears the store (same as Web Report session). Switching projects restores that project’s saved audit state independently. Facility filter is reconciled to valid facility options on restore; collapsed group keys are pruned to keys that still exist for the current build/mode.
 
 ✅ DECIDED (Project Audit — filter visibility rules): With **no limiting filters** (all facilities, blank search, report-content off, all warning codes enabled), **every audit record** is shown. **Warning codes cleared** still shows all records but hides badges and sets warnings count to **0**. **Partial warning-code selection** narrows to records/groups with ≥1 enabled visible warning. **Report content issues only** is the explicit report-content record filter; empty result with no issues in scope shows a **success** empty state. **Hide expected custom/unassigned noise** affects badge/count visibility only, not which records appear.
+
+✅ DECIDED (Project Audit — filter UI split): `ProjectAuditReportView.tsx` orchestrates audit build and session state. Filter and summary UI lives in presentational components under `src/components/projectAudit/`: **`ProjectAuditWarningFilters`**, **`ProjectAuditFilterControls`**, **`ProjectAuditSummaryCards`**, and **`ProjectAuditEmptyState`**. Split is maintainability-only; audit logic and filter semantics are unchanged.
 
 Future work should investigate and implement a deliberate project/facility association workflow:
 
@@ -2107,6 +2137,12 @@ Project data records may store image arrays, but reporting should eventually sup
 ---
 
 # 🔐 Firebase Safety
+
+## Gemini API access
+
+✅ DECIDED (Gemini API access): Gemini **generateContent** is accessed **server-side only** via Express **`POST /api/gemini`** (`server/geminiRoute.ts`, registered in `server.ts`). The **`GEMINI_API_KEY`** lives in server environment only (see `.env.example`); it is **never bundled into the client**. Client features that need Gemini must call the proxy route, not the Google API directly.
+
+---
 
 Firestore behavior must follow these principles:
 
