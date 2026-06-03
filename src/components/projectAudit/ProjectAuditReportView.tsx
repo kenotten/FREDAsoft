@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, ClipboardCheck, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import type {
   Category,
   Facility,
@@ -12,12 +12,10 @@ import type {
   Project,
   ProjectData,
 } from '../../types';
-import { Button, Card, Select } from '../ui/core';
+import { Card } from '../ui/core';
 import { cn, formatCurrency } from '../../lib/utils';
 import {
   ALL_AUDIT_WARNING_CODES,
-  AUDIT_WARNING_CATEGORIES,
-  AUDIT_WARNING_CATEGORY_ORDER,
   AUDIT_WARNING_LABELS,
   buildProjectAuditReport,
   CONTENT_AUDIT_WARNING_CODES,
@@ -27,7 +25,6 @@ import {
   filterProjectAuditGroups,
   filterVisibleAuditWarnings,
   getGroupsForMode,
-  isWarningCodeFilterAtDefault,
   isWarningTypeRecordFilterActive,
   type AuditMode,
   type AuditWarning,
@@ -44,6 +41,17 @@ import {
   reconcileProjectAuditProjectState,
   saveProjectAuditStateForProject,
 } from '../../lib/projectAuditSessionState';
+import { ProjectAuditFilterControls } from './ProjectAuditFilterControls';
+import {
+  ProjectAuditNoProjectEmpty,
+  ProjectAuditResultsEmptyState,
+} from './ProjectAuditEmptyState';
+import { ProjectAuditSummaryCards } from './ProjectAuditSummaryCards';
+import {
+  categoryCodes,
+  categorySelectionState,
+  ProjectAuditWarningFilterPanel,
+} from './ProjectAuditWarningFilters';
 
 export type ProjectAuditReportViewProps = {
   projectId: string;
@@ -276,181 +284,6 @@ function AuditGroupPanel({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function categoryCodes(categoryId: AuditWarningCategoryId): readonly AuditWarningCode[] {
-  return AUDIT_WARNING_CATEGORIES[categoryId].codes;
-}
-
-function categorySelectionState(
-  categoryId: AuditWarningCategoryId,
-  enabledCodes: ReadonlySet<AuditWarningCode>
-): 'all' | 'none' | 'partial' {
-  const codes = categoryCodes(categoryId);
-  const enabled = codes.filter((c) => enabledCodes.has(c)).length;
-  if (enabled === 0) return 'none';
-  if (enabled === codes.length) return 'all';
-  return 'partial';
-}
-
-function WarningFilterPanel({
-  enabledCodes,
-  hideCustomLinkageNoise,
-  warningPanelOpen,
-  warningCodesCleared,
-  onTogglePanel,
-  onSelectAll,
-  onClearAll,
-  onResetDefaults,
-  onToggleCategory,
-  onToggleCode,
-  onHideCustomLinkageNoiseChange,
-}: {
-  enabledCodes: ReadonlySet<AuditWarningCode>;
-  hideCustomLinkageNoise: boolean;
-  warningPanelOpen: boolean;
-  warningCodesCleared: boolean;
-  onTogglePanel: () => void;
-  onSelectAll: () => void;
-  onClearAll: () => void;
-  onResetDefaults: () => void;
-  onToggleCategory: (categoryId: AuditWarningCategoryId) => void;
-  onToggleCode: (code: AuditWarningCode) => void;
-  onHideCustomLinkageNoiseChange: (checked: boolean) => void;
-}) {
-  return (
-    <div className="border-t border-zinc-200 pt-4">
-      <button
-        type="button"
-        onClick={onTogglePanel}
-        className="flex w-full items-center gap-2 text-left text-xs font-bold uppercase tracking-wide text-zinc-500 hover:text-zinc-800"
-      >
-        {warningPanelOpen ? (
-          <ChevronDown size={14} className="shrink-0" />
-        ) : (
-          <ChevronRight size={14} className="shrink-0" />
-        )}
-        Warning filters
-        {isWarningTypeRecordFilterActive({ enabledCodes, hideCustomLinkageNoise: false }) ||
-        hideCustomLinkageNoise ? (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-black normal-case text-amber-900">
-            Active
-          </span>
-        ) : warningCodesCleared ? (
-          <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[9px] font-black normal-case text-zinc-700">
-            Badges hidden
-          </span>
-        ) : null}
-      </button>
-
-      {warningPanelOpen ? (
-        <div className="mt-3 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={onSelectAll}>
-              Select all
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={onClearAll}>
-              Clear all
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={onResetDefaults}>
-              Reset defaults
-            </Button>
-          </div>
-
-          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2 text-xs text-zinc-800">
-            <input
-              type="checkbox"
-              checked={hideCustomLinkageNoise}
-              onChange={(e) => onHideCustomLinkageNoiseChange(e.target.checked)}
-              className="mt-0.5 rounded border-zinc-300"
-            />
-            <span className="leading-snug">
-              <span className="font-semibold">Hide expected custom/unassigned noise</span>
-              <span className="mt-0.5 block text-[10px] text-zinc-500">
-                Hides expected metadata badges on custom records with report snapshots (IDs, glossary row,
-                missing masters), and group consistency badges on Unassigned groups. Report-content
-                warnings are never hidden. Warnings are still generated.
-              </span>
-            </span>
-          </label>
-
-          <div className="flex flex-wrap gap-2">
-            {AUDIT_WARNING_CATEGORY_ORDER.map((categoryId) => {
-              const cat = AUDIT_WARNING_CATEGORIES[categoryId];
-              const state = categorySelectionState(categoryId, enabledCodes);
-              return (
-                <button
-                  key={categoryId}
-                  type="button"
-                  onClick={() => onToggleCategory(categoryId)}
-                  className={cn(
-                    'rounded-lg border px-2.5 py-1 text-[10px] font-bold transition-colors',
-                    state === 'all'
-                      ? categoryId === 'report_content'
-                        ? 'border-rose-300 bg-rose-50 text-rose-950'
-                        : 'border-amber-300 bg-amber-50 text-amber-950'
-                      : state === 'partial'
-                        ? 'border-zinc-300 bg-zinc-100 text-zinc-700'
-                        : 'border-zinc-200 bg-white text-zinc-500'
-                  )}
-                  title={`Toggle all ${cat.label} warning types`}
-                >
-                  {cat.label}
-                  {state === 'partial' ? ' (partial)' : ''}
-                </button>
-              );
-            })}
-          </div>
-
-          {warningCodesCleared ? (
-            <p className="text-[11px] leading-snug text-amber-900">
-              All warning types are unchecked — warning badges are hidden. Records and groups are still
-              shown. Use Select all or Reset defaults to restore badges.
-            </p>
-          ) : null}
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {AUDIT_WARNING_CATEGORY_ORDER.map((categoryId) => {
-              const cat = AUDIT_WARNING_CATEGORIES[categoryId];
-              return (
-                <fieldset
-                  key={categoryId}
-                  className={cn(
-                    'rounded-lg border p-3',
-                    categoryId === 'report_content' ? 'border-rose-200 bg-rose-50/30' : 'border-zinc-200'
-                  )}
-                >
-                  <legend className="px-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                    {cat.label}
-                  </legend>
-                  <ul className="mt-2 space-y-1.5">
-                    {cat.codes.map((code) => (
-                      <li key={code}>
-                        <label className="flex cursor-pointer items-start gap-2 text-xs text-zinc-800">
-                          <input
-                            type="checkbox"
-                            checked={enabledCodes.has(code)}
-                            onChange={() => onToggleCode(code)}
-                            className={cn(
-                              'mt-0.5 rounded',
-                              CONTENT_AUDIT_WARNING_CODES.has(code)
-                                ? 'border-rose-300 text-rose-700'
-                                : 'border-zinc-300'
-                            )}
-                          />
-                          <span className="leading-snug">{AUDIT_WARNING_LABELS[code] || code}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </fieldset>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -707,12 +540,7 @@ export function ProjectAuditReportView({
     contentIssuesOnly && built.summary.recordCount > 0 && reportContentIssueCount === 0;
 
   if (!projectId) {
-    return (
-      <div className="mx-auto max-w-4xl py-12 text-center text-zinc-500">
-        <ClipboardCheck size={40} className="mx-auto mb-4 opacity-20" />
-        <p className="text-sm font-medium">Select a project to open Project Audit.</p>
-      </div>
-    );
+    return <ProjectAuditNoProjectEmpty />;
   }
 
   return (
@@ -727,108 +555,35 @@ export function ProjectAuditReportView({
         project data or client reports. Costs shown are raw saved values (no cost multiplier applied).
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {[
-          {
-            label: recordsStatUsesFilteredCount ? 'Records (filtered)' : 'Records',
-            value: recordsStatUsesFilteredCount ? visibleRecordCount : built.summary.recordCount,
-          },
-          { label: 'Groups', value: filteredGroups.length },
-          {
-            label: 'Report content issues',
-            value: reportContentIssueCount,
-            highlight: reportContentIssueCount > 0,
-          },
-          { label: 'Facilities', value: built.summary.facilityCount },
-          { label: 'Warnings', value: visibleWarningCount },
-        ].map((stat) => (
-          <Card key={stat.label} className="px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{stat.label}</p>
-            <p
-              className={cn(
-                'text-xl font-black',
-                'highlight' in stat && stat.highlight ? 'text-rose-700' : 'text-zinc-900'
-              )}
-            >
-              {stat.value}
-            </p>
-          </Card>
-        ))}
-      </div>
+      <ProjectAuditSummaryCards
+        recordsStatUsesFilteredCount={recordsStatUsesFilteredCount}
+        visibleRecordCount={visibleRecordCount}
+        totalRecordCount={built.summary.recordCount}
+        groupCount={filteredGroups.length}
+        reportContentIssueCount={reportContentIssueCount}
+        facilityCount={built.summary.facilityCount}
+        visibleWarningCount={visibleWarningCount}
+      />
 
       <Card className="space-y-4 p-4">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="flex rounded-lg border border-zinc-200 p-0.5">
-            {(['finding', 'recommendation'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => {
-                  setMode(m);
-                  setCollapsed(new Set());
-                }}
-                className={cn(
-                  'rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors',
-                  mode === m ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
-                )}
-              >
-                {m === 'finding' ? 'By Finding' : 'By Recommendation'}
-              </button>
-            ))}
-          </div>
-          <div className="min-w-[12rem] flex-1">
-            <Select
-              label="Facility"
-              value={facilityFilter}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFacilityFilter(e.target.value)}
-              options={built.facilityOptions.map((o) => ({ value: o.id, label: o.label }))}
-            />
-          </div>
-          <div className="min-w-[14rem] flex-[2]">
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-              Search
-            </label>
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Text, facility, IDs, citations…"
-                className="w-full rounded-lg border border-zinc-200 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
-              />
-            </div>
-          </div>
-          <label
-            className="flex cursor-pointer items-center gap-2 rounded-lg border border-rose-200 bg-rose-50/80 px-3 py-2 text-xs text-rose-950"
-            title="Shows records missing category, item, location, finding text, or recommendation text."
-          >
-            <input
-              type="checkbox"
-              checked={contentIssuesOnly}
-              onChange={(e) => setContentIssuesOnly(e.target.checked)}
-              className="rounded border-rose-300 text-rose-700 focus:ring-rose-500"
-            />
-            <span className="font-semibold leading-snug">Report content issues only</span>
-          </label>
-          <div className="flex gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={expandAll}>
-              Expand all
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={collapseAll}>
-              Collapse all
-            </Button>
-          </div>
-        </div>
-        {contentIssuesOnly ? (
-          <p className="text-[11px] leading-snug text-rose-800">
-            Showing groups with at least one record missing category, item, location, finding snapshot
-            text, or recommendation snapshot text. Metadata-only warnings (IDs, glossary row, archived
-            master, snapshot drift, costs, citations) are hidden until this filter is off.
-          </p>
-        ) : null}
+        <ProjectAuditFilterControls
+          mode={mode}
+          onModeChange={(m) => {
+            setMode(m);
+            setCollapsed(new Set());
+          }}
+          facilityFilter={facilityFilter}
+          onFacilityFilterChange={setFacilityFilter}
+          facilityOptions={built.facilityOptions}
+          search={search}
+          onSearchChange={setSearch}
+          contentIssuesOnly={contentIssuesOnly}
+          onContentIssuesOnlyChange={setContentIssuesOnly}
+          onExpandAll={expandAll}
+          onCollapseAll={collapseAll}
+        />
 
-        <WarningFilterPanel
+        <ProjectAuditWarningFilterPanel
           enabledCodes={enabledCodes}
           hideCustomLinkageNoise={hideCustomLinkageNoise}
           warningPanelOpen={warningPanelOpen}
@@ -861,14 +616,7 @@ export function ProjectAuditReportView({
       </Card>
 
       {filteredGroups.length === 0 ? (
-        <Card
-          className={cn(
-            'p-12 text-center',
-            emptyStateIsSuccess ? 'border-emerald-200 bg-emerald-50/50 text-emerald-800' : 'text-zinc-500'
-          )}
-        >
-          <p className={cn('text-sm', emptyStateIsSuccess && 'font-medium')}>{emptyMessage}</p>
-        </Card>
+        <ProjectAuditResultsEmptyState message={emptyMessage} isSuccess={emptyStateIsSuccess} />
       ) : (
         <div className="space-y-3">
           {filteredGroups.map((group) => (
