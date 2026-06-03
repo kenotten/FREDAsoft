@@ -1,7 +1,7 @@
 # Convert to RAS
 
 **Status:** Planning / architecture note (not an implementation spec). **Not implemented.**  
-**Last updated:** 2026-06-01  
+**Last updated:** 2026-06-03  
 **Audience:** Product owner, architecture review, implementation planning
 
 > **Disclaimer:** This document captures internal planning for adapting FREDAsoft toward Registered Accessibility Specialist (RAS) workflows under the Texas Department of Licensing and Regulation (TDLR). It does **not** assert legal compliance, required forms, or final field lists. All TDLR/RAS requirements must be verified from official sources, sample deliverables, and qualified review before any implementation.
@@ -171,11 +171,11 @@ Internal storage may reuse existing `projectData` fields where possible; RAS mod
 
 - **Do not** treat a straight clone of current assessment **findings** as the final authoritative RAS Plan Review library.
 - **Preferred workflow:**
-  1. Develop RAS comments in **spreadsheet batches** derived from TAS
+  1. Develop RAS comments in **spreadsheet batches** derived from TAS (start from **`templates/RAS_FINDINGS_TEMPLATE.xlsx`**)
   2. Review, edit, and vet internally
   3. **Import approved rows** into **`rasFindings`** (new collection or equivalent)
 
-**Import format spec:** column definitions, Firestore field map, dry-run rules, and validation report shape are in **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`** (Phase 2 planning; no importer yet).
+**Authoring workbook:** **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** (layout: **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`**). **Import format spec:** column definitions, Firestore field map, dry-run rules, and validation report shape are in **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`** (no importer yet).
 - Existing TAS findings may be **reference/seed** content only; RAS library becomes **independent first-class** content.
 
 ### Identity and metadata (planning)
@@ -368,7 +368,9 @@ Research backlog — confirm against official sources and sample deliverables:
 
 ## Related documentation
 
+- **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** — blank RAS Plan Review findings authoring workbook (v1)
 - **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`** — spreadsheet columns, target **`rasFindings`** shape, import safety, dry-run report (Phase 2; planning only)
+- **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`** — spreadsheet layout spec for the workbook
 - `docs/ARCHITECTURE_DESIGN.md` — durable ✅ DECIDED blocks (add RAS decisions when implementation begins)
 - `AGENTS.md` — protected areas, behavior disclosure, Firestore data safety
 

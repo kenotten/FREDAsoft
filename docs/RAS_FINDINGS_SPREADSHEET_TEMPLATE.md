@@ -1,7 +1,7 @@
 # RAS Findings Spreadsheet Template
 
-**Status:** Planning / human authoring template (not an implementation spec). **Not implemented.**  
-**Last updated:** 2026-06-02  
+**Status:** Human authoring template spec. **Blank workbook artifact:** **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** (v1; no importer yet).  
+**Last updated:** 2026-06-03  
 **Audience:** Content authors, reviewers, future importer implementers
 
 > **Disclaimer:** This document defines a **concrete spreadsheet layout** for authoring RAS Plan Review **comments** before any Firestore importer exists. Examples are **illustrative only** and do **not** assert TDLR compliance or correct TAS citations for real projects.
@@ -20,7 +20,9 @@ Authors use this template to:
 - Track review status before import  
 - Hand a predictable file shape to a **future** dry-run importer  
 
-This doc is **template planning only**—no app code, Firestore writes, or import scripts.
+This doc is the layout spec for the checked-in workbook. No app code, Firestore writes, or import scripts.
+
+**Artifact:** Copy or open **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** from the repo. The **Findings** tab column order matches §3; dropdowns reference the **Valid Values** tab.
 
 ---
 
@@ -34,7 +36,7 @@ This doc is **template planning only**—no app code, Firestore writes, or impor
 | **Import Notes** | Batch metadata: date, reviewer, source TAS sections, dry-run report filename, import decisions. |
 | **Review Log** *(optional)* | Row-level review history if not tracked in **reviewerNotes** on Findings tab. |
 
-**File format (open):** Google Sheets (export CSV), Excel (`.xlsx`), or UTF-8 CSV—see **`RAS_FINDINGS_IMPORT_FORMAT.md` Q-RAS-IMP-001**. Column order on **Findings** tab should match §3.
+**File format:** Canonical v1 artifact is **`templates/RAS_FINDINGS_TEMPLATE.xlsx`**. Authors may duplicate in Google Sheets or export CSV for review; a future importer may accept Excel/CSV—see **`RAS_FINDINGS_IMPORT_FORMAT.md` Q-RAS-IMP-001**. Column order on **Findings** must match §3.
 
 ---
 
@@ -218,14 +220,16 @@ When the two docs differ, **`RAS_FINDINGS_IMPORT_FORMAT.md`** wins for importer 
 
 | ID | Question |
 |----|----------|
-| **Q-RAS-TPL-001** | Publish a blank **Google Sheets** or **Excel** file in repo, or docs-only column spec? |
+| **Q-RAS-TPL-001** | ~~Publish blank Excel in repo?~~ **Resolved:** **`templates/RAS_FINDINGS_TEMPLATE.xlsx`**. Google Sheets mirror TBD. |
 | **Q-RAS-TPL-002** | Should **Findings** tab include a frozen **`fldFindID`** column after first import for **`update`** rows? |
-| **Q-RAS-TPL-003** | Dropdown validation: enforce on sheet vs validate only at import? |
+| **Q-RAS-TPL-003** | ~~Dropdown on sheet vs import-only?~~ **Resolved for v1 artifact:** dropdowns on **importAction**, **reviewStatus**, **findingType**, **isCompound**, **active**; import-time validation still required later. |
 
 ---
 
 ## Related documentation
 
+- **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** — blank authoring workbook (v1)  
+- **`templates/README.md`** — short pointer to the workbook  
 - **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`** — target Firestore shape and import safety  
 - **`docs/CONVERT_TO_RAS.md`** — RAS product planning and glossary workflow  
 - **`AGENTS.md`** — Firestore data safety before any import implementation  

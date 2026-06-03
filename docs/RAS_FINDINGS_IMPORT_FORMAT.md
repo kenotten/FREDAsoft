@@ -1,7 +1,7 @@
 # RAS Findings Import Format
 
 **Status:** Planning / import-format spec (not an implementation spec). **Not implemented.**  
-**Last updated:** 2026-06-02  
+**Last updated:** 2026-06-03  
 **Audience:** Product owner, content authors, architecture review, future importer implementers
 
 > **Disclaimer:** This document defines how curated RAS Plan Review **comments** may be authored in spreadsheets and later imported into Firestore **`rasFindings`**. It does **not** assert TDLR legal compliance, final field names in production, or importer behavior until a separate implementation branch is approved per **AGENTS.md**.
@@ -16,7 +16,7 @@ This spec supports the workflow decided in **`docs/CONVERT_TO_RAS.md`**: RAS Pla
 
 **This document is planning only.** No application code, Firestore rules, import scripts, or production writes are in scope here.
 
-**Human-facing spreadsheet layout:** column order, valid values, example rows, and authoring checklist are in **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`**. This file remains the authority for Firestore field map and import safety rules.
+**Human-facing spreadsheet layout:** column order, valid values, example rows, and authoring checklist are in **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`**. **Blank workbook:** **`templates/RAS_FINDINGS_TEMPLATE.xlsx`**. This file remains the authority for Firestore field map and import safety rules.
 
 ---
 
@@ -279,7 +279,7 @@ Importer dry-run output should include at minimum:
 
 | ID | Question | Notes |
 |----|----------|-------|
-| **Q-RAS-IMP-001** | **Spreadsheet source of truth:** Google Sheets export CSV, Excel (`.xlsx`), or checked-in CSV only? | Affects parser and review workflow. |
+| **Q-RAS-IMP-001** | **Spreadsheet source of truth:** Google Sheets export CSV, Excel (`.xlsx`), or checked-in CSV only? | **v1 authoring artifact:** **`templates/RAS_FINDINGS_TEMPLATE.xlsx`**. Future importer parser format TBD. |
 | **Q-RAS-IMP-002** | Should **`findingType`** be a strict enum in Firestore rules / importer, or free text with warnings? | Affects validation strictness. |
 | **Q-RAS-IMP-003** | Is one **`rasFindings`** library enough, or separate **`ras_plan_review`** vs **`ras_inspection`** libraries/collections? | Plan Review uses this spec; Inspection may reuse assessment TAS glossary per **`CONVERT_TO_RAS.md`**. |
 | **Q-RAS-IMP-004** | Must Plan Review rows be **`approved`** in spreadsheet before any Firestore write? | Default here: **yes** for production. |
@@ -291,6 +291,7 @@ Importer dry-run output should include at minimum:
 
 ## Related documentation
 
+- **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** — blank v1 authoring workbook  
 - **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`** — human authoring spreadsheet layout, valid values, examples, checklist  
 - **`docs/CONVERT_TO_RAS.md`** — RAS product planning, glossary direction, phased delivery  
 - **`docs/ARCHITECTURE_DESIGN.md`** — durable ✅ DECIDED blocks when RAS is implemented  
