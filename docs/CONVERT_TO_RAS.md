@@ -1,6 +1,6 @@
 # Convert to RAS
 
-**Status:** Planning / architecture note (not an implementation spec)  
+**Status:** Planning / architecture note (not an implementation spec). **Not implemented.**  
 **Last updated:** 2026-06-01  
 **Audience:** Product owner, architecture review, implementation planning
 
@@ -12,248 +12,361 @@
 
 FREDAsoft today supports accessibility inspection and reporting workflows used by consultants and inspectors: organizing work by project and facility, capturing structured deficiency records, attaching findings/recommendations/standards/photos/costs, and producing printable/PDF-style reports plus an internal Web Report Viewer.
 
-This document records considerations for **adapting or extending** FREDAsoft so it can better support inspections performed as **Registered Accessibility Specialists (RAS)** under **TDLR** expectations in Texas. The goal is to align product thinking, data model options, reporting shape, and phased delivery—**without** committing to code, schema, or compliance claims in this phase.
+This document records **current planning decisions** and open questions for adapting FREDAsoft so it can support inspections performed as **Registered Accessibility Specialists (RAS)** under TDLR-related expectations in Texas. The goal is to align product thinking, data model options, reporting shape, glossary direction, and phased delivery—**without** committing to code, schema, or compliance claims in this phase.
 
 ---
 
 ## 2. Background
 
-RAS-related accessibility work in Texas is tied to state licensing and compliance-oriented inspection/reporting practices. Inspectors operating in that context typically need:
+RAS-related accessibility work in Texas is tied to state licensing and compliance-oriented inspection/reporting practices. Inspectors operating in that context typically need traceable project context, TAS-oriented standards, structured comments/deficiencies, reports with certification language, and eventually submission/retention workflows.
 
-- Traceable **project and registration** context (who, what building, which regulatory frame).
-- Consistent **terminology and standards** (often Texas Accessibility Standards — TAS — and related federal references where applicable).
-- **Structured findings** that can be reviewed, corrected, and re-inspected.
-- **Reports** that may need specific sections, certification language, signatures, dates, and photo/citation treatment.
-- Eventually, **submission, retention, and audit** expectations (forms, exports, possibly electronic filing—TBD).
+FREDAsoft already models much of the *mechanics* of inspection documentation. RAS support is planned as a **project-level type** and a **separate report/record shape** layered on shared infrastructure (projects, facilities, locations, photos, citations)—not a replacement of assessment/consulting workflows.
 
-FREDAsoft already models much of the *mechanics* of inspection documentation (records, locations, citations, photos, costs, reports). What is **not** yet defined in product terms is how RAS/TDLR-specific metadata, report templates, workflows, and validation rules should layer on top—or whether RAS should be a distinct **mode**, **project type**, or **product variant**.
-
-This is **future planning**. Nothing in this document should be read as approved scope for the next sprint.
+**Planning posture:** Decisions in sections 3–11 below reflect the latest architecture conversation. They are **not** shipped product behavior until implemented and reviewed per **AGENTS.md**.
 
 ---
 
 ## 3. Current FREDAsoft capabilities relevant to RAS
 
-The following existing areas are likely **carry-forward assets** when evaluating RAS support. They are not guaranteed to map 1:1 to TDLR deliverables without requirement review.
+Existing areas that may **carry forward** for RAS (with gaps noted):
 
-| Area | Relevance to RAS planning |
-|------|---------------------------|
-| **Project / facility / location organization** | Core structure for multi-building work, scoped narratives, and per-location deficiencies. |
-| **Data Entry (`projectData` records)** | Primary capture surface for deficiencies; snapshot fields preserve report-time text. |
-| **Glossary sets (e.g. TAS 2012, UFAS)** | Standardized category/item/finding/recommendation templates; TAS may dominate RAS work. |
-| **Findings and recommendations** | Master libraries + per-record snapshots; grouping and audit tooling exist. |
-| **Standards / citations** | Record-level and glossary-linked citations; referenced-standards addendum in reports. |
-| **Photos** | Per-record image arrays; documentation cards use first images; supplemental photos in addendum. |
-| **Costs / financial section** | Optional remediation costing; may or may not be required for all RAS deliverables. |
-| **Web Report Viewer** | Read-only web rendering with filters, session state, Financial / Referenced Standards / Photo Addendum sections. |
-| **PDF / Report Preview** | Sectioned printable report with sort order, addenda, and section availability rules. |
-| **Project Audit** | Internal QA across project records (warnings, report-content filters, snapshot drift). |
-| **Future client-facing web report + auth** | Planned direction for published/read-only client views; relevant for owner review and staff roles. |
-
-**Implication:** RAS conversion may be an **extension and template layer** more than a greenfield product—provided TDLR requirements fit the existing record/report model after research.
+| Area | Relevance | RAS planning note |
+|------|-----------|-------------------|
+| **Project / facility / location** | Core structure | RAS adds project type + report instances; locations/areas still apply |
+| **Data Entry (`projectData`)** | Record capture | RAS mode omits recommendations/costs; may add sheet/detail # |
+| **Glossary (TAS 2012, UFAS, etc.)** | Templates | RAS projects: **TAS 2012 only**; separate **rasFindings** library for Plan Review |
+| **Findings / recommendations** | Masters + snapshots | RAS uses **comments**; no recommendations on RAS reports |
+| **Standards / citations** | TAS references | Retained; no recommendation citations |
+| **Photos** | Per-record images | Retained; drawing references TBD for Plan Review |
+| **Costs / financial** | Assessment reports | **Excluded** from RAS reports |
+| **Web Report Viewer** | Read-only sections | RAS template likely drops Financial; other sections TBD |
+| **PDF / Report Preview** | Sectioned PDF | RAS template separate from assessment template |
+| **Project Audit** | QA warnings | Must not treat missing rec/cost as errors on RAS |
+| **Future client portal + auth** | Published views | Phase 9+; outstanding-issues workflow across reports |
 
 ---
 
-## 4. Likely RAS-specific requirements to investigate
+## 4. Project type (decided — planning)
 
-The list below is a **research backlog**, not a specification. Each item needs confirmation against TDLR rules, RAS practice, and sample reports.
+FREDAsoft should support **project type** at the project level:
 
-### Registration and project identity
-- [ ] TDLR **project / registration numbers** and related identifiers
-- [ ] Owner / client legal name and contact fields
-- [ ] Site address, building name, suite/floor, parcel or other facility identifiers
-- [ ] Project **scope** (new construction, alteration, barrier removal, plan review, etc.)
-- [ ] **Inspection type** and **status** (initial, follow-up, final, failed, approved — wording TBD)
+| Type | Meaning |
+|------|---------|
+| **`assessment`** | Current consulting/inspection-style work (default) |
+| **`ras`** | Texas RAS/TDLR-oriented work |
 
-### Inspector / RAS credentials
-- [ ] RAS **name**, **license/registration number**, firm affiliation
-- [ ] Signature block, certification language, inspection date(s)
-- [ ] Co-inspector or reviewer fields (if applicable)
+**Rules (planning):**
 
-### Technical content
-- [ ] Applicable **TAS version** (e.g. 2012) and when UFAS or other sets apply
-- [ ] **Required finding language** or mandated phrasing (if any)
-- [ ] Mandatory **report sections** and ordering
-- [ ] **Photo** requirements (quantity, labeling, linkage to deficiencies)
-- [ ] **Citation** requirements (TAS section format, federal refs, plan sheets)
-
-### Delivery and compliance operations
-- [ ] **Submission** format (PDF only, portal upload, API — unknown)
-- [ ] **Export** packages (ZIP, form PDFs, XML — unknown)
-- [ ] **Record retention** duration and immutability expectations
-- [ ] **Audit trail** (who changed what, when, before/after submission)
-- [ ] Official **TDLR forms**, checklists, cover sheets, dates, notarization (if any)
+- **RAS is selected when the project is created or configured** — not inferred per facility or per report only.
+- **Existing projects default to `assessment`** — no silent conversion.
+- **`ras` projects are TAS 2012 only** — glossary/standard enforcement must not break assessment projects that use other sets (UFAS, etc.).
+- Assessment and RAS projects may coexist in one deployment; UI and validation branch on project type.
 
 ---
 
-## 5. Data model considerations
+## 5. RAS report structure (decided — planning)
 
-No schema changes are proposed here. Future design might introduce or extend entities/fields such as:
+### Multiple report instances per RAS project
 
-### Profiles and credentials
-- **RAS profile** — inspector registration metadata reused across projects
-- Link to existing **Inspector** records or a parallel RAS-specific profile
+- A single **RAS project** can contain **multiple independent RAS report instances** (e.g. Preliminary Plan Review, then Revised Plan Review, then Official Inspection).
+- **Report records are scoped to one report instance** — each instance has its own record set.
+- **v1: no automatic carry-forward** of records from a prior report instance into a new one. Staff copy or re-enter as needed.
+- **Future (bonus):** outstanding-issues dashboard / client response workflow that tracks items **across** report instances (not in v1).
 
-### Project-level metadata
-- **TDLR project block** — registration number, submission IDs, jurisdiction notes
-- **Inspection program flags** — RAS vs general consulting vs hybrid
-- **Applicable standard set** — primary glossary/TAS version for the project
+### Implications
 
-### Inspection events
-- **Inspection event** — date, type, inspector, status, notes (supports re-inspections)
-- Relationship: one project → many events → many `projectData` rows (or event-scoped subsets)
-
-### Deficiency / compliance tracking
-- **Barrier / deficiency record** — may map closely to existing `projectData`
-- **Compliance status** per record or per location (compliant, non-compliant, corrected, N/A)
-- **Corrective action** — due dates, verification visit, linked re-inspection records
-
-### Workflow and publication
-- **Submission status** — draft, internal review, submitted, accepted, rejected
-- **Attachments / forms** — uploaded TDLR PDFs, plans, correspondence
-- **Report publication state** — internal draft vs client-visible vs archived snapshot
-
-**Design principle:** Prefer extending `project` / `projectData` snapshots and explicit metadata documents over recomputing report text from master libraries at render time. Recent audit work highlighted risks when category/item/finding/recommendation resolution diverges from saved snapshots.
+- Data model needs a **RAS report instance** entity (or equivalent) linking: division, report kind, dates, narrative/certification text, and child records.
+- Web Report / PDF generation targets **one selected report instance** at a time.
+- Project Audit may need instance-scoped or project-scoped modes later.
 
 ---
 
-## 6. Glossary and standards considerations
+## 6. RAS divisions and report kinds (decided — planning)
 
-### TAS as primary set
-For RAS-focused work, **TAS 2012** (or successor sets) may become the **default glossary** and citation source. UFAS and other sets may remain for legacy or mixed portfolios.
+RAS work splits into two **divisions**:
 
-### Three layers to keep distinct
-1. **Active glossary set** — what Data Entry uses for new picks and templates  
-2. **Saved record glossary set** — what was active when each `projectData` row was created/edited  
-3. **Report-visible snapshot text** — `fldFindShort` / `fldRecShort` / long fields and citation snapshots on the record  
+### Plan Review
 
-RAS conversion must **not** reintroduce resolution bugs where reports show wrong category/item labels because live glossary rows changed after save.
+| Report kind |
+|-------------|
+| Preliminary Plan Review |
+| Revised Plan Review |
+| Official Plan Review |
 
-### Standards on records
-- Record-level standard IDs and snapshot citation text should remain authoritative for reports.
-- Referenced Standards addendum logic should continue to use **included records** and shared builders—not live master re-resolution that resurrects removed citations.
+### Inspection
 
-### Audit alignment
-Project Audit warnings (missing IDs, snapshot drift, custom/unassigned noise) are a template for future **RAS-specific audit rules** (e.g. missing TDLR number, unsigned report, photo without linked deficiency).
+| Report kind |
+|-------------|
+| Special Inspection |
+| Official Inspection |
 
----
+### One template, configured per instance
 
-## 7. Reporting considerations
+All RAS report kinds can share **one RAS report template**, differentiated by configuration:
 
-### Current report surfaces (baseline)
+- Report **title / heading**
+- **Division** (Plan Review vs Inspection)
+- **Report kind** (from lists above)
+- **Narrative / certification language** (instance- or kind-specific boilerplate)
+- **Visible labels** (e.g. “Comment” vs legacy “Finding” in UI)
 
-| Section | PDF / Report Preview | Web Report Viewer |
-|---------|----------------------|-------------------|
-| Cover / heading | Yes | Yes (heading) |
-| Narrative | Yes | Yes |
-| Financial summary | Yes | Yes |
-| Documentation (findings/recs, photos 0–1) | Yes | Yes |
-| Referenced Standards addendum | Yes | Yes |
-| Photo Addendum (images index 2+) | Yes | Yes |
-
-Sort hierarchy (category-first vs location-first) exists in both PDF dialog and Web Report session.
-
-### Possible RAS-specific sections (to validate)
-
-| Possible section | Notes |
-|------------------|-------|
-| **TDLR / project registration** | Registration number, scope, dates, owner — may be cover or dedicated page |
-| **Inspection summary** | Counts by status, pass/fail, visit dates |
-| **Compliance findings** | May map to existing documentation with different labels/grouping |
-| **Required standards / citations** | May overlap Referenced Standards; TDLR may mandate format |
-| **Photos / photo addendum** | Likely reuse current photo model; labeling rules TBD |
-| **Inspector certification / signature** | New block; possibly image signature + license # |
-| **Owner / client acknowledgment** | Optional signature area |
-| **Remediation / follow-up status** | May need new data not in current cost-only financial view |
-
-**Open design choice:** One **RAS report template** vs configurable section sets (similar to current Report Preview section dialog).
+Exact legal wording for each kind remains subject to TDLR/sample verification.
 
 ---
 
-## 8. Workflow considerations
+## 7. RAS record and report fields (decided — planning)
 
-End-to-end flow (conceptual):
+### Excluded from RAS reports (and ideally from RAS Data Entry)
+
+RAS reports **do not include**:
+
+- Recommendations
+- Recommendation citations
+- Financials
+- Quantities
+- Unit costs
+- Total costs
+
+Assessment projects retain all of the above unchanged.
+
+### Included on RAS report rows / records
+
+| Field / concept | Notes |
+|-----------------|-------|
+| **Category** | From glossary / RAS library |
+| **Item** | From glossary / RAS library |
+| **Location / area** | Required for both divisions; Inspection primary locator |
+| **Sheet / detail #** | **Plan Review:** support alongside location/area. **One free-text field**, e.g. `5/A4.2; 1/A15.3; C2.11` |
+| **Comment** | Report-visible text (see §8) |
+| **TAS reference(s)** | Standards/citations on record |
+| **Photos / drawing references** | Where applicable; Plan Review may emphasize drawing refs |
+
+### Division-specific UI (planning)
+
+- **Plan Review:** show **Location / area** and **Sheet / detail #** (both meaningful).
+- **Inspection:** **Location / area** primary; **Sheet / detail #** hidden or optional.
+
+Internal storage may reuse existing `projectData` fields where possible; RAS mode hides or ignores recommendation/cost columns.
+
+---
+
+## 8. Finding vs Comment terminology (decided — planning)
+
+| User-facing (RAS) | Internal / legacy |
+|-------------------|-------------------|
+| **Comment** | May still map to finding-style fields (`fldFindShort`, `fldFindLong`, etc.) |
+
+**Planning rules:**
+
+- **“Comment”** is the label on RAS reports and RAS Data Entry.
+- **Short text** (`fldFindShort` or equivalent): library search, picker navigation, future table-style reports, internal use — **not** the primary line on RAS PDF in v1.
+- **Long text** (`fldFindLong` or equivalent): **report-visible comment** for RAS v1.
+- Do not require users to maintain duplicate short+long prose if only long is needed on the deliverable; short can remain a convenience field populated from library picks.
+
+---
+
+## 9. Glossary and library direction (decided — planning)
+
+### RAS Plan Review library (`rasFindings`)
+
+- **Do not** treat a straight clone of current assessment **findings** as the final authoritative RAS Plan Review library.
+- **Preferred workflow:**
+  1. Develop RAS comments in **spreadsheet batches** derived from TAS
+  2. Review, edit, and vet internally
+  3. **Import approved rows** into **`rasFindings`** (new collection or equivalent)
+- Existing TAS findings may be **reference/seed** content only; RAS library becomes **independent first-class** content.
+
+### Identity and metadata (planning)
+
+- **No `fldSourceFindID` required** for RAS library rows.
+- **New IDs** for `rasFindings` entries.
+- Useful metadata fields (illustrative):
+  - `fldFindingLibraryType` = `ras_plan_review` (and similar for other RAS library types if needed)
+  - `fldNeedsReview`
+  - Review status
+  - Finding/comment type
+  - Applicability tags
+  - Compound finding flag
+- **Preserve** item and standards/citation relationships.
+- **Do not include** recommendation or cost fields on RAS findings.
+
+### RAS Inspection library
+
+- Existing **inspection/assessment TAS glossary** may be **reusable** for RAS Inspection comments (field-observed wording).
+- **Separate curated Plan Review library** is required for drawing/plan wording (see §10).
+
+### Snapshot integrity (unchanged principle)
+
+Keep distinct:
+
+1. **Active glossary / library** at edit time  
+2. **Saved record snapshots** on `projectData`  
+3. **Report output** from snapshots, not live master re-resolution  
+
+RAS conversion must not reintroduce category/item/comment resolution bugs audited in assessment workflows.
+
+### Import safety
+
+- Library import must support **dry-run and review** before Firestore writes (**AGENTS.md** data safety).
+
+---
+
+## 10. Plan Review vs Inspection comment wording (decided — planning)
+
+| Division | Comment style (examples) |
+|----------|---------------------------|
+| **Plan Review** | Planned/drawing conditions: “Plans show…”, “The drawings indicate…”, “Insufficient information is provided…” |
+| **Inspection** | Observed field conditions: “The lavatory is located…”, “The door lacks…” |
+
+- **Plan Review** → curated **`rasFindings`** / Plan Review library.
+- **Inspection** → may leverage existing **TAS inspection/assessment** glossary patterns where wording fits observed conditions.
+
+---
+
+## 11. Report metadata and header fields (decided — planning)
+
+From sample RAS report review, header/metadata block should support (names may map to new or existing project/report fields):
+
+| Field |
+|-------|
+| RAS Name / # |
+| Review / Inspection Date |
+| OCG Project # |
+| TABS # |
+| Project Name |
+| Facility Name |
+| Project Address |
+| City / State / ZIP |
+| Project Description |
+| Scope of Work |
+| Tenant Funds Provided |
+| Owner name / address / city / state / ZIP |
+| Architect / Design Professional / Design Firm |
+
+Binding to **project** vs **report instance** vs **facility** to be finalized in Phase 1 architecture doc. TDLR-mandatory vs operational fields still require verification.
+
+---
+
+## 12. Reporting considerations
+
+### Assessment baseline (unchanged today)
+
+Assessment reports retain: Narrative, Financial, Documentation (finding + recommendation), Referenced Standards, Photo Addendum (Web Report and PDF paths as implemented).
+
+### RAS template (planning)
+
+| Topic | Direction |
+|-------|-----------|
+| **Template count** | One shared RAS template, configured per report instance (§6) |
+| **Sections** | Likely: metadata/header, narrative/certification, comment table (category/item/location/sheet/TAS/photos), referenced standards, photo addendum — **no financial block** |
+| **Labels** | “Comment” not “Finding”; no recommendation column |
+| **Web Report** | RAS-specific viewer or mode; section toggles analogous to assessment where useful |
+| **PDF** | Separate from `ReportPreview` assessment path until explicitly integrated; protect `ReportPreview.tsx` per **AGENTS.md** |
+
+### Requirements still to investigate
+
+- Exact page order, fonts, signature blocks, mandatory boilerplate per report kind
+- Submission/export format (PDF only vs portal — TBD)
+
+---
+
+## 13. Workflow considerations (updated)
 
 ```mermaid
 flowchart LR
-  A[Create project] --> B[Select RAS / TAS mode]
-  B --> C[Capture inspection records]
-  C --> D[Project Audit review]
-  D --> E[Generate report]
-  E --> F[Staff review]
-  F --> G[Client review]
-  G --> H[Export / submit / archive]
+  A[Create project] --> B{Project type}
+  B -->|assessment| C[Assessment Data Entry]
+  B -->|ras| D[Create RAS report instance]
+  D --> E[RAS Data Entry - comments only]
+  E --> F[Project Audit - RAS rules]
+  F --> G[Generate RAS report]
+  G --> H[Staff / client review]
+  H --> I[Export / archive]
+  I -.-> J[Future: outstanding issues across reports]
 ```
 
-| Step | FREDAsoft today | RAS gap (likely) |
-|------|-----------------|------------------|
-| Create project | Projects, clients, facilities | TDLR metadata, RAS project type |
-| Select TAS/RAS mode | Glossary per project/context | Explicit mode flag, locked defaults |
-| Capture records | Data Entry | Compliance status, mandated fields |
-| Project Audit | Warning filters, report-content shortcut | RAS rule pack |
-| Generate report | Report Preview PDF | RAS template, certification page |
-| Client/staff review | Internal Web Report; auth TBD | Roles, published snapshot |
-| Export/submit/archive | PDF export | Portal/API, immutable snapshot |
-
-**Future auth/roles:** Staff vs RAS inspector vs client read-only; publish/unpublish report; possibly prevent edits after submission.
+| Step | Assessment (today) | RAS (planned) |
+|------|----------------------|---------------|
+| Create project | Default type | Select `ras`; TAS 2012 locked |
+| Report scope | Facility-level report | Per **report instance** |
+| Capture records | Finding + rec + costs | Comment + TAS + location/sheet; no rec/cost |
+| Audit | Rec/cost warnings OK | Missing rec/cost **not** errors |
+| Generate report | Assessment PDF/Web | RAS template + instance config |
+| Cross-report tracking | N/A in v1 | Future dashboard (Phase 9) |
 
 ---
 
-## 9. Risks / questions
+## 14. Risks, gotchas, and open questions
 
-### Regulatory and format
-- What is the **exact** TDLR/RAS report format (page order, mandatory fields, fonts, legal boilerplate)?
-- Are there **required forms** or an official **submission API**, or is delivery PDF/email only?
-- Which fields are **legally required** vs operationally helpful?
+### Implementation gotchas (planning)
 
-### Product architecture
-- Should RAS be a **separate product mode**, a **project type**, or a **report template** on the same data?
-- How do **non-RAS accessibility consulting reports** coexist in one deployment (multi-tenant glossary, per-project flag)?
-- Can one project mix RAS and non-RAS facilities/records?
+| Risk | Mitigation direction |
+|------|----------------------|
+| Data Entry assumes **finding + recommendation** pairing | RAS mode hides rec fields; validation branches on project/report type |
+| Report and audit logic assumes **recommendation/cost** fields | RAS audit rule pack; do not flag missing rec/cost as errors |
+| Plan Review needs **location/area and sheet/detail** | Both on form; sheet as single free-text field |
+| **Report instances** need isolated record scopes | Foreign key / scope filter on all RAS queries |
+| **TAS 2012-only** enforcement on `ras` projects | Guardrails on glossary picker; never block assessment projects |
+| **Library import** | Dry-run, batch review, no accidental production overwrite |
+| Cloning assessment findings into RAS library | Use spreadsheet vetting → `rasFindings`; avoid authoritative clone |
 
-### Data integrity
-- Are **immutable audit logs** required after submission?
-- How are **corrections and re-inspections** modeled—new event, new report version, amended records?
-- When is a **published snapshot** frozen vs live Firestore data?
+### Regulatory and product questions (still open)
 
-### Operational
-- Who may **sign** or **certify**—only logged-in RAS user?
-- Retention: how long must photos, reports, and edit history be kept?
-- Training burden if RAS and legacy workflows diverge in UI
+- Exact TDLR/RAS deliverable format and legally required fields
+- Required forms or submission APIs (if any)
+- Immutable audit log after submission?
+- Corrections / re-inspection: new report instance only in v1 — workflow for amendments TBD
+- Published snapshot vs live data for client portal
 
 ---
 
-## 10. Proposed phased approach
+## 15. Proposed phased approach (updated)
 
-Phases are sequential research → incremental delivery. Timelines and scope require Archie/user approval per phase.
+Sequential phases; scope and timing require Archie/user approval each phase. **None of this is implemented** by this document alone.
 
 | Phase | Focus | Outcomes |
 |-------|--------|----------|
-| **1 — Research** | TDLR/RAS requirements, sample reports, forms, peer tools | Requirements matrix, gap analysis, go/no-go on template approach |
-| **2 — Metadata model** | RAS project fields, inspector credentials, inspection events (design only → then implement) | Schema proposal, migration plan, no breaking changes to legacy projects |
-| **3 — RAS report template** | PDF + Web Report sections for RAS; certification block | Template behind feature flag; legacy reports unchanged by default |
-| **4 — RAS audit checks** | Project Audit rule pack for RAS blockers | Warnings aligned to report template requirements |
-| **5 — Auth & publishing** | Client/staff roles, published report snapshots | Read-only client view; staff publish workflow |
-| **6 — Export / submit / archive** | Exports, submission hooks, retention | Integrations only after Phase 1 confirms channels |
+| **1** | Finalize RAS **data/report architecture** document | Project type, report instance model, field map, header metadata binding |
+| **2** | Define RAS findings **spreadsheet / import format** | Column spec, validation rules, dry-run contract |
+| **3** | Build / import curated **`rasFindings`** library in batches | Vetted Plan Review comments in Firestore |
+| **4** | Add project-level type **`assessment` \| `ras`** | Default assessment; RAS → TAS 2012 only |
+| **5** | Add **RAS report instance** model | Division, report kind, scoped records |
+| **6** | Add **RAS Data Entry** mode | No recommendations/costs; Plan Review sheet/detail; Inspection location-first |
+| **7** | Add **RAS report template** (PDF + Web) | Shared template; per-instance title/narrative/labels |
+| **8** | Add **RAS-specific audit** checks | RAS blockers without rec/cost false positives |
+| **9** | Client portal / **outstanding issues** across reports | Later; not v1 |
 
-Each implementation phase should follow **AGENTS.md**: plan → review → branch → lint/build → manual test → document `ARCHITECTURE_DESIGN.md` ✅ DECIDED blocks.
+Each implementation phase: plan → Archie review → branch → lint/build → manual test → **✅ DECIDED** in `docs/ARCHITECTURE_DESIGN.md` when durable.
 
 ---
 
-## 11. Non-goals for now
+## 16. Requirements still to investigate (TDLR / operations)
 
-- **No implementation** of RAS features in application code from this document alone  
-- **No Firestore schema or rules changes** until requirements and migration strategy are approved  
-- **No claim of legal or TDLR compliance** until requirements are verified with authoritative sources  
-- **No changes to existing PDF/Report Preview output** for current projects until RAS template requirements are confirmed  
-- **No package.json / dependency changes** for this planning task  
-- **No substitution** of this doc for official TDLR guidance, RAS training, or legal review  
+Research backlog — confirm against official sources and sample deliverables:
+
+- TDLR registration / TABS identifiers and required formatting
+- Submission channels (portal, API, email/PDF only)
+- Record retention and immutability after filing
+- Mandatory certification/signature language per report kind
+- Photo and drawing reference minimums
+
+---
+
+## 17. Non-goals for now
+
+- **No application code** changes from this document alone  
+- **No Firestore schema or rules changes** until architecture + migration approved  
+- **No claim of TDLR legal compliance** until requirements verified  
+- **No changes to assessment PDF/Report Preview** until RAS template is scoped separately  
+- **No automatic carry-forward** of RAS records between report instances in v1  
+- **No `rasFindings` production import** without dry-run and approval  
+- **No package.json / dependency changes** for docs-only updates  
 
 ---
 
 ## Related documentation
 
-- `docs/ARCHITECTURE_DESIGN.md` — durable product/architecture decisions (Web Report, Project Audit, report snapshots, etc.)
-- `AGENTS.md` — AI agent protocol (protected areas, behavior change disclosure, verification)
+- `docs/ARCHITECTURE_DESIGN.md` — durable ✅ DECIDED blocks (add RAS decisions when implementation begins)
+- `AGENTS.md` — protected areas, behavior disclosure, Firestore data safety
 
-When Phase 1 research produces verified requirements, add a concise **✅ DECIDED** block to `ARCHITECTURE_DESIGN.md` and link back to this document for the full planning context.
+When implementation starts, add concise **✅ DECIDED** entries to `ARCHITECTURE_DESIGN.md` and keep this file as the full planning context.
