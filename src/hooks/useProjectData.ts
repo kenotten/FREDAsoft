@@ -37,9 +37,13 @@ export function useProjectData(projectId: string | null): ProjectDataResult {
       [where('fldPDataProject', '==', scopedProjectId)]
     );
 
-    const locUnsub = firestoreService.onSnapshot('locations', (data) => {
-      setRawLocations(data);
-    });
+    const locUnsub = firestoreService.onSnapshot(
+      'locations',
+      (data) => {
+        setRawLocations(data);
+      },
+      [where('fldProjectID', '==', scopedProjectId)]
+    );
 
     return () => {
       unsub();
