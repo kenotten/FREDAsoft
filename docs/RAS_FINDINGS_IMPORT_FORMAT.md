@@ -307,6 +307,7 @@ Future Firestore-backed dry-run may add **`importableRows`** after resolution; o
 
 - **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** — blank v1 authoring workbook  
 - **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`** — human authoring spreadsheet layout, valid values, examples, checklist  
+- **`docs/RAS_FINDING_AUTHORING_STYLE.md`** — finding prose and phrasing conventions for library batches  
 - **`docs/CONVERT_TO_RAS.md`** — RAS product planning, glossary direction, phased delivery  
 - **`docs/ARCHITECTURE_DESIGN.md`** — durable ✅ DECIDED blocks when RAS is implemented  
 - **`AGENTS.md`** — Firestore write safety, protected areas, behavior disclosure  

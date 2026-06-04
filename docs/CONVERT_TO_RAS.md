@@ -371,6 +371,7 @@ Research backlog — confirm against official sources and sample deliverables:
 - **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** — blank RAS Plan Review findings authoring workbook (v1)
 - **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`** — spreadsheet columns, target **`rasFindings`** shape, import safety, dry-run report (Phase 2; planning only)
 - **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`** — spreadsheet layout spec for the workbook
+- **`docs/RAS_FINDING_AUTHORING_STYLE.md`** — Plan Review library finding prose (Batch 1+ conventions)
 - `docs/ARCHITECTURE_DESIGN.md` — durable ✅ DECIDED blocks (add RAS decisions when implementation begins)
 - `AGENTS.md` — protected areas, behavior disclosure, Firestore data safety
 

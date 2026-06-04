@@ -6,7 +6,8 @@
 
 > **Disclaimer:** This document defines a **concrete spreadsheet layout** for authoring RAS Plan Review **comments** before any Firestore **write** importer exists. Examples are **illustrative only** and do **not** assert TDLR compliance or correct TAS citations for real projects.
 
-**Authority for Firestore shape and import safety:** **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`**
+**Authority for Firestore shape and import safety:** **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`**  
+**Authority for finding prose and phrasing:** **`docs/RAS_FINDING_AUTHORING_STYLE.md`**
 
 ---
 
@@ -145,7 +146,7 @@ Semicolon-separated; not an exhaustive enum:
 
 ## 5. Example rows
 
-Illustrative only—not legal or technical advice.
+Illustrative only—not legal or technical advice. These rows demonstrate **column layout and valid values** only. **Prose conventions** for `rasFindShort` and `rasFindLong` are governed by **`docs/RAS_FINDING_AUTHORING_STYLE.md`** (canonical wording: **`content/ras-findings/batches/RAS-PR-batch1-doors-maneuvering-clearance.xlsx`**).
 
 | importKey | importAction | reviewStatus | rasFindShort | rasFindLong | categoryName | itemName | fldItem | tasRefs | findingType | applicabilityTags | isCompound | sortOrder | reviewerNotes | active |
 |-----------|--------------|--------------|--------------|-------------|--------------|----------|---------|---------|-------------|-------------------|------------|-----------|---------------|--------|
@@ -163,9 +164,9 @@ Illustrative only—not legal or technical advice.
 
 1. **Only `approved` rows import by default**—set **`reviewStatus`** explicitly; use **`needs_review`** / **`draft`** while editing.  
 2. **`rasFindShort`** — internal search and library navigation; keep concise and unique within item where possible.  
-3. **`rasFindLong`** — **report-visible Comment** on RAS Plan Review deliverables (v1).  
-4. **Plan Review wording** — prefer drawing/plan phrasing: *“Plans show…”*, *“The drawings indicate…”*, *“Insufficient information is provided…”* (see **`docs/CONVERT_TO_RAS.md` §10).  
-5. **`tasRefs`** — must be resolvable to TAS 2012 standards in FREDAsoft; dry-run lists unresolved refs.  
+3. **`rasFindLong`** — **report-visible Comment** on RAS Plan Review deliverables (v1). Follow **`docs/RAS_FINDING_AUTHORING_STYLE.md`** for reusable library prose.  
+4. **Plan Review wording** — library batches: see **`docs/RAS_FINDING_AUTHORING_STYLE.md`**; product context: **`docs/CONVERT_TO_RAS.md` §10**.  
+5. **`tasRefs`** — must be resolvable to TAS 2012 standards in FREDAsoft; dry-run lists unresolved refs. Citations belong in **`tasRefs`**, not repeated in **`rasFindLong`** (style guide §6).  
 6. **`fldItem`** — use when ID is known; reduces name-matching errors.  
 7. **No recommendations or costs** — do not add forbidden columns or paste assessment export columns.  
 8. **No `fldSourceFindID`** — RAS library is independent; do not link to assessment **`findings`** IDs in the sheet.  
@@ -184,7 +185,7 @@ Before requesting a dry-run (future importer):
 - [ ] **Forbidden columns** absent or empty (recommendation, qty, cost, etc.)  
 - [ ] **Duplicate review** — scan for duplicate **`rasFindShort`** / **`rasFindLong`** within same item; resolve or reject  
 - [ ] **Approved only** — non-**`approved`** rows intentionally left for later or marked **`skip`**  
-- [ ] **Wording review** — Plan Review tone; no field-observation language unless intentional  
+- [ ] **Wording review** — per **`docs/RAS_FINDING_AUTHORING_STYLE.md`**; Plan Review tone; no field-observation language unless intentional  
 - [ ] **Legal disclaimer** — batch reviewed by qualified staff; **no compliance claim** from spreadsheet alone  
 - [ ] **Batch metadata** recorded on **Import Notes** tab (reviewer, date, file version)
 
@@ -214,7 +215,8 @@ npx tsx scripts/maintenance/dry-run-ras-findings-import.ts --input path/to/batch
 | Document | Role |
 |----------|------|
 | **`RAS_FINDINGS_IMPORT_FORMAT.md`** | **Authority** for import philosophy, Firestore field map, safety rules, dry-run report schema, open questions. |
-| **`RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`** (this file) | **Human-facing** column layout, valid values, examples, and authoring checklist. |
+| **`RAS_FINDING_AUTHORING_STYLE.md`** | **Authority** for `rasFindShort` / `rasFindLong` prose, placeholders, and reusable finding patterns. |
+| **`RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`** (this file) | **Human-facing** column layout, valid values, layout examples, and authoring checklist. |
 
 When the two docs differ, **`RAS_FINDINGS_IMPORT_FORMAT.md`** wins for importer behavior; update this template to match after architecture review.
 
@@ -235,5 +237,6 @@ When the two docs differ, **`RAS_FINDINGS_IMPORT_FORMAT.md`** wins for importer 
 - **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** — blank authoring workbook (v1)  
 - **`templates/README.md`** — short pointer to the workbook  
 - **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`** — target Firestore shape and import safety  
+- **`docs/RAS_FINDING_AUTHORING_STYLE.md`** — finding prose, placeholders, Batch 1 canonical examples  
 - **`docs/CONVERT_TO_RAS.md`** — RAS product planning and glossary workflow  
 - **`AGENTS.md`** — Firestore data safety before any import implementation  
