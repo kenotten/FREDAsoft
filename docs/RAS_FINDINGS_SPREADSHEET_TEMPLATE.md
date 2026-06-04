@@ -164,8 +164,8 @@ Illustrative only—not legal or technical advice. These rows demonstrate **colu
 
 1. **Only `approved` rows import by default**—set **`reviewStatus`** explicitly; use **`needs_review`** / **`draft`** while editing.  
 2. **`rasFindShort`** — internal search and library navigation; keep concise and unique within item where possible.  
-3. **`rasFindLong`** — **report-visible Comment** on RAS Plan Review deliverables (v1). Follow **`docs/RAS_FINDING_AUTHORING_STYLE.md`** for reusable library prose.  
-4. **Plan Review wording** — library batches: see **`docs/RAS_FINDING_AUTHORING_STYLE.md`**; product context: **`docs/CONVERT_TO_RAS.md` §10**.  
+3. **`rasFindLong`** — **report-visible Comment** on RAS Plan Review deliverables (v1). Follow **`docs/RAS_FINDING_AUTHORING_STYLE.md`** for reusable library prose and **syntax families** (§7).  
+4. **Plan Review wording** — library batches: see **`docs/RAS_FINDING_AUTHORING_STYLE.md`** (syntax families §7); product context: **`docs/CONVERT_TO_RAS.md` §10**.  
 5. **`tasRefs`** — must be resolvable to TAS 2012 standards in FREDAsoft; dry-run lists unresolved refs. Citations belong in **`tasRefs`**, not repeated in **`rasFindLong`** (style guide §6).  
 6. **`fldItem`** — use when ID is known; reduces name-matching errors.  
 7. **No recommendations or costs** — do not add forbidden columns or paste assessment export columns.  
@@ -215,7 +215,7 @@ npx tsx scripts/maintenance/dry-run-ras-findings-import.ts --input path/to/batch
 | Document | Role |
 |----------|------|
 | **`RAS_FINDINGS_IMPORT_FORMAT.md`** | **Authority** for import philosophy, Firestore field map, safety rules, dry-run report schema, open questions. |
-| **`RAS_FINDING_AUTHORING_STYLE.md`** | **Authority** for `rasFindShort` / `rasFindLong` prose, placeholders, and reusable finding patterns. |
+| **`RAS_FINDING_AUTHORING_STYLE.md`** | **Authority** for `rasFindShort` / `rasFindLong` prose, placeholders, **syntax families**, and reusable finding patterns. |
 | **`RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`** (this file) | **Human-facing** column layout, valid values, layout examples, and authoring checklist. |
 
 When the two docs differ, **`RAS_FINDINGS_IMPORT_FORMAT.md`** wins for importer behavior; update this template to match after architecture review.

@@ -6,7 +6,7 @@
 
 > **Disclaimer:** This guide records **internal spreadsheet/library wording conventions** for curated RAS Plan Review findings. It does **not** assert legal compliance, correct TAS citations for a specific project, or final TDLR/RAS deliverable wording. Qualified staff must review all batch content before any future import.
 
-**Canonical first batch:** **`content/ras-findings/batches/RAS-PR-batch1-doors-maneuvering-clearance.xlsx`** (doors / maneuvering clearance, TAS 404.2.3.2).
+**Canonical first batch (Family 1):** **`content/ras-findings/batches/RAS-PR-batch1-doors-maneuvering-clearance.xlsx`** (doors / maneuvering clearance, TAS 404.2.3.2).
 
 ---
 
@@ -19,6 +19,7 @@ This document governs **prose and phrasing** for RAS Plan Review **library** row
 | Wording in **Findings** tab batches | App UI labels, report PDF layout, Data Entry behavior |
 | Reusable **rasFindings** library text | Firestore import rules, dry-run implementation, schema |
 | Plan Review **library** authoring | Inspection (field-observation) glossary wording |
+| **Syntax families** — reusable `rasFindLong` patterns | Firebase/Firestore import behavior, app UI |
 
 **Column layout, enums, and dry-run CLI:** **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`**.  
 **Import safety and Firestore field map:** **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`**.  
@@ -32,6 +33,7 @@ Syntax and terminology are **expected to evolve** as more batches are authored. 
 
 - **Finding (v1):** Keep the term **finding** in spreadsheet and import field names (`rasFindShort`, `rasFindLong`, `findingType`) for now. User-facing RAS deliverables may label the same text **Comment** per product planning; that label change does not require renaming import columns in this phase.
 - **Batch:** A reviewed `.xlsx` (or export) under **`content/ras-findings/batches/`** or equivalent, validated with the offline dry-run CLI before any future write import.
+- **Syntax family:** A paired set of reusable `rasFindLong` templates (typically **noncompliance** + **insufficient_information**) for the same underlying criterion. See §7.
 
 ---
 
@@ -40,9 +42,9 @@ Syntax and terminology are **expected to evolve** as more batches are authored. 
 | Field | Role |
 |-------|------|
 | **`rasFindShort`** | Concise **library/search label** — picker navigation, deduplication review, internal QA. Not a substitute for the full report sentence. |
-| **`rasFindLong`** | **Reusable report-facing prose** — the Comment body on RAS Plan Review deliverables (v1). Write so staff can reuse the row across projects with placeholders filled in later. |
+| **`rasFindLong`** | **Reusable report-facing prose** — the Comment body on RAS Plan Review deliverables (v1). Follow a **syntax family** template (§7). |
 | **`tasRefs`** | **Authoritative TAS 2012 citation(s)** for the row — semicolon-separated (e.g. `404.2.3.2`). |
-| **`findingType`** | Classification that must **match** the prose pattern (see §7). |
+| **`findingType`** | Classification that must **match** the syntax family variant (§8). |
 
 ---
 
@@ -50,11 +52,23 @@ Syntax and terminology are **expected to evolve** as more batches are authored. 
 
 - **Plan Review library** — describe drawing/plan conditions, not observed field conditions (no “is mounted,” “lacks,” etc. unless intentionally authoring Inspection library content).
 - **Concise and direct** — state the condition or information gap; avoid long narrative.
-- **Not recommendation-like** — do **not** instruct the design team what to do. Avoid **Revise**, **Provide**, **Include**, **Clarify**, and similar imperatives in `rasFindLong`, except where the row is genuinely about **insufficient information** (and even then, describe what cannot be determined — not a fix list).
+- **Not recommendation-like** — do **not** instruct the design team what to do. Avoid imperatives in `rasFindLong` (see §4.1).
 - **Banned phrase (library prose):** do **not** use **“on the submitted plans.”**
 - **Prefer “determine” over “verify”** in insufficient-information findings.
 
-**Relationship to `CONVERT_TO_RAS.md` §10:** Product planning still lists examples such as “Plans show…” and “The drawings indicate…” for Plan Review. **Curated library batches** may use tighter condition statements (Batch 1 pattern). When in doubt, follow this style guide for **`rasFindings`** library rows.
+**Relationship to `CONVERT_TO_RAS.md` §10:** Product planning still lists examples such as “Plans show…” and “The drawings indicate…” for Plan Review. **Curated library batches** use **syntax family** templates (§7). When in doubt, follow this style guide for **`rasFindings`** library rows.
+
+### 4.1 Terms and phrasing to avoid
+
+| Avoid | Prefer / note |
+|-------|----------------|
+| **exceeds** | **greater than** or **less than** (Family 2) |
+| **too high** / **too narrow** | **greater than** / **less than** + quantity |
+| **not ADA compliant** (generic) | Specific condition or measurement (syntax family) |
+| TAS / section numbers in **`rasFindLong`** | **`tasRefs` only** (§6) |
+| **revise**, **provide**, **adjust**, **lower**, **widen** | Condition statement or insufficient-information pattern |
+| **Revise**, **Provide**, **Include**, **Clarify** | Same — no recommendation verbs |
+| **verify** | **determine** (insufficient-information variant) |
 
 ---
 
@@ -62,18 +76,20 @@ Syntax and terminology are **expected to evolve** as more batches are authored. 
 
 ### `[LOCATION]`
 
-Use **`[LOCATION]`** as the standard placeholder wherever a specific door, room, sheet reference, or similar locator will be supplied at report/Data Entry time — not in the library import row itself.
+Use **`[LOCATION]`** as the standard placeholder wherever a specific door, room, route segment, sheet reference, or similar locator will be supplied at report/Data Entry time — not in the library import row itself.
 
-**Example:** `…on the pull side of the door [LOCATION]…`
+**Example:** `…on the pull side of the door [LOCATION]…` or `…at [LOCATION].`
 
 ### Bracketed choices
 
 Use **pipe-separated choices** inside brackets when one library row covers variants the author or reporter selects later:
 
-**Example:** `[forward | hinge | latch]`
+**Examples:** `[forward | hinge | latch]` · `[greater than | less than]`
 
 - Be consistent with spacing around `|` within a batch.
-- Prefer **one reusable row** with bracketed choices over multiple near-duplicate approved rows that differ only by hinge vs latch vs forward.
+- Prefer **one reusable row** with bracketed choices over multiple near-duplicate approved rows.
+
+**Family 2 template slots:** `[measured feature]` · `[threshold]` · `[unit/context]` (see §7.2).
 
 **Not in library `rasFindLong` (v1):** project-specific sheet numbers (e.g. `A4.2`) — those belong on report instances / Data Entry fields when implemented.
 
@@ -88,37 +104,32 @@ Use **pipe-separated choices** inside brackets when one library row covers varia
 | **Do not cite in `rasFindShort`** | Short label names the condition, not the code section |
 | **TAS 2012 only** | No UFAS, ADA, or other standards in `tasRefs` for this library |
 
+Thresholds stated in Family 2 prose (e.g. 8.33%, 36 inches) are **library constants for that finding row**; legal/technical authority remains staff review and **`tasRefs`**, not this style guide.
+
 Exact matching and resolution rules: **`docs/RAS_FINDINGS_IMPORT_FORMAT.md` §8**.
 
 ---
 
-## 7. “Not provided” vs “insufficient information”
+## 7. Syntax families
 
-Pair **`findingType`** with the correct prose pattern. **Do not mix** patterns on a single row.
+Syntax families are the **primary organizing framework** for reusable library findings. Each family defines:
 
-| `findingType` | When to use | `rasFindLong` pattern |
-|---------------|-------------|------------------------|
-| **`noncompliance`** | Plans/drawings show or imply the accessible condition **is not met** | State that clearance or feature **is not provided** (or equivalent direct condition) |
-| **`insufficient_information`** | Plans/drawings **do not support a determination** | **Insufficient information is provided to determine whether…** |
+1. A **noncompliance** `rasFindLong` pattern — use when drawings **show or imply** the criterion is **not met**.
+2. An **insufficient_information** companion — use when drawings **do not provide enough information** to determine whether the criterion is met.
 
-**Do not** use “cannot be determined” language on a **noncompliance** row, or assert “is not provided” on an **insufficient_information** row unless the deficiency is actually shown.
+Authors pick the family, fill template slots and placeholders, set **`tasRefs`**, and pair **`findingType`** with the variant (§8). Do **not** mix family templates on one row.
 
-### Suggested `rasFindShort` labels (Batch 1 pattern)
+| Family | Name | Implemented in batch |
+|--------|------|----------------------|
+| **1** | Condition not provided | **`RAS-PR-batch1-doors-maneuvering-clearance.xlsx`** |
+| **2** | Measurable / dimensional criteria | Documentation only (no workbook on this branch) |
+| *(future)* | e.g. coordination, other patterns | TBD as batches are authored |
 
-| Pattern | Example `rasFindShort` |
-|---------|-------------------------|
-| Not provided | Accessible maneuvering clearance not provided |
-| Cannot determine | Door maneuvering clearance cannot be determined |
+### 7.1 Family 1 — Condition not provided (Batch 1)
 
-Enum definitions: **`docs/RAS_FINDINGS_IMPORT_FORMAT.md` §6**.
+**Topic:** Door maneuvering clearance, pull side. **`tasRefs`:** `404.2.3.2` for both rows below.
 
----
-
-## 8. Canonical examples (Batch 1 — doors / maneuvering clearance)
-
-These two approved rows are the **first canonical** library pair for pull-side maneuvering clearance at doors. **`tasRefs`:** `404.2.3.2` for both.
-
-### 8.1 Noncompliance — not provided
+#### Noncompliance — not provided
 
 | Field | Text |
 |-------|------|
@@ -126,7 +137,7 @@ These two approved rows are the **first canonical** library pair for pull-side m
 | **`rasFindLong`** | Accessible maneuvering clearance is not provided on the pull side of the door [LOCATION] for a [forward \| hinge \| latch] approach. |
 | **`findingType`** | `noncompliance` |
 
-### 8.2 Insufficient information — cannot determine
+#### Insufficient information — cannot determine
 
 | Field | Text |
 |-------|------|
@@ -136,30 +147,101 @@ These two approved rows are the **first canonical** library pair for pull-side m
 
 **Reusable finding rule:** Do not add separate approved rows for minor variant wording (e.g. hinge-only vs latch-only) when bracketed choices already cover the library intent.
 
+### 7.2 Family 2 — Measurable / dimensional criteria
+
+Use when the finding is expressed as a **comparison to a numeric threshold** (dimension, slope, force, height, etc.).
+
+#### Templates
+
+| Variant | `findingType` | `rasFindLong` template |
+|---------|---------------|-------------------------|
+| Threshold not met | `noncompliance` | The [measured feature] is [greater than \| less than] [threshold] [unit/context] at [LOCATION]. |
+| Cannot determine measurement | `insufficient_information` | Insufficient information is provided to determine the [measured feature] at [LOCATION]. |
+
+#### Preferred terminology (Family 2)
+
+Use these terms in library prose where applicable:
+
+- **greater than** · **less than**
+- **clear width** · **accessible route**
+- **operable part**
+- **above the finished floor or ground**
+- **opening force**
+- **slope** · **cross slope**
+
+#### Illustrative noncompliance examples
+
+*(Not compliance determinations. Set **`tasRefs`** per row when authoring batches.)*
+
+| Example `rasFindLong` |
+|-----------------------|
+| The ramp slope is greater than 8.33% at [LOCATION]. |
+| The clear width of the accessible route is less than 36 inches at [LOCATION]. |
+| The operable part of controls and operating mechanisms is greater than 48 inches above the finished floor or ground at [LOCATION]. |
+| The door opening force is greater than 5 pounds at [LOCATION]. |
+
+#### Illustrative insufficient-information companions
+
+| Example `rasFindLong` |
+|-----------------------|
+| Insufficient information is provided to determine the ramp slope at [LOCATION]. |
+| Insufficient information is provided to determine the clear width of the accessible route at [LOCATION]. |
+| Insufficient information is provided to determine the height of the operable part of controls and operating mechanisms at [LOCATION]. |
+| Insufficient information is provided to determine the door opening force at [LOCATION]. |
+
+**`rasFindShort` (suggested):** Name the measurement, e.g. “Ramp slope greater than 8.33%”, “Accessible route clear width less than 36 inches” — not Family 1 “not provided” wording.
+
+### 7.3 Future families
+
+Other `findingType` values (e.g. **`coordination_issue`**, **`caution`**) may get syntax families when batches and review agree on reusable templates. Until then, do not force Plan Review library rows into Family 1 or 2 patterns.
+
+---
+
+## 8. `findingType` pairing across syntax families
+
+Pair **`findingType`** with the correct **family variant**. **Do not mix** patterns on a single row.
+
+| `findingType` | When to use (Plan Review library) |
+|---------------|-----------------------------------|
+| **`noncompliance`** | Drawings **show or imply** the criterion **is not met** (not provided, or measurement fails threshold) |
+| **`insufficient_information`** | Drawings **do not provide enough information** to determine whether the criterion is met |
+
+| Family | Noncompliance signal | Insufficient-information signal |
+|--------|----------------------|----------------------------------|
+| **1 — Not provided** | …**is not provided**… | **determine whether** … **is provided** |
+| **2 — Measurable** | …**is greater than** / **is less than** … | **determine the** [measured feature] |
+
+**Do not** use “cannot be determined” on a **noncompliance** row, or assert “is not provided” on an **insufficient_information** row unless the deficiency is actually shown.
+
+Enum definitions: **`docs/RAS_FINDINGS_IMPORT_FORMAT.md` §6**.
+
 ---
 
 ## 9. Good vs bad wording (illustrative)
 
 | Situation | Good (`rasFindLong`) | Bad |
 |-----------|----------------------|-----|
-| Condition | Accessible maneuvering clearance is not provided on the pull side of the door [LOCATION] for a [forward \| hinge \| latch] approach. | Plans show insufficient maneuvering clearance per TAS 404.2.3.2. Provide dimensioned plan graphics on the submitted plans. |
-| Insufficient info | Insufficient information is provided to determine whether accessible maneuvering clearance is provided on the pull side of the door [LOCATION] for a [forward \| hinge \| latch] approach. | Insufficient information is provided to verify maneuvering clearance. Include details on sheet A4.2. |
+| Family 1 — condition | Accessible maneuvering clearance is not provided on the pull side of the door [LOCATION] for a [forward \| hinge \| latch] approach. | Plans show insufficient maneuvering clearance per TAS 404.2.3.2. Provide dimensioned plan graphics on the submitted plans. |
+| Family 1 — insufficient info | Insufficient information is provided to determine whether accessible maneuvering clearance is provided on the pull side of the door [LOCATION] for a [forward \| hinge \| latch] approach. | Insufficient information is provided to verify maneuvering clearance. Include details on sheet A4.2. |
+| Family 2 — measurable | The clear width of the accessible route is less than 36 inches at [LOCATION]. | The accessible walkway is too narrow and exceeds 36 inches clearance. |
+| Family 2 — insufficient info | Insufficient information is provided to determine the ramp slope at [LOCATION]. | Provide ramp slope on the submitted plans to verify compliance. |
 | TAS in prose | *(none — use `tasRefs`)* | …compliance with TAS 404.2.3.2 maneuvering clearance requirements. |
-| Duplication | Two standard rows (§8) | Six approved rows differing only by approach side or latch vs hinge |
+| Duplication | One row per family variant with bracketed choices | Six approved rows differing only by latch vs hinge |
 
 ---
 
 ## 10. Deferred topics
 
-The following are **intentionally deferred** from Batch 1 until separate findings are drafted and reviewed:
+The following are **intentionally deferred** until separate findings are drafted and reviewed:
 
 | Topic | Notes |
 |-------|--------|
-| **Recessed door** maneuvering clearance | Distinct condition from pull-side clearance at a standard door; needs its own short/long templates when added. |
-| **Push side** (vs Batch 1 pull-side pair) | Add only when a reviewed template is agreed; avoid near-duplicate rows. |
-| **Door swing vs clearance** (`coordination_issue`) | Removed from Batch 1 as redundant with the two standard findings; revisit if coordination wording is standardized. |
-| **Broader parent `404.2.3` without `404.2.3.2`** | Use only when subsection-level citation is inappropriate; do not duplicate insufficient-information rows. |
-| **Category/item names** (e.g. `Doors` / `Interior Doors`) | Placeholders in draft batches until Library Manager / Firestore resolution is approved. |
+| **Recessed door** maneuvering clearance | Distinct from Family 1 pull-side pair; needs its own templates |
+| **Push side** (vs Batch 1 pull-side pair) | Add only when a reviewed template is agreed |
+| **Door swing vs clearance** (`coordination_issue`) | Future syntax family TBD |
+| **Broader parent `404.2.3` without `404.2.3.2`** | Use only when subsection-level citation is inappropriate |
+| **Category/item names** (e.g. `Doors` / `Interior Doors`) | Placeholders until Library Manager / Firestore resolution is approved |
+| **Measurable batch workbook** | Family 2 examples are documentation-only until a batch is scoped |
 
 ---
 
@@ -167,9 +249,10 @@ The following are **intentionally deferred** from Batch 1 until separate finding
 
 Before marking a row **`approved`**:
 
-- [ ] `rasFindLong` is reusable and concise — no recommendation imperatives, no “on the submitted plans”
+- [ ] Syntax family identified (§7) and template variant correct
+- [ ] `rasFindLong` is reusable and concise — no terms in §4.1
 - [ ] TAS citations appear only in **`tasRefs`**
-- [ ] **`findingType`** matches the not-provided vs insufficient-information pattern (§7)
+- [ ] **`findingType`** matches family variant (§8)
 - [ ] **`[LOCATION]`** and bracketed choices used consistently
 - [ ] No duplicate approved row where one reusable finding with brackets suffices
 - [ ] Plan Review tone — not field-inspection observation language
@@ -177,9 +260,19 @@ Before marking a row **`approved`**:
 
 ---
 
+## 12. Syntax family checklist (new rows)
+
+- [ ] Family **1** or **2** (or future family) explicitly chosen
+- [ ] **Noncompliance** and **insufficient_information** pair considered — companion row exists or is intentionally N/A
+- [ ] Family 2: **greater than** / **less than** (not “exceeds”); **clear width** / **accessible route** (not vague “walkway”)
+- [ ] **`rasFindShort`** matches family (measurement label for Family 2; “not provided” / “cannot be determined” for Family 1)
+- [ ] Threshold in prose matches intended library constant; **`tasRefs`** set separately
+
+---
+
 ## Related documentation
 
-- **`content/ras-findings/batches/RAS-PR-batch1-doors-maneuvering-clearance.xlsx`** — first canonical batch  
+- **`content/ras-findings/batches/RAS-PR-batch1-doors-maneuvering-clearance.xlsx`** — Family 1 implemented batch  
 - **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`** — spreadsheet layout and column spec  
 - **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`** — import format and `findingType` enums  
 - **`docs/CONVERT_TO_RAS.md`** — RAS product planning  
