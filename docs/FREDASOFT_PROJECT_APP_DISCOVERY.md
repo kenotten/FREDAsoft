@@ -465,7 +465,51 @@ Track correspondence/merge documents as optional module—do not merge with Repo
 
 ---
 
-## 15. Suggested phased discovery follow-ups
+## 15. Product-owner domain clarification: TDLR records, canonical stakeholders, correspondence, and portal direction
+
+**Source:** Kenneth (product owner), 2026-06 follow-up to this discovery doc.  
+**Status:** Architecture and requirements **implications** only—not implementation decisions, Firestore schema, or porting from the Lovable prototype.
+
+### Dual-track data: TDLR registration vs canonical stakeholders
+
+1. **TDLR registration data** must be **preserved as recorded**—it is the **legal / source registration record** and must not be silently replaced by internal cleanup.
+2. **Canonical internal stakeholders** (Owner, Designer, RAS firm, Tenant, Agent, etc.) are a **separate track** from raw party names and addresses as they appeared on TDLR registration.
+3. **Name, address, and entity variations are expected.** Multiple raw variants may **link to one canonical stakeholder**; the system should tolerate inconsistency across sources and time.
+4. **Normalization** should support **aliases / observed names**, **review**, and **matching** workflows—not blind overwrite of canonical records from a single scraped or imported row.
+
+**Architecture implication:** FREDAsoft should plan for **immutable-or-audited TDLR snapshots** plus a **maintained canonical stakeholder directory** with explicit linkage, not a single flattened “project party” table copied from prototype `tbl*` shapes.
+
+### TDLR extraction / scraping (separate pipeline)
+
+5. **TDLR data extraction or scraping** is a **separate pipeline**, not inline project form entry. **Requirement candidate** capabilities include:
+   - source page / source reference per extraction run
+   - extraction logs (when, what URL or source, success/failure)
+   - parsed fields stored distinctly from reviewed/canonical data
+   - human **review** before parsed values promote to trusted internal use
+
+**Architecture implication:** Do not conflate “save project” in the Project app with “ingest TDLR HTML/PDF/API output.” Prototype manual entry and import paths are **UI references** only.
+
+### Correspondence vs inspection reporting
+
+6. **Correspondence templates** and **formatted PDF letters** (merge fields, milestone-triggered letters) are **first-class requirements**, **separate** from **inspection report PDF generation** (Report Preview, Web Report Viewer, assessment/RAS deliverable reports).
+
+**Architecture implication:** Aligns with discovery **Option D** and Lovable `correspondence_*` tables as **workflow candidates**—not substitutes for `projectData`-driven reporting workflows.
+
+### Client portal direction (extends `CLIENT_PORTAL_SPEC.md`)
+
+7. **Client portal** scope (future) includes, per project: **project progress**, **project information**, **reports** (published deliverables), and **client-submitted updates** to company / contact / address data.
+8. Client-submitted updates should **likely be reviewed and approved** before they modify **canonical** Client, Facility, contact, or stakeholder records—submissions are **workflow candidates**, not automatic writes.
+9. Portal access implies a future **roles / project membership / published-report access** model (who sees which project, which report instances, and what they may edit vs view).
+
+**Cross-reference:** `docs/CLIENT_PORTAL_SPEC.md` today emphasizes the portal as an **interactive expanded report workspace** (findings, photos, sorting). Kenneth’s clarification adds **project administration and master-data stewardship** as portal-adjacent requirements—not yet fully specified in that doc.
+
+### What this does not decide
+
+10. Collection names, Firestore rules, UI routes, scraping technology, and approval UX remain **open** for Archie review and phased discovery (§16). This section **narrows intent**; it does not authorize implementation or Supabase/Lovable porting.
+
+---
+
+## 16. Suggested phased discovery follow-ups
 
 | Phase | Deliverable | Depends on |
 |-------|-------------|------------|
@@ -473,13 +517,16 @@ Track correspondence/merge documents as optional module—do not merge with Repo
 | **D2** | **Workflow wireframes** (ASCII or external) for Project hub vs Data Entry entry points | Option A/B/C choice |
 | **D3** | **RAS report instance** field spec crosswalk (CONVERT_TO_RAS §11 ↔ prototype dates) | RAS phase approval |
 | **D4** | **Firestore schema sketch** (docs only)—separate branch, no implementation | ARCHITECTURE_DESIGN ✅ DECIDED process |
-| **D5** | Stakeholder model decision (directory vs Client-only) | Q1, Q2 |
+| **D5** | Stakeholder model decision (directory vs Client-only; dual-track TDLR vs canonical per §15) | Q1, Q2; §15 |
+| **D6** | TDLR extraction pipeline sketch (source, log, parsed, review) | §15 points 5–6 |
+| **D7** | Correspondence template + PDF letter requirements spec | §15 point 6; Option D |
+| **D8** | Portal submission + approval workflow (canonical record updates) | §15 points 7–9; `CLIENT_PORTAL_SPEC.md` |
 
 **Not suggested:** Supabase→Firestore migration scripts, copying edge functions, or importing `database-export` CSVs into the repo.
 
 ---
 
-## 16. Related FREDAsoft documentation index
+## 17. Related FREDAsoft documentation index
 
 | Document | Relevance |
 |----------|-----------|
@@ -498,6 +545,7 @@ Track correspondence/merge documents as optional module—do not merge with Repo
 | Item | Value |
 |------|-------|
 | Created | 2026-06-04 |
+| Updated | 2026-06-04 (§15 product-owner domain clarification) |
 | Prototype path | `C:\dev\LovableApp\extracted\codebase-clean\` (external) |
 | FREDAsoft implementation | **None** on this branch |
 | Secrets in doc | **None** |
