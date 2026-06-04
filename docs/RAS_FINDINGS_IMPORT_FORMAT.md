@@ -1,6 +1,6 @@
 # RAS Findings Import Format
 
-**Status:** Planning / import-format spec (not an implementation spec). **Not implemented.**  
+**Status:** Planning / import-format spec. **Offline dry-run skeleton implemented** (no Firestore reads/writes).  
 **Last updated:** 2026-06-03  
 **Audience:** Product owner, content authors, architecture review, future importer implementers
 
@@ -14,7 +14,15 @@ Define the **spreadsheet authoring format** and **target Firestore document shap
 
 This spec supports the workflow decided in **`docs/CONVERT_TO_RAS.md`**: RAS Plan Review content is built in **reviewed spreadsheet batches** derived from **TAS 2012**, then imported into an independent **`rasFindings`** library—not cloned wholesale from the existing assessment **`findings`** collection.
 
-**This document is planning only.** No application code, Firestore rules, import scripts, or production writes are in scope here.
+**This document is planning only.** No application code, Firestore rules, or production writes. **Phase 8:** offline dry-run CLI validates spreadsheet batches locally.
+
+**Dry-run command (offline v1 — no credentials):**
+
+```text
+npx tsx scripts/maintenance/dry-run-ras-findings-import.ts --input path/to/batch.xlsx
+```
+
+Outputs gitignored reports: **`reports/ras-findings-import-dry-run.json`** and **`.md`**. Item/standard resolution is **deferred** in v1 (`firestore_resolution_deferred_v1`).
 
 **Human-facing spreadsheet layout:** column order, valid values, example rows, and authoring checklist are in **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`**. **Blank workbook:** **`templates/RAS_FINDINGS_TEMPLATE.xlsx`**. This file remains the authority for Firestore field map and import safety rules.
 
@@ -225,7 +233,7 @@ Future importer (not in this branch) must follow **AGENTS.md** data safety:
 | **No secrets** | Never commit service account JSON; use env-based credentials per maintenance script pattern. |
 | **Environment** | Document target project; require operator confirmation for production. |
 
-Reference pattern: **`scripts/maintenance/report-orphans.ts`** (read-only, header documentation, credential guidance).
+Reference pattern: **`scripts/maintenance/dry-run-ras-findings-import.ts`** (offline dry-run; no credentials). Firestore-backed maintenance scripts such as **`report-orphans.ts`** remain separate.
 
 ---
 
@@ -234,10 +242,10 @@ Reference pattern: **`scripts/maintenance/report-orphans.ts`** (read-only, heade
 | Topic | v1 rule |
 |-------|---------|
 | **New rows** | **`importAction` absent or `create`** → new **`fldFindID`**. |
-| **Updates** | **`importAction` = `update`** requires existing **`fldFindID`** in spreadsheet or explicit match key (future). |
+| **Updates** | **`importAction` = `update`** requires existing **`fldFindID`** in spreadsheet or explicit match key (future). Offline v1 skips with **`import_action_update_not_supported_v1`**. |
 | **Skips** | **`importAction` = `skip`** → dry-run lists as skipped. |
 | **No source FK** | **`fldSourceFindID` not required**; do not dedupe by assessment finding ID. |
-| **Duplicate detection** | Dry-run warns on same normalized **`rasFindShort`** + **`fldItem`** (and optionally same **`rasFindLong`**) as existing **`rasFindings`**. |
+| **Duplicate detection** | Offline v1: within-batch **`rasFindShort`** + item key. Future: collisions against existing **`rasFindings`**. |
 | **Re-import** | Rows marked **`imported`** in spreadsheet should not create duplicates unless **`update`** is explicit. |
 | **Future stable key** | Optional **`importKey`** column may be added later for idempotent re-import; not required for v1. |
 
@@ -245,20 +253,26 @@ Reference pattern: **`scripts/maintenance/report-orphans.ts`** (read-only, heade
 
 ## 13. Validation / dry-run report
 
-Importer dry-run output should include at minimum:
+Offline v1 dry-run (`mode: offline_dry_run_v1`) output includes at minimum:
 
 | Metric / section | Content |
 |------------------|---------|
-| **totalRows** | All data rows in batch |
-| **importableRows** | Count with **`reviewStatus=approved`** and passing validation |
-| **skippedRows** | By reason code (status, unresolved item, unresolved standard, forbidden columns, duplicate, etc.) |
-| **unresolvedItems** | Row index, names, candidate matches |
-| **unresolvedStandards** | Row index, **`tasRefs`**, reason |
-| **duplicateWarnings** | Normalized short/long text collisions within batch or against Firestore |
+| **totalRows** | All non-empty data rows in batch |
+| **approvedRows** | Rows with **`reviewStatus=approved`** |
+| **structurallyValidRows** | Approved rows passing required-field, enum, duplicate, and forbidden-column checks |
+| **blockedRows** | Rows blocked by validation (missing required, invalid values, duplicate in batch) |
+| **blockedPendingFirestoreResolution** | Structurally valid rows whose item/standard IDs are not resolved offline |
+| **skippedRows** | By reason code (**`importAction=skip`**, **`update` not supported v1**, non-**`approved`** status, etc.) |
+| **proposedCreatePreviews** | Preview-only proposed **`rasFindings`** document shape (not written) |
+| **unresolvedItems** | Row index, names/ID, reason **`firestore_resolution_deferred_v1`** |
+| **unresolvedStandards** | Row index, **`tasRefs`** tokens, deferred reason |
+| **duplicateWarnings** | Within-batch normalized **`rasFindShort`** + item key collisions |
 | **missingRequired** | Row index, missing column list |
-| **forbiddenColumnsPopulated** | Rows with recommendation/cost data |
-| **proposedCreates** | Summary list (ID, short, item, standard count) |
-| **proposedUpdates** | If any **`importAction=update`** |
+| **forbiddenColumnsPopulated** | Forbidden header/column presence |
+| **proposedCreates** | Preview document list (same as **proposedCreatePreviews** count) |
+| **proposedUpdates** | Empty in offline v1 (**`importAction=update`** not supported) |
+
+Future Firestore-backed dry-run may add **`importableRows`** after resolution; offline v1 does **not** report rows as fully importable when resolution is deferred.
 
 ---
 
@@ -266,7 +280,7 @@ Importer dry-run output should include at minimum:
 
 - **No Data Entry RAS mode** in this spec phase  
 - **No RAS report generator** (PDF / Web Report RAS template)  
-- **No Firestore importer script** in this branch  
+- **No Firestore write importer** (offline dry-run skeleton only for Phase 8)  
 - **No Firestore schema/rules/migration** until architecture approval  
 - **No client portal / outstanding-issue workflow**  
 - **No TDLR legal compliance claim** until verified against official sources  

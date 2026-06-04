@@ -175,7 +175,7 @@ Internal storage may reuse existing `projectData` fields where possible; RAS mod
   2. Review, edit, and vet internally
   3. **Import approved rows** into **`rasFindings`** (new collection or equivalent)
 
-**Authoring workbook:** **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** (layout: **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`**). **Import format spec:** column definitions, Firestore field map, dry-run rules, and validation report shape are in **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`** (no importer yet).
+**Authoring workbook:** **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** (layout: **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`**). **Import format spec:** **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`**. **Phase 8:** offline dry-run CLI — **`scripts/maintenance/dry-run-ras-findings-import.ts`** (no Firestore writes; no credentials).
 - Existing TAS findings may be **reference/seed** content only; RAS library becomes **independent first-class** content.
 
 ### Identity and metadata (planning)

@@ -1,0 +1,2 @@
+importKey,importAction,reviewStatus,rasFindShort,rasFindLong,categoryName,itemName,fldItem,tasRefs,findingType,applicabilityTags,isCompound,sortOrder,reviewerNotes,active,recommendation
+PR-BAD,create,approved,Bad,Bad long,Doors,Interior Doors,,404.2.3.2,noncompliance,,false,,,true,Do not import

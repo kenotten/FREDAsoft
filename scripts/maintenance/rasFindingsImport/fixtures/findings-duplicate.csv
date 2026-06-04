@@ -1,0 +1,3 @@
+importKey,importAction,reviewStatus,rasFindShort,rasFindLong,categoryName,itemName,fldItem,tasRefs,findingType,applicabilityTags,isCompound,sortOrder,reviewerNotes,active
+PR-D1,create,approved,Same short,First long,Doors,Interior Doors,,404.2.3.2,noncompliance,,false,,,true
+PR-D2,create,approved,Same short,Second long,Doors,Interior Doors,,404.2.3.2,noncompliance,,false,,,true

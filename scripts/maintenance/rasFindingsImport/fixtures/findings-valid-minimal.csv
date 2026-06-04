@@ -1,0 +1,2 @@
+importKey,importAction,reviewStatus,rasFindShort,rasFindLong,categoryName,itemName,fldItem,tasRefs,findingType,applicabilityTags,isCompound,sortOrder,reviewerNotes,active
+PR-001,create,approved,Short label,Long comment text here,Doors,Interior Doors,,404.2.3.2,noncompliance,plan_review,false,10,,true

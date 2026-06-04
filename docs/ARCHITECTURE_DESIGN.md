@@ -2345,3 +2345,5 @@ Add a concise future phase section covering:
 7. inspector/reviewer/team model deferred
 
 ✅ DECIDED (RAS findings authoring - Phase 7, planning artifact only): Checked-in blank Excel workbook **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** for RAS Plan Review comment batches. Layout spec: **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`**; import/Firestore authority: **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`**. **Findings** tab is the only tab intended for a future importer. No Firestore importer, schema change, or app UI in this artifact phase.
+
+✅ DECIDED (RAS findings import - Phase 8, offline dry-run skeleton only): Maintenance CLI **`scripts/maintenance/dry-run-ras-findings-import.ts`** validates **Findings** tab batches locally; outputs gitignored **`reports/ras-findings-import-dry-run.json`** and **`.md`**. No Firestore reads/writes, no credentials, no write mode. Item/standard resolution deferred in v1.

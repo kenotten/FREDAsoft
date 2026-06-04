@@ -1,10 +1,10 @@
 # RAS Findings Spreadsheet Template
 
-**Status:** Human authoring template spec. **Blank workbook artifact:** **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** (v1; no importer yet).  
+**Status:** Human authoring template spec. **Blank workbook:** **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** (v1). **Offline dry-run CLI:** **`scripts/maintenance/dry-run-ras-findings-import.ts`** validates **Findings** batches locally (no Firestore reads/writes; no write mode).  
 **Last updated:** 2026-06-03  
-**Audience:** Content authors, reviewers, future importer implementers
+**Audience:** Content authors, reviewers, future Firestore importer implementers
 
-> **Disclaimer:** This document defines a **concrete spreadsheet layout** for authoring RAS Plan Review **comments** before any Firestore importer exists. Examples are **illustrative only** and do **not** assert TDLR compliance or correct TAS citations for real projects.
+> **Disclaimer:** This document defines a **concrete spreadsheet layout** for authoring RAS Plan Review **comments** before any Firestore **write** importer exists. Examples are **illustrative only** and do **not** assert TDLR compliance or correct TAS citations for real projects.
 
 **Authority for Firestore shape and import safety:** **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`**
 
@@ -18,9 +18,9 @@ Authors use this template to:
 
 - Draft and review comment rows in batches  
 - Track review status before import  
-- Hand a predictable file shape to a **future** dry-run importer  
+- Hand a predictable file shape to the **offline dry-run CLI** (§8) and, later, a Firestore write importer  
 
-This doc is the layout spec for the checked-in workbook. No app code, Firestore writes, or import scripts.
+This doc is the layout spec for the checked-in workbook. No app code or Firestore writes. **Phase 8:** offline dry-run validation/reporting CLI only — no Firestore importer, no write mode, no credential-backed resolution (future).
 
 **Artifact:** Copy or open **`templates/RAS_FINDINGS_TEMPLATE.xlsx`** from the repo. The **Findings** tab column order matches §3; dropdowns reference the **Valid Values** tab.
 
@@ -190,18 +190,22 @@ Before requesting a dry-run (future importer):
 
 ---
 
-## 8. Future importer expectations
+## 8. Importer (offline dry-run skeleton)
 
-The importer (separate implementation branch) should:
+Phase 8 provides an **offline dry-run CLI** — no Firestore reads/writes, no credentials:
+
+```text
+npx tsx scripts/maintenance/dry-run-ras-findings-import.ts --input path/to/batch.xlsx
+```
 
 | Expectation | Detail |
 |-------------|--------|
-| **Read Findings tab** | Header row + data rows; ignore other tabs except optional config. |
-| **Dry-run default** | No Firestore writes; emit JSON/CSV report per **`RAS_FINDINGS_IMPORT_FORMAT.md` §13**. |
-| **Skipped rows** | By **`reviewStatus`**, **`importAction=skip`**, unresolved refs, forbidden columns, duplicates. |
-| **Unresolved** | Items and standards listed with row numbers and reasons. |
-| **Writes** | Only with explicit **`--write`** (or equivalent) **and** operator confirmation. |
-| **Target collection** | **`rasFindings`** field map per **`RAS_FINDINGS_IMPORT_FORMAT.md` §10**. |
+| **Read Findings tab** | Header row + data rows from **Findings** only (`.xlsx`); CSV must use same 15 columns. |
+| **Dry-run default** | Emits **`reports/ras-findings-import-dry-run.json`** and **`.md`** (gitignored). |
+| **Skipped rows** | By **`reviewStatus`**, **`importAction=skip`**, **`update` not supported v1**, validation failures. |
+| **Unresolved** | Items and standards listed with row numbers and **`firestore_resolution_deferred_v1`**. |
+| **Writes** | **Not implemented.** Future write mode requires separate approval. |
+| **Target collection** | Preview shape per **`RAS_FINDINGS_IMPORT_FORMAT.md` §10**. |
 
 ---
 

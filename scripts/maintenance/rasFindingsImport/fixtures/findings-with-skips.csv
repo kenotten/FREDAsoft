@@ -1,0 +1,4 @@
+importKey,importAction,reviewStatus,rasFindShort,rasFindLong,categoryName,itemName,fldItem,tasRefs,findingType,applicabilityTags,isCompound,sortOrder,reviewerNotes,active
+PR-SKIP,skip,approved,Should skip,Skip row,Doors,Interior Doors,,404.2.3.2,noncompliance,,false,,,true
+PR-DRAFT,create,draft,Draft row,Draft long,Doors,Interior Doors,,404.2.3.2,noncompliance,,false,,,true
+PR-OK,create,approved,Good row,Good long,Doors,Interior Doors,,404.2.3.2,noncompliance,plan_review,false,1,,true
