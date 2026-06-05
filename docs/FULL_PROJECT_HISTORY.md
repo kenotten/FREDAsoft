@@ -196,10 +196,11 @@ Documentation-only architecture and field discovery for a future FREDAsoft **Pro
 | TDLR open-records export field index | `docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md` |
 | **D1** Field-level mapping | `docs/FREDASOFT_PROJECT_FIELD_LEVEL_MAPPING.md` |
 | **D2** TDLR review workflow | `docs/FREDASOFT_PROJECT_TDLR_REVIEW_WORKFLOW.md` (`3a8c341`) |
+| **D3** RAS report instance crosswalk | `docs/FREDASOFT_PROJECT_RAS_REPORT_INSTANCE_CROSSWALK.md` (`b865548`) |
 | **D4** TDLR schema sketch | `docs/FREDASOFT_PROJECT_TDLR_SCHEMA_SKETCH.md` (`32f2407`) |
 | Source materials catalog | `docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md` |
 
-**Status (2026-06-05):** D1 complete (`8806cbb`); D2 review workflow (`3a8c341`); D4 schema sketch (`32f2407`). Implementation deferred (no Firestore, scrapers, or UI in this phase).
+**Status (2026-06-05):** D1 complete (`8806cbb`); D2 review workflow (`3a8c341`); D3 report instance crosswalk (`b865548`); D4 schema sketch (`32f2407`). Implementation deferred (no Firestore, scrapers, or UI in this phase).
 
 ---
 

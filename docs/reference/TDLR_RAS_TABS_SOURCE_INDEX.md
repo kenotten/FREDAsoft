@@ -137,6 +137,7 @@ These URLs are **publicly reachable** without Drive or local folder access. Cros
 | **D7 — Correspondence requirements** | Proof/notice/request forms and RAS bulletins for letter templates and merge fields |
 | **RAS findings / TAS references** | `2012 TAS.pdf` vs registration forms—separate standard citations from project metadata |
 | **Future Firestore schema sketches (D4)** | **`docs/FREDASOFT_PROJECT_TDLR_SCHEMA_SKETCH.md`** — conceptual source-track model; cite reviewed sources per field group |
+| **D3 — RAS report instance crosswalk** | **`docs/FREDASOFT_PROJECT_RAS_REPORT_INSTANCE_CROSSWALK.md`** — TABS status/PSU/milestone fields vs CONVERT_TO_RAS report instances |
 | **`docs/CONVERT_TO_RAS.md`** | Close §16 research backlog against reviewed §3/§5 sources |
 
 **Workflow:** Source (local, Drive, or public URL) → **human review** → requirement note in architecture/discovery doc → optional ✅ DECIDED in `docs/ARCHITECTURE_DESIGN.md` when durable. This index is a **catalog + review tracker**, not a requirements spec.
@@ -164,6 +165,7 @@ These URLs are **publicly reachable** without Drive or local folder access. Cros
 | **`docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md`** | TDLR open-records export column headers (pre-D1; third mapping layer) |
 | **`docs/FREDASOFT_PROJECT_FIELD_LEVEL_MAPPING.md`** | D1 cross-layer field mapping (EAB205N + TABS + export) |
 | **`docs/FREDASOFT_PROJECT_TDLR_REVIEW_WORKFLOW.md`** | D2 reviewer workflow wireframes (intake → review → approved links) |
+| **`docs/FREDASOFT_PROJECT_RAS_REPORT_INSTANCE_CROSSWALK.md`** | D3 TDLR milestone/status vs RAS report instance crosswalk |
 | **`docs/FREDASOFT_PROJECT_TDLR_SCHEMA_SKETCH.md`** | D4 conceptual TDLR source-track schema sketch |
 | **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** | Project metadata and TDLR-oriented fields |
 | **`docs/CONVERT_TO_RAS.md`** | RAS report structure; §16 research backlog |
@@ -177,7 +179,7 @@ These URLs are **publicly reachable** without Drive or local folder access. Cros
 | Item | Value |
 |------|-------|
 | Created | 2026-06-04 |
-| Updated | 2026-06-05 (§8 D2/D4 links; §6 D4 schema sketch reference) |
+| Updated | 2026-06-05 (§8 D3 crosswalk link; §6 D3 workstream row) |
 | Local reference path | `C:\dev\FREDAsoftReferenceMaterials\` (outside repo) |
 | PDFs in FREDAsoft repo | **None** |
 | Secrets / credentials | **None** |
