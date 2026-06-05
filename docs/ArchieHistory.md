@@ -54762,3 +54762,486 @@ No need to paste the previous one — I’ll generate a fresh, high-signal hando
 
 
 
+ChatGPT
+
+
+
+
+Invite team members
+
+
+Pasted text(103).txt
+Document
+
+Thought for a couple of seconds
+Archie #9 is synced.
+
+I’ll treat the uploaded handoff as the current FREDAsoft continuity context: repo is clean on main, latest commit is a43d0e6, tests/lint/build/CI are passing, and the next recommended phase is creating the actual blank RAS findings spreadsheet template before building any importer. 
+
+
+For the next FREDAsoft task, I’ll start with the required git-state discipline and keep Cursor scoped: inspect first, plan second, implement only after approval, never on main.
+
+
+Welcome.  What is our first task?
+
+Our first task should be Phase 7: create the actual RAS findings spreadsheet template artifact.
+
+Specifically: have Cursor create a real blank workbook based on:
+
+docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md
+
+Recommended repo path:
+
+templates/RAS_FINDINGS_TEMPLATE.xlsx
+
+It should include these tabs:
+
+README / Instructions
+
+Findings
+
+Valid Values
+
+Import Notes
+
+Review Log
+
+Important boundary: do not build the importer yet. This phase is only the template artifact and any small docs update needed to reference it.
+
+Before Cursor touches anything, we should begin with the required git hygiene:
+
+git checkout main
+git pull --ff-only origin main
+git status
+git branch --show-current
+git branch
+git ls-files --others --exclude-standard
+Then create a focused branch:
+
+git checkout -b ras-findings-template
+After that, I’d give Cursor a scoped inspect-and-plan prompt, not an implementation prompt yet.
+
+
+PS C:\dev\fredasoft> git checkout main
+>> git pull --ff-only origin main
+>> git status
+>> git branch --show-current
+>> git branch
+>> git ls-files --others --exclude-standard
+M       docs/ArchieHistory.md
+Already on 'main'
+Your branch is up to date with 'origin/main'.
+From https://github.com/kenotten/FREDAsoft   
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   docs/ArchieHistory.md
+
+no changes added to commit (use "git add" and/or "git commit -a")      
+main
+* main
+PS C:\dev\fredasoft> git checkout -b ras-findings-template
+Switched to a new branch 'ras-findings-template'
+PS C:\dev\fredasoft> 
+
+Thought for a couple of seconds
+Good. One protocol note: docs/ArchieHistory.md was already modified on main before the branch was created, so that change is now safely carried onto ras-findings-template. That is acceptable, but we should make sure it does not get mixed into the RAS template commit unless it is intentional.
+
+Next step: have Cursor inspect and plan only.
+
+Use this prompt:
+
+We are on branch ras-findings-template.
+
+Goal: Phase 7 only — create the actual blank RAS findings spreadsheet template artifact based on docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md.
+
+Do not implement yet. First inspect and report a plan.
+
+Start by running:
+
+git status
+git diff --stat
+git diff -- docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md
+git diff -- docs/ArchieHistory.md
+
+Then inspect:
+- docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md
+- docs/RAS_FINDINGS_IMPORT_FORMAT.md
+- docs/CONVERT_TO_RAS.md
+- docs/ARCHITECTURE_DESIGN.md
+
+Report back with:
+1. Whether docs/ArchieHistory.md contains only expected conversation-history updates.
+2. Proposed exact file path for the workbook, likely templates/RAS_FINDINGS_TEMPLATE.xlsx.
+3. Proposed workbook tabs.
+4. Proposed columns for the Findings tab.
+5. Proposed valid values lists.
+6. Any small docs updates needed to reference the new template.
+7. Exact files you plan to touch.
+8. Verification plan.
+
+Constraints:
+- Do not build an importer.
+- Do not change Firestore code.
+- Do not change app UI.
+- Do not touch Data Entry, ReportPreview, Library Manager, or Project Audit.
+- Do not add generated scratch files.
+- Do not commit anything yet.
+What I want back from Cursor before we approve implementation is the tab/column plan. The most important design issue is making sure the spreadsheet is author-friendly but still importer-ready later, without sneaking importer behavior into this branch.
+
+
+
+Pasted markdown(183).md
+File
+
+
+Pasted markdown(184).md
+File
+
+
+Pasted markdown(185).md
+File
+
+
+Pasted markdown(186).md
+File
+
+
+Pasted markdown(188).md
+File
+
+
+Pasted markdown(189).md
+File
+
+
+Pasted markdown(190).md
+File
+I'll follow your well-reasoned approach.  finish small doc slices and merge. 
+
+Here is cursor:
+
+
+Pasted markdown(191).md
+File
+
+
+Pasted markdown(192).md
+File
+
+
+Pasted markdown(193).md
+File
+Here is cursor, and after that I will provide the information you asked for:
+
+Question: I have about 20 pdf documents that you need to review at some point, and you may want to refer back to them periodically.  Where can I store them/save them so you can have access? Will a google drive work?
+
+manageproject1.jpg
+manageproject2.jpg
+manageproject3.jpg
+ProjectSearch.jpg
+ProjectSearchBlank.jpg
+
+manageprojectPS.txt
+Document
+
+ProjectSearch.txt
+Document
+
+ProjectSearchBlank.txt
+Document
+Just so you can see the same
+
+
+Pasted markdown(194).md
+File
+Before I stop it, here is what hasn't been committed yet:
+
+Responsive Informationarchitectural barriers ALL proj
+Now interactive!
+I did an open records request from TDLR for all of the projects in their database last year, and here is the Excel file they sent me. Perhaps it will give some important information. I placed it in the FREDAsoftReferenceMaterials directory also
+
+Thought for 9s
+Good work. Because the prior EAB205N field index is still untracked on this same branch, I would not commit this as only “open-records export.” At this point the cleanest path is to commit both related prerequisite indexes together.
+
+Use a combined commit message:
+
+Index TDLR registration and export fields
+This accurately covers:
+
+EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md
+TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md
+related doc links / DECIDED blocks
+Proceed:
+
+git add docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md `
+        docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md `
+        docs/ARCHITECTURE_DESIGN.md `
+        docs/CONVERT_TO_RAS.md `
+        docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md `
+        docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md `
+        docs/reference/TDLR_TABS_FORM_FIELD_DISCOVERY.md
+
+git status
+git diff --cached --stat
+git commit -m "Index TDLR registration and export fields"
+Then merge/push:
+
+git checkout main
+git pull --ff-only origin main
+git merge --ff-only tdlr-open-records-export-field-index
+git status
+npm run lint
+npm run build
+npm test
+git push origin main
+git branch -d tdlr-open-records-export-field-index
+git status
+git branch
+This is acceptable because both docs are part of the same pre-D1 foundation:
+
+EAB205N = intended registration form fields
+TABS pages = web/UI/application field structure
+Open-records Excel = TDLR export/reporting field names
+After this commit is merged, we are finally ready for D1: field-level mapping.
+
+
+PS C:\dev\fredasoft> git add docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md 
+>>         docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md 
+>>         docs/ARCHITECTURE_DESIGN.md 
+>>         docs/CONVERT_TO_RAS.md 
+>>         docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md 
+>>         docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md 
+>>         docs/reference/TDLR_TABS_FORM_FIELD_DISCOVERY.md
+>>
+>> git status
+>> git diff --cached --stat
+>> git commit -m "Index TDLR registration and export fields"
+On branch tdlr-open-records-export-field-index              9b65079-d71d-459e-8d36-fece9188032b
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+        modified:   docs/ARCHITECTURE_DESIGN.md
+        modified:   docs/CONVERT_TO_RAS.md
+        modified:   docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md
+        new file:   docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md
+        new file:   docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md
+        modified:   docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md
+        modified:   docs/reference/TDLR_TABS_FORM_FIELD_DISCOVERY.md
+
+ docs/ARCHITECTURE_DESIGN.md                        |   4 +
+ docs/CONVERT_TO_RAS.md                             |   2 +
+ docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md |   6 +-
+ .../TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md        | 343 +++++++++++++++++++++
+ docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md       |   7 +-
+ docs/reference/TDLR_TABS_FORM_FIELD_DISCOVERY.md   |   2 +-
+ 7 files changed, 684 insertions(+), 5 deletions(-)
+[tdlr-open-records-export-field-index 8b41433] Index TDLR registration and export fields
+ 7 files changed, 684 insertions(+), 5 deletions(-)
+ create mode 100644 docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md
+ create mode 100644 docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md
+PS C:\dev\fredasoft> git checkout main
+>> git pull --ff-only origin main
+>> git merge --ff-only tdlr-open-records-export-field-index
+>> git status
+>> npm run lint
+>> npm run build
+>> npm test
+>> git push origin main
+>> git branch -d tdlr-open-records-export-field-index
+>> git status
+>> git branch
+Switched to branch 'main'us\x0agit branch;19b65079-d71d-459e-8d36-fece9188032b
+Your branch is up to date with 'origin/main'.
+From https://github.com/kenotten/FREDAsoft
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+Updating a1c9e67..8b41433
+Fast-forward
+ docs/ARCHITECTURE_DESIGN.md                        |   4 +
+ docs/CONVERT_TO_RAS.md                             |   2 +
+ docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md |   6 +-
+ .../EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md    | 325 +++++++++++++++++++
+ .../TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md        | 343 +++++++++++++++++++++
+ docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md       |   7 +-
+ docs/reference/TDLR_TABS_FORM_FIELD_DISCOVERY.md   |   2 +-
+ 7 files changed, 684 insertions(+), 5 deletions(-)
+ create mode 100644 docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md
+ create mode 100644 docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md
+On branch main
+Your branch is ahead of 'origin/main' by 1 commit.
+  (use "git push" to publish your local commits)
+
+nothing to commit, working tree clean
+
+> react-example@1.0.9 lint
+> node --max-old-space-size=4096 node_modules/typescript/bin/tsc --noEmit
+
+
+> react-example@1.0.9 build
+> vite build
+
+vite v6.4.1 building for production...
+✓ 2461 modules transformed.
+dist/assets/manifest-Vh1b0wBs.json           0.44 kB │ gzip:   0.25 kB
+dist/index.html                              1.20 kB │ gzip:   0.56 kB
+dist/assets/ocglogonew-CuDp_Lx9.jpg         23.23 kB
+dist/assets/FREDAsoftLogo-McJKpJGJ.png      95.68 kB
+dist/assets/index-CiWGAEUm.css              86.07 kB │ gzip:  14.44 kB
+dist/assets/purify.es-BgtpMKW3.js           22.77 kB │ gzip:   8.79 kB
+dist/assets/ReportPreview-DgHdnAEq.js       38.36 kB │ gzip:  10.46 kB
+dist/assets/index.es-BTH_N_uy.js           159.64 kB │ gzip:  53.54 kB
+dist/assets/html2canvas.esm-QH1iLAAe.js    202.38 kB │ gzip:  48.04 kB
+dist/assets/DocumentManager-BdIuKPWh.js    413.39 kB │ gzip: 135.85 kB
+dist/assets/index-ChNHPMoW.js            1,563.92 kB │ gzip: 400.24 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 14.30s
+
+> react-example@1.0.9 test
+> vitest run
+
+
+ RUN  v4.1.8 C:/dev/fredasoft
+
+ ✓ src/lib/__tests__/trashProjectData.test.ts (4 tests) 10ms
+ ✓ src/lib/__tests__/reportPreviewShared.test.ts (2 tests) 9ms
+ ✓ src/lib/__tests__/projectAuditReport.test.ts (11 tests) 16ms
+ ✓ src/lib/__tests__/webReportFilters.test.ts (3 tests) 39ms
+ ✓ scripts/maintenance/rasFindingsImport/parseInput.test.ts (6 tests) 11ms
+ ✓ scripts/maintenance/rasFindingsImport/validateRows.test.ts (6 tests) 18ms
+
+ Test Files  6 passed (6)
+      Tests  32 passed (32)
+   Start at  02:05:25
+   Duration  1.87s (transform 1.36s, setup 0ms, import 4.09s, tests 104ms, environment 2ms)
+
+Enumerating objects: 19, done.
+Counting objects: 100% (19/19), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (11/11), done.
+Writing objects: 100% (11/11), 16.41 KiB | 3.28 MiB/s, done.
+Total 11 (delta 7), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (7/7), completed with 7 local objects.
+To https://github.com/kenotten/FREDAsoft.git
+   a1c9e67..8b41433  main -> main
+Deleted branch tdlr-open-records-export-field-index (was 8b41433).
+On branch main
+Your branch is up to date with 'origin/main'.
+
+nothing to commit, working tree clean
+  eab205n-field-index
+* main
+PS C:\dev\fredasoft> 
+
+Good. The main work is merged, pushed, and clean.
+
+You have one stale local branch left:
+
+eab205n-field-index
+That work was included in the combined commit:
+
+8b41433 Index TDLR registration and export fields
+So delete the stale branch:
+
+git branch -D eab205n-field-index
+git status
+git branch
+Expected final state:
+
+On branch main
+Your branch is up to date with 'origin/main'.
+
+nothing to commit, working tree clean
+* main
+After that, we are ready for D1: field-level mapping.
+
+
+I've noticed that a couple of times now you have forgotten to either commit a branch or start a new branch. Is this conversation getting bloated so that we should start a new Archie #10 chat?
+
+Yes — I think starting Archie #10 is wise now.
+
+This conversation is getting long enough that process drift is showing up: I missed the clean branch/commit separation a couple of times, and you had to catch it. That is exactly the signal that we should hand off while the project state is clean.
+
+Before starting the new chat, do one final cleanup locally:
+
+git branch -D eab205n-field-index
+git status
+git branch
+Expected:
+
+On branch main
+Your branch is up to date with 'origin/main'.
+
+nothing to commit, working tree clean
+* main
+Then start the new chat as Archie #10.
+
+Opening prompt for the new chat:
+
+You are Archie for FREDAsoft.
+
+We are starting Archie #10.
+
+Current local repo:
+C:\dev\fredasoft
+
+Current expected Git state:
+- branch: main
+- main == origin/main
+- working tree clean
+- only branch should be main after deleting stale eab205n-field-index
+
+Before doing any architecture/design work, re-ground in:
+- docs/ArchieHistory.md
+- docs/FULL_PROJECT_HISTORY.md
+- docs/ARCHITECTURE_DESIGN.md
+- docs/FREDASOFT_PROJECT_APP_DISCOVERY.md
+- docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md
+- docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md
+- docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md
+- docs/reference/TDLR_TABS_FORM_FIELD_DISCOVERY.md
+- docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md
+- docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md
+- docs/CONVERT_TO_RAS.md
+
+Important process rule:
+- Always start from clean main.
+- Create a short-lived branch before changes.
+- One branch = one small doc/code slice.
+- Review status/diff before commit.
+- Merge/push only after lint/build/test when appropriate.
+- Do not let Cursor edit before grounding in the record for architecture work.
+
+Recent completed work:
+- D5: FREDAsoft Project stakeholder model
+- D5.5: TABS form-field discovery
+- D6: TDLR/TABS extraction pipeline sketch
+- EAB205N project registration field index
+- TDLR open-records export field index
+
+Key architecture rule:
+TDLR/TABS source data is legal/as-recorded source data and lives separately from FREDAsoft canonical/operational data. FREDAsoft does not overwrite or correct TDLR data. FREDAsoft suggests candidate matches; the user/staff reviewer approves, rejects, creates a new stakeholder, leaves unmatched, or defers. Only approved associations become explicit match/link/alias records.
+
+Next planned task:
+D1 — field-level mapping, grounded in:
+- EAB205N intended registration fields
+- TABS web/UI field discovery
+- TDLR open-records export field names
+- D6 extraction pipeline
+- D5 stakeholder model
+And yes: in Archie #10, make the first task confirm state, not start D1 immediately:
+
+git status
+git branch
+git log --oneline -5
+You were right to challenge this. The process is part of the architecture now.
+
+
