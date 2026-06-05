@@ -55245,3 +55245,89 @@ git log --oneline -5
 You were right to challenge this. The process is part of the architecture now.
 
 
+---
+
+## Archie #10 wrap-up checkpoint (2026-06-05)
+
+**Status:** Archie #10 complete — Project / TDLR / RAS **documentation-only** discovery chain **D1–D8** finished. No application code, Firestore schema, importers, security rules, or UI in this phase.
+
+### Final Git state (before this wrap-up entry)
+
+- **Branch:** `main`
+- **`main` == `origin/main`**
+- **Working tree:** clean
+- **Branches shown:** `main` only (after local cleanup)
+- **Latest commit:** `fd9eebc` — Cross-link portal stakeholder implications
+
+### Completed commits (D1–D8 artifact + cross-link pairs)
+
+| Commit | Summary |
+|--------|---------|
+| `8806cbb` | Document project field-level mapping (**D1**) |
+| `195d278` | Cross-link project field mapping docs |
+| `3a8c341` | Document TDLR review workflow (**D2**) |
+| `32f2407` | Document TDLR schema sketch (**D4**) |
+| `ae2ada5` | Cross-link TDLR review and schema docs |
+| `b865548` | Document RAS report instance crosswalk (**D3**) |
+| `00de4b0` | Cross-link RAS report instance crosswalk |
+| `3c61f33` | Document correspondence requirements crosswalk (**D7**) |
+| `3a342c1` | Cross-link correspondence requirements crosswalk |
+| `ce5af20` | Document portal stakeholder implications (**D8**) |
+| `fd9eebc` | Cross-link portal stakeholder implications |
+
+### Primary D1–D8 artifacts
+
+- `docs/FREDASOFT_PROJECT_FIELD_LEVEL_MAPPING.md` — **D1**
+- `docs/FREDASOFT_PROJECT_TDLR_REVIEW_WORKFLOW.md` — **D2**
+- `docs/FREDASOFT_PROJECT_RAS_REPORT_INSTANCE_CROSSWALK.md` — **D3**
+- `docs/FREDASOFT_PROJECT_TDLR_SCHEMA_SKETCH.md` — **D4**
+- `docs/FREDASOFT_PROJECT_CORRESPONDENCE_REQUIREMENTS_CROSSWALK.md` — **D7**
+- `docs/FREDASOFT_PROJECT_PORTAL_STAKEHOLDER_IMPLICATIONS.md` — **D8**
+
+### Supporting pre-D1 / D5 / D5.5 / D6 / reference docs (already on main)
+
+- `docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`
+- `docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md` — **D5**
+- `docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md` — **D6**
+- `docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md`
+- `docs/reference/TDLR_TABS_FORM_FIELD_DISCOVERY.md` — **D5.5**
+- `docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md`
+- `docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md`
+
+Cross-links and ✅ DECIDED blocks recorded in `docs/ARCHITECTURE_DESIGN.md`, `docs/FULL_PROJECT_HISTORY.md` (Phase 6), and `docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md`.
+
+### Durable architecture rule (carry forward)
+
+TDLR/TABS source data is **legal/as-recorded source data** and remains **separate** from FREDAsoft **canonical/operational** data. FREDAsoft **does not overwrite or correct** TDLR data. Candidate matches, portal submissions, report hints, correspondence hints, aliases, project/facility/stakeholder links, and recipient bindings require **explicit staff review**. Only **approved** associations become explicit match/link/alias records. **No** report, correspondence artifact, portal account, or canonical update is **auto-created** from TDLR status or source data alone.
+
+### What Archie #10 delivered (concise)
+
+| Step | Outcome |
+|------|---------|
+| **D1** | Cross-layer field mapping framework (EAB205N, TABS, export, canonical targets) |
+| **D2** | Six-screen staff review workflow (intake → snapshot → match → diff → approval) |
+| **D3** | RAS report instance vs TDLR milestone/status crosswalk |
+| **D4** | Conceptual TDLR source-track schema sketch (`tdlr*` areas) |
+| **D7** | Correspondence artifact and recipient crosswalk (distinct from report instances) |
+| **D8** | Portal stakeholder visibility, submission, and review implications |
+
+### Recommended next phase
+
+**Implementation planning may begin only after re-grounding in the D1–D8 docs.** Do **not** start Cursor implementation before architecture re-grounding.
+
+Start with a **small implementation-planning slice** (docs/plan only — not code):
+
+1. Decide whether the next step is:
+   - **implementation readiness plan** (overall sequencing),
+   - **D4 schema refinement** (finalize collection names and boundaries),
+   - **D6 extraction implementation plan** (pipeline stages, dry-run posture),
+   - or **portal/auth role matrix** (roles, invitation, rules sketch).
+2. Continue **one branch = one small slice**.
+3. Default workflow: `git checkout main` → `git pull` → clean status → short-lived branch → review → merge.
+
+**Explicit non-goals until a scoped implementation phase is approved:** Firestore writes/migrations, scrapers/importers, security rules, portal UI, correspondence templates, automatic creation from TDLR status.
+
+---
+
+*End Archie #10 wrap-up checkpoint.*
+
