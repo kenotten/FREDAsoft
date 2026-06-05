@@ -72,7 +72,7 @@ FREDAsoft Project must support:
 4. **Correspondence** — merge letters to the right party/contact without conflating with inspection **reporting workflows**.  
 5. **Future client portal** — scoped access and **proposed** master-data updates, not blind overwrites.
 
-**Core tension:** The same real-world entity may appear under **different spellings** on different TDLR registrations. Raw TDLR rows must **not** silently overwrite canonical stakeholders. Conversely, staff need **one place** to maintain corrected addresses and contacts for day-to-day work.
+**Core tension:** The same real-world entity may appear under **different spellings** on different TDLR registrations. FREDAsoft must preserve TDLR/TABS as-recorded **legal/source snapshots** and must **not** overwrite or correct TDLR’s source data (TDLR’s authorized TABS process owns corrections/edits). Instead, FREDAsoft maintains its own canonical operational stakeholders/project parties and uses explicit match/link/alias records so staff can create/update **draft operational records** (after review) without mutating the preserved TDLR source.
 
 **FREDAsoft today** has **Client → Facility → Project** and rich **projectData** inspection workflows, but **no** stakeholder directory, TDLR snapshot track, or project-party model.
 
@@ -84,7 +84,7 @@ FREDAsoft Project must support:
 
 **Definition:** An immutable-or-audited copy of a **party row** (name, address fragments, contact text) **as recorded on a TDLR registration** at a point in time, tied to an extraction run and source reference.
 
-**What it is not:** A canonical stakeholder; not editable operational truth without a separate promotion/review path.
+**What it is not:** A canonical stakeholder; TDLR/TABS source snapshots remain the preserved legal/source record and are not overwritten or corrected by FREDAsoft. Hydration from TDLR/TABS produces a source snapshot plus a preview of draft operational records (aliases/canonical stakeholders/project parties) for staff review and explicit linking.
 
 **Requirement candidate:** Versioned if the same TABS registration is re-scraped and wording changes.
 
@@ -281,7 +281,7 @@ Discovery §14 Q2 and §15 establish that **canonical stakeholders are separate 
 
 | Track | Purpose | Mutability |
 |-------|---------|------------|
-| **TDLR / source** | Legal registration record as captured | Append/version; not silently overwritten |
+| **TDLR / source** | Official legal/source registration record as captured | Append/version only; never corrected/overwritten by FREDAsoft |
 | **Canonical** | Internal operational directory | Staff-maintained; portal changes via approval |
 | **Project party** | Who is on this project in which role | Links canonical to Project |
 | **Alias** | Observed name variants | Accumulates; links to canonical |
@@ -305,7 +305,7 @@ TDLR extract / manual capture
           │
           v
 ┌───────────────────┐
-│ Staff review       │  (workflow candidate — no blind overwrite)
+│ Staff review       │  (workflow candidate — no overwrite of TDLR source snapshots or canonical records)
 └─────────┬─────────┘
           │
           ├──────────────────────┐

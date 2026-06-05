@@ -472,10 +472,10 @@ Track correspondence/merge documents as optional module—do not merge with Repo
 
 ### Dual-track data: TDLR registration vs canonical stakeholders
 
-1. **TDLR registration data** must be **preserved as recorded**—it is the **legal / source registration record** and must not be silently replaced by internal cleanup.
+1. **TDLR registration data** must be **preserved as recorded**—it is the **legal / source registration record** and FREDAsoft must not overwrite or correct it; TDLR’s authorized TABS process owns edits.
 2. **Canonical internal stakeholders** (Owner, Designer, RAS firm, Tenant, Agent, etc.) are a **separate track** from raw party names and addresses as they appeared on TDLR registration.
 3. **Name, address, and entity variations are expected.** Multiple raw variants may **link to one canonical stakeholder**; the system should tolerate inconsistency across sources and time.
-4. **Normalization** should support **aliases / observed names**, **review**, and **matching** workflows—not blind overwrite of canonical records from a single scraped or imported row.
+4. **Normalization** should support **aliases / observed names**, **review**, and **matching** workflows—not blind overwrite of canonical records from a single scraped or imported row, and not edits to the preserved TDLR snapshots. Hydration from TDLR/TABS produces source snapshots and suggests/creates **draft operational records** for staff review and explicit match/link/alias records.
 
 **Architecture implication:** FREDAsoft should plan for **immutable-or-audited TDLR snapshots** plus a **maintained canonical stakeholder directory** with explicit linkage, not a single flattened “project party” table copied from prototype `tbl*` shapes.
 

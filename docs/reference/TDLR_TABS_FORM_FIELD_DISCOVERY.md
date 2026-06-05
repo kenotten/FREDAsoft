@@ -183,6 +183,10 @@ DateEnd           → filter-date-end
 
 **D6 note:** Details page is a strong **extraction target shape** for TDLR registration snapshot rows (read-only HTML, sectioned parties).
 
+**D6 rule (source vs canonical):** TABS HTML extraction should treat each registration save as an **as-recorded source snapshot** and produce **candidate FREDAsoft links/aliases** (and/or **draft operational records**) for staff review—never overwrite or correct the preserved TDLR source snapshot.
+
+**Source reconciliation:** `eab205n-project-registration.pdf` / EAB205N is the **primary intended registration field source**; TABS HTML captures reflect the **UI/implementation field structure** and must be reconciled against EAB205N before finalizing D6 field assumptions.
+
 **Open question:** Public details URL pattern `/TABS/Projects/{projectNumber}` vs internal GUID — which key does D6 use?
 
 ---
