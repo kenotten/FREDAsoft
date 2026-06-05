@@ -488,7 +488,7 @@ Before finalizing **D6** extraction field lists, scraping scope, or any **legal/
 | Phase | Deliverable | Depends on |
 |-------|-------------|------------|
 | **D4** | Firestore schema sketch (docs only) | SM-1–SM-9; auth phase for roles |
-| **D6** | TDLR extraction pipeline sketch | §18 source review; §9 dual-track |
+| **D6** | TDLR extraction pipeline sketch — **`docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md`** | §18 source review; §9 dual-track |
 | **D7** | Correspondence template + PDF letter spec | §13; Kenneth §17 Q3, Q6, Q12 |
 | **D8** | Portal submission + approval workflow | §11; `CLIENT_PORTAL_SPEC.md` |
 | **Auth** | Roles and permissions design | §12 likely roles; portal membership |
@@ -514,6 +514,7 @@ Before finalizing **D6** extraction field lists, scraping scope, or any **legal/
 | Document | Relevance |
 |----------|-----------|
 | **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** | Prototype discovery; §15 domain clarification |
+| **`docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md`** | D6 extraction pipeline sketch (ingest → snapshot → match → review) |
 | **`docs/ARCHITECTURE_DESIGN.md`** | Core data model; DECIDED blocks |
 | **`docs/CONVERT_TO_RAS.md`** | RAS headers; report instances |
 | **`docs/CLIENT_PORTAL_SPEC.md`** | Portal navigation and report workspace |

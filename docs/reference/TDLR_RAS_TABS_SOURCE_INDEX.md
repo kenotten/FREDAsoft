@@ -158,6 +158,7 @@ These URLs are **publicly reachable** without Drive or local folder access. Cros
 | Document | Relevance |
 |----------|-----------|
 | **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** | §18 — review materials before D6 |
+| **`docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md`** | D6 extraction pipeline sketch (source hierarchy, stages, matching rules) |
 | **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** | Project metadata and TDLR-oriented fields |
 | **`docs/CONVERT_TO_RAS.md`** | RAS report structure; §16 research backlog |
 | **`docs/RAS_FINDING_AUTHORING_STYLE.md`** | TAS-based library prose (distinct from registration forms) |
