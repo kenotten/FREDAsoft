@@ -375,6 +375,8 @@ Research backlog — confirm against official sources and sample deliverables:
 - **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** — Lovable Project prototype discovery (metadata/stakeholder workflows; not inspection Data Entry)
 - **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** — D5 stakeholder model (Owner/Design/RAS parties; TDLR vs canonical; §11 header field sources TBD)
 - **`docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md`** — D6 TDLR/TABS extraction pipeline sketch (source snapshots vs canonical; milestone/report-instance hints)
+- **`docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md`** — EAB205N registration field index (pre-D1; §11 header field sources)
+- **`docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md`** — TDLR open-records export column headers (pre-D1; bulk/legacy field-name layer)
 - `docs/ARCHITECTURE_DESIGN.md` — durable ✅ DECIDED blocks (add RAS decisions when implementation begins)
 - `AGENTS.md` — protected areas, behavior disclosure, Firestore data safety
 

@@ -71,7 +71,7 @@ This doc completes discovery phase **D6** (see **`docs/FREDASOFT_PROJECT_APP_DIS
 |-------|-------------|
 | Scraper / browser automation / API client code | Future implementation branch |
 | Firestore schema, rules, migrations | **D4** |
-| PDF parser for EAB205N | Future EAB205N field extraction doc |
+| PDF parser for EAB205N | **`docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md`** (field index only; no parser) |
 | Credentials, session handling, live TABS access | Future implementation + ops policy |
 | UI wireframes for review queue | **D2** |
 | Field-level FREDAsoft mapping spreadsheet | **D1** |
@@ -511,7 +511,7 @@ Only **user-approved** associations become **approved match/link/alias** records
 
 | Priority | Deliverable | Purpose |
 |----------|-------------|---------|
-| 1 | **EAB205N field extraction/index doc** | Line-by-line registration field catalog from primary PDF; reconcile with D5.5 |
+| 1 | **EAB205N field extraction/index doc** — **`docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md`** | Registration field catalog from primary PDF; reconcile with D5.5 |
 | 2 | **D1 field mapping spreadsheet/doc** | §6 groups → FREDAsoft candidate fields |
 | 3 | **D2 workflow wireframe** | TABS entry, review queue, side-by-side matching UI |
 | 4 | **D4 Firestore schema sketch** | After D1/D2; instantiate §5 record families |
@@ -527,6 +527,8 @@ Secondary: **D7** correspondence spec (notifications, letters, proof forms); **D
 | **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** | §15 dual-track; §16 D6 placement |
 | **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** | Canonical vs snapshot; matching; party roles |
 | **`docs/reference/TDLR_TABS_FORM_FIELD_DISCOVERY.md`** | TABS UI field inventory (D5.5) |
+| **`docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md`** | EAB205N registration field index (pre-D1) |
+| **`docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md`** | TDLR open-records export field index (pre-D1; bulk/legacy compare) |
 | **`docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md`** | EAB205N, PDFs, official URLs |
 | **`docs/CONVERT_TO_RAS.md`** | RAS report instances; §11 header fields |
 | **`docs/ARCHITECTURE_DESIGN.md`** | ✅ DECIDED blocks |

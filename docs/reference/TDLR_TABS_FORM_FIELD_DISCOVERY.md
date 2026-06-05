@@ -20,7 +20,7 @@ Identify **visible labels**, **HTML field names/ids**, **control types**, **drop
 | Field **structure** and **enum patterns** | Full city/county/country option lists (noted as enumerated lookups) |
 | Requirement **candidates** | Schema / Firestore decisions |
 
-**Related:** `docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md`, `docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`, `docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md`
+**Related:** `docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md`, `docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md`, `docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md`, `docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`, `docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md`
 
 ---
 

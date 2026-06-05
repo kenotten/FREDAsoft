@@ -61,7 +61,7 @@ Use one primary category per file:
 | `eab-form-requirement-guide.pdf` | `eab-form-requirement-guide.pdf` | TDLR-official | Overview of required EAB forms and completion rules | unreviewed | Index for which forms apply to standard vs special registration |
 | `EAB-Help-Sheet-for-Sub-Contractors.pdf` | `EAB-Help-Sheet-for-Sub-Contractors.pdf` | TABS-system | Sub-contractor party context on projects | unreviewed | **D5:** map to Misc role or separate party type? |
 | `EAB-Request-for-Inspection-Form-Help-Sheet.pdf` | `EAB-Request-for-Inspection-Form-Help-Sheet.pdf` | TABS-system | Inspection request workflow; milestone dates | unreviewed | Relates to `Request-for-Inspection-EAB241N.pdf` |
-| `eab205n-project-registration.pdf` | `eab205n-project-registration.pdf` | TDLR-official | **High priority** **D6** primary registration field source (intended fields; supports D1/D4 schema candidate derivation); **D5** party fields (owner, agent, RAS, design) | unreviewed | Compare to https://www.tdlr.texas.gov/ab/forms/eab205n-project-registration.pdf for version. Review before finalizing D6 extraction field lists / any schema candidates; extraction should create **as-recorded TDLR source snapshots** and suggest/prepare **FREDAsoft links + draft operational records** (no overwrite/correction of preserved TDLR source data) |
+| `eab205n-project-registration.pdf` | `eab205n-project-registration.pdf` | TDLR-official | **High priority** **D6** primary registration field source (intended fields; supports D1/D4 schema candidate derivation); **D5** party fields (owner, agent, RAS, design) | reviewed-2026-06-05 — field index | Field inventory: **`docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md`**. Compare to https://www.tdlr.texas.gov/ab/forms/eab205n-project-registration.pdf for version parity. |
 | `eab213n-variance-application.pdf` | `eab213n-variance-application.pdf` | TDLR-official | Variance workflow (likely out of v1 FREDAsoft scope) | unreviewed | Confirm if in scope for Project app or future phase |
 | `eab243n-designated-agent-form.pdf` | `eab243n-designated-agent-form.pdf` | TDLR-official | **D5** Agent stakeholder; designated agent attachment to registration | unreviewed | Link to project party role **Agent** and correspondence recipients |
 | `eab245n-special-registration.pdf` | `eab245n-special-registration.pdf` | TDLR-official | Special registration path; project classification flags | unreviewed | Map `fldspecialcategory` / inspection-only prototype fields |
@@ -81,8 +81,9 @@ Use one primary category per file:
 | `rasprocedures2018.pdf` | `rasprocedures2018.pdf` | RAS-procedure | **Primary RAS procedures** reference for plan review / inspection workflow | unreviewed | High priority for D6/D7 review; do not infer fields until read |
 | `registration-help-sheet.pdf` | `registration-help-sheet.pdf` | TABS-system | TABS project registration step guidance | unreviewed | **D6** extraction UX and required-field checklist |
 | `Request-for-Inspection-EAB241N.pdf` | `Request-for-Inspection-EAB241N.pdf` | TDLR-official | Formal inspection request form | unreviewed | Inspection scheduling milestone; **D7** letter triggers |
+| `Responsive_Information.xlsx` | `Responsive_Information.xlsx` | TABS-system / Other | **Pre-D1** TDLR open-records export field names (30 columns; ~337k rows) | reviewed-2026-06-05 — header index only | Field inventory: **`docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md`**. **No row data** in repo; workbook not committed. |
 
-**Row count (local reference files):** 28 (flat folder; no subdirectories as of 2026-06-04).
+**Row count (local reference files):** 29 (flat folder; no subdirectories as of 2026-06-05).
 
 ---
 
@@ -159,6 +160,8 @@ These URLs are **publicly reachable** without Drive or local folder access. Cros
 |----------|-----------|
 | **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** | §18 — review materials before D6 |
 | **`docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md`** | D6 extraction pipeline sketch (source hierarchy, stages, matching rules) |
+| **`docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md`** | EAB205N field inventory (pre-D1; primary registration-field source) |
+| **`docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md`** | TDLR open-records export column headers (pre-D1; third mapping layer) |
 | **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** | Project metadata and TDLR-oriented fields |
 | **`docs/CONVERT_TO_RAS.md`** | RAS report structure; §16 research backlog |
 | **`docs/RAS_FINDING_AUTHORING_STYLE.md`** | TAS-based library prose (distinct from registration forms) |
