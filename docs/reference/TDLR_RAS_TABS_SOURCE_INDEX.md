@@ -162,6 +162,7 @@ These URLs are **publicly reachable** without Drive or local folder access. Cros
 | **`docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md`** | D6 extraction pipeline sketch (source hierarchy, stages, matching rules) |
 | **`docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md`** | EAB205N field inventory (pre-D1; primary registration-field source) |
 | **`docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md`** | TDLR open-records export column headers (pre-D1; third mapping layer) |
+| **`docs/FREDASOFT_PROJECT_FIELD_LEVEL_MAPPING.md`** | D1 cross-layer field mapping (EAB205N + TABS + export) |
 | **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** | Project metadata and TDLR-oriented fields |
 | **`docs/CONVERT_TO_RAS.md`** | RAS report structure; §16 research backlog |
 | **`docs/RAS_FINDING_AUTHORING_STYLE.md`** | TAS-based library prose (distinct from registration forms) |
@@ -174,7 +175,7 @@ These URLs are **publicly reachable** without Drive or local folder access. Cros
 | Item | Value |
 |------|-------|
 | Created | 2026-06-04 |
-| Updated | 2026-06-04 (§3 local reference manifest, 28 files) |
+| Updated | 2026-06-05 (§8 D1 mapping link; §3 Responsive_Information.xlsx row) |
 | Local reference path | `C:\dev\FREDAsoftReferenceMaterials\` (outside repo) |
 | PDFs in FREDAsoft repo | **None** |
 | Secrets / credentials | **None** |

@@ -178,7 +178,28 @@ to:
 - Redesign standards association UX
 - Begin Client Portal implementation (interactive reporting)
 
+---
 
+## Phase 6: Project App & TDLR Discovery (Documentation, June 2026)
+
+Documentation-only architecture and field discovery for a future FREDAsoft **Project app** and TDLR/TABS registration integration. No application code, Firestore schema, or importers in this phase.
+
+**Architecture rule:** TDLR/TABS source data is preserved as-recorded (legal/source track), separate from FREDAsoft canonical/operational data. FREDAsoft suggests candidate matches; staff reviewer approves explicit links/aliases—no auto-merge, no overwrite of TDLR source or canonical records.
+
+| Step | Deliverable |
+|------|---------------|
+| Prototype discovery | `docs/FREDASOFT_PROJECT_APP_DISCOVERY.md` |
+| **D5** Stakeholder model | `docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md` |
+| **D5.5** TABS form-field discovery | `docs/reference/TDLR_TABS_FORM_FIELD_DISCOVERY.md` |
+| **D6** Extraction pipeline sketch | `docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md` |
+| EAB205N registration field index | `docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md` |
+| TDLR open-records export field index | `docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md` |
+| **D1** Field-level mapping | `docs/FREDASOFT_PROJECT_FIELD_LEVEL_MAPPING.md` |
+| Source materials catalog | `docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md` |
+
+**Status (2026-06-05):** D1 complete (`8806cbb`). Next planned docs slices: D2 workflow wireframes, D4 Firestore schema sketch.
+
+---
 
 Here is Project Context for Gabriel (Gemini AI)
 Gemini
