@@ -135,6 +135,7 @@ These URLs are **publicly reachable** without Drive or local folder access. Cros
 | **D5 — Stakeholder model** (`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md` §18) | Owner/agent/design forms and help sheets (§3) before finalizing entity definitions |
 | **D6 — TDLR extraction pipeline** | EAB205N, help sheets, registration guide for parsed fields, logs, and review queues |
 | **D7 — Correspondence requirements crosswalk** | **`docs/FREDASOFT_PROJECT_CORRESPONDENCE_REQUIREMENTS_CROSSWALK.md`** — proof/notice/request forms, TABS letters/notifications vs RAS report instances |
+| **D8 — Portal stakeholder implications** | **`docs/FREDASOFT_PROJECT_PORTAL_STAKEHOLDER_IMPLICATIONS.md`** — portal visibility, pending proposals, source snapshot posture |
 | **RAS findings / TAS references** | `2012 TAS.pdf` vs registration forms—separate standard citations from project metadata |
 | **Future Firestore schema sketches (D4)** | **`docs/FREDASOFT_PROJECT_TDLR_SCHEMA_SKETCH.md`** — conceptual source-track model; cite reviewed sources per field group |
 | **D3 — RAS report instance crosswalk** | **`docs/FREDASOFT_PROJECT_RAS_REPORT_INSTANCE_CROSSWALK.md`** — TABS status/PSU/milestone fields vs CONVERT_TO_RAS report instances |
@@ -168,6 +169,7 @@ These URLs are **publicly reachable** without Drive or local folder access. Cros
 | **`docs/FREDASOFT_PROJECT_RAS_REPORT_INSTANCE_CROSSWALK.md`** | D3 TDLR milestone/status vs RAS report instance crosswalk |
 | **`docs/FREDASOFT_PROJECT_TDLR_SCHEMA_SKETCH.md`** | D4 conceptual TDLR source-track schema sketch |
 | **`docs/FREDASOFT_PROJECT_CORRESPONDENCE_REQUIREMENTS_CROSSWALK.md`** | D7 correspondence artifact and recipient crosswalk |
+| **`docs/FREDASOFT_PROJECT_PORTAL_STAKEHOLDER_IMPLICATIONS.md`** | D8 portal stakeholder visibility and submission implications |
 | **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** | Project metadata and TDLR-oriented fields |
 | **`docs/CONVERT_TO_RAS.md`** | RAS report structure; §16 research backlog |
 | **`docs/RAS_FINDING_AUTHORING_STYLE.md`** | TAS-based library prose (distinct from registration forms) |
@@ -180,7 +182,7 @@ These URLs are **publicly reachable** without Drive or local folder access. Cros
 | Item | Value |
 |------|-------|
 | Created | 2026-06-04 |
-| Updated | 2026-06-05 (§8 D7 crosswalk link; §6 D7 workstream doc reference) |
+| Updated | 2026-06-05 (§8 D8 portal link; §6 D8 workstream row) |
 | Local reference path | `C:\dev\FREDAsoftReferenceMaterials\` (outside repo) |
 | PDFs in FREDAsoft repo | **None** |
 | Secrets / credentials | **None** |
