@@ -517,7 +517,7 @@ Track correspondence/merge documents as optional module—do not merge with Repo
 | **D2** | **Workflow wireframes** (ASCII or external) for Project hub vs Data Entry entry points | Option A/B/C choice |
 | **D3** | **RAS report instance** field spec crosswalk (CONVERT_TO_RAS §11 ↔ prototype dates) | RAS phase approval |
 | **D4** | **Firestore schema sketch** (docs only)—separate branch, no implementation | ARCHITECTURE_DESIGN ✅ DECIDED process |
-| **D5** | Stakeholder model decision (directory vs Client-only; dual-track TDLR vs canonical per §15) | Q1, Q2; §15 |
+| **D5** | Stakeholder model decision/discovery — **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** (dual-track TDLR vs canonical; Client vs Owner; contact/user distinction) | Q1, Q2; §15 |
 | **D6** | TDLR extraction pipeline sketch (source, log, parsed, review) | §15 points 5–6 |
 | **D7** | Correspondence template + PDF letter requirements spec | §15 point 6; Option D |
 | **D8** | Portal submission + approval workflow (canonical record updates) | §15 points 7–9; `CLIENT_PORTAL_SPEC.md` |
@@ -536,6 +536,7 @@ Track correspondence/merge documents as optional module—do not merge with Repo
 | **`docs/REPORTING_SPEC.md`** | Assessment report ordering (distinct from prototype Reports) |
 | **`docs/RAS_FINDING_AUTHORING_STYLE.md`** | RAS Plan Review library prose (separate from Project app) |
 | **`docs/RAS_FINDINGS_IMPORT_FORMAT.md`** | `rasFindings` import (not prototype) |
+| **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** | D5 stakeholder model (canonical vs TDLR snapshot; project parties; portal/correspondence implications) |
 | **`AGENTS.md`** | Protected areas, no Firestore writes without approval |
 
 ---

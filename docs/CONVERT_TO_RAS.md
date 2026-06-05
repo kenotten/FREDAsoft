@@ -373,6 +373,7 @@ Research backlog — confirm against official sources and sample deliverables:
 - **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`** — spreadsheet layout spec for the workbook
 - **`docs/RAS_FINDING_AUTHORING_STYLE.md`** — Plan Review library finding prose (Batch 1+ conventions)
 - **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** — Lovable Project prototype discovery (metadata/stakeholder workflows; not inspection Data Entry)
+- **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** — D5 stakeholder model (Owner/Design/RAS parties; TDLR vs canonical; §11 header field sources TBD)
 - `docs/ARCHITECTURE_DESIGN.md` — durable ✅ DECIDED blocks (add RAS decisions when implementation begins)
 - `AGENTS.md` — protected areas, behavior disclosure, Firestore data safety
 
