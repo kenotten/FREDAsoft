@@ -2,7 +2,7 @@
 
 **Status:** Documentation-only reference index. **Not implementation.**  
 **Last updated:** 2026-06-04  
-**Branch context:** `tdlr-source-index`  
+**Branch context:** `tdlr-source-index-manifest`  
 **Maintainers:** Product owner (Kenneth), architecture review (Archie)
 
 > **Disclaimer:** This index records **where** reference materials live and **how** they may inform FREDAsoft discovery. It does **not** assert TDLR legal compliance, final field requirements, or current regulatory text. **Review each source** before relying on it for requirements. Do **not** treat this file as a substitute for reading primary sources.
@@ -13,74 +13,104 @@
 
 FREDAsoft Project, RAS, and TDLR-related work (D5–D8, Firestore sketches, correspondence, extraction pipeline) need traceable **source documents**. This index:
 
-- Points to the **Google Drive library** as the authoritative file store for PDFs and internal procedure materials  
+- Points to **Google Drive** and a **local reference folder** (outside the repo) as source-document libraries for PDFs and procedure materials  
 - Stores in the repo only **curated metadata**, extraction notes, and architecture decisions—**never** the binary PDFs  
 - Records **official public URLs** when known (TDLR/TABS web and forms)  
 - Tracks **review status** so unreviewed materials are not treated as requirements
 
 **No PDFs are copied into this repository.** No credentials, PII, or long copyrighted excerpts belong here.
 
----
-
-## 2. Google Drive source library
-
-| Item | Value |
-|------|-------|
-| **Role** | Primary **source-document library** for TDLR/RAS/TABS PDFs, internal RAS procedures, sample deliverables, and correspondence examples |
-| **Folder URL** | [Google Drive folder](https://drive.google.com/drive/folders/1tsvdLroXe7w2B0PSw0tC63VTM55exUor) |
-| **Folder ID** | `1tsvdLroXe7w2B0PSw0tC63VTM55exUor` |
-| **Repo policy** | Metadata and notes only in git; binaries remain on Drive |
-| **Access** | Requires Google account authorized by folder owner (not public/anonymous) |
-
-### Inventory enumeration note
-
-Automated listing of this folder **failed** (Google sign-in / 401 unauthorized from unauthenticated access). **Per-file rows below are incomplete until** a maintainer with Drive access exports filenames and file IDs (see §3.1).
+| Library | Location | In git? |
+|---------|----------|---------|
+| **Local reference** | `C:\dev\FREDAsoftReferenceMaterials\` | **No** — metadata only in this index |
+| **Google Drive** | [Folder `1tsvdLroXe7w2B0PSw0tC63VTM55exUor`](https://drive.google.com/drive/folders/1tsvdLroXe7w2B0PSw0tC63VTM55exUor) | **No** — metadata only; file IDs pending export |
 
 ---
 
-## 3. Drive file inventory
-
-### 3.1 How to complete or refresh the inventory
-
-1. Open the [Drive folder](https://drive.google.com/drive/folders/1tsvdLroXe7w2B0PSw0tC63VTM55exUor) with an authorized account.  
-2. For each file, copy **exact filename**, **file ID** (from share link or file URL), and optional subfolder path.  
-3. Add a row to §3.2 using the column definitions below.  
-4. Set **review status** to `unreviewed` until a qualified reviewer confirms relevance and extracts requirement notes elsewhere (not by quoting long passages here).  
-5. Add **official public URL** in the notes column when the Drive file duplicates or supplements a TDLR.gov publication.
-
-**File URL pattern:** `https://drive.google.com/file/d/{FILE_ID}/view`
-
-### 3.2 Indexed Drive files
-
-| Title / filename | Drive URL or file ID | Category | Likely workflow relevance | Review status | Notes / open questions |
-|------------------|----------------------|----------|---------------------------|---------------|------------------------|
-| *(Drive folder — container)* | [Folder `1tsvdLroXe7w2B0PSw0tC63VTM55exUor`](https://drive.google.com/drive/folders/1tsvdLroXe7w2B0PSw0tC63VTM55exUor) | Library root | All D5–D8 discovery | **unreviewed** | Per-file inventory pending authenticated export; do not infer requirements from folder existence alone |
-
-**Row count (Drive files indexed):** 0 individual files + 1 folder container row (as of 2026-06-04).
-
-> **Action for Kenneth:** Paste exported filenames and file IDs into §3.2 (or provide a CSV manifest out-of-band) so this index can list each Drive PDF/document without copying binaries into the repo.
-
-### 3.3 Document categories (for new rows)
+## 2. Document categories
 
 Use one primary category per file:
 
 | Category code | Description |
 |---------------|-------------|
 | **TDLR-official** | TDLR-published form, rule excerpt, or bulletin (verify against tdlr.texas.gov when possible) |
-| **TABS-system** | TABS registration UI help, field screenshots, or operational notes |
-| **RAS-procedure** | Internal or RAS professional procedure / checklist |
+| **TABS-system** | TABS registration help sheets, field guidance, operational notes |
+| **RAS-procedure** | RAS professional procedure, bulletin, or checklist |
 | **Sample-deliverable** | Sample plan review, inspection report, or letter (redact PII before indexing notes) |
 | **Correspondence** | Letter templates, merge-field examples, milestone correspondence |
-| **TAS-standard** | Texas Accessibility Standards (2012) reference excerpts or indexes |
-| **Stakeholder-registration** | Party/owner/agent/designer registration field definitions |
-| **Legal-policy** | TDLR policy, FAQ, or administrative code summaries |
+| **TAS-standard** | Texas Accessibility Standards reference (1994, 2012, etc.) |
+| **Stakeholder-registration** | Party/owner/agent/designer/ownership field definitions |
+| **Legal-policy** | Texas Administrative Code, Government Code, Occupations Code excerpts |
 | **Other** | Uncategorized until reviewed |
 
 ---
 
-## 4. Official public sources (not on Drive)
+## 3. Local reference file inventory
 
-These URLs are **publicly reachable** without Drive credentials. They should be **cross-checked** against Drive copies when both exist. All listed as **unreviewed** for FREDAsoft requirement extraction until explicitly reviewed.
+**Root path (outside repo):** `C:\dev\FREDAsoftReferenceMaterials\`  
+**Indexed:** 2026-06-04 — filenames only; **no PDF content review** in this pass.  
+**Relative path** column is from the root above.
+
+| Filename | Relative path | Category | Likely workflow relevance | Review status | Notes / open questions |
+|----------|---------------|----------|---------------------------|---------------|------------------------|
+| `1994tas.pdf` | `1994tas.pdf` | TAS-standard | Historical TAS reference; distinguish from TAS 2012 RAS scope | unreviewed | Confirm whether FREDAsoft RAS work needs 1994 TAS citations or archive-only |
+| `2012 TAS.pdf` | `2012 TAS.pdf` | TAS-standard | **RAS findings / TAS references**; `rasFindings` citation authority for RAS projects | unreviewed | Primary TAS 2012 standard doc for CONVERT_TO_RAS; map to glossary enforcement |
+| `CHAPTER 68. ELIMINATION OF ARCHITECTURAL BARRIERS.pdf` | `CHAPTER 68. ELIMINATION OF ARCHITECTURAL BARRIERS.pdf` | Legal-policy | EAB program rules; form acceptance; registration obligations | unreviewed | Cross-check form version and completeness requirements vs TABS help sheets |
+| `EAB Ownership Help Sheet.pdf` | `EAB Ownership Help Sheet.pdf` | Stakeholder-registration | **D5** owner entity types; LLC/LP ownership uploads | unreviewed | D6: which ownership types require LLO / AOF uploads? |
+| `EAB-CAD-Numbers-Help-Sheet.pdf` | `EAB-CAD-Numbers-Help-Sheet.pdf` | TABS-system | **D6** CAD number field; registration required document | unreviewed | Map CAD fields to TDLR snapshot vs Facility link |
+| `eab-form-requirement-guide.pdf` | `eab-form-requirement-guide.pdf` | TDLR-official | Overview of required EAB forms and completion rules | unreviewed | Index for which forms apply to standard vs special registration |
+| `EAB-Help-Sheet-for-Sub-Contractors.pdf` | `EAB-Help-Sheet-for-Sub-Contractors.pdf` | TABS-system | Sub-contractor party context on projects | unreviewed | **D5:** map to Misc role or separate party type? |
+| `EAB-Request-for-Inspection-Form-Help-Sheet.pdf` | `EAB-Request-for-Inspection-Form-Help-Sheet.pdf` | TABS-system | Inspection request workflow; milestone dates | unreviewed | Relates to `Request-for-Inspection-EAB241N.pdf` |
+| `eab205n-project-registration.pdf` | `eab205n-project-registration.pdf` | TDLR-official | **D6** primary registration form; **D5** party fields (owner, agent, RAS, design) | unreviewed | Compare to https://www.tdlr.texas.gov/ab/forms/eab205n-project-registration.pdf for version |
+| `eab213n-variance-application.pdf` | `eab213n-variance-application.pdf` | TDLR-official | Variance workflow (likely out of v1 FREDAsoft scope) | unreviewed | Confirm if in scope for Project app or future phase |
+| `eab243n-designated-agent-form.pdf` | `eab243n-designated-agent-form.pdf` | TDLR-official | **D5** Agent stakeholder; designated agent attachment to registration | unreviewed | Link to project party role **Agent** and correspondence recipients |
+| `eab245n-special-registration.pdf` | `eab245n-special-registration.pdf` | TDLR-official | Special registration path; project classification flags | unreviewed | Map `fldspecialcategory` / inspection-only prototype fields |
+| `eab247n-limited-liability-ownership-form.pdf` | `eab247n-limited-liability-ownership-form.pdf` | TDLR-official | **D5/D6** LLC/LP/LLO ownership; TABS upload requirement | unreviewed | Stakeholder entity type **organization** vs ownership form |
+| `GV.469.pdf` | `GV.469.pdf` | Legal-policy | Texas Government Code Ch. 469 (EAB statutory basis) | unreviewed | Confirm chapter scope; no legal interpretation in index |
+| `Inspection-Response-EAB229N.pdf` | `Inspection-Response-EAB229N.pdf` | TDLR-official | Post-inspection response form | unreviewed | **D7** correspondence vs inspection report deliverable boundary |
+| `Notice-of-Substantial-Compliance-EAB246N.pdf` | `Notice-of-Substantial-Compliance-EAB246N.pdf` | TDLR-official / Correspondence | Substantial compliance notice; milestone letter candidate | unreviewed | **D7** merge fields and project milestone triggers |
+| `OC.51.pdf` | `OC.51.pdf` | Legal-policy | Texas Occupations Code reference (RAS licensing context) | unreviewed | Confirm section/chapter; RAS credential fields |
+| `Proof-of-Inspection-EAB244N.pdf` | `Proof-of-Inspection-EAB244N.pdf` | TDLR-official | Proof-of-inspection filing; inspection milestone metadata | unreviewed | **D6** date fields; link to RAS report instance (inspection kind) |
+| `Proof-of-Submission-EAB242N.pdf` | `Proof-of-Submission-EAB242N.pdf` | TDLR-official | Proof-of-submission filing; plan review milestone | unreviewed | **D6** date fields; link to plan review report instance |
+| `RAS 2012 - 01.pdf` | `RAS 2012 - 01.pdf` | RAS-procedure | RAS bulletin / guidance (2012 series) | unreviewed | Identify bulletin topic before requirement use |
+| `RAS 2012 - 02.pdf` | `RAS 2012 - 02.pdf` | RAS-procedure | RAS bulletin / guidance (2012 series) | unreviewed | Identify bulletin topic before requirement use |
+| `RAS 2014 - 03 Equivalent Faciliation.pdf` | `RAS 2014 - 03 Equivalent Faciliation.pdf` | RAS-procedure | Equivalent facilitation guidance (filename spelling: Faciliation) | unreviewed | May inform comment terminology; not registration metadata |
+| `RAS Bulletin 2014 -04.pdf` | `RAS Bulletin 2014 -04.pdf` | RAS-procedure | RAS bulletin (2014 series) | unreviewed | Identify bulletin topic before requirement use |
+| `RAS-Bulletin-2023-06-owner-response-need.pdf` | `RAS-Bulletin-2023-06-owner-response-need.pdf` | RAS-procedure / Correspondence | Owner response requirements | unreviewed | **D5/D7** owner correspondence; portal submission implications |
+| `RAS-Notification-Help.pdf` | `RAS-Notification-Help.pdf` | RAS-procedure / TABS-system | RAS notification procedures in TABS | unreviewed | **D7** notification vs correspondence templates |
+| `rasprocedures2018.pdf` | `rasprocedures2018.pdf` | RAS-procedure | **Primary RAS procedures** reference for plan review / inspection workflow | unreviewed | High priority for D6/D7 review; do not infer fields until read |
+| `registration-help-sheet.pdf` | `registration-help-sheet.pdf` | TABS-system | TABS project registration step guidance | unreviewed | **D6** extraction UX and required-field checklist |
+| `Request-for-Inspection-EAB241N.pdf` | `Request-for-Inspection-EAB241N.pdf` | TDLR-official | Formal inspection request form | unreviewed | Inspection scheduling milestone; **D7** letter triggers |
+
+**Row count (local reference files):** 28 (flat folder; no subdirectories as of 2026-06-04).
+
+---
+
+## 4. Google Drive source library
+
+| Item | Value |
+|------|-------|
+| **Role** | Shared **source-document library** (may mirror local reference folder) |
+| **Folder URL** | [Google Drive folder](https://drive.google.com/drive/folders/1tsvdLroXe7w2B0PSw0tC63VTM55exUor) |
+| **Folder ID** | `1tsvdLroXe7w2B0PSw0tC63VTM55exUor` |
+| **Repo policy** | Metadata and notes only in git; binaries remain on Drive |
+| **Access** | Requires Google account authorized by folder owner (not public/anonymous) |
+
+### 4.1 Drive file inventory
+
+Automated Drive listing **failed** (sign-in required). Local inventory (§3) may match Drive contents; **file IDs** still needed for Drive URLs.
+
+| Title / filename | Drive URL or file ID | Category | Likely workflow relevance | Review status | Notes / open questions |
+|------------------|----------------------|----------|---------------------------|---------------|------------------------|
+| *(Drive folder — container)* | [Folder `1tsvdLroXe7w2B0PSw0tC63VTM55exUor`](https://drive.google.com/drive/folders/1tsvdLroXe7w2B0PSw0tC63VTM55exUor) | Library root | All D5–D8 discovery | unreviewed | Add per-file Drive IDs when exported; cross-check against §3 filenames |
+
+**Row count (Drive files individually indexed):** 0 files + 1 folder row. **Local mirror:** 28 files in §3.
+
+---
+
+## 5. Official public sources (web)
+
+These URLs are **publicly reachable** without Drive or local folder access. Cross-check against §3 local copies when both exist. All **unreviewed** for requirement extraction.
 
 | Title | URL | Category | Likely workflow relevance | Review status | Notes / open questions |
 |-------|-----|----------|---------------------------|---------------|------------------------|
@@ -88,8 +118,8 @@ These URLs are **publicly reachable** without Drive credentials. They should be 
 | Architectural Barriers FAQ (incl. TABS FAQs) | https://www.tdlr.texas.gov/ab/abfaq.htm | Legal-policy | Registration rules; user types; upload constraints | unreviewed | D6 extraction constraints (PDF uploads, user types) |
 | TABS — Register (account creation) | https://www.tdlr.texas.gov/TABS/Account/Register | TABS-system | Owner, Agent, Tenant, Designer user types; CAD/LLO upload requirements | unreviewed | D5 stakeholder roles; D6 required documents |
 | TABS — Login | https://www.tdlr.texas.gov/TABS/Account/Login | TABS-system | System entry point (no credentials stored here) | unreviewed | D6 source page reference only |
-| Project Registration form EAB205N (Aug 2023) | https://www.tdlr.texas.gov/ab/forms/Project-Registration-EAB205N.pdf | TDLR-official | Registration fields; RAS info; owner/agent sections | unreviewed | D6 parsed field candidates; compare to Drive copies |
-| Project Registration form (alternate path) | https://www.tdlr.texas.gov/ab/forms/eab205n-project-registration.pdf | TDLR-official | Same form family — confirm version parity with above | unreviewed | Which URL is current canonical? |
+| Project Registration form EAB205N (Aug 2023) | https://www.tdlr.texas.gov/ab/forms/Project-Registration-EAB205N.pdf | TDLR-official | Registration fields; RAS info; owner/agent sections | unreviewed | Compare to local `eab205n-project-registration.pdf` |
+| Project Registration form (alternate path) | https://www.tdlr.texas.gov/ab/forms/eab205n-project-registration.pdf | TDLR-official | Same form family — confirm version parity | unreviewed | Which URL matches local copy revision? |
 | New EAB forms announcement (2023-09-08) | https://www.tdlr.texas.gov/news/2023/09/08/new-elimination-of-architectural-barriers-forms/ | Legal-policy | Form version effective dates; online-only registration | unreviewed | D6 versioning / reject old forms |
 | TDLR Public Information Act policy | https://www.tdlr.texas.gov/disclaimer.htm#PublicInfoPolicy | Legal-policy | Data handling context for registration submissions | unreviewed | Portal / retention implications |
 
@@ -97,49 +127,52 @@ These URLs are **publicly reachable** without Drive credentials. They should be 
 
 ---
 
-## 5. How this index will be used
+## 6. How this index will be used
 
 | FREDAsoft workstream | Use of this index |
 |----------------------|-------------------|
-| **D5 — Stakeholder model** (`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md` §18) | Confirm TDLR party types, registration vs canonical stakeholder rules before finalizing entity definitions |
-| **D6 — TDLR extraction pipeline** | Identify **source pages/forms** for parsed fields, extraction logs, and review queues; map Drive + official PDF field labels to dual-track snapshots |
-| **D7 — Correspondence requirements** | Locate letter templates and merge-field examples; separate from inspection report PDF specs |
-| **RAS findings / TAS references** | Distinguish **TAS 2012** standard citations (library authoring) from **TDLR registration** forms (project metadata) |
-| **Future Firestore schema sketches (D4)** | Cite which sources justify which field groups; no schema until sources reviewed |
-| **`docs/CONVERT_TO_RAS.md`** | Close research backlog items (§16) against reviewed sources—not prototype or Drive filenames alone |
+| **D5 — Stakeholder model** (`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md` §18) | Owner/agent/design forms and help sheets (§3) before finalizing entity definitions |
+| **D6 — TDLR extraction pipeline** | EAB205N, help sheets, registration guide for parsed fields, logs, and review queues |
+| **D7 — Correspondence requirements** | Proof/notice/request forms and RAS bulletins for letter templates and merge fields |
+| **RAS findings / TAS references** | `2012 TAS.pdf` vs registration forms—separate standard citations from project metadata |
+| **Future Firestore schema sketches (D4)** | Cite reviewed sources per field group; no schema until sources reviewed |
+| **`docs/CONVERT_TO_RAS.md`** | Close §16 research backlog against reviewed §3/§5 sources |
 
-**Workflow:** Source (Drive or public URL) → **human review** → requirement note in architecture/discovery doc → optional ✅ DECIDED in `docs/ARCHITECTURE_DESIGN.md` when durable. This index stays a **catalog + review tracker**, not a requirements spec.
-
----
-
-## 6. Review and maintenance rules
-
-1. **Default status:** `unreviewed` for every new row until a named reviewer marks otherwise in a future edit (e.g. `reviewed-2026-06-XX — Kenneth`).  
-2. **No long quotes:** Index notes summarize relevance in one or two sentences; full text stays on Drive or tdlr.texas.gov.  
-3. **Versioning:** When TDLR publishes a new form version, add a **new row**; do not silently replace old URLs.  
-4. **PII:** Sample deliverables on Drive may contain project-specific data; index notes must not reproduce PII.  
-5. **Official precedence:** When Drive and tdlr.texas.gov disagree, **official public source** wins pending Kenneth/Archie confirmation.
+**Workflow:** Source (local, Drive, or public URL) → **human review** → requirement note in architecture/discovery doc → optional ✅ DECIDED in `docs/ARCHITECTURE_DESIGN.md` when durable. This index is a **catalog + review tracker**, not a requirements spec.
 
 ---
 
-## 7. Related FREDAsoft documentation
+## 7. Review and maintenance rules
+
+1. **Default status:** `unreviewed` until a named reviewer updates status (e.g. `reviewed-2026-06-XX — Kenneth`).  
+2. **No long quotes:** Summarize relevance briefly; full text stays in `FREDAsoftReferenceMaterials`, Drive, or tdlr.texas.gov.  
+3. **Versioning:** New form revision → **new row**; do not silently replace filenames or URLs.  
+4. **PII:** Forms and samples may contain example project data; index must not reproduce PII.  
+5. **Official precedence:** When local/Drive and tdlr.texas.gov disagree, **official public source** wins pending confirmation.  
+6. **Local folder sync:** When files are added/removed under `C:\dev\FREDAsoftReferenceMaterials\`, refresh §3 on a docs-only branch—still **no PDFs in git**.
+
+---
+
+## 8. Related FREDAsoft documentation
 
 | Document | Relevance |
 |----------|-----------|
-| **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** | §18 — review TDLR/TABS materials before D6 |
+| **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** | §18 — review materials before D6 |
 | **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** | Project metadata and TDLR-oriented fields |
 | **`docs/CONVERT_TO_RAS.md`** | RAS report structure; §16 research backlog |
-| **`docs/RAS_FINDING_AUTHORING_STYLE.md`** | TAS-based library prose (distinct from TDLR registration forms) |
+| **`docs/RAS_FINDING_AUTHORING_STYLE.md`** | TAS-based library prose (distinct from registration forms) |
 | **`docs/ARCHITECTURE_DESIGN.md`** | Durable ✅ DECIDED blocks when sources drive architecture |
 
 ---
 
-## 8. Document control
+## 9. Document control
 
 | Item | Value |
 |------|-------|
 | Created | 2026-06-04 |
-| Drive PDFs in repo | **None** |
+| Updated | 2026-06-04 (§3 local reference manifest, 28 files) |
+| Local reference path | `C:\dev\FREDAsoftReferenceMaterials\` (outside repo) |
+| PDFs in FREDAsoft repo | **None** |
 | Secrets / credentials | **None** |
 | PII quoted | **None** |
-| Drive files individually indexed | **Pending** authenticated inventory export |
+| PDF content reviewed in this pass | **No** — filenames and categories only |
