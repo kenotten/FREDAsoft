@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
+    "dev:pm-prototype": "vite --open /index-pm-prototype.html",
     "build": "vite build",
     "start": "node server.ts",
     "preview": "vite preview",
