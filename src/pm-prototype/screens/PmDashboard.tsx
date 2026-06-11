@@ -47,7 +47,9 @@ export function PmDashboard() {
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">PM Dashboard / Work Queue</h1>
           <p className="text-sm text-zinc-500 mt-1">
-            Mock queues replacing spreadsheet tabs — click a project to open overview.
+            Mock queues replacing spreadsheet tabs — click a project to open overview. Rows tagged{' '}
+            <span className="font-medium text-violet-700">TABS sample</span> are sanitized
+            validation fixtures.
           </p>
         </div>
         <div className="flex gap-2">
@@ -104,6 +106,7 @@ export function PmDashboard() {
                 <th className="px-4 py-3 font-semibold">OCG #</th>
                 <th className="px-4 py-3 font-semibold">Client</th>
                 <th className="px-4 py-3 font-semibold">Site</th>
+                <th className="px-4 py-3 font-semibold">Sample</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3 font-semibold">RAS</th>
                 <th className="px-4 py-3 font-semibold">Due</th>
@@ -120,6 +123,15 @@ export function PmDashboard() {
                   <td className="px-4 py-3 font-mono text-xs">{p.ocgProjectNumber}</td>
                   <td className="px-4 py-3">{p.clientLabel}</td>
                   <td className="px-4 py-3">{p.siteName}</td>
+                  <td className="px-4 py-3 text-xs">
+                    {p.validationSampleLabel ? (
+                      <span className="inline-block px-2 py-0.5 rounded bg-violet-100 text-violet-800 max-w-[200px] truncate">
+                        TABS sample
+                      </span>
+                    ) : (
+                      <span className="text-zinc-300">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="inline-block px-2 py-0.5 rounded bg-zinc-100 text-xs">
                       {p.currentStatus}
@@ -138,7 +150,7 @@ export function PmDashboard() {
               ))}
               {filteredProjects.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-zinc-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-zinc-400">
                     No mock projects in this queue.
                   </td>
                 </tr>

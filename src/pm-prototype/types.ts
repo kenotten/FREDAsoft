@@ -125,6 +125,39 @@ export interface MockTabsStatusUpdateRow {
   status: string;
 }
 
+/** TABS Inspection modal — InspectionUploadedTable row (source only). */
+export interface MockTabsInspectionDocumentRow {
+  id: string;
+  ras: string;
+  document: string;
+  file: string;
+  reported: string;
+  submitted: string;
+  status: string;
+}
+
+/** Extended Manage Project #proj_ident read-only fields (lbl* panel). */
+export interface MockTabsManagePanelFields {
+  projectName: string;
+  buildingOrFacilityName: string;
+  address: string;
+  scopeOfWork: string;
+  squareFootage: string;
+  estStartDate: string;
+  estEndDate: string;
+  estimatedCost: string;
+  jobClass: string;
+  ownerClass: string;
+  privateFundsByTenant: string;
+  rasDisplay: string;
+  tenant: string;
+  cadNumber: string;
+  roadwayConstruction: string;
+  stateProject: string;
+  specialCategory: string;
+  stateLeaseNumber: string;
+}
+
 /** Observed PSUUPDocumentTypeId option labels — checklist reference only. */
 export const TABS_DOCUMENT_TYPE_OPTIONS = [
   'Article of Formation Documents',
@@ -164,6 +197,12 @@ export interface MockTdlrSourceSnapshot {
   };
   tabsContacts: MockTabsContactRow[];
   tabsStatusUpdates: MockTabsStatusUpdateRow[];
+  /** Optional Manage Project panel detail for validation samples. */
+  managePanel?: MockTabsManagePanelFields;
+  /** Generic TABS notice (e.g. enforcement) — sanitized text only. */
+  sourceNote?: string;
+  /** InspectionUploadedTable rows when present. */
+  inspectionDocuments?: MockTabsInspectionDocumentRow[];
   candidateLinks: {
     id: string;
     partyRole: PartyRole;
@@ -197,6 +236,8 @@ export interface MockProject {
   paymentPending: boolean;
   intakeScenario?: IntakeScenario;
   queue: QueueKey;
+  /** Visual marker for TABS validation sample projects (sanitized). */
+  validationSampleLabel?: string;
 }
 
 export interface MockFeedback {

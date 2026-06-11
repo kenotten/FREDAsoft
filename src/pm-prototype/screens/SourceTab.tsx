@@ -35,6 +35,12 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
         </p>
       </div>
 
+      {snapshot.sourceNote && (
+        <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-900">
+          <strong>MOCK TABS notice:</strong> {snapshot.sourceNote}
+        </div>
+      )}
+
       <Card className="p-5 bg-amber-50/40 border-amber-200 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-amber-950 uppercase tracking-wider">
@@ -94,6 +100,78 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
             <dt className="text-xs font-semibold text-amber-800 uppercase">DataVersionId</dt>
             <dd className="mt-1 font-mono text-xs">{asRecorded.dataVersionId}</dd>
           </div>
+          {snapshot.managePanel && (
+            <>
+              <div>
+                <dt className="text-xs font-semibold text-amber-800 uppercase">Project Name</dt>
+                <dd className="mt-1">{snapshot.managePanel.projectName}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-amber-800 uppercase">
+                  Building or FacilityName
+                </dt>
+                <dd className="mt-1">{snapshot.managePanel.buildingOrFacilityName}</dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-xs font-semibold text-amber-800 uppercase">Address</dt>
+                <dd className="mt-1">{snapshot.managePanel.address}</dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-xs font-semibold text-amber-800 uppercase">Scope of Work</dt>
+                <dd className="mt-1">{snapshot.managePanel.scopeOfWork}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-amber-800 uppercase">
+                  Estimate of square footage
+                </dt>
+                <dd className="mt-1">{snapshot.managePanel.squareFootage}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-amber-800 uppercase">Est. Start Date</dt>
+                <dd className="mt-1">{snapshot.managePanel.estStartDate}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-amber-800 uppercase">Est. End Date</dt>
+                <dd className="mt-1">{snapshot.managePanel.estEndDate}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-amber-800 uppercase">Estimated Cost</dt>
+                <dd className="mt-1">{snapshot.managePanel.estimatedCost}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-amber-800 uppercase">Job Class</dt>
+                <dd className="mt-1">{snapshot.managePanel.jobClass}</dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-xs font-semibold text-amber-800 uppercase">Owner Class</dt>
+                <dd className="mt-1">{snapshot.managePanel.ownerClass}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-amber-800 uppercase">
+                  Private Funds Provided By Tenant?
+                </dt>
+                <dd className="mt-1">{snapshot.managePanel.privateFundsByTenant}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-amber-800 uppercase">RAS</dt>
+                <dd className="mt-1">{snapshot.managePanel.rasDisplay || '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-amber-800 uppercase">Tenant</dt>
+                <dd className="mt-1">{snapshot.managePanel.tenant || '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-amber-800 uppercase">
+                  Is Roadway Construction?
+                </dt>
+                <dd className="mt-1">{snapshot.managePanel.roadwayConstruction}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-amber-800 uppercase">Project CAD Number</dt>
+                <dd className="mt-1">{snapshot.managePanel.cadNumber || '—'}</dd>
+              </div>
+            </>
+          )}
         </dl>
       </Card>
 
@@ -125,6 +203,42 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
                         {row.status}
                       </span>
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {snapshot.inspectionDocuments && snapshot.inspectionDocuments.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/80">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-600">
+              Inspection — InspectionUploadedTable (TABS source mock)
+            </h4>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-100 text-left text-xs uppercase tracking-wider text-zinc-500">
+                  <th className="px-3 py-2 font-semibold">RAS</th>
+                  <th className="px-3 py-2 font-semibold">Document</th>
+                  <th className="px-3 py-2 font-semibold">File</th>
+                  <th className="px-3 py-2 font-semibold">Reported</th>
+                  <th className="px-3 py-2 font-semibold">Submitted</th>
+                  <th className="px-3 py-2 font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {snapshot.inspectionDocuments.map((row) => (
+                  <tr key={row.id} className="border-b border-zinc-50">
+                    <td className="px-3 py-2">{row.ras}</td>
+                    <td className="px-3 py-2">{row.document}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-zinc-600">{row.file}</td>
+                    <td className="px-3 py-2 text-zinc-600">{row.reported}</td>
+                    <td className="px-3 py-2 text-zinc-600">{row.submitted}</td>
+                    <td className="px-3 py-2 text-xs">{row.status}</td>
                   </tr>
                 ))}
               </tbody>

@@ -76,6 +76,11 @@ export function ProjectOverview() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
+            {project.validationSampleLabel && (
+              <span className="px-2 py-1 rounded bg-violet-100 text-violet-800 font-medium">
+                {project.validationSampleLabel}
+              </span>
+            )}
             <span className="px-2 py-1 rounded bg-zinc-100 font-medium">{project.currentStatus}</span>
             <span className="px-2 py-1 rounded bg-blue-50 text-blue-800">{project.serviceScope}</span>
             {project.paymentPending && (
