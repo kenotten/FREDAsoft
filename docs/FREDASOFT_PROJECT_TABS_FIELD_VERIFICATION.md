@@ -2,7 +2,7 @@
 
 **Status:** Field verification draft.  
 **Evidence source:** Observed TDLR/TABS screens captured during Archie #11 (screenshots and saved HTML/text).  
-**Last updated:** 2026-06-05  
+**Last updated:** 2026-06-09  
 **Branch context:** `archie-11-tabs-field-verification`  
 **Audience:** Kenneth, Kathy Rodriguez, Jessica Montalvo, OCG RASes, architecture review (Archie)
 
@@ -52,6 +52,7 @@ This document captures **fields observed directly** on current TDLR/TABS **Proje
 | **Registration Review / Verify** | Read-only summary before submit/payment; project contacts summary table | Archie #11 screenshot + saved HTML/text; summary labels align with Manage Project `#proj_ident` `lbl*` ids |
 | **Payment step context** | Fee/payment before or alongside project number assignment | Observed in registration flow context (Archie #11); detail fields **not fully indexed** here |
 | **Site-wide notices (registration)** | CAD, LLO, AOF/SOS, owner-agent form, false-information warning | Observed banner/notice text on registration and Manage Project captures |
+| **Manage Project (three-project validation)** | Post-registration hub: Project panel, Contact Info, Status Updates, Inspection, Upload Documents, Edit/amendment | Archie #11 three-project validation captures (screenshots + HTML/text; **not committed**) |
 
 ### 2.2 Evidence storage
 
@@ -219,6 +220,11 @@ Shared modal API: `POST /TABS/Project/EditContact`; hidden `ContactType`: `Owner
 | Special category project | `lblSpecialProjectCategory` | `No` | Source snapshot | |
 | State lease number | `lblProjectStateLeaseNumber` | Empty | Source snapshot | |
 | Registrant contact phone | `lblProjectContact` | Phone or `Not Available` | Registrant source only | |
+| Last action | `lblProjectAction` | Workflow milestone label (sanitized) | **Manage Project only** — operational transaction hint | Not on registration Verify |
+| Project created by | `lblProjectCreatedBy` | e.g. `Registered by TDLR` | Source provenance | Post-registration |
+| Plan review by | `lblProjectPlanReviewBy` | RAS display name (sanitized) | Assigned professional hint | Post-registration |
+| Inspection by | `lblProjectInspectionBy` | RAS display name (sanitized) | Assigned professional hint | Post-registration |
+| Data version id | `DataVersionId` (hidden) | Numeric era code (shape only) | Snapshot metadata — TABS vs EABPRJ era | Not user-facing label |
 
 ### 6.1 Project contacts summary table (Verify)
 
@@ -226,15 +232,15 @@ Observed columns match Manage Project `#tblContacts`:
 
 | Column | FREDAsoft interpretation | Notes |
 |--------|--------------------------|-------|
-| Contact type | Maps to project party role (Owner, Design Firm, RAS, Tenant, Agent) | Display e.g. "Building Or Facility Owner", "Design Firm", "Registered Accessibility Specialists" |
+| Contact Type | Maps to project party role (Owner, Design Firm, RAS, Tenant, Agent) | Exact TABS spellings vary — see §8.2 |
 | Name | Organization / party name as recorded | Source snapshot row |
-| Contact or professional name | Person row within party | Contact person **candidate** |
+| Contact or Professional Name | Person row within party | Contact person **candidate** |
 | Address | Composite mailing/site text | Source snapshot |
 | Phone | Phone as recorded | Source snapshot |
-| Email | Email as recorded | Source snapshot |
-| Type of license | Professional license type (design) | Source snapshot enum |
+| E-mail | Email as recorded | TABS label uses **E-mail** hyphenation |
+| Type of License | Professional license type (design) | Source snapshot enum |
 | License | License number | Source snapshot |
-| Business type | Owner entity type | Source snapshot; links to `BusinessType` enum |
+| Is Current | Current-row flag on Manage table | **Manage Project only** — not on Verify summary |
 
 ---
 
@@ -256,7 +262,174 @@ Phrased as **observed TABS UI text** — not legal conclusions beyond what TABS 
 
 ---
 
-## 8. Candidate FREDAsoft crosswalk
+## 8. Three-project Manage Project validation notes
+
+**Evidence:** Archie #11 validation pass across **three** Manage Project captures (post-registration authenticated hub). **Sanitized shapes only** below — no real project numbers, names, addresses, emails, phones, or CAD values committed.
+
+**Scope boundary:** This section documents **Manage Project post-registration** surfaces. It is **distinct from** Registration / Verify fields (§4–§6), which capture intake-time as-recorded values before or at submit.
+
+### 8.1 Manage Project header / Project panel (`#proj_ident`)
+
+| Observation | Detail |
+|-------------|--------|
+| **Project ID** | Displayed in **page header badges** and again in the **Project panel** as `Project ID :` |
+| **Project Status** | Displayed in **page header** and in the Project panel as `Status :` (`lblProjectStatus`) |
+| **Panel surface** | Read-only labels (`lbl*`); edit requires separate amendment workflow (§8.6) |
+
+**Observed label ids (Project panel):**
+
+| Label id | TABS label (observed) | Classification | Sanitized example shape |
+|----------|----------------------|----------------|-------------------------|
+| `lblProjectId` | Project ID | Source snapshot + legacy cross-ref | Legacy id token (e.g. `EABPRJ…` / TABS-era shape) |
+| `lblProjectName` | Project Name | Source snapshot | Short commercial name |
+| `lblBuildingorFacilityName` | Building or FacilityName | Source snapshot | Building label (note TABS spacing) |
+| `lblProjectAddress` | Address | Source snapshot | Composite street, city, state, zip, county |
+| `lblProjectAction` | Last Action | **Post-registration operational** transaction hint | e.g. `Inspection Complete`, `Plan Review` |
+| `lblProjectScopeOfWork` | Scope of Work | Source snapshot | Narrative |
+| `lblProjectEstimateOfSquareFootage` | Estimate of square footage | Source snapshot | Numeric or `Unknown` |
+| `lblProjectStatus` | Status | Source snapshot status | e.g. `Review Complete`, `Inspection Complete` |
+| `lblProjectEstStartdate` | Est. Start Date | Source snapshot | Date |
+| `lblProjectEstEnddate` | Est. End Date | Source snapshot | Date |
+| `lblProjectEstCost` | Estimated Cost | Source snapshot | Currency |
+| `lblProjectJobClass` | Job Class | Source snapshot | e.g. `Renovation/Alteration` |
+| `lblProjectOwnerClass` | Owner Class | Source snapshot | Funding-class sentence |
+| `lblProjectPrivateFunds` | Private Funds Provided By Tenant? | Source snapshot | Yes / No / Not available |
+| `lblProjectOwner` | Owner | Party source snapshot | Entity name |
+| `lblProjectTenant` | Tenant | Party source snapshot | Name or empty |
+| `lblProjectRAS` | RAS | Party / assignment snapshot | `LAST,FIRST` display shape |
+| `lblProjectStateLease` | State Project? | Source snapshot flag | Yes / No |
+| `lblProjectStateLeaseNumber` | State Lease Number | Source snapshot | Text or empty |
+| `lblSpecialProjectCategory` | Special Category Project? | Source snapshot flag | Yes / No |
+| `lblProjectPlanReviewBy` | Plan Review By | **Post-registration** assignment hint | RAS display name |
+| `lblProjectInspectionBy` | Inspection By | **Post-registration** assignment hint | RAS display name |
+| `lblProjectCreatedBy` | Project Created By | Source provenance | e.g. `Registered by TDLR` |
+| `lblProjectContact` | Registrant Contact Phone # | Registrant source | Phone or `Not Available` |
+| `lblIsRoadwayConstruction` | Is Roadway Construction? | Source snapshot flag | Yes / No |
+| `lblProjectCADNumber` | Project CAD Number | Source snapshot + document gate | CAD account shape or empty |
+| `DataVersionId` | *(hidden)* | Snapshot metadata | Numeric era code |
+
+### 8.2 Contact Info table (`#tblContacts`)
+
+| Aspect | Observed detail |
+|--------|-----------------|
+| **Table id** | `tblContacts` |
+| **Section title** | Contact Info |
+| **API** | `POST /TABS/Project/EditContact` (modals) |
+
+**Columns (exact headers):**
+
+| Column | Notes |
+|--------|-------|
+| Contact Type | TABS display string — not FREDAsoft party enum |
+| Name | Organization / entity |
+| Contact or Professional Name | Person name |
+| Address | Composite text |
+| Phone | As recorded |
+| E-mail | TABS uses **E-mail** (not "Email") |
+| Type of License | Design professional license type |
+| License | License number |
+| Is Current | Row currency flag |
+
+**Observed Contact Type display values (exact TABS spelling):**
+
+| TABS Contact Type (as displayed) | FREDAsoft party role candidate |
+|----------------------------------|-------------------------------|
+| Building Or Facility Owner | Owner |
+| Owners Designated Agent | Owner Agent — **no apostrophe** in table text |
+| Design Firm | Design Firm |
+| Registered Accessibility Specialists | RAS Firm — **plural** Specialists |
+
+### 8.3 Project Status Updates table (`#psu_info`)
+
+| Aspect | Observed detail |
+|--------|-----------------|
+| **Section title** | Project Status Updates |
+| **Nature** | **Operational/status transaction rows** — not the same as registration Project Information fields |
+
+**Columns:**
+
+| Column | Sanitized example shape |
+|--------|-------------------------|
+| Description | `Registration`, `Plan Review`, `Inspection`, `Closure`, `Close Project` |
+| Report Date | Date |
+| Submitted On | Date |
+| Status | Row status — e.g. `Review Complete`, `Rejected` |
+
+**Validation notes:**
+
+- Project-level panel status (`lblProjectStatus`) may read **Review Complete** or **Inspection Complete**.
+- Individual status-update rows may read **Rejected** even when project header shows another status.
+- Treat PSU rows as **milestone/transaction history** on the source track — not FREDAsoft OCG queue statuses (workflow discovery §6).
+
+### 8.4 Inspection modal
+
+| Aspect | Observed detail |
+|--------|-----------------|
+| **Section / modal title** | Inspection |
+| **Header fields** | `RAS Accepted On` (date); `RAS Name` (display) |
+| **Table id** | `InspectionUploadedTable` |
+
+**Table columns:** RAS · Document · File · Reported · Submitted · Status · Comments · SubmitBy · View · Remove
+
+**Observed Document column labels (examples):**
+
+- Inspection Transmittal - No Violations
+- Inspection Transmittal - Violations
+- Inspection Report
+- Request for Inspection
+- Proof of Inspection
+
+### 8.5 Upload Documents modal
+
+| Aspect | Observed detail |
+|--------|-----------------|
+| **Document Type select id** | `PSUUPDocumentTypeId` |
+| **Classification** | **Document/checklist reference list** — not canonical Project fields |
+
+**Observed document type options (labels only):**
+
+- Article of Formation Documents
+- Construction Documents (CDs)
+- County Appraisal District Documents
+- Ground Lease
+- Inspection Response Form
+- Limited Liability Ownership
+- Miscellaneous
+- Notice of Substantial Compliance
+- Owner Agent Designation
+- Proof of Inspection Form
+- Proof of Re-Inspection Form
+- Proof of Submission
+- Registration form (if registered by RAS)
+- Request for Inspection
+- Request for Re-Inspection
+- Texas Secretary of State records Documents
+
+### 8.6 Edit Project Information / amendment modal (`#modProjectEditUpload`)
+
+| Aspect | Observed detail |
+|--------|-----------------|
+| **Workflow** | **Post-registration amendment** — not normal inline edit of `lbl*` fields |
+| **Required upload** | Written PDF request before project edit |
+| **Observed ids** | `AmendmentUploadedFile`, `AmendmentComments` |
+| **Observed action label** | Upload written request to edit |
+| **Observed notice** | CAD records upload required prior to completing project edit |
+| **FREDAsoft posture** | Document/amendment gate + audit event — not canonical field mutation from TABS scrape |
+
+### 8.7 Implications from three-project validation
+
+| # | Implication |
+|---|-------------|
+| 1 | **Split registration vs Manage Project** in all mapping docs: Verify/registration fields (§4–§6) vs post-registration panel, PSU, Inspection, and amendment surfaces (this section). |
+| 2 | Add **Last Action**, **Plan Review By**, **Inspection By**, **Project Created By**, **DataVersionId**, and **Is Current** to field inventories — done in §6 and §8.1–§8.2. |
+| 3 | **Document upload types** (`PSUUPDocumentTypeId` options) are a **checklist/reference list** for staff gates — **not** FREDAsoft canonical Project/Facility attributes. |
+| 4 | **Project Status Updates** rows are **status transaction / milestone history** — distinct from registration economics/site fields and distinct from FREDAsoft operational status vocabulary until explicitly mapped. |
+| 5 | Preserve **exact TABS Contact Type spellings** in source snapshots (`Owners Designated Agent`, `Building Or Facility Owner`, `Registered Accessibility Specialists`). |
+| 6 | PM prototype Source/Parties views should mirror **TABS column headers** for as-recorded tables while keeping FREDAsoft canonical parties separate (dual-track). |
+
+---
+
+## 9. Candidate FREDAsoft crosswalk
 
 | TABS source field/group | Candidate FREDAsoft canonical/operational area | Link behavior | Review requirement |
 |-------------------------|-----------------------------------------------|---------------|-------------------|
@@ -275,23 +448,22 @@ Phrased as **observed TABS UI text** — not legal conclusions beyond what TABS 
 
 ---
 
-## 9. What this means for the PM prototype
+## 10. What this means for the PM prototype
 
-The mock-only PM prototype (`index-pm-prototype.html`, `src/pm-prototype/`) Phase A exercised a **thin** source panel. This verification suggests **likely Phase B refinements** (still mock-only, no Firebase):
+The mock-only PM prototype (`index-pm-prototype.html`, `src/pm-prototype/`) aligns labels with TABS where showing **as-recorded source** data. Canonical FREDAsoft parties and OCG statuses remain separate.
 
-| Prototype area | Refinement implied by TABS evidence |
-|----------------|-------------------------------------|
-| **Source tab** | Show **full project information snapshot** (job class, owner class, tenant funds flag, CAD #, roadway/state/special flags, dates, cost, sq ft, scope) — not only TABS # and owner/registrant |
-| **Parties tab** | **Two-column or dual-row** presentation: TABS as-recorded contact rows vs FREDAsoft canonical stakeholders; show **Business type**, **license** columns from contacts table |
-| **Documents / checklist tab** (not in Phase A) | Represent **CAD document**, **LLO**, **AOF/SOS**, **owner agent designation**, **PRF**, **plans**, **request for inspection** as mock gates |
-| **Intake** | Support **OCG project without TABS #** at day one; later **hydrate** source snapshot when TABS # exists (workflow discovery option C) |
-| **Verify-style read-only page** | Optional mock **Registration Review** screen mirroring Verify summary before "submit" |
+| Prototype area | TABS alignment (from §8) |
+|----------------|--------------------------|
+| **Source tab** | Manage Project panel labels: Project ID, Status, Last Action, Project Created By, Plan Review By, Inspection By; PSU history table; document type reference list |
+| **Parties tab** | `#tblContacts` column headers and exact Contact Type spellings above canonical party cards |
+| **Status tab** | OCG operational statuses (workflow discovery) — **not** TABS `lblProjectStatus` enums |
+| **Documents** | Use `PSUUPDocumentTypeId` option labels as checklist reference only |
 
-Prototype changes remain **disposable** and **not saved** — this section informs staff review only.
+Prototype changes remain **disposable** and **not saved**.
 
 ---
 
-## 10. What this means for future schema refinement
+## 11. What this means for future schema refinement
 
 Per `docs/FREDASOFT_PROJECT_TDLR_SCHEMA_SKETCH.md` (D4) — conceptual only:
 
@@ -306,7 +478,7 @@ Per `docs/FREDASOFT_PROJECT_TDLR_SCHEMA_SKETCH.md` (D4) — conceptual only:
 
 ---
 
-## 11. Open questions
+## 12. Open questions
 
 | # | Question |
 |---|----------|
@@ -320,10 +492,12 @@ Per `docs/FREDASOFT_PROJECT_TDLR_SCHEMA_SKETCH.md` (D4) — conceptual only:
 | 8 | What are the **exact registration-wizard input ids** for Project Information (not yet committed to `TDLR_TABS_FORM_FIELD_DISCOVERY.md`)? |
 | 9 | Does **payment step** expose fee line items that should map to OCG payment tracking (workflow discovery)? |
 | 10 | How do **Plan Review By** / **Inspection By** (`lblProjectPlanReviewBy`, `lblProjectInspectionBy`) relate to registration-time RAS block? |
+| 11 | When PSU row status is **Rejected**, how should FREDAsoft display project header status vs row history? |
+| 12 | Should **InspectionUploadedTable** document labels map 1:1 to `PSUUPDocumentTypeId` options or remain separate taxonomies? |
 
 ---
 
-## 12. Related documentation
+## 13. Related documentation
 
 | Document | Relevance |
 |----------|-----------|

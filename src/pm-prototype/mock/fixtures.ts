@@ -241,6 +241,98 @@ export const INITIAL_PARTIES: MockProjectParty[] = [
   },
 ];
 
+const MOCK_TABS_CONTACTS_RIVERSIDE: MockTdlrSourceSnapshot['tabsContacts'] = [
+  {
+    id: 'tc-002-owner',
+    contactType: 'Building Or Facility Owner',
+    name: 'Riverside Med Properties Inc',
+    contactOrProfessionalName: 'J. Rivera',
+    address: '100 Medical Plaza, Austin, TX 78701',
+    phone: '(512) 555-0200',
+    email: 'compliance@example-mock.test',
+    typeOfLicense: '',
+    license: '',
+    isCurrent: true,
+  },
+  {
+    id: 'tc-002-agent',
+    contactType: 'Owners Designated Agent',
+    name: 'Riverside Facilities Mgmt',
+    contactOrProfessionalName: 'A. Brooks',
+    address: '200 Admin Way, Austin, TX 78702',
+    phone: '(512) 555-0201',
+    email: 'agent@example-mock.test',
+    typeOfLicense: '',
+    license: '',
+    isCurrent: true,
+  },
+  {
+    id: 'tc-002-design',
+    contactType: 'Design Firm',
+    name: 'Gulf Coast Design Associates',
+    contactOrProfessionalName: 'C. Nguyen',
+    address: '300 Design Blvd, Austin, TX 78703',
+    phone: '(512) 555-0202',
+    email: 'gc@example-mock.test',
+    typeOfLicense: 'Architect',
+    license: 'MOCK-12345',
+    isCurrent: true,
+  },
+  {
+    id: 'tc-002-ras',
+    contactType: 'Registered Accessibility Specialists',
+    name: 'Jordan Lee',
+    contactOrProfessionalName: 'Jordan Lee',
+    address: '400 RAS Office Park, Austin, TX 78704',
+    phone: '(512) 555-0203',
+    email: 'ras@example-mock.test',
+    typeOfLicense: 'RAS',
+    license: 'MOCK-149',
+    isCurrent: true,
+  },
+];
+
+const MOCK_TABS_STATUS_RIVERSIDE: MockTdlrSourceSnapshot['tabsStatusUpdates'] = [
+  {
+    id: 'psu-002-reg',
+    description: 'Registration',
+    reportDate: '2026-04-09',
+    submittedOn: '2026-04-10',
+    status: 'Review Complete',
+  },
+  {
+    id: 'psu-002-pr',
+    description: 'Plan Review',
+    reportDate: '2026-05-15',
+    submittedOn: '2026-05-16',
+    status: 'Review Complete',
+  },
+];
+
+const MOCK_TABS_STATUS_STATE_ST: MockTdlrSourceSnapshot['tabsStatusUpdates'] = [
+  {
+    id: 'psu-005-reg',
+    description: 'Registration',
+    reportDate: '2026-02-01',
+    submittedOn: '2026-02-02',
+    status: 'Review Complete',
+  },
+  {
+    id: 'psu-005-pr',
+    description: 'Plan Review',
+    reportDate: '2026-04-28',
+    submittedOn: '2026-05-01',
+    status: 'Review Complete',
+  },
+  {
+    id: 'psu-005-close',
+    description: 'Close Project',
+    reportDate: '2026-05-20',
+    submittedOn: '2026-05-21',
+    status: 'Rejected',
+  },
+];
+
 export const INITIAL_SNAPSHOTS: MockTdlrSourceSnapshot[] = [
   {
     projectId: 'proj-002',
@@ -249,9 +341,17 @@ export const INITIAL_SNAPSHOTS: MockTdlrSourceSnapshot[] = [
     asRecorded: {
       registrantName: 'Gulf Coast Design Associates',
       ownerName: 'Riverside Med Properties Inc',
-      statusLabel: 'Registered — Plan Review',
+      statusLabel: 'Review Complete',
       registrationDate: '2026-04-09',
+      projectIdLabel: 'MOCK-TABS-884521',
+      lastAction: 'Plan Review',
+      projectCreatedBy: 'Registered by TDLR',
+      planReviewBy: 'Jordan Lee',
+      inspectionBy: '—',
+      dataVersionId: '900002',
     },
+    tabsContacts: MOCK_TABS_CONTACTS_RIVERSIDE,
+    tabsStatusUpdates: MOCK_TABS_STATUS_RIVERSIDE,
     candidateLinks: [
       {
         id: 'link-002-owner',
@@ -274,9 +374,54 @@ export const INITIAL_SNAPSHOTS: MockTdlrSourceSnapshot[] = [
     asRecorded: {
       registrantName: 'State Street Capital',
       ownerName: 'State Street Properties LLC',
-      statusLabel: 'Registered — Plan Review Complete',
+      statusLabel: 'Review Complete',
       registrationDate: '2026-02-01',
+      projectIdLabel: 'MOCK-TABS-901334',
+      lastAction: 'Plan Review Complete',
+      projectCreatedBy: 'Registered by TDLR',
+      planReviewBy: 'Jordan Lee',
+      inspectionBy: 'Morgan Reyes',
+      dataVersionId: '900002',
     },
+    tabsContacts: [
+      {
+        id: 'tc-005-owner',
+        contactType: 'Building Or Facility Owner',
+        name: 'State Street Properties LLC',
+        contactOrProfessionalName: 'T. Morgan',
+        address: '500 Commerce St, Dallas, TX 75201',
+        phone: '(214) 555-0300',
+        email: 'owner@example-mock.test',
+        typeOfLicense: '',
+        license: '',
+        isCurrent: true,
+      },
+      {
+        id: 'tc-005-design',
+        contactType: 'Design Firm',
+        name: 'Metro Design Group',
+        contactOrProfessionalName: 'L. Park',
+        address: '600 Design Ave, Dallas, TX 75202',
+        phone: '(214) 555-0301',
+        email: 'design@example-mock.test',
+        typeOfLicense: 'Engineer',
+        license: 'MOCK-67890',
+        isCurrent: true,
+      },
+      {
+        id: 'tc-005-ras',
+        contactType: 'Registered Accessibility Specialists',
+        name: 'Jordan Lee',
+        contactOrProfessionalName: 'Jordan Lee',
+        address: '700 RAS Center, Dallas, TX 75203',
+        phone: '(214) 555-0302',
+        email: 'ras@example-mock.test',
+        typeOfLicense: 'RAS',
+        license: 'MOCK-149',
+        isCurrent: true,
+      },
+    ],
+    tabsStatusUpdates: MOCK_TABS_STATUS_STATE_ST,
     candidateLinks: [
       {
         id: 'link-005-owner',

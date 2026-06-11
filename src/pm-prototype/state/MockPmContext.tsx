@@ -183,9 +183,25 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
           asRecorded: {
             registrantName: '(mock) pending staff review',
             ownerName: '(mock) as-recorded owner',
-            statusLabel: 'Registered (mock)',
+            statusLabel: 'Project Registered (mock)',
             registrationDate: data.dateReceived,
+            projectIdLabel: 'MOCK-PENDING',
+            lastAction: 'Registration',
+            projectCreatedBy: 'Registered by TDLR (mock)',
+            planReviewBy: '—',
+            inspectionBy: '—',
+            dataVersionId: '900002',
           },
+          tabsContacts: [],
+          tabsStatusUpdates: [
+            {
+              id: nextId('psu'),
+              description: 'Registration',
+              reportDate: data.dateReceived,
+              submittedOn: data.dateReceived,
+              status: 'Review Complete',
+            },
+          ],
           candidateLinks: [
             {
               id: nextId('link'),

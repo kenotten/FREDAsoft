@@ -2,7 +2,7 @@ import React from 'react';
 import { AlertTriangle, Link2 } from 'lucide-react';
 import { Button, Card } from '../../components/ui/core';
 import { useMockPm } from '../state/MockPmContext';
-import { PARTY_ROLE_LABELS, type MockTdlrSourceSnapshot } from '../types';
+import { PARTY_ROLE_LABELS, TABS_DOCUMENT_TYPE_OPTIONS, type MockTdlrSourceSnapshot } from '../types';
 
 interface SourceTabProps {
   projectId: string;
@@ -23,6 +23,8 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
     );
   }
 
+  const { asRecorded } = snapshot;
+
   return (
     <div className="space-y-4">
       <div className="p-4 rounded-lg bg-amber-50 border border-amber-300 flex gap-3 text-sm text-amber-950">
@@ -36,7 +38,7 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
       <Card className="p-5 bg-amber-50/40 border-amber-200 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-amber-950 uppercase tracking-wider">
-            TDLR Source Snapshot (read-only mock)
+            TDLR Source Snapshot — Manage Project panel (read-only mock)
           </h3>
           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-amber-200 text-amber-900">
             SOURCE ONLY
@@ -45,8 +47,32 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
 
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
+            <dt className="text-xs font-semibold text-amber-800 uppercase">Project ID</dt>
+            <dd className="mt-1 font-mono font-medium">{asRecorded.projectIdLabel}</dd>
+          </div>
+          <div>
             <dt className="text-xs font-semibold text-amber-800 uppercase">TABS #</dt>
             <dd className="mt-1 font-mono font-medium">{snapshot.tabsNumber}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-amber-800 uppercase">Status</dt>
+            <dd className="mt-1">{asRecorded.statusLabel}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-amber-800 uppercase">Last Action</dt>
+            <dd className="mt-1">{asRecorded.lastAction}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-amber-800 uppercase">Project Created By</dt>
+            <dd className="mt-1">{asRecorded.projectCreatedBy}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-amber-800 uppercase">Plan Review By</dt>
+            <dd className="mt-1">{asRecorded.planReviewBy}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-amber-800 uppercase">Inspection By</dt>
+            <dd className="mt-1">{asRecorded.inspectionBy}</dd>
           </div>
           <div>
             <dt className="text-xs font-semibold text-amber-800 uppercase">Captured at</dt>
@@ -54,23 +80,73 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
           </div>
           <div>
             <dt className="text-xs font-semibold text-amber-800 uppercase">Registrant</dt>
-            <dd className="mt-1">{snapshot.asRecorded.registrantName}</dd>
+            <dd className="mt-1">{asRecorded.registrantName}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold text-amber-800 uppercase">
-              Owner (as recorded)
-            </dt>
-            <dd className="mt-1 font-medium">{snapshot.asRecorded.ownerName}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-semibold text-amber-800 uppercase">Project status</dt>
-            <dd className="mt-1">{snapshot.asRecorded.statusLabel}</dd>
+            <dt className="text-xs font-semibold text-amber-800 uppercase">Owner (as recorded)</dt>
+            <dd className="mt-1 font-medium">{asRecorded.ownerName}</dd>
           </div>
           <div>
             <dt className="text-xs font-semibold text-amber-800 uppercase">Registration date</dt>
-            <dd className="mt-1">{snapshot.asRecorded.registrationDate}</dd>
+            <dd className="mt-1">{asRecorded.registrationDate}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-amber-800 uppercase">DataVersionId</dt>
+            <dd className="mt-1 font-mono text-xs">{asRecorded.dataVersionId}</dd>
           </div>
         </dl>
+      </Card>
+
+      {snapshot.tabsStatusUpdates.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/80">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-600">
+              Project Status Updates (TABS source)
+            </h4>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-100 text-left text-xs uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-3 font-semibold">Description</th>
+                  <th className="px-4 py-3 font-semibold">Report Date</th>
+                  <th className="px-4 py-3 font-semibold">Submitted On</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {snapshot.tabsStatusUpdates.map((row) => (
+                  <tr key={row.id} className="border-b border-zinc-50">
+                    <td className="px-4 py-3">{row.description}</td>
+                    <td className="px-4 py-3 text-zinc-600">{row.reportDate}</td>
+                    <td className="px-4 py-3 text-zinc-600">{row.submittedOn}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-block px-2 py-0.5 rounded bg-zinc-100 text-xs">
+                        {row.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      <Card className="p-4 bg-zinc-50 border-zinc-200">
+        <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
+          Upload Documents — Document Type reference (PSUUPDocumentTypeId mock)
+        </h4>
+        <p className="text-xs text-zinc-500 mb-3">
+          Checklist labels only — not FREDAsoft canonical project fields.
+        </p>
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-zinc-700">
+          {TABS_DOCUMENT_TYPE_OPTIONS.map((label) => (
+            <li key={label} className="truncate">
+              {label}
+            </li>
+          ))}
+        </ul>
       </Card>
 
       <div className="space-y-3">

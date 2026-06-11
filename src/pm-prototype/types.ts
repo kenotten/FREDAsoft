@@ -102,6 +102,49 @@ export interface MockProjectParty {
   isCanonicalLinked: boolean;
 }
 
+/** TABS #tblContacts row — as-recorded source only (exact Contact Type spellings). */
+export interface MockTabsContactRow {
+  id: string;
+  contactType: string;
+  name: string;
+  contactOrProfessionalName: string;
+  address: string;
+  phone: string;
+  email: string;
+  typeOfLicense: string;
+  license: string;
+  isCurrent: boolean;
+}
+
+/** TABS Project Status Updates (#psu_info) row — source transaction history. */
+export interface MockTabsStatusUpdateRow {
+  id: string;
+  description: string;
+  reportDate: string;
+  submittedOn: string;
+  status: string;
+}
+
+/** Observed PSUUPDocumentTypeId option labels — checklist reference only. */
+export const TABS_DOCUMENT_TYPE_OPTIONS = [
+  'Article of Formation Documents',
+  'Construction Documents (CDs)',
+  'County Appraisal District Documents',
+  'Ground Lease',
+  'Inspection Response Form',
+  'Limited Liability Ownership',
+  'Miscellaneous',
+  'Notice of Substantial Compliance',
+  'Owner Agent Designation',
+  'Proof of Inspection Form',
+  'Proof of Re-Inspection Form',
+  'Proof of Submission',
+  'Registration form (if registered by RAS)',
+  'Request for Inspection',
+  'Request for Re-Inspection',
+  'Texas Secretary of State records Documents',
+] as const;
+
 export interface MockTdlrSourceSnapshot {
   projectId: string;
   tabsNumber: string;
@@ -111,7 +154,16 @@ export interface MockTdlrSourceSnapshot {
     ownerName: string;
     statusLabel: string;
     registrationDate: string;
+    /** lblProjectId — legacy/TABS project id shape */
+    projectIdLabel: string;
+    lastAction: string;
+    projectCreatedBy: string;
+    planReviewBy: string;
+    inspectionBy: string;
+    dataVersionId: string;
   };
+  tabsContacts: MockTabsContactRow[];
+  tabsStatusUpdates: MockTabsStatusUpdateRow[];
   candidateLinks: {
     id: string;
     partyRole: PartyRole;
