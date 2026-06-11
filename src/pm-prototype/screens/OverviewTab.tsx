@@ -6,6 +6,10 @@ interface OverviewTabProps {
   project: MockProject;
 }
 
+/** Matches project header Client value styling (blue-800 + bold) for field labels only. */
+const OVERVIEW_FIELD_LABEL = 'text-xs font-bold text-blue-800 uppercase';
+const OVERVIEW_FIELD_VALUE = 'mt-1 text-zinc-900 font-normal';
+
 export function OverviewTab({ project }: OverviewTabProps) {
   return (
     <div className="space-y-4">
@@ -15,57 +19,59 @@ export function OverviewTab({ project }: OverviewTabProps) {
         </h3>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
-            <dt className="text-xs font-semibold text-zinc-500 uppercase">Site / project name</dt>
-            <dd className="mt-1 text-zinc-900">{project.siteName}</dd>
+            <dt className={OVERVIEW_FIELD_LABEL}>Site / project name</dt>
+            <dd className={OVERVIEW_FIELD_VALUE}>{project.siteName}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold text-zinc-500 uppercase">OCG #</dt>
-            <dd className="mt-1 font-mono">{project.ocgProjectNumber}</dd>
+            <dt className={OVERVIEW_FIELD_LABEL}>OCG #</dt>
+            <dd className={`${OVERVIEW_FIELD_VALUE} font-mono`}>{project.ocgProjectNumber}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold text-zinc-500 uppercase">TABS #</dt>
-            <dd className="mt-1 font-mono">{project.tabsNumber ?? '— pending —'}</dd>
+            <dt className={OVERVIEW_FIELD_LABEL}>TABS #</dt>
+            <dd className={`${OVERVIEW_FIELD_VALUE} font-mono`}>
+              {project.tabsNumber ?? '— pending —'}
+            </dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold text-zinc-500 uppercase">Date received</dt>
-            <dd className="mt-1">{project.dateReceived}</dd>
+            <dt className={OVERVIEW_FIELD_LABEL}>Date received</dt>
+            <dd className={OVERVIEW_FIELD_VALUE}>{project.dateReceived}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold text-zinc-500 uppercase">Client</dt>
-            <dd className="mt-1 text-blue-800 font-medium">{project.clientLabel}</dd>
+            <dt className={OVERVIEW_FIELD_LABEL}>Client</dt>
+            <dd className={OVERVIEW_FIELD_VALUE}>{project.clientLabel}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold text-zinc-500 uppercase">Owner (canonical)</dt>
-            <dd className="mt-1 text-emerald-800 font-medium">{project.ownerLabel}</dd>
+            <dt className={OVERVIEW_FIELD_LABEL}>Owner (canonical)</dt>
+            <dd className={OVERVIEW_FIELD_VALUE}>{project.ownerLabel}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold text-zinc-500 uppercase">Service scope</dt>
-            <dd className="mt-1">{project.serviceScope}</dd>
+            <dt className={OVERVIEW_FIELD_LABEL}>Service scope</dt>
+            <dd className={OVERVIEW_FIELD_VALUE}>{project.serviceScope}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold text-zinc-500 uppercase">Current status</dt>
+            <dt className={OVERVIEW_FIELD_LABEL}>Current status</dt>
             <dd className="mt-1">
-              <span className="inline-block px-2 py-1 rounded bg-zinc-100 text-xs font-medium">
+              <span className="inline-block px-2 py-1 rounded bg-zinc-100 text-xs font-normal text-zinc-900">
                 {project.currentStatus}
               </span>
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold text-zinc-500 uppercase">Assigned RAS</dt>
-            <dd className="mt-1">{project.assignedRas ?? 'Not assigned (mock)'}</dd>
+            <dt className={OVERVIEW_FIELD_LABEL}>Assigned RAS</dt>
+            <dd className={OVERVIEW_FIELD_VALUE}>
+              {project.assignedRas ?? 'Not assigned (mock)'}
+            </dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold text-zinc-500 uppercase">Next due date</dt>
-            <dd className="mt-1">{project.nextDueDate ?? '—'}</dd>
+            <dt className={OVERVIEW_FIELD_LABEL}>Next due date</dt>
+            <dd className={OVERVIEW_FIELD_VALUE}>{project.nextDueDate ?? '—'}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold text-zinc-500 uppercase">Payment</dt>
-            <dd className="mt-1">
-              {project.paymentPending ? (
-                <span className="text-amber-700 font-medium">Payment pending (mock)</span>
-              ) : (
-                <span className="text-zinc-600">No pending fees (mock)</span>
-              )}
+            <dt className={OVERVIEW_FIELD_LABEL}>Payment</dt>
+            <dd className={OVERVIEW_FIELD_VALUE}>
+              {project.paymentPending
+                ? 'Payment pending (mock)'
+                : 'No pending fees (mock)'}
             </dd>
           </div>
         </dl>
