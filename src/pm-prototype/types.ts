@@ -263,3 +263,53 @@ export interface IntakeFormData {
   serviceScope: ServiceScope;
   dateReceived: string;
 }
+
+/** Canonical stakeholder directory entry — mock operational track only. */
+export type StakeholderType =
+  | 'Client'
+  | 'Owner'
+  | 'Tenant'
+  | 'Design Firm'
+  | 'Owner Agent'
+  | 'RAS Firm'
+  | 'Contact Person'
+  | 'Other';
+
+export type StakeholderEntityKind = 'entity' | 'person';
+
+export type StakeholderReviewDecision =
+  | 'unreviewed'
+  | 'linked'
+  | 'create-draft'
+  | 'deferred'
+  | 'rejected';
+
+export const STAKEHOLDER_REVIEW_DECISION_LABELS: Record<StakeholderReviewDecision, string> = {
+  unreviewed: 'Unreviewed',
+  linked: 'Linked to candidate',
+  'create-draft': 'Create draft recommended',
+  deferred: 'Deferred',
+  rejected: 'Rejected',
+};
+
+export interface MockCanonicalStakeholder {
+  id: string;
+  displayName: string;
+  stakeholderType: StakeholderType;
+  entityKind: StakeholderEntityKind;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
+/** Staff review of a TABS #tblContacts row vs canonical stakeholder candidates. */
+export interface MockStakeholderLinkReview {
+  id: string;
+  projectId: string;
+  tabsContactRowId: string;
+  candidateStakeholderId?: string;
+  matchReason: string;
+  confidence: 'high' | 'medium' | 'low' | 'none';
+  reviewDecision: StakeholderReviewDecision;
+  reviewNote: string;
+}

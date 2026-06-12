@@ -4,22 +4,27 @@
 
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import {
+  INITIAL_CANONICAL_STAKEHOLDERS,
   INITIAL_FEEDBACK,
   INITIAL_PARTIES,
   INITIAL_PROJECTS,
   INITIAL_SNAPSHOTS,
+  INITIAL_STAKEHOLDER_LINK_REVIEWS,
 } from '../mock/fixtures';
 import type {
   IntakeFormData,
+  MockCanonicalStakeholder,
   MockFeedback,
   MockProject,
   MockProjectParty,
+  MockStakeholderLinkReview,
   MockTdlrSourceSnapshot,
   ProjectStatus,
   ProjectTab,
   PrototypeView,
   QueueKey,
   ServiceScope,
+  StakeholderReviewDecision,
 } from '../types';
 
 const IN_REVIEW_STATUSES: ProjectStatus[] = [
@@ -63,6 +68,8 @@ interface MockPmContextValue {
   parties: MockProjectParty[];
   snapshots: MockTdlrSourceSnapshot[];
   feedback: MockFeedback[];
+  canonicalStakeholders: MockCanonicalStakeholder[];
+  stakeholderLinkReviews: MockStakeholderLinkReview[];
   selectedQueue: QueueKey | 'all';
   goToDashboard: () => void;
   goToIntake: () => void;
@@ -73,11 +80,15 @@ interface MockPmContextValue {
   updateProjectStatus: (projectId: string, status: ProjectStatus) => void;
   updateProjectScope: (projectId: string, scope: ServiceScope) => void;
   approveCandidateLink: (projectId: string, linkId: string) => void;
+  setStakeholderReviewDecision: (reviewId: string, decision: StakeholderReviewDecision) => void;
+  updateStakeholderReviewNote: (reviewId: string, note: string) => void;
   addFeedback: (entry: Omit<MockFeedback, 'id' | 'createdAt'>) => void;
   resetMockData: () => void;
   getProject: (id: string) => MockProject | undefined;
   getProjectParties: (projectId: string) => MockProjectParty[];
   getProjectSnapshot: (projectId: string) => MockTdlrSourceSnapshot | undefined;
+  getStakeholderLinkReviewsForProject: (projectId: string) => MockStakeholderLinkReview[];
+  getCanonicalStakeholder: (id: string) => MockCanonicalStakeholder | undefined;
 }
 
 const MockPmContext = createContext<MockPmContextValue | null>(null);
@@ -92,6 +103,12 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
     ...INITIAL_SNAPSHOTS,
   ]);
   const [feedback, setFeedback] = useState<MockFeedback[]>(() => [...INITIAL_FEEDBACK]);
+  const [canonicalStakeholders, setCanonicalStakeholders] = useState<MockCanonicalStakeholder[]>(
+    () => [...INITIAL_CANONICAL_STAKEHOLDERS]
+  );
+  const [stakeholderLinkReviews, setStakeholderLinkReviews] = useState<
+    MockStakeholderLinkReview[]
+  >(() => [...INITIAL_STAKEHOLDER_LINK_REVIEWS]);
   const [selectedQueue, setSelectedQueue] = useState<QueueKey | 'all'>('all');
 
   const goToDashboard = useCallback(() => {
@@ -124,6 +141,17 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
   const getProjectSnapshot = useCallback(
     (projectId: string) => snapshots.find((s) => s.projectId === projectId),
     [snapshots]
+  );
+
+  const getStakeholderLinkReviewsForProject = useCallback(
+    (projectId: string) =>
+      stakeholderLinkReviews.filter((r) => r.projectId === projectId),
+    [stakeholderLinkReviews]
+  );
+
+  const getCanonicalStakeholder = useCallback(
+    (id: string) => canonicalStakeholders.find((s) => s.id === id),
+    [canonicalStakeholders]
   );
 
   const createProjectFromIntake = useCallback((data: IntakeFormData): string => {
@@ -246,6 +274,21 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const setStakeholderReviewDecision = useCallback(
+    (reviewId: string, decision: StakeholderReviewDecision) => {
+      setStakeholderLinkReviews((prev) =>
+        prev.map((r) => (r.id === reviewId ? { ...r, reviewDecision: decision } : r))
+      );
+    },
+    []
+  );
+
+  const updateStakeholderReviewNote = useCallback((reviewId: string, note: string) => {
+    setStakeholderLinkReviews((prev) =>
+      prev.map((r) => (r.id === reviewId ? { ...r, reviewNote: note } : r))
+    );
+  }, []);
+
   const approveCandidateLink = useCallback((projectId: string, linkId: string) => {
     setSnapshots((prev) =>
       prev.map((s) => {
@@ -276,6 +319,8 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
     setParties([...INITIAL_PARTIES]);
     setSnapshots([...INITIAL_SNAPSHOTS]);
     setFeedback([...INITIAL_FEEDBACK]);
+    setCanonicalStakeholders([...INITIAL_CANONICAL_STAKEHOLDERS]);
+    setStakeholderLinkReviews([...INITIAL_STAKEHOLDER_LINK_REVIEWS]);
     setView('dashboard');
     setActiveProjectId(null);
     setActiveTab('overview');
@@ -291,6 +336,8 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
       parties,
       snapshots,
       feedback,
+      canonicalStakeholders,
+      stakeholderLinkReviews,
       selectedQueue,
       goToDashboard,
       goToIntake,
@@ -301,11 +348,15 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
       updateProjectStatus,
       updateProjectScope,
       approveCandidateLink,
+      setStakeholderReviewDecision,
+      updateStakeholderReviewNote,
       addFeedback,
       resetMockData,
       getProject,
       getProjectParties,
       getProjectSnapshot,
+      getStakeholderLinkReviewsForProject,
+      getCanonicalStakeholder,
     }),
     [
       view,
@@ -315,6 +366,8 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
       parties,
       snapshots,
       feedback,
+      canonicalStakeholders,
+      stakeholderLinkReviews,
       selectedQueue,
       goToDashboard,
       goToIntake,
@@ -323,11 +376,15 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
       updateProjectStatus,
       updateProjectScope,
       approveCandidateLink,
+      setStakeholderReviewDecision,
+      updateStakeholderReviewNote,
       addFeedback,
       resetMockData,
       getProject,
       getProjectParties,
       getProjectSnapshot,
+      getStakeholderLinkReviewsForProject,
+      getCanonicalStakeholder,
     ]
   );
 

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { BadgeCheck, Building2, User, Users } from 'lucide-react';
+import { StakeholderLinkReviewPanel } from '../components/StakeholderLinkReviewPanel';
 import { Card } from '../../components/ui/core';
 import { useMockPm } from '../state/MockPmContext';
 import { PARTY_ROLE_LABELS, type MockProject, type MockProjectParty } from '../types';
@@ -17,9 +18,20 @@ interface PartiesTabProps {
 }
 
 export function PartiesTab({ project, parties }: PartiesTabProps) {
-  const { getProjectSnapshot } = useMockPm();
+  const {
+    getProjectSnapshot,
+    getStakeholderLinkReviewsForProject,
+    getCanonicalStakeholder,
+    setStakeholderReviewDecision,
+    updateStakeholderReviewNote,
+  } = useMockPm();
   const snapshot = getProjectSnapshot(project.id);
   const tabsContacts = snapshot?.tabsContacts ?? [];
+  const linkReviews = getStakeholderLinkReviewsForProject(project.id);
+  const reviewByContactId = useMemo(
+    () => new Map(linkReviews.map((r) => [r.tabsContactRowId, r])),
+    [linkReviews]
+  );
 
   const clientParty = parties.find((p) => p.role === 'Client');
   const ownerParty = parties.find((p) => p.role === 'Owner');
@@ -78,6 +90,42 @@ export function PartiesTab({ project, parties }: PartiesTabProps) {
             Exact TABS spellings preserved (e.g. Owners Designated Agent, Registered Accessibility
             Specialists).
           </p>
+        </div>
+      )}
+
+      {tabsContacts.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wider">
+              Canonical stakeholder review (mock)
+            </h3>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-indigo-100 text-indigo-800">
+              Mock only — not saved
+            </span>
+          </div>
+          <p className="text-xs text-zinc-500">
+            TABS rows are source/as-recorded and are not edited here. Staff review links each row to
+            a canonical stakeholder candidate — separate from Client, Owner, Design Firm, Agent, and
+            RAS roles.
+          </p>
+          <div className="space-y-4">
+            {tabsContacts.map((row) => {
+              const review = reviewByContactId.get(row.id);
+              const candidate = review?.candidateStakeholderId
+                ? getCanonicalStakeholder(review.candidateStakeholderId)
+                : undefined;
+              return (
+                <StakeholderLinkReviewPanel
+                  key={row.id}
+                  contactRow={row}
+                  review={review}
+                  candidate={candidate}
+                  onSetDecision={setStakeholderReviewDecision}
+                  onUpdateNote={updateStakeholderReviewNote}
+                />
+              );
+            })}
+          </div>
         </div>
       )}
 
