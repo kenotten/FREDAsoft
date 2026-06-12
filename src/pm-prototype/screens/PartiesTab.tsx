@@ -22,7 +22,9 @@ export function PartiesTab({ project, parties }: PartiesTabProps) {
     getProjectSnapshot,
     getStakeholderLinkReviewsForProject,
     getCanonicalStakeholder,
+    canonicalStakeholders,
     setStakeholderReviewDecision,
+    selectStakeholderManually,
     updateStakeholderReviewNote,
   } = useMockPm();
   const snapshot = getProjectSnapshot(project.id);
@@ -111,7 +113,10 @@ export function PartiesTab({ project, parties }: PartiesTabProps) {
           <div className="space-y-4">
             {tabsContacts.map((row) => {
               const review = reviewByContactId.get(row.id);
-              const candidate = review?.candidateStakeholderId
+              const suggestedStakeholder = review?.suggestedStakeholderId
+                ? getCanonicalStakeholder(review.suggestedStakeholderId)
+                : undefined;
+              const selectedStakeholder = review?.candidateStakeholderId
                 ? getCanonicalStakeholder(review.candidateStakeholderId)
                 : undefined;
               return (
@@ -119,9 +124,12 @@ export function PartiesTab({ project, parties }: PartiesTabProps) {
                   key={row.id}
                   contactRow={row}
                   review={review}
-                  candidate={candidate}
+                  suggestedStakeholder={suggestedStakeholder}
+                  selectedStakeholder={selectedStakeholder}
+                  allStakeholders={canonicalStakeholders}
                   onSetDecision={setStakeholderReviewDecision}
                   onUpdateNote={updateStakeholderReviewNote}
+                  onSelectStakeholderManually={selectStakeholderManually}
                 />
               );
             })}
@@ -214,7 +222,8 @@ export function PartiesTab({ project, parties }: PartiesTabProps) {
         )}
 
         <p className="text-xs text-zinc-400">
-          No stakeholder directory search in this prototype — parties are mock fixtures only.
+          Canonical party cards are mock operational fixtures — use stakeholder review above for TABS
+          linking decisions.
         </p>
       </div>
     </div>

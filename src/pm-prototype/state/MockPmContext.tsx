@@ -81,6 +81,7 @@ interface MockPmContextValue {
   updateProjectScope: (projectId: string, scope: ServiceScope) => void;
   approveCandidateLink: (projectId: string, linkId: string) => void;
   setStakeholderReviewDecision: (reviewId: string, decision: StakeholderReviewDecision) => void;
+  selectStakeholderManually: (reviewId: string, stakeholderId: string) => void;
   updateStakeholderReviewNote: (reviewId: string, note: string) => void;
   addFeedback: (entry: Omit<MockFeedback, 'id' | 'createdAt'>) => void;
   resetMockData: () => void;
@@ -277,10 +278,43 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
   const setStakeholderReviewDecision = useCallback(
     (reviewId: string, decision: StakeholderReviewDecision) => {
       setStakeholderLinkReviews((prev) =>
-        prev.map((r) => (r.id === reviewId ? { ...r, reviewDecision: decision } : r))
+        prev.map((r) => {
+          if (r.id !== reviewId) return r;
+          if (decision === 'linked' && r.suggestedStakeholderId) {
+            return {
+              ...r,
+              reviewDecision: decision,
+              candidateStakeholderId: r.suggestedStakeholderId,
+            };
+          }
+          return { ...r, reviewDecision: decision };
+        })
       );
     },
     []
+  );
+
+  const selectStakeholderManually = useCallback(
+    (reviewId: string, stakeholderId: string) => {
+      setStakeholderLinkReviews((prev) =>
+        prev.map((r) => {
+          if (r.id !== reviewId) return r;
+          const stakeholder = canonicalStakeholders.find((s) => s.id === stakeholderId);
+          const name = stakeholder?.displayName ?? stakeholderId;
+          const manualNote = `Manual staff selection — linked to "${name}" via mock canonical stakeholder search (session only).`;
+          const reviewNote = r.reviewNote.trim()
+            ? `${r.reviewNote}\n${manualNote}`
+            : manualNote;
+          return {
+            ...r,
+            candidateStakeholderId: stakeholderId,
+            reviewDecision: 'linked-manually',
+            reviewNote,
+          };
+        })
+      );
+    },
+    [canonicalStakeholders]
   );
 
   const updateStakeholderReviewNote = useCallback((reviewId: string, note: string) => {
@@ -349,6 +383,7 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
       updateProjectScope,
       approveCandidateLink,
       setStakeholderReviewDecision,
+      selectStakeholderManually,
       updateStakeholderReviewNote,
       addFeedback,
       resetMockData,
@@ -377,6 +412,7 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
       updateProjectScope,
       approveCandidateLink,
       setStakeholderReviewDecision,
+      selectStakeholderManually,
       updateStakeholderReviewNote,
       addFeedback,
       resetMockData,

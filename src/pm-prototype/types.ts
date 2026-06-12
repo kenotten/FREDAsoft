@@ -280,6 +280,7 @@ export type StakeholderEntityKind = 'entity' | 'person';
 export type StakeholderReviewDecision =
   | 'unreviewed'
   | 'linked'
+  | 'linked-manually'
   | 'create-draft'
   | 'deferred'
   | 'rejected';
@@ -287,6 +288,7 @@ export type StakeholderReviewDecision =
 export const STAKEHOLDER_REVIEW_DECISION_LABELS: Record<StakeholderReviewDecision, string> = {
   unreviewed: 'Unreviewed',
   linked: 'Linked to candidate',
+  'linked-manually': 'Linked manually',
   'create-draft': 'Create draft recommended',
   deferred: 'Deferred',
   rejected: 'Rejected',
@@ -300,6 +302,8 @@ export interface MockCanonicalStakeholder {
   email?: string;
   phone?: string;
   address?: string;
+  /** Mock directory notes — searchable in manual stakeholder search only. */
+  directoryNotes?: string;
 }
 
 /** Staff review of a TABS #tblContacts row vs canonical stakeholder candidates. */
@@ -307,6 +311,9 @@ export interface MockStakeholderLinkReview {
   id: string;
   projectId: string;
   tabsContactRowId: string;
+  /** System-suggested canonical stakeholder (unchanged when staff overrides). */
+  suggestedStakeholderId?: string;
+  /** Currently selected canonical stakeholder for this review. */
   candidateStakeholderId?: string;
   matchReason: string;
   confidence: 'high' | 'medium' | 'low' | 'none';

@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertCircle, Link2, UserPlus, Clock, Ban } from 'lucide-react';
 import { Card } from '../../components/ui/core';
+import { StakeholderManualSearch } from './StakeholderManualSearch';
 import {
   STAKEHOLDER_REVIEW_DECISION_LABELS,
   type MockCanonicalStakeholder,
@@ -12,6 +13,7 @@ import {
 const DECISION_BADGE_CLASS: Record<StakeholderReviewDecision, string> = {
   unreviewed: 'bg-amber-100 text-amber-900 border-amber-200',
   linked: 'bg-green-100 text-green-900 border-green-200',
+  'linked-manually': 'bg-teal-100 text-teal-900 border-teal-200',
   'create-draft': 'bg-violet-100 text-violet-900 border-violet-200',
   deferred: 'bg-slate-100 text-slate-700 border-slate-200',
   rejected: 'bg-red-100 text-red-900 border-red-200',
@@ -24,21 +26,91 @@ const CONFIDENCE_LABEL: Record<MockStakeholderLinkReview['confidence'], string> 
   none: 'No match',
 };
 
+function StakeholderCard({
+  stakeholder,
+  label,
+  badge,
+  muted = false,
+  matchLine,
+}: {
+  stakeholder: MockCanonicalStakeholder;
+  label: string;
+  badge?: string;
+  muted?: boolean;
+  matchLine?: string;
+}) {
+  return (
+    <div
+      className={`p-3 rounded-lg border ${
+        muted ? 'bg-zinc-50 border-zinc-200' : 'bg-white border-indigo-200'
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">{label}</p>
+        {badge && (
+          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+            {badge}
+          </span>
+        )}
+      </div>
+      <p className={`font-semibold ${muted ? 'text-zinc-700' : 'text-zinc-900'}`}>
+        {stakeholder.displayName}
+      </p>
+      <p className="text-xs text-zinc-600 mt-1">
+        Type: {stakeholder.stakeholderType} ·{' '}
+        {stakeholder.entityKind === 'entity' ? 'Entity' : 'Person'}
+      </p>
+      {(stakeholder.email || stakeholder.phone) && (
+        <p className="text-xs text-zinc-500 mt-1">
+          {[stakeholder.email, stakeholder.phone].filter(Boolean).join(' · ')}
+        </p>
+      )}
+      {stakeholder.address && (
+        <p className="text-xs text-zinc-500 mt-0.5">{stakeholder.address}</p>
+      )}
+      {matchLine && <p className="text-xs text-indigo-800 mt-2">{matchLine}</p>}
+    </div>
+  );
+}
+
 interface StakeholderLinkReviewPanelProps {
   contactRow: MockTabsContactRow;
   review: MockStakeholderLinkReview | undefined;
-  candidate: MockCanonicalStakeholder | undefined;
+  suggestedStakeholder: MockCanonicalStakeholder | undefined;
+  selectedStakeholder: MockCanonicalStakeholder | undefined;
+  allStakeholders: MockCanonicalStakeholder[];
   onSetDecision: (reviewId: string, decision: StakeholderReviewDecision) => void;
   onUpdateNote: (reviewId: string, note: string) => void;
+  onSelectStakeholderManually: (reviewId: string, stakeholderId: string) => void;
 }
 
 export function StakeholderLinkReviewPanel({
   contactRow,
   review,
-  candidate,
+  suggestedStakeholder,
+  selectedStakeholder,
+  allStakeholders,
   onSetDecision,
   onUpdateNote,
+  onSelectStakeholderManually,
 }: StakeholderLinkReviewPanelProps) {
+  const hasSuggestion = Boolean(review?.suggestedStakeholderId && suggestedStakeholder);
+  const hasSelection = Boolean(review?.candidateStakeholderId && selectedStakeholder);
+  const overrideActive =
+    hasSuggestion &&
+    hasSelection &&
+    review!.suggestedStakeholderId !== review!.candidateStakeholderId;
+  const isManualLink = review?.reviewDecision === 'linked-manually';
+  const linkedToSuggested =
+    review?.reviewDecision === 'linked' && hasSuggestion && !overrideActive;
+  const showSelectedCard = hasSelection && (isManualLink || overrideActive);
+  const showSuggestedCard = hasSuggestion && !showSelectedCard;
+  const suggestedBadge = linkedToSuggested
+    ? 'Linked to suggested'
+    : overrideActive
+      ? 'System suggestion'
+      : 'System suggestion';
+
   return (
     <Card className="p-4 border border-indigo-100 bg-indigo-50/30">
       <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -83,44 +155,73 @@ export function StakeholderLinkReviewPanel({
         </p>
       ) : (
         <>
-          {candidate ? (
-            <div className="mb-4 p-3 rounded-lg bg-white border border-indigo-200">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 mb-2">
-                Canonical stakeholder candidate
-              </p>
-              <p className="font-semibold text-zinc-900">{candidate.displayName}</p>
-              <p className="text-xs text-zinc-600 mt-1">
-                Type: {candidate.stakeholderType} ·{' '}
-                {candidate.entityKind === 'entity' ? 'Entity' : 'Person'}
-              </p>
-              {(candidate.email || candidate.phone) && (
-                <p className="text-xs text-zinc-500 mt-1">
-                  {[candidate.email, candidate.phone].filter(Boolean).join(' · ')}
-                </p>
-              )}
-              {candidate.address && (
-                <p className="text-xs text-zinc-500 mt-0.5">{candidate.address}</p>
-              )}
-              <p className="text-xs text-indigo-800 mt-2">
-                {CONFIDENCE_LABEL[review.confidence]} — {review.matchReason}
+          {showSelectedCard ? (
+            <div className="mb-3">
+              <StakeholderCard
+                stakeholder={selectedStakeholder!}
+                label="Selected canonical stakeholder"
+                badge="Manual staff selection"
+              />
+            </div>
+          ) : null}
+
+          {showSuggestedCard ? (
+            <div className="mb-4">
+              <StakeholderCard
+                stakeholder={suggestedStakeholder!}
+                label={linkedToSuggested ? 'Canonical stakeholder candidate' : 'Suggested candidate'}
+                badge={suggestedBadge}
+                matchLine={`${CONFIDENCE_LABEL[review.confidence]} — ${review.matchReason}`}
+              />
+            </div>
+          ) : null}
+
+          {overrideActive && hasSuggestion ? (
+            <div className="mb-4">
+              <StakeholderCard
+                stakeholder={suggestedStakeholder!}
+                label="Suggested candidate"
+                badge="System suggestion — overridden"
+                muted
+                matchLine={`${CONFIDENCE_LABEL[review.confidence]} — ${review.matchReason}`}
+              />
+              <p className="text-xs text-amber-800 mt-2">
+                Staff overrode the suggested candidate — original suggestion shown for reference.
               </p>
             </div>
-          ) : (
+          ) : null}
+
+          {!hasSuggestion && !showSelectedCard ? (
             <div className="mb-4 p-3 rounded-lg bg-white border border-violet-200">
               <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700 mb-1">
                 Canonical stakeholder candidate
               </p>
-              <p className="text-sm text-zinc-600">No directory candidate — staff may create draft.</p>
+              <p className="text-sm text-zinc-600">
+                No suggested candidate. Search existing canonical stakeholders or create a draft.
+              </p>
               <p className="text-xs text-violet-800 mt-2">
                 {CONFIDENCE_LABEL[review.confidence]} — {review.matchReason}
               </p>
             </div>
-          )}
+          ) : null}
+
+          <StakeholderManualSearch
+            stakeholders={allStakeholders}
+            review={review}
+            selectedStakeholderId={review.candidateStakeholderId}
+            suggestedStakeholderId={review.suggestedStakeholderId}
+            onSelect={(id) => onSelectStakeholderManually(review.id, id)}
+            triggerLabel={
+              hasSuggestion || hasSelection
+                ? 'Find different stakeholder'
+                : 'Search canonical stakeholders'
+            }
+          />
 
           <div className="flex flex-wrap gap-2 mb-3">
             <button
               type="button"
-              disabled={!candidate}
+              disabled={!hasSuggestion}
               onClick={() => onSetDecision(review.id, 'linked')}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
             >
