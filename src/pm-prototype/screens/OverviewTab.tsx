@@ -41,7 +41,7 @@ export function OverviewTab({ project }: OverviewTabProps) {
             <dd className={OVERVIEW_FIELD_VALUE}>{project.clientLabel}</dd>
           </div>
           <div>
-            <dt className={OVERVIEW_FIELD_LABEL}>Owner (canonical)</dt>
+            <dt className={OVERVIEW_FIELD_LABEL}>Owner (FREDA project role)</dt>
             <dd className={OVERVIEW_FIELD_VALUE}>{project.ownerLabel}</dd>
           </div>
           <div>
@@ -78,7 +78,7 @@ export function OverviewTab({ project }: OverviewTabProps) {
       </Card>
 
       <p className="text-xs text-zinc-400">
-        Use the Parties, Source, Status, and Feedback tabs to continue the mock workflow review.
+        Use the Roles, TDLR data, Status, and Feedback tabs to continue the mock workflow review.
       </p>
     </div>
   );

@@ -597,7 +597,7 @@ const VALIDATION_SAMPLE_SNAPSHOTS: MockTdlrSourceSnapshot[] = [
       {
         id: 'link-val-001-owner',
         partyRole: 'Owner',
-        matchReason: 'Owner name matches canonical (mock)',
+        matchReason: 'Owner name matches FREDA stakeholder record (mock)',
         approved: true,
       },
     ],
@@ -928,7 +928,7 @@ export const INITIAL_SNAPSHOTS: MockTdlrSourceSnapshot[] = [
       {
         id: 'link-002-owner',
         partyRole: 'Owner',
-        matchReason: 'Owner name similar to canonical (spelling differs)',
+        matchReason: 'Owner name similar to FREDA stakeholder record (spelling differs)',
         approved: false,
       },
       {
@@ -1125,7 +1125,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     stakeholderType: 'Other',
     entityKind: 'entity',
     email: 'vendor@mock-other.example',
-    directoryNotes: 'Non-standard party — use only when no type fits.',
+    directoryNotes: 'Non-standard role — use only when no type fits.',
   },
 ];
 
@@ -1137,7 +1137,7 @@ export const INITIAL_STAKEHOLDER_LINK_REVIEWS: MockStakeholderLinkReview[] = [
     tabsContactRowId: 'tc-val-001-owner',
     suggestedStakeholderId: 'stake-mock-owner-airport',
     candidateStakeholderId: 'stake-mock-owner-airport',
-    matchReason: 'Owner name fuzzy match — spelling similar to canonical directory (Client ≠ Owner)',
+    matchReason: 'Owner name fuzzy match — spelling similar to FREDA stakeholder directory (Client ≠ Owner)',
     confidence: 'high',
     reviewDecision: 'unreviewed',
     reviewNote: 'Confirm Owner is not the paying Client before linking.',
@@ -1183,7 +1183,7 @@ export const INITIAL_STAKEHOLDER_LINK_REVIEWS: MockStakeholderLinkReview[] = [
     matchReason: 'Design firm name match',
     confidence: 'medium',
     reviewDecision: 'linked',
-    reviewNote: 'Canonical design firm linked (mock).',
+    reviewNote: 'FREDA design firm stakeholder linked (mock).',
   },
   {
     id: 'slr-val-002-ras1',
@@ -1237,10 +1237,10 @@ export const INITIAL_STAKEHOLDER_LINK_REVIEWS: MockStakeholderLinkReview[] = [
     tabsContactRowId: 'tc-002-owner',
     suggestedStakeholderId: 'stake-mock-owner-riverside',
     candidateStakeholderId: 'stake-mock-owner-riverside',
-    matchReason: 'Owner as-recorded spelling differs from canonical',
+    matchReason: 'Owner as-recorded spelling differs from FREDA stakeholder record',
     confidence: 'medium',
     reviewDecision: 'unreviewed',
-    reviewNote: 'TABS "Riverside Med Properties Inc" vs canonical full name.',
+    reviewNote: 'TDLR data "Riverside Med Properties Inc" vs FREDA stakeholder full name.',
   },
   {
     id: 'slr-002-design',

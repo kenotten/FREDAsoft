@@ -301,7 +301,7 @@ export function MockPmProvider({ children }: { children: React.ReactNode }) {
           if (r.id !== reviewId) return r;
           const stakeholder = canonicalStakeholders.find((s) => s.id === stakeholderId);
           const name = stakeholder?.displayName ?? stakeholderId;
-          const manualNote = `Manual staff selection — linked to "${name}" via mock canonical stakeholder search (session only).`;
+          const manualNote = `Manual staff selection — linked to "${name}" via mock FREDA stakeholder search (session only).`;
           const reviewNote = r.reviewNote.trim()
             ? `${r.reviewNote}\n${manualNote}`
             : manualNote;

@@ -106,16 +106,14 @@ export function StakeholderLinkReviewPanel({
   const showSelectedCard = hasSelection && (isManualLink || overrideActive);
   const showSuggestedCard = hasSuggestion && !showSelectedCard;
   const suggestedBadge = linkedToSuggested
-    ? 'Linked to suggested'
-    : overrideActive
-      ? 'System suggestion'
-      : 'System suggestion';
+    ? 'Linked to suggested FREDA stakeholder'
+    : 'Suggested FREDA stakeholder';
 
   return (
     <Card className="p-4 border border-indigo-100 bg-indigo-50/30">
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-amber-100 text-amber-900 border border-amber-200">
-          TABS source row
+          TDLR data row
         </span>
         <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-zinc-200 text-zinc-600">
           Mock only — not saved
@@ -151,7 +149,7 @@ export function StakeholderLinkReviewPanel({
       {!review ? (
         <p className="text-sm text-zinc-500 flex items-center gap-2">
           <AlertCircle size={16} className="shrink-0" />
-          No mock stakeholder review configured for this source row.
+          No mock stakeholder review configured for this TDLR data row.
         </p>
       ) : (
         <>
@@ -159,7 +157,7 @@ export function StakeholderLinkReviewPanel({
             <div className="mb-3">
               <StakeholderCard
                 stakeholder={selectedStakeholder!}
-                label="Selected canonical stakeholder"
+                label="Selected FREDA stakeholder"
                 badge="Manual staff selection"
               />
             </div>
@@ -169,7 +167,7 @@ export function StakeholderLinkReviewPanel({
             <div className="mb-4">
               <StakeholderCard
                 stakeholder={suggestedStakeholder!}
-                label={linkedToSuggested ? 'Canonical stakeholder candidate' : 'Suggested candidate'}
+                label="Suggested FREDA stakeholder"
                 badge={suggestedBadge}
                 matchLine={`${CONFIDENCE_LABEL[review.confidence]} — ${review.matchReason}`}
               />
@@ -180,13 +178,14 @@ export function StakeholderLinkReviewPanel({
             <div className="mb-4">
               <StakeholderCard
                 stakeholder={suggestedStakeholder!}
-                label="Suggested candidate"
-                badge="System suggestion — overridden"
+                label="Suggested FREDA stakeholder"
+                badge="Suggested FREDA stakeholder — overridden"
                 muted
                 matchLine={`${CONFIDENCE_LABEL[review.confidence]} — ${review.matchReason}`}
               />
               <p className="text-xs text-amber-800 mt-2">
-                Staff overrode the suggested candidate — original suggestion shown for reference.
+                Staff overrode the suggested FREDA stakeholder — original suggestion shown for
+                reference.
               </p>
             </div>
           ) : null}
@@ -194,10 +193,11 @@ export function StakeholderLinkReviewPanel({
           {!hasSuggestion && !showSelectedCard ? (
             <div className="mb-4 p-3 rounded-lg bg-white border border-violet-200">
               <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700 mb-1">
-                Canonical stakeholder candidate
+                Suggested FREDA stakeholder
               </p>
               <p className="text-sm text-zinc-600">
-                No suggested candidate. Search existing canonical stakeholders or create a draft.
+                No suggested FREDA stakeholder. Search FREDA stakeholders or create a FREDA
+                stakeholder draft.
               </p>
               <p className="text-xs text-violet-800 mt-2">
                 {CONFIDENCE_LABEL[review.confidence]} — {review.matchReason}
@@ -213,8 +213,8 @@ export function StakeholderLinkReviewPanel({
             onSelect={(id) => onSelectStakeholderManually(review.id, id)}
             triggerLabel={
               hasSuggestion || hasSelection
-                ? 'Find different stakeholder'
-                : 'Search canonical stakeholders'
+                ? 'Find different FREDA stakeholder'
+                : 'Search FREDA stakeholders'
             }
           />
 
@@ -226,7 +226,7 @@ export function StakeholderLinkReviewPanel({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Link2 size={14} />
-              Link to candidate
+              Link to suggested FREDA stakeholder
             </button>
             <button
               type="button"
@@ -234,7 +234,7 @@ export function StakeholderLinkReviewPanel({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-violet-600 text-white hover:bg-violet-700"
             >
               <UserPlus size={14} />
-              Create new stakeholder draft
+              Create FREDA stakeholder draft
             </button>
             <button
               type="button"
@@ -250,7 +250,7 @@ export function StakeholderLinkReviewPanel({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-red-600 text-white hover:bg-red-700"
             >
               <Ban size={14} />
-              Reject source match
+              Reject TDLR data match
             </button>
           </div>
 

@@ -113,7 +113,7 @@ export function NewProjectIntake() {
           label="Client"
           value={form.client}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => update('client', e.target.value)}
-          placeholder="Paying customer / contract party"
+          placeholder="Paying customer (Client FREDA project role)"
         />
 
         <Input

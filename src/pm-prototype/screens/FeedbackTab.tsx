@@ -7,8 +7,8 @@ const SCREEN_OPTIONS = [
   { value: 'dashboard', label: 'PM Dashboard' },
   { value: 'intake', label: 'New Project Intake' },
   { value: 'overview', label: 'Project Overview' },
-  { value: 'parties', label: 'Parties' },
-  { value: 'source', label: 'TDLR Source Snapshot' },
+  { value: 'parties', label: 'Roles' },
+  { value: 'source', label: 'TDLR data snapshot' },
   { value: 'status', label: 'Status & Scope' },
   { value: 'feedback', label: 'Staff Feedback' },
 ];

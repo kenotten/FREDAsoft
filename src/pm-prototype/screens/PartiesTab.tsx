@@ -48,10 +48,10 @@ export function PartiesTab({ project, parties }: PartiesTabProps) {
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-4">
             <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wider">
-              Contact Info — TABS as-recorded (#tblContacts mock)
+              Contact Info — TDLR data (#tblContacts mock)
             </h3>
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-amber-100 text-amber-800">
-              SOURCE ONLY
+              TDLR DATA — READ ONLY
             </span>
           </div>
           <Card className="overflow-hidden border-amber-200">
@@ -99,16 +99,16 @@ export function PartiesTab({ project, parties }: PartiesTabProps) {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wider">
-              Canonical stakeholder review (mock)
+              Review TDLR roles against FREDA stakeholders (mock)
             </h3>
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-indigo-100 text-indigo-800">
               Mock only — not saved
             </span>
           </div>
           <p className="text-xs text-zinc-500">
-            TABS rows are source/as-recorded and are not edited here. Staff review links each row to
-            a canonical stakeholder candidate — separate from Client, Owner, Design Firm, Agent, and
-            RAS roles.
+            TDLR data rows are as-recorded and are not edited here. Staff review each TDLR role
+            against a FREDA stakeholder — then assign a FREDA project role (Client, Owner, Design
+            Firm, Agent, RAS, etc.).
           </p>
           <div className="space-y-4">
             {tabsContacts.map((row) => {
@@ -139,13 +139,13 @@ export function PartiesTab({ project, parties }: PartiesTabProps) {
 
       <div className="space-y-4">
         <h3 className="text-sm font-bold text-zinc-800 uppercase tracking-wider">
-          FREDAsoft canonical parties (mock operational)
+          FREDA project roles (mock operational)
         </h3>
 
         {clientDiffersFromOwner && (
           <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-900">
             <strong>Client ≠ Owner:</strong> Client ({project.clientLabel}) is the paying customer.
-            Owner ({project.ownerLabel}) is the legally responsible party — shown separately below.
+            Owner ({project.ownerLabel}) is the legally responsible role — shown separately below.
           </div>
         )}
 
@@ -202,7 +202,7 @@ export function PartiesTab({ project, parties }: PartiesTabProps) {
                   {party.isCanonicalLinked ? (
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-green-100 text-green-800">
                       <BadgeCheck size={12} />
-                      Canonical linked (mock)
+                      FREDA stakeholder linked (mock)
                     </span>
                   ) : (
                     <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-zinc-100 text-zinc-500">
@@ -217,12 +217,12 @@ export function PartiesTab({ project, parties }: PartiesTabProps) {
 
         {parties.length === 0 && (
           <p className="text-sm text-zinc-400 text-center py-8">
-            No mock parties for this project yet.
+            No mock project roles for this project yet.
           </p>
         )}
 
         <p className="text-xs text-zinc-400">
-          Canonical party cards are mock operational fixtures — use stakeholder review above for TABS
+          FREDA project role cards are mock operational fixtures — use TDLR role review above for
           linking decisions.
         </p>
       </div>

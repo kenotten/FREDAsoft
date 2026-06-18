@@ -10,8 +10,8 @@ import { StatusTab } from './StatusTab';
 
 const TABS: { id: ProjectTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
-  { id: 'parties', label: 'Parties' },
-  { id: 'source', label: 'Source' },
+  { id: 'parties', label: 'Roles' },
+  { id: 'source', label: 'TDLR data' },
   { id: 'status', label: 'Status' },
   { id: 'feedback', label: 'Feedback' },
 ];

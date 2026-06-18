@@ -16,8 +16,8 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
     return (
       <div className="space-y-4">
         <div className="p-4 rounded-lg bg-zinc-50 border border-zinc-200 text-sm text-zinc-600">
-          No TDLR/TABS source snapshot for this mock project yet. Add a TABS # at intake or use a
-          fixture project that includes source data (e.g. Riverside Medical Annex).
+          No TDLR data snapshot for this mock project yet. Add a TABS # at intake or use a
+          fixture project that includes TDLR data (e.g. Riverside Medical Annex).
         </div>
       </div>
     );
@@ -30,8 +30,8 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
       <div className="p-4 rounded-lg bg-amber-50 border border-amber-300 flex gap-3 text-sm text-amber-950">
         <AlertTriangle size={20} className="shrink-0 mt-0.5" />
         <p>
-          <strong>Source values are as-recorded TDLR/TABS data.</strong> They do not overwrite
-          FREDAsoft canonical parties. Review candidate links separately.
+          <strong>TDLR data values are as-recorded from TDLR/TABS.</strong> They do not overwrite
+          FREDA project roles. Review candidate FREDA stakeholder links separately.
         </p>
       </div>
 
@@ -44,10 +44,10 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
       <Card className="p-5 bg-amber-50/40 border-amber-200 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-amber-950 uppercase tracking-wider">
-            TDLR Source Snapshot — Manage Project panel (read-only mock)
+            TDLR data snapshot — Manage Project panel (read-only mock)
           </h3>
           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-amber-200 text-amber-900">
-            SOURCE ONLY
+            TDLR DATA — READ ONLY
           </span>
         </div>
 
@@ -179,7 +179,7 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
         <Card className="overflow-hidden">
           <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/80">
             <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-600">
-              Project Status Updates (TABS source)
+              Project Status Updates (TDLR data)
             </h4>
           </div>
           <div className="overflow-x-auto">
@@ -215,7 +215,7 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
         <Card className="overflow-hidden">
           <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/80">
             <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-600">
-              Inspection — InspectionUploadedTable (TABS source mock)
+              Inspection — InspectionUploadedTable (TDLR data mock)
             </h4>
           </div>
           <div className="overflow-x-auto">
@@ -252,7 +252,7 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
           Upload Documents — Document Type reference (PSUUPDocumentTypeId mock)
         </h4>
         <p className="text-xs text-zinc-500 mb-3">
-          Checklist labels only — not FREDAsoft canonical project fields.
+          Checklist labels only — not FREDA project role fields.
         </p>
         <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-zinc-700">
           {TABS_DOCUMENT_TYPE_OPTIONS.map((label) => (
@@ -266,7 +266,7 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
       <div className="space-y-3">
         <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-2">
           <Link2 size={14} />
-          Candidate link badges (assistive only)
+          Candidate FREDA stakeholder link badges (assistive only)
         </h4>
         {snapshot.candidateLinks.map((link) => (
           <Card key={link.id} className="p-4 flex flex-wrap items-center justify-between gap-3">
@@ -291,7 +291,7 @@ export function SourceTab({ projectId, snapshot }: SourceTabProps) {
           </Card>
         ))}
         {snapshot.candidateLinks.length === 0 && (
-          <p className="text-sm text-zinc-400">No candidate links in this mock snapshot.</p>
+          <p className="text-sm text-zinc-400">No candidate FREDA stakeholder links in this mock snapshot.</p>
         )}
       </div>
     </div>

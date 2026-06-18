@@ -46,7 +46,7 @@ export function StakeholderManualSearch({
   selectedStakeholderId,
   suggestedStakeholderId,
   onSelect,
-  triggerLabel = 'Search canonical stakeholders',
+  triggerLabel = 'Search FREDA stakeholders',
 }: StakeholderManualSearchProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -72,7 +72,7 @@ export function StakeholderManualSearch({
         <div className="mt-2 p-3 rounded-lg bg-white border border-indigo-200 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
-              Mock canonical stakeholder search
+              Mock FREDA stakeholder search
             </p>
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-200 text-zinc-600">
               In-memory only — not saved
@@ -110,12 +110,12 @@ export function StakeholderManualSearch({
                       <span className="font-medium text-zinc-900">{s.displayName}</span>
                       {isSuggested && (
                         <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
-                          Suggested
+                          Suggested FREDA stakeholder
                         </span>
                       )}
                       {isSelected && (
                         <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-green-100 text-green-800">
-                          Selected
+                          Selected FREDA stakeholder
                         </span>
                       )}
                     </div>
@@ -129,7 +129,7 @@ export function StakeholderManualSearch({
             )}
           </div>
           <p className="text-[10px] text-zinc-400">
-            Selecting a row applies a manual staff selection for this TABS source row (mock session
+            Selecting a row applies a manual staff selection for this TDLR data row (mock session
             only).
           </p>
         </div>

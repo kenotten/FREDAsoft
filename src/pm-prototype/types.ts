@@ -287,9 +287,9 @@ export type StakeholderReviewDecision =
 
 export const STAKEHOLDER_REVIEW_DECISION_LABELS: Record<StakeholderReviewDecision, string> = {
   unreviewed: 'Unreviewed',
-  linked: 'Linked to candidate',
+  linked: 'Linked to suggested FREDA stakeholder',
   'linked-manually': 'Linked manually',
-  'create-draft': 'Create draft recommended',
+  'create-draft': 'Create FREDA stakeholder draft recommended',
   deferred: 'Deferred',
   rejected: 'Rejected',
 };
