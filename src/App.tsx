@@ -848,9 +848,8 @@ export default function App() {
     <div className="h-screen w-full flex flex-col items-center justify-center bg-zinc-50 p-4">
       <div className="mb-8 flex flex-col items-center">
         <img src={FREDAsoftLogo} alt="Logo" className="h-16 w-auto mb-4" />
-        <h1 className="text-2xl font-bold text-zinc-900">FREDAsoft</h1>
-        <p className="text-zinc-500 text-sm">Field Resilience & Data Safety</p>
-      </div>
+        
+        </div>
       <Button onClick={handleLogin} className="px-8 py-6 text-lg rounded-2xl shadow-lg shadow-blue-100">
         <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-6 h-6 mr-3" alt="Google" />
         Sign in with Google
