@@ -129,8 +129,11 @@ export function StakeholderLinkReviewPanel({
 
       <div className="grid gap-3 sm:grid-cols-3 text-sm mb-4 p-3 rounded-lg bg-white border border-amber-100">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Contact Type</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">TDLR role</p>
           <p className="font-medium text-zinc-900 mt-0.5">{contactRow.contactType}</p>
+          <p className="text-[10px] text-zinc-500 mt-1">
+            Role shown in TDLR data — not the FREDA project role.
+          </p>
         </div>
         <div>
           <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Name</p>
@@ -208,6 +211,7 @@ export function StakeholderLinkReviewPanel({
           <StakeholderManualSearch
             stakeholders={allStakeholders}
             review={review}
+            tdlrRole={contactRow.contactType}
             selectedStakeholderId={review.candidateStakeholderId}
             suggestedStakeholderId={review.suggestedStakeholderId}
             onSelect={(id) => onSelectStakeholderManually(review.id, id)}

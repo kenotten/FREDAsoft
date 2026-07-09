@@ -1,5 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Search } from 'lucide-react';
+import {
+  formatTypicalRolesLabel,
+  stakeholderMatchesTypicalRoles,
+  tdlrContactTypeToTypicalRoles,
+} from '../lib/tdlrTypicalRoleMapping';
 import type { MockCanonicalStakeholder, MockStakeholderLinkReview } from '../types';
 
 function stakeholderSearchHaystack(
@@ -9,6 +14,7 @@ function stakeholderSearchHaystack(
   return [
     stakeholder.displayName,
     stakeholder.stakeholderType,
+    stakeholder.typicalRoles?.join(' '),
     stakeholder.entityKind,
     stakeholder.email,
     stakeholder.phone,
@@ -21,7 +27,7 @@ function stakeholderSearchHaystack(
     .toLowerCase();
 }
 
-function filterStakeholders(
+function filterStakeholdersByQuery(
   stakeholders: MockCanonicalStakeholder[],
   query: string,
   review?: MockStakeholderLinkReview
@@ -34,6 +40,8 @@ function filterStakeholders(
 interface StakeholderManualSearchProps {
   stakeholders: MockCanonicalStakeholder[];
   review: MockStakeholderLinkReview;
+  /** TDLR #tblContacts Contact Type for the row under review. */
+  tdlrRole: string;
   selectedStakeholderId?: string;
   suggestedStakeholderId?: string;
   onSelect: (stakeholderId: string) => void;
@@ -43,6 +51,7 @@ interface StakeholderManualSearchProps {
 export function StakeholderManualSearch({
   stakeholders,
   review,
+  tdlrRole,
   selectedStakeholderId,
   suggestedStakeholderId,
   onSelect,
@@ -50,11 +59,32 @@ export function StakeholderManualSearch({
 }: StakeholderManualSearchProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [includeAllTypicalRoles, setIncludeAllTypicalRoles] = useState(false);
+
+  const likelyTypicalRoles = useMemo(
+    () => tdlrContactTypeToTypicalRoles(tdlrRole),
+    [tdlrRole]
+  );
+
+  const roleFilteredStakeholders = useMemo(() => {
+    if (includeAllTypicalRoles || !likelyTypicalRoles) {
+      return stakeholders;
+    }
+    return stakeholders.filter((s) =>
+      stakeholderMatchesTypicalRoles(s.typicalRoles, likelyTypicalRoles)
+    );
+  }, [stakeholders, includeAllTypicalRoles, likelyTypicalRoles]);
 
   const results = useMemo(
-    () => filterStakeholders(stakeholders, query, review),
-    [stakeholders, query, review]
+    () => filterStakeholdersByQuery(roleFilteredStakeholders, query, review),
+    [roleFilteredStakeholders, query, review]
   );
+
+  const helperCopy = includeAllTypicalRoles
+    ? 'Showing all FREDA stakeholders for atypical role assignments.'
+    : likelyTypicalRoles
+      ? 'Showing FREDA stakeholders usually associated with this TDLR role.'
+      : 'No typical-role mapping for this TDLR role — showing all FREDA stakeholders.';
 
   return (
     <div className="mb-4">
@@ -78,16 +108,45 @@ export function StakeholderManualSearch({
               In-memory only — not saved
             </span>
           </div>
+
+          <p className="text-xs text-zinc-600">
+            TDLR role under review: <span className="font-medium text-zinc-900">{tdlrRole}</span>
+          </p>
+
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeAllTypicalRoles}
+              onChange={(e) => setIncludeAllTypicalRoles(e.target.checked)}
+              className="mt-0.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span className="text-sm text-zinc-800">Include all typical roles</span>
+          </label>
+
+          <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-100 rounded-md px-2 py-1.5">
+            {helperCopy}
+          </p>
+
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name, type, email, phone, address, notes…"
+            placeholder="Search name, typical role, type, email, phone, address, notes…"
             className="w-full text-sm border border-zinc-200 rounded-md px-3 py-2 bg-white text-zinc-900"
           />
           <div className="max-h-48 overflow-y-auto space-y-1">
             {results.length === 0 ? (
-              <p className="text-xs text-zinc-500 py-2">No mock stakeholders match this search.</p>
+              <p className="text-xs text-zinc-500 py-2">
+                No mock stakeholders match this search
+                {!includeAllTypicalRoles && likelyTypicalRoles
+                  ? ' within the likely typical roles.'
+                  : '.'}{' '}
+                {!includeAllTypicalRoles && (
+                  <span className="text-indigo-700">
+                    Turn on &ldquo;Include all typical roles&rdquo; for atypical assignments.
+                  </span>
+                )}
+              </p>
             ) : (
               results.map((s) => {
                 const isSelected = s.id === selectedStakeholderId;
@@ -120,6 +179,7 @@ export function StakeholderManualSearch({
                       )}
                     </div>
                     <p className="text-xs text-zinc-600 mt-0.5">
+                      Typical role(s): {formatTypicalRolesLabel(s.typicalRoles)} ·{' '}
                       {s.stakeholderType} · {s.entityKind === 'entity' ? 'Entity' : 'Person'}
                       {s.email ? ` · ${s.email}` : ''}
                     </p>
@@ -130,7 +190,7 @@ export function StakeholderManualSearch({
           </div>
           <p className="text-[10px] text-zinc-400">
             Selecting a row applies a manual staff selection for this TDLR data row (mock session
-            only).
+            only). FREDA project role is assigned separately on this project.
           </p>
         </div>
       )}

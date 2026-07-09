@@ -1014,6 +1014,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     email: 'owner@mock-airport.example',
     phone: '(555) 100-0001',
     address: '200 Mock Holdings Way, Example City, TX 77002',
+    typicalRoles: ['Owner'],
   },
   {
     id: 'stake-mock-design-horizon',
@@ -1023,6 +1024,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     email: 'design@mock-horizon.example',
     phone: '(555) 100-0003',
     address: '400 Mock Design Center, Example City, TX 77004',
+    typicalRoles: ['Design Professional'],
   },
   {
     id: 'stake-mock-owner-riverside',
@@ -1032,6 +1034,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     email: 'compliance@example-mock.test',
     phone: '(512) 555-0200',
     address: '100 Medical Plaza, Austin, TX 78701',
+    typicalRoles: ['Owner'],
   },
   {
     id: 'stake-mock-design-gulf',
@@ -1041,6 +1044,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     email: 'gc@example-mock.test',
     phone: '(512) 555-0202',
     address: '300 Design Blvd, Austin, TX 78703',
+    typicalRoles: ['Design Professional'],
   },
   {
     id: 'stake-mock-ras-jordan',
@@ -1049,6 +1053,8 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     entityKind: 'person',
     email: 'ras@example-mock.test',
     phone: '(512) 555-0203',
+    typicalRoles: ['RAS', 'Design Professional'],
+    directoryNotes: 'Licensed RAS who also holds architect credentials — atypical Design Firm assignments possible.',
   },
   {
     id: 'stake-mock-ras-sam',
@@ -1057,6 +1063,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     entityKind: 'person',
     email: 'ras1@mock-ras.example',
     phone: '(555) 200-0003',
+    typicalRoles: ['RAS'],
   },
   {
     id: 'stake-mock-owner-city',
@@ -1066,6 +1073,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     email: 'owner@mock-city.example',
     phone: '(555) 200-0001',
     address: '600 Mock City Hall, Example City, TX 78702',
+    typicalRoles: ['Owner'],
   },
   {
     id: 'stake-mock-design-civic',
@@ -1074,6 +1082,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     entityKind: 'entity',
     email: 'plans@mock-civic.example',
     phone: '(555) 200-0002',
+    typicalRoles: ['Design Professional'],
   },
   {
     id: 'stake-mock-owner-isd',
@@ -1082,6 +1091,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     entityKind: 'entity',
     email: 'compliance@mock-isd.example',
     phone: '(555) 300-0003',
+    typicalRoles: ['Owner'],
   },
   {
     id: 'stake-mock-agent-pinnacle',
@@ -1092,6 +1102,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     phone: '(555) 400-0001',
     address: '50 Agent Plaza, Example City, TX 78710',
     directoryNotes: 'Handles Owners Designated Agent correspondence for public projects.',
+    typicalRoles: ['Owner Agent'],
   },
   {
     id: 'stake-mock-tenant-retail',
@@ -1101,6 +1112,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     email: 'tenant@mock-retail.example',
     phone: '(555) 400-0002',
     address: '1200 Mock Mall Way, Example City, TX 78711',
+    typicalRoles: ['Tenant'],
   },
   {
     id: 'stake-mock-client-dept',
@@ -1110,6 +1122,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     email: 'facilities@mock-city.example',
     phone: '(555) 400-0003',
     directoryNotes: 'Paying customer — distinct from Owner entity.',
+    typicalRoles: ['Client', 'Contact Person'],
   },
   {
     id: 'stake-mock-contact-jane',
@@ -1118,6 +1131,7 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     entityKind: 'person',
     email: 'site@mock-contact.example',
     phone: '(555) 400-0004',
+    typicalRoles: ['Contact Person'],
   },
   {
     id: 'stake-mock-other-vendor',
@@ -1126,6 +1140,27 @@ export const INITIAL_CANONICAL_STAKEHOLDERS: MockCanonicalStakeholder[] = [
     entityKind: 'entity',
     email: 'vendor@mock-other.example',
     directoryNotes: 'Non-standard role — use only when no type fits.',
+    typicalRoles: ['Other'],
+  },
+  {
+    id: 'stake-mock-owner-tenant-hybrid',
+    displayName: 'Lakewood Retail Group Mock',
+    stakeholderType: 'Owner',
+    entityKind: 'entity',
+    email: 'leasing@mock-lakewood.example',
+    phone: '(555) 400-0005',
+    address: '800 Mock Retail Blvd, Example City, TX 78712',
+    directoryNotes: 'Developer/owner company that sometimes appears as Tenant on leasehold projects.',
+    typicalRoles: ['Owner', 'Tenant'],
+  },
+  {
+    id: 'stake-mock-agent-riverside-fm',
+    displayName: 'Riverside Facilities Mgmt',
+    stakeholderType: 'Owner Agent',
+    entityKind: 'entity',
+    email: 'agent@riversidefm.example',
+    phone: '(512) 555-0201',
+    typicalRoles: ['Owner Agent'],
   },
 ];
 

@@ -277,6 +277,28 @@ export type StakeholderType =
 
 export type StakeholderEntityKind = 'entity' | 'person';
 
+/** Usual FREDA stakeholder roles across projects — supports multiple per stakeholder. */
+export type TypicalStakeholderRole =
+  | 'Client'
+  | 'Owner'
+  | 'Tenant'
+  | 'Design Professional'
+  | 'Owner Agent'
+  | 'RAS'
+  | 'Contact Person'
+  | 'Other';
+
+export const TYPICAL_STAKEHOLDER_ROLE_LABELS: Record<TypicalStakeholderRole, string> = {
+  Client: 'Client',
+  Owner: 'Owner',
+  Tenant: 'Tenant',
+  'Design Professional': 'Design Professional',
+  'Owner Agent': 'Owner Agent',
+  RAS: 'RAS',
+  'Contact Person': 'Contact Person',
+  Other: 'Other',
+};
+
 export type StakeholderReviewDecision =
   | 'unreviewed'
   | 'linked'
@@ -304,6 +326,8 @@ export interface MockCanonicalStakeholder {
   address?: string;
   /** Mock directory notes — searchable in manual stakeholder search only. */
   directoryNotes?: string;
+  /** Usual roles for this FREDA stakeholder across projects (mock directory). */
+  typicalRoles: TypicalStakeholderRole[];
 }
 
 /** Staff review of a TABS #tblContacts row vs canonical stakeholder candidates. */
