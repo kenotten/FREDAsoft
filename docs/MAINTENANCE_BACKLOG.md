@@ -127,6 +127,40 @@ Treat as **mini-design reviews**: write a short scope note before coding; prefer
  For now, dropdown value changes may be handled as one-off code/data updates. This feature should be implemented later when FREDA’s controlled vocabulary needs grow beyond manual maintenance.
  
  ---
+
+ ### Performance Phase 1 – Reduce Unnecessary React Re-renders
+
+ **Status:** Deferred (post-PM implementation)
+ **Priority:** Medium
+
+ **Background:**
+ Chrome DevTools Network and Performance profiling, together with a code inspection of `App.tsx`, `useCoreCollections`, `LayoutOrchestrator`, `MainContent`, `ProjectDataEntry`, `GlossaryBuilder`, and `LibraryManager`, showed:
+
+ * Startup network activity is reasonable.
+ * Ordinary UI interactions generate little or no new Firestore traffic.
+ * The browser main thread spends significant time executing JavaScript after common interactions.
+ * The primary bottleneck appears to be client-side rendering / state propagation rather than internet latency or Firestore throughput.
+
+ **Primary architectural observation:**
+ `App.tsx` currently acts as the application’s render fan-out. A single interaction (changing selections in Data Entry, Glossary Builder, etc.) propagates through App and causes multiple heavy screens—including hidden-but-mounted screens—to re-render.
+
+ **Future optimization goals** (when performance work becomes a priority):
+
+ 1. Reduce unnecessary `App.tsx` render fan-out.
+ 2. Prevent hidden-but-mounted screens from re-rendering unnecessarily.
+ 3. Evaluate `React.memo` on major feature surfaces.
+ 4. Keep transient UI state local where practical instead of lifting every selection into App state.
+ 5. Profile large list rendering (Library Manager, Glossary Explorer, etc.) before optimizing individual algorithms.
+ 6. Measure after every optimization; avoid speculative tuning.
+
+ **Do not begin by optimizing** Firestore queries, network traffic, sorting algorithms, or glossary lookup algorithms until render fan-out has been addressed. Those changes may produce only marginal gains while the primary rendering multiplier remains.
+
+ **Reason for deferral:**
+ Current performance is acceptable for ongoing feature development. Sequencing is governed by the agreed near-term roadmap in `docs/ARCHITECTURE_DESIGN.md` (**Current Work State** → **Near-term product roadmap**): limited Library usability → freeze Library decisions for Beta → resume FREDA PM → FREDA PM Beta (end of August 2026) → then return to deferred backlog items including this Performance Phase 1 entry.
+
+ **Source:** Chrome DevTools Network and Performance profiling plus code inspection identifying App-level render fan-out and hidden mounted components as the primary suspected source of ordinary interaction latency.
+
+ ---
  
  ## Guidelines
  

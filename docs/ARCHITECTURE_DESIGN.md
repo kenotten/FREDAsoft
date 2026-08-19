@@ -111,10 +111,20 @@ Targeted unit tests under `src/lib/__tests__/` cover shared report and audit hel
 
 ## 🚦 Current Work State
 
-Current phase:
+### ✅ DECIDED: Near-term product roadmap (August 2026 Beta)
+
+Agreed sequencing (intentionally separates product clarification from implementation work):
+
+1. Complete **limited Library usability improvements**.
+2. **Freeze Library decisions** for the Beta cycle.
+3. Resume **FREDA PM** implementation.
+4. Reach **FREDA PM Beta** by the **end of August 2026**.
+5. Return to deferred engineering work in `docs/MAINTENANCE_BACKLOG.md`, including **Performance Phase 1 – Reduce Unnecessary React Re-renders**.
+
+Current phase label (technical stabilization context; does not override the roadmap above):
 
 ```text
-Data Integrity Stabilization
+Data Integrity Stabilization → Library usability (limited) → FREDA PM Beta
 ```
 
 Recent completed areas:
@@ -197,6 +207,32 @@ It supports:
 - report generation
 
 The system must support multiple standards, multiple project contexts, and project-specific professional judgment.
+
+### ✅ DECIDED: FREDAsoft product ecosystem
+
+FREDAsoft is an **application ecosystem** of closely related product families that **share common data**.
+
+**Current product families** (responsibilities / functional boundaries):
+
+| Family | Responsibility |
+|--------|----------------|
+| **FREDA PM** | Project management, TDLR integration, stakeholders, workflow, correspondence, portal |
+| **FREDAreview** | Plan Review workflow |
+| **FREDAfield** | Field inspection workflow |
+| **FREDAreports** | Report generation |
+
+**Shared services** (cross-cutting domain capabilities, not product-family silos):
+
+- Projects
+- Stakeholders
+- Library
+- Standards
+- Organizations
+- Users
+
+These names describe **product responsibilities and functional boundaries**. They do **not** necessarily represent deployment boundaries or separate codebases.
+
+Repository governance (chat vs markdown vs implementation): see root `AGENTS.md` — **Repository is the source of truth**.
 
 ---
 
@@ -317,6 +353,46 @@ Libraries define reusable professional content:
 - default standards associations
 
 Libraries are the origin of structured content.
+
+### ✅ DECIDED: Library philosophy (masters, standards, Glossary Builder, maintenance)
+
+**Standards**
+
+- Standards are **externally authored** reference material.
+- FREDAsoft does **not** rewrite or reinterpret standards.
+- FREDAsoft **must** support ongoing **formatting**, **structural** improvements (including separating exceptions from standard text), **metadata refinement**, **editorial corrections**, and **usability** improvements while **preserving authoritative content**.
+
+**Categories**
+
+- Shared master records.
+- Require **create**, **edit**, and **retire** capability.
+
+**Items**
+
+- Shared master records beneath Categories.
+- Require **create**, **edit**, and **retire** capability.
+
+**Findings**
+
+- Reusable master records associated with **Category / Item** context.
+
+**Recommendations**
+
+- **Independent** reusable master records.
+- Recommendations are **not** children of Findings.
+- A Recommendation may be associated with **multiple** Findings without duplication.
+- (Aligns with the Library / Glossary / ProjectData snapshot model below: association metadata and glossary pairings, not a mandatory finding→recommendation hierarchy.)
+
+**Glossary Builder**
+
+- Remains an **assembly** tool: Category + Item + Finding + Recommendation → Glossary records.
+- May continue allowing creation of missing Categories, Items, Findings, and Recommendations as a **convenience** while building glossary rows.
+- Is **not** intended to be the **only** maintenance interface for those master collections.
+
+**Library maintenance**
+
+- There should be a **central library maintenance** experience where administrators can browse, create, edit, retire, and manage Categories, Items, Findings, and Recommendations **independent of Glossary Builder**.
+- This is a **usability** objective, **not** a database redesign.
 
 ✅ DECIDED: **Active Glossary** (glossary set chosen in Data Entry) filters which approved glossary rows drive Category / Item / Finding / Recommendation path options. **Standards Library Type** is separate and only scopes standards/citation browsing (e.g. Standards Browser). Active Glossary is user-selected and persisted locally in the browser for v1 (not derived from project or facility type).
 

@@ -68,6 +68,37 @@ After merge:
 - Keep `docs/ARCHITECTURE_DESIGN.md` current with major architecture/product decisions.
 - Use concise `✅ DECIDED` blocks for durable decisions.
 
+## 9a. Repository governance (source of truth)
+
+**Primary rule: THE REPOSITORY IS THE SOURCE OF TRUTH.**
+
+| Channel | Role |
+|---------|------|
+| **Chat** | Exploration and discussion — ideas, questions, decision *development*. |
+| **Markdown** | Official product and architectural decisions — durable and binding. |
+| **Repository** | Source of truth for what the product/system *is*. |
+| **Cursor** | Implementation assistant. |
+| **User** | Final product decision maker. |
+
+ChatGPT (and similar) conversations are where ideas are explored and decisions are developed. Repository markdown is where significant product and architectural decisions become **official**. Implementation must follow repository documentation rather than conversational memory.
+
+When a significant product or architectural decision is reached:
+
+1. Identify the appropriate markdown document (prefer `docs/ARCHITECTURE_DESIGN.md` for architecture/product; `docs/MAINTENANCE_BACKLOG.md` for deferred engineering; this file for AI/agent protocol).
+2. Memorialize the decision there (prefer `✅ DECIDED` where applicable).
+3. Cross-reference related documents concisely where useful.
+4. Only then proceed with implementation that depends on that decision.
+
+**Do not** duplicate large decision blocks across multiple documents. Prefer one authoritative home with short references elsewhere.
+
+Historical chat transcripts and exploratory notes (including `docs/ArchieHistory.md`) may explain *how* a decision was reached; they do **not** supersede newer documented decisions.
+
+When documentation conflicts:
+
+- Prefer explicit **`✅ DECIDED`** (or similarly labeled) product/architecture decisions.
+- Prefer **newer** authoritative documentation over older exploratory notes.
+- If a conflict cannot be confidently resolved, **stop** and ask Archie/user before implementing.
+
 ## 10. Reporting back
 Cursor should report:
 - branch
