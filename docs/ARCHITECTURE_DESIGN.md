@@ -1616,6 +1616,27 @@ For custom records:
 
 Reports use `projectData.fldStandards` as the final citation source.
 
+✅ DECIDED (Data Entry missing-glossary-citation fallback — Beta compatibility safeguard):
+
+Normal inheritance remains:
+
+```text
+Glossary → ProjectData
+```
+
+A non-empty `glossary.fldStandards` is authoritative for a **new glossary-based** ProjectData snapshot and is copied as-is.
+
+If the selected glossary row has **no usable** `fldStandards`, Data Entry may reconstruct citations for that **new unsaved** glossary-based record only, as a compatibility safeguard:
+
+- union the linked master Finding and Recommendation `fldStandards`
+- deduplicate IDs
+- tolerate legacy citation shapes (array, object map, or single string)
+- resolve Finding / Recommendation IDs robustly (`id`, `fldFindID`, `fldRecID`, glossary `fldFind` / `fldFindID` / `fldRec` / `fldRecID`)
+
+The reconstructed set becomes the new ProjectData record’s editable snapshot. The fallback **does not** write back to the glossary row. It **does not** automatically repopulate an **existing saved** ProjectData record merely because saved `fldStandards` is empty. Custom ProjectData records are unaffected.
+
+This is **not** a replacement for Glossary → ProjectData snapshot inheritance, and it does **not** mean ProjectData generally inherits live from the master library. Broader hydration review is deferred (see `docs/MAINTENANCE_BACKLOG.md`).
+
 ---
 
 ## 27. Citation Reporting Policy

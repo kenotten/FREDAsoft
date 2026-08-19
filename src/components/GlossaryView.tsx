@@ -49,7 +49,7 @@ export function GlossaryView({
 
   // INITIALIZE STAGED STATE
   const initializeStaged = () => {
-    const { selectedFind, selectedRec, editingGlossaryId } = selections;
+    const { selectedFind, selectedRec, editingGlossaryId, selectedCat, selectedItem } = selections;
 
     const norm = (v: any) => String(v ?? '').toLowerCase().trim();
     const safeArray = (v: any): string[] => {
@@ -59,7 +59,9 @@ export function GlossaryView({
         ? v
         : typeof v === 'object'
           ? Object.values(v)
-          : [];
+          : typeof v === 'string'
+            ? [v]
+            : [];
 
       return Array.from(
         new Set(
@@ -87,16 +89,23 @@ export function GlossaryView({
     const rStds = safeArray(r?.fldStandards);
     setStagedRecStds(rStds);
 
-    // Glossary
+    // Glossary: exact five-tuple (or editing id). Do not bind another Category/Item/Set row.
+    const selectedSetKey = norm(selectedGlossarySetIdForStandardsSync);
     const g = editingGlossaryId
       ? glossary.find((g: Glossary) =>
           norm(g.fldGlosId) === norm(editingGlossaryId) ||
           norm(g.id) === norm(editingGlossaryId)
         )
-      : glossary.find((g: Glossary) =>
-          norm(g.fldFind) === norm(selectedFind) &&
-          norm(g.fldRec) === norm(selectedRec)
-        );
+      : glossary.find((row: Glossary) => {
+          const g: any = row;
+          return (
+            norm(g.fldCat) === norm(selectedCat) &&
+            norm(g.fldItem) === norm(selectedItem) &&
+            (norm(g.fldFind) === norm(selectedFind) || norm(g.fldFindID) === norm(selectedFind)) &&
+            (norm(g.fldRec) === norm(selectedRec) || norm(g.fldRecID) === norm(selectedRec)) &&
+            norm(g.fldGlossarySetId) === selectedSetKey
+          );
+        });
 
  const gStds = safeArray(g?.fldStandards);
 
@@ -114,9 +123,9 @@ const lastIdentity = React.useRef('');
 
 React.useEffect(() => {
   if (isGlossaryTemplateMode) return;
-  const { selectedFind, selectedRec, editingGlossaryId } = selections;
+  const { selectedFind, selectedRec, editingGlossaryId, selectedCat, selectedItem } = selections;
 
-  const currentIdentity = `${selectedFind}-${selectedRec}-${editingGlossaryId}`;
+  const currentIdentity = `${selectedCat}-${selectedItem}-${selectedFind}-${selectedRec}-${editingGlossaryId}-${selectedGlossarySetIdForStandardsSync}`;
   const identityChanged = currentIdentity !== lastIdentity.current;
 
   const norm = (v: any) => String(v ?? '').toLowerCase().trim();
@@ -150,9 +159,12 @@ React.useEffect(() => {
   }
 }, [
   isGlossaryTemplateMode,
+  selections.selectedCat,
+  selections.selectedItem,
   selections.selectedFind,
   selections.selectedRec,
   selections.editingGlossaryId,
+  selectedGlossarySetIdForStandardsSync,
   findings,
   masterRecommendations,
   glossary

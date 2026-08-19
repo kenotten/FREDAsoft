@@ -161,6 +161,62 @@ Treat as **mini-design reviews**: write a short scope note before coding; prefer
  **Source:** Chrome DevTools Network and Performance profiling plus code inspection identifying App-level render fan-out and hidden mounted components as the primary suspected source of ordinary interaction latency.
 
  ---
+
+ ### Standards Hydration Architecture Review
+
+ **Status:** Deferred until after Beta unless further inspection failures require earlier work.
+ **Priority:** Medium
+
+ **Background:**
+ A limited Beta-safe Data Entry fallback reconstructs citations for **new** glossary-based ProjectData when `glossary.fldStandards` is empty, using the linked Finding + Recommendation masters. That is a compatibility safeguard, not the long-term snapshot model. Glossary creation paths may still persist empty `glossary.fldStandards` in some cases.
+
+ **Future review should examine:**
+
+ * whether all glossary creation paths consistently persist inherited master citations into `glossary.fldStandards`
+ * normal vs related-record hydration semantics
+ * legacy empty glossary citation snapshots
+ * whether existing saved ProjectData should ever be repaired/backfilled
+ * whether the Data Entry fallback should remain long-term or be retired after glossary data is normalized
+
+ **Do not** treat this backlog item as permission to migrate Firestore or silently rewrite historical ProjectData.
+
+ ---
+
+ ### Custom Record Template Citation Seeding
+
+ **Status:** Deferred — post-Beta product behavior review
+ **Priority:** Medium
+
+ **Background:**
+ Custom Records are project-only and are not automatically added to the library or glossary. Current documented behavior (`docs/ARCHITECTURE_DESIGN.md` §26, §34) is that custom citations start empty unless the user adds them. Template copy currently seeds wording and related metadata only, not `fldStandards`.
+
+ **Current behavior:**
+
+ * A Custom Record created from scratch starts with no inherited citations.
+ * Selecting an existing library Finding or Recommendation as a template copies wording/metadata but intentionally does not copy `fldStandards`.
+ * Selecting a template currently clears citations associated with the prior path/template state.
+
+ **Future product review should consider:**
+
+ ```text
+ Custom from scratch
+ → no inherited citations
+
+ Custom + Finding template
+ → seed Finding citations into projectData snapshot
+
+ Custom + Recommendation template
+ → seed Recommendation citations into projectData snapshot
+
+ Custom + Finding + Recommendation templates
+ → seed deduplicated union into projectData snapshot
+ ```
+
+ If implemented later, citations would be copied once as editable `projectData.fldStandards`. They would not be linked dynamically to masters, would not create a glossary row, would not modify Finding/Recommendation masters, and would not change existing saved Custom records automatically.
+
+ This would require amending current Custom-record decisions in `docs/ARCHITECTURE_DESIGN.md` before implementation. Do not treat this backlog item as permission to change Custom-mode citation behavior.
+
+ ---
  
  ## Guidelines
  

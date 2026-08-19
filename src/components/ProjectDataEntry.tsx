@@ -39,6 +39,7 @@ import { cn, sortEntities, sortCategoriesForDropdown, sortItemsForDropdown, form
 import { v4 as uuidv4 } from 'uuid';
 import { resizeImage } from '../lib/imageUtils';
 import { normalizeId, idsEqual } from '../lib/idUtils';
+import { normalizeCitationIds, standardsIdsFromGlossaryRow } from '../lib/citationStandards';
 import { toFraction, fromFraction } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
@@ -102,26 +103,6 @@ function glossaryRecommendationMatches(g: any, recId: string): boolean {
   return normalizeId(g?.fldRec) === t || normalizeId(g?.fldRecID) === t;
 }
 
-/** Glossary row standards, else union of linked master finding + recommendation (Glossary Builder parity). */
-function standardsIdsFromGlossaryRow(
-  gRow: any,
-  findingsList: any[],
-  masterRecs: any[]
-): string[] {
-  const fromGlos = safeArray(gRow?.fldStandards);
-  if (fromGlos.length > 0) return fromGlos;
-  const find = (findingsList || []).find((f: any) =>
-    normalizeId(f.fldFindID || f.id) === normalizeId(gRow?.fldFind)
-  );
-  const recRaw = gRow?.fldRec || gRow?.fldRecID;
-  const rec = (masterRecs || []).find((r: any) => recommendationMatches(r, recRaw));
-  const merged = new Set<string>();
-  for (const id of [...safeArray(find?.fldStandards), ...safeArray(rec?.fldStandards)]) {
-    const s = String(id).trim();
-    if (s) merged.add(s);
-  }
-  return Array.from(merged);
-}
 
 function recordCitationDisplayLabel(standard: any | undefined, idFallback: string): string {
   const formatted = formatStandardCitationLabel(standard);
@@ -320,6 +301,7 @@ export default function ProjectDataEntry({
   /** Suppress false dirty during programmatic record hydration (jump / explorer / layout hydrate). */
   const isHydratingFromRecordRef = useRef(false);
   const lastHydratedRecordIdRef = useRef('');
+  const lastNewRecordCitationFallbackKeyRef = useRef('');
   const isFormDirtyRef = useRef(false);
   const isSavingRef = useRef(false);
   const clonePersistRef = useRef<{
@@ -1068,9 +1050,17 @@ export default function ProjectDataEntry({
     if (!gRow) return;
 
     if (dataEntryMode === 'glossary') {
-      setFldStandards(
-        standardsIdsFromGlossaryRow(gRow, findings || [], masterRecommendations || [])
-      );
+      if (!activeRecord) {
+        setFldStandards(
+          standardsIdsFromGlossaryRow(
+            gRow,
+            resolvableFindingsList || [],
+            resolvableMasterRecsList || []
+          )
+        );
+      } else {
+        setFldStandards(normalizeCitationIds(gRow?.fldStandards));
+      }
     }
 
     const recIdRaw = gRow.fldRec || gRow.fldRecID;
@@ -1278,28 +1268,12 @@ export default function ProjectDataEntry({
       setFldLocation(rec.fldLocation || '');
       setFldImages(Array.isArray(rec.fldImages) ? rec.fldImages : []);
 
-      if (!isCustom) {
-        const savedStd = safeArray(rec.fldStandards);
-        const glosForStd = (glossary || []).find(
-          (g: any) =>
-            (g.id || g.fldGlosId || '').trim().toLowerCase() ===
-            (rec.fldData || '').trim().toLowerCase()
-        );
-        setFldStandards(
-          savedStd.length > 0
-            ? savedStd
-            : glosForStd
-              ? standardsIdsFromGlossaryRow(glosForStd, findings || [], masterRecommendations || [])
-              : []
-        );
-      } else {
-        setFldStandards(safeArray(rec.fldStandards));
-      }
+      setFldStandards(normalizeCitationIds(rec.fldStandards));
 
       setIsDirty(markDirty);
       return newSelections;
     },
-    [glossary, findings, masterRecommendations]
+    [glossary]
   );
 
   const finishRecordHydration = useCallback(() => {
@@ -2426,7 +2400,8 @@ export default function ProjectDataEntry({
     const opts = recommendationOptions;
     if (!opts.length) return '';
     if (selections.glosId && opts.some((o) => normalizeId(o.value) === normalizeId(selections.glosId))) {
-      return selections.glosId;
+      const match = opts.find((o) => normalizeId(o.value) === normalizeId(selections.glosId));
+      return match ? match.value : selections.glosId;
     }
     if (selections.recId && rowsForPath.length) {
       const row = rowsForPath.find((g: any) => glossaryRecommendationMatches(g, selections.recId));
@@ -2450,6 +2425,43 @@ export default function ProjectDataEntry({
     }
     if (gRow) applyGlossaryRecommendationRow(gRow, false);
   }, [isHydratingRecord, selections.findId, selections.recId, recommendationOptions, rowsForPath, glossary]);
+
+  /** New unsaved glossary records: retry citation fallback once masters load for the selected row. */
+  useEffect(() => {
+    if (activeRecord) return;
+    if (dataEntryMode !== 'glossary') return;
+    const gid = normalizeId(selections.glosId);
+    if (!gid) {
+      lastNewRecordCitationFallbackKeyRef.current = '';
+      return;
+    }
+    if (normalizeCitationIds(fldStandardsRef.current).length > 0) return;
+    const listSig = `${(resolvableFindingsList || []).length}:${(resolvableMasterRecsList || []).length}`;
+    const key = `${gid}:${listSig}`;
+    if (lastNewRecordCitationFallbackKeyRef.current === key) return;
+    const gRow =
+      (glossaryRowsForDataEntry || []).find(
+        (g: any) => normalizeId(g.fldGlosId || g.id) === gid
+      ) ||
+      (glossary || []).find((g: any) => normalizeId(g.fldGlosId || g.id) === gid);
+    if (!gRow) return;
+    const next = standardsIdsFromGlossaryRow(
+      gRow,
+      resolvableFindingsList || [],
+      resolvableMasterRecsList || []
+    );
+    lastNewRecordCitationFallbackKeyRef.current = key;
+    if (next.length === 0) return;
+    setFldStandards(next);
+  }, [
+    activeRecord,
+    dataEntryMode,
+    selections.glosId,
+    resolvableFindingsList,
+    resolvableMasterRecsList,
+    glossaryRowsForDataEntry,
+    glossary
+  ]);
 
   const sortedCategories = useMemo(
     () =>
@@ -3414,6 +3426,12 @@ export default function ProjectDataEntry({
                 onChange={(e: any) => {
                   const gid = e.target.value;
                   if (!gid) {
+                    const stillValid =
+                      Boolean(selections.glosId) &&
+                      recommendationOptions.some(
+                        (o) => normalizeId(o.value) === normalizeId(selections.glosId)
+                      );
+                    if (stillValid) return;
                     clearFldStandardsBecauseNoGlossaryRow();
                     onSelectionChange({ ...selections, recId: '', glosId: '', isDirty: true });
                     return;

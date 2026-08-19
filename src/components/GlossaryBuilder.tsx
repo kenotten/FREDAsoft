@@ -1396,6 +1396,28 @@ export function GlossaryBuilder({
         return;
       }
 
+      let glosStds = normalizeStringArray(stagedGlosStds);
+      if (!updateId && glosStds.length === 0) {
+        const selFind = String(selectedFind || '').toLowerCase().trim();
+        const selRec = String(selectedRec || '').toLowerCase().trim();
+        const findingForStds = resolvableFindingsList?.find(
+          (f: any) =>
+            String(f.id || '').toLowerCase().trim() === selFind ||
+            String(f.fldFindID || '').toLowerCase().trim() === selFind
+        );
+        const recForStds = resolvableMasterRecsList?.find(
+          (r: any) =>
+            String(r.id || '').toLowerCase().trim() === selRec ||
+            String(r.fldRecID || '').toLowerCase().trim() === selRec
+        );
+        glosStds = Array.from(
+          new Set([
+            ...normalizeStringArray(findingForStds?.fldStandards),
+            ...normalizeStringArray(recForStds?.fldStandards),
+          ])
+        );
+      }
+
       const payload: any = {
         fldCat: selectedCat,
         fldItem: selectedItem,
@@ -1405,7 +1427,7 @@ export function GlossaryBuilder({
         fldImages: images,
         fldUnitCost: selections.fldUnitCost !== undefined ? selections.fldUnitCost : null,
         fldUnitType: selections.fldUnitType !== undefined ? selections.fldUnitType : null,
-        fldStandards: normalizeStringArray(stagedGlosStds),
+        fldStandards: glosStds,
       };
 
       if (updateId) {
