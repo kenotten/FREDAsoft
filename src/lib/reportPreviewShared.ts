@@ -650,3 +650,150 @@ export function getReportSectionAvailability(
     hasPhotoAddendum: filtered.some((d) => Array.isArray(d.fldImages) && d.fldImages.length > 2)
   };
 }
+
+/** PDF Photo Addendum (Section D): max photos in one logical row (`grid-cols-4`). */
+export const PHOTO_ADDENDUM_PHOTOS_PER_ROW = 4;
+
+/**
+ * Conservative Section D packing budget (CSS px).
+ * Page is 816px; content pad is pt-48 + pb-72 → 696px raw inner height.
+ * 660 leaves ~36px slack above the footer, matching Referenced Standards subsequent-page budget.
+ * Do not pack against the full 696px.
+ */
+export const PHOTO_ADDENDUM_PAGE_BUDGET_PX = 660;
+
+/**
+ * D1 only: `h2` title (~38px: text-xl + pb-2 + border-b-2) + parent `gap-3` (12px).
+ * Nominal ~50px; 52px is slightly conservative. Continuation pages do not pay this.
+ */
+export const PHOTO_ADDENDUM_FIRST_PAGE_TITLE_COST_PX = 52;
+
+/**
+ * Location `h3` (~19px: text-xs + pb-0.5 + border-b) + `space-y-1.5` (6px) before the first row.
+ * Nominal ~25px; 28px is slightly conservative.
+ * Assumes a single-line location heading (ordinary labels at 960px content width).
+ */
+export const PHOTO_ADDENDUM_LOCATION_HEADING_COST_PX = 28;
+
+/**
+ * One logical photo row: `PhotoAddendumCell` `max-h-[132px]` image + nowrap caption.
+ * Nominal ~148px; 152px is slightly conservative. Short rows cost the same as full rows.
+ */
+export const PHOTO_ADDENDUM_ROW_COST_PX = 152;
+
+/** `space-y-2` between logical photo rows of the same location. */
+export const PHOTO_ADDENDUM_ROW_GAP_PX = 8;
+
+/** `space-y-5` between location groups on the same D page. */
+export const PHOTO_ADDENDUM_GROUP_GAP_PX = 20;
+
+export type PhotoAddendumPageLocationGroup<T> = {
+  locationLabel: string;
+  photoRows: T[][];
+};
+
+export function chunkItemsIntoRows<T>(items: T[], itemsPerRow: number): T[][] {
+  if (items.length === 0) return [];
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += itemsPerRow) {
+    rows.push(items.slice(i, i + itemsPerRow));
+  }
+  return rows;
+}
+
+export function groupConsecutivePhotoAddendumByLocation<T extends { locationLabel: string }>(
+  photos: T[]
+): { locationLabel: string; photos: T[] }[] {
+  const groups: { locationLabel: string; photos: T[] }[] = [];
+  for (const photo of photos) {
+    const last = groups[groups.length - 1];
+    if (last && last.locationLabel === photo.locationLabel) {
+      last.photos.push(photo);
+    } else {
+      groups.push({ locationLabel: photo.locationLabel, photos: [photo] });
+    }
+  }
+  return groups;
+}
+
+function photoAddendumStartLocationCost(needsGroupGap: boolean): number {
+  return (
+    (needsGroupGap ? PHOTO_ADDENDUM_GROUP_GAP_PX : 0) +
+    PHOTO_ADDENDUM_LOCATION_HEADING_COST_PX +
+    PHOTO_ADDENDUM_ROW_COST_PX
+  );
+}
+
+function photoAddendumAdditionalRowCost(): number {
+  return PHOTO_ADDENDUM_ROW_GAP_PX + PHOTO_ADDENDUM_ROW_COST_PX;
+}
+
+/**
+ * Pack extra-photo rows onto Section D pages using a deterministic height budget.
+ * Whole logical rows only; heading + first row is the minimum start unit; continuation
+ * pages repeat the location heading and do not pay the D1 title cost.
+ */
+export function paginatePhotoAddendumByRows<T extends { locationLabel: string }>(
+  photos: T[],
+  photosPerRow: number = PHOTO_ADDENDUM_PHOTOS_PER_ROW
+): PhotoAddendumPageLocationGroup<T>[][] {
+  if (photos.length === 0) return [];
+
+  const pages: PhotoAddendumPageLocationGroup<T>[][] = [];
+  let currentPage: PhotoAddendumPageLocationGroup<T>[] = [];
+  let usedHeight = PHOTO_ADDENDUM_FIRST_PAGE_TITLE_COST_PX;
+
+  const remainingHeight = () => PHOTO_ADDENDUM_PAGE_BUDGET_PX - usedHeight;
+
+  const flushPage = () => {
+    if (currentPage.length === 0) return;
+    pages.push(currentPage);
+    currentPage = [];
+    usedHeight = 0;
+  };
+
+  const placeStartLocation = (locationLabel: string, row: T[]) => {
+    let needsGroupGap = currentPage.length > 0;
+    let cost = photoAddendumStartLocationCost(needsGroupGap);
+    if (cost > remainingHeight() && currentPage.length > 0) {
+      flushPage();
+      needsGroupGap = false;
+      cost = photoAddendumStartLocationCost(false);
+    }
+    currentPage.push({ locationLabel, photoRows: [row] });
+    usedHeight += cost;
+  };
+
+  const placeAdditionalRow = (locationLabel: string, row: T[]) => {
+    const cost = photoAddendumAdditionalRowCost();
+    if (cost > remainingHeight()) {
+      flushPage();
+      placeStartLocation(locationLabel, row);
+      return;
+    }
+    const last = currentPage[currentPage.length - 1];
+    if (!last) {
+      placeStartLocation(locationLabel, row);
+      return;
+    }
+    last.photoRows.push(row);
+    usedHeight += cost;
+  };
+
+  for (const group of groupConsecutivePhotoAddendumByLocation(photos)) {
+    const locationRows = chunkItemsIntoRows(group.photos, photosPerRow);
+    for (let rowIndex = 0; rowIndex < locationRows.length; rowIndex++) {
+      const last = currentPage[currentPage.length - 1];
+      const continuingOnThisPage =
+        rowIndex > 0 && last !== undefined && last.locationLabel === group.locationLabel;
+      if (continuingOnThisPage) {
+        placeAdditionalRow(group.locationLabel, locationRows[rowIndex]);
+      } else {
+        placeStartLocation(group.locationLabel, locationRows[rowIndex]);
+      }
+    }
+  }
+
+  flushPage();
+  return pages;
+}

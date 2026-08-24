@@ -43,7 +43,9 @@ import {
   FINANCIAL_TABLE_CLASS,
   FINANCIAL_SUBTOTAL_CELL_CLASS,
   FINANCIAL_SUBTOTAL_BORDER_STYLE,
-  FINANCIAL_CATEGORY_HEADER_CELL_CLASS
+  FINANCIAL_CATEGORY_HEADER_CELL_CLASS,
+  paginatePhotoAddendumByRows,
+  type PhotoAddendumPageLocationGroup
 } from '../lib/reportPreviewShared';
 import type { ReportSectionSelection } from './ReportSectionSelectionDialog';
 
@@ -350,9 +352,6 @@ function AddendumPaginatedContent({
   );
 }
 
-/** Supplemental project-data photos (fldImages index >= 2); chunked for fixed-height PageContainer pages. */
-const PHOTO_ADDENDUM_IMAGES_PER_PAGE = 8;
-
 /** Financial pagination: tbody heights are measured; each printed page adds thead (py-2 + text-[10px] row). */
 const FIN_PAGINATION_THEAD_OVERHEAD_PX = 32;
 /** Small slack per row for divide-y / subpixel layout — keep low so budgets stay close to measured sums. */
@@ -635,15 +634,6 @@ function buildSupplementalPhotoRows(
   return rows;
 }
 
-function chunkPhotoAddendumRows(rows: PhotoAddendumRow[]): PhotoAddendumRow[][] {
-  if (rows.length === 0) return [];
-  const chunks: PhotoAddendumRow[][] = [];
-  for (let i = 0; i < rows.length; i += PHOTO_ADDENDUM_IMAGES_PER_PAGE) {
-    chunks.push(rows.slice(i, i + PHOTO_ADDENDUM_IMAGES_PER_PAGE));
-  }
-  return chunks;
-}
-
 function PhotoAddendumCell({ row }: { row: PhotoAddendumRow }) {
   const [broken, setBroken] = useState(false);
   const caption = `${row.categoryLabel} | ${row.itemLabel}`;
@@ -675,22 +665,12 @@ function PhotoAddendumCell({ row }: { row: PhotoAddendumRow }) {
 }
 
 function PhotoAddendumPageBody({
-  rows,
+  groups,
   showSectionTitle,
 }: {
-  rows: PhotoAddendumRow[];
+  groups: PhotoAddendumPageLocationGroup<PhotoAddendumRow>[];
   showSectionTitle: boolean;
 }) {
-  const sections: { label: string; items: PhotoAddendumRow[] }[] = [];
-  for (const row of rows) {
-    const last = sections[sections.length - 1];
-    if (last && last.label === row.locationLabel) {
-      last.items.push(row);
-    } else {
-      sections.push({ label: row.locationLabel, items: [row] });
-    }
-  }
-
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       {showSectionTitle ? (
@@ -700,14 +680,21 @@ function PhotoAddendumPageBody({
         </h2>
       ) : null}
       <div className="min-h-0 flex-1 space-y-5 overflow-hidden">
-        {sections.map((sec, si) => (
-          <div key={`${sec.label}-${si}`} className="space-y-1.5 break-inside-avoid">
+        {groups.map((sec, si) => (
+          <div key={`${sec.locationLabel}-${si}`} className="space-y-1.5 break-inside-avoid">
             <h3 className="border-b border-zinc-200 pb-0.5 text-xs font-black uppercase tracking-wide text-zinc-600">
-              {sec.label}
+              {sec.locationLabel}
             </h3>
-            <div className="grid grid-cols-4 gap-x-2 gap-y-2">
-              {sec.items.map((row) => (
-                <PhotoAddendumCell key={`${row.recordId}-${row.imageIndex}`} row={row} />
+            <div className="space-y-2">
+              {sec.photoRows.map((photoRow, ri) => (
+                <div
+                  key={`${sec.locationLabel}-${si}-row-${ri}`}
+                  className="grid grid-cols-4 gap-x-2 break-inside-avoid [page-break-inside:avoid]"
+                >
+                  {photoRow.map((row) => (
+                    <PhotoAddendumCell key={`${row.recordId}-${row.imageIndex}`} row={row} />
+                  ))}
+                </div>
               ))}
             </div>
           </div>
@@ -809,7 +796,7 @@ export function ReportPreview({
   }, [sectionSel.photoAddendum, filteredData, locations, glossary, categories, items]);
 
   const photoAddendumPages = useMemo(
-    () => chunkPhotoAddendumRows(supplementalPhotoRows),
+    () => paginatePhotoAddendumByRows(supplementalPhotoRows),
     [supplementalPhotoRows]
   );
 
@@ -1697,14 +1684,14 @@ export function ReportPreview({
 
               {/* Photo Addendum (fldImages index 2+ only; main cards unchanged at slice(0,2)) */}
               {sectionSel.photoAddendum && photoAddendumPages.length > 0
-                ? photoAddendumPages.map((photoPageRows, phIdx) => (
+                ? photoAddendumPages.map((photoPageGroups, phIdx) => (
                     <PageContainer
                       key={`photo-add-${phIdx}`}
                       pageNumber={`D${phIdx + 1}`}
                       facilityName={facility.fldFacName}
                     >
                       <PhotoAddendumPageBody
-                        rows={photoPageRows}
+                        groups={photoPageGroups}
                         showSectionTitle={phIdx === 0}
                       />
                     </PageContainer>

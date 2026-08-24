@@ -105,7 +105,7 @@ Targeted unit tests under `src/lib/__tests__/` cover shared report and audit hel
 
 - `projectAuditReport.test.ts` — `projectAuditReport` warning visibility, custom/unassigned noise, and multiple unit-cost helpers
 - `webReportFilters.test.ts` — `webReportFilters` inclusion and reconciliation logic
-- `reportPreviewShared.test.ts` — `reportPreviewShared` preview filtering and sort helpers
+- `reportPreviewShared.test.ts` — `reportPreviewShared` preview filtering, sort helpers, and PDF Photo Addendum height-budget row pagination
 
 ---
 
@@ -1659,6 +1659,8 @@ This prevents removed record-level citations from reappearing in reports.
 ✅ DECIDED (report UI v1): **View Report** opens a section-selection dialog before `ReportPreview`. The cover page is always included; other sections default to on for the current open only (no `localStorage`). **Referenced standards** and **Photo addendum** rows are omitted when `getReportSectionAvailability` reports no content. Deselected sections are not rendered (no empty placeholders). Page labels keep fixed prefixes (narrative Roman numerals, documentation `1,2,…`, financial `A*`, standards `B*`, photo `D*`); gaps when a section is omitted are acceptable.
 
 ✅ DECIDED (report preview): The same dialog offers **report record sort** (default **Category → Location → Item**; optional **Location → Category → Item**). It drives **`filterReportProjectForPreview`** (Documentation order). **Financial Summary** follows the same choice: default mode groups by category with columns Item \| Location \| …; location-first mode groups by location with columns Category \| Item \| …. It is not persisted. **Referenced standards** addendum ordering stays citation-driven. **Photo addendum** keeps location-first display; `filteredData` order may only affect tie-breaks within the same location label.
+
+✅ DECIDED (PDF Photo Addendum Section D row pagination): PDF **Photo Addendum (extra photos)** paginates by **complete logical photo rows** (maximum **4** photos per row) using a **conservative deterministic vertical height budget** (`660px` body, not the raw `696px` inner content box). Packing uses known fixed Tailwind geometry in `ReportPreview.tsx` (title, one-line location heading, `max-h-[132px]` cell + caption, row/group gaps). **No runtime DOM measurement.** Rows are never split across D pages. Location heading + first photo row is the minimum start unit; continuation pages **repeat the same location heading** (no “(continued)” suffix) and do not pay the D1 title cost. Extra-photo qualification remains `fldImages` index **2+**. Sort remains location → record order → image index. Captions, photo size, D numbering (`D1`, `D2`, …), Sections A/B/C, Web Report Photo Addendum, and Firestore are unchanged.
 
 ✅ DECIDED (Web Report Viewer — foundation): Internal **Web Report Viewer** tab provides **separate read-only web rendering** (Option B) using **live Firestore-backed data** already loaded in the app shell. **No auth/client portal**, **no published snapshots**, **no print**, and **no changes to `ReportPreview.tsx`**. Initial sections: **heading** (always included), **narrative**, and **documentation** with the same two hierarchy modes as PDF reports. **Financial**, **Referenced Standards**, and **Photo Addendum** are implemented (see v1 blocks below). Full on-screen order: Narrative → Financial → Documentation → Referenced Standards → Photo Addendum. **Section toggles** control included on-screen content (and future print/export); **accordion collapse is screen-only** and does not affect inclusion.
 
