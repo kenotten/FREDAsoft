@@ -1,7 +1,7 @@
 # Convert to RAS
 
-**Status:** Planning / architecture note (not an implementation spec). **Not implemented.**  
-**Last updated:** 2026-06-03  
+**Status:** Planning / architecture note (not an implementation spec). **Not implemented.**
+**Last updated:** 2026-08-28
 **Audience:** Product owner, architecture review, implementation planning
 
 > **Disclaimer:** This document captures internal planning for adapting FREDAsoft toward Registered Accessibility Specialist (RAS) workflows under the Texas Department of Licensing and Regulation (TDLR). It does **not** assert legal compliance, required forms, or final field lists. All TDLR/RAS requirements must be verified from official sources, sample deliverables, and qualified review before any implementation.
@@ -225,27 +225,39 @@ RAS conversion must not reintroduce category/item/comment resolution bugs audite
 
 ---
 
-## 11. Report metadata and header fields (decided — planning)
+## 11. Report metadata and header fields
 
-From sample RAS report review, header/metadata block should support (names may map to new or existing project/report fields):
+**RAS Inspection Report cover ownership (authoritative):** **`docs/ARCHITECTURE_DESIGN.md`** (✅ DECIDED 2026-08-28). That block supersedes the earlier §11 list wherever they disagree.
 
-| Field |
-|-------|
-| RAS Name / # |
-| Review / Inspection Date |
-| OCG Project # |
-| TABS # |
-| Project Name |
-| Facility Name |
-| Project Address |
-| City / State / ZIP |
-| Project Description |
-| Scope of Work |
-| Tenant Funds Provided |
-| Owner name / address / city / state / ZIP |
-| Architect / Design Professional / Design Firm |
+From sample RAS report review, header/metadata may also include dates, site/owner/design-firm lines, etc. Binding of those remaining fields to **project** vs **report instance** vs **facility** is still to be finalized. TDLR-mandatory vs operational fields still require verification.
 
-Binding to **project** vs **report instance** vs **facility** to be finalized in Phase 1 architecture doc. TDLR-mandatory vs operational fields still require verification.
+### RAS Inspection Report cover (decided 2026-08-28)
+
+| Cover content | Source |
+|---------------|--------|
+| **Inspection Report** | RAS report-profile / template constant — **not** Project metadata |
+| **2012 Texas Accessibility Standards** | RAS report-profile / template constant — **not** Project metadata |
+| **TABS Project Number** | Canonical `projects.fldTabsProjectNumber` (new concept; TDLR Project Number is snapshot only) |
+| **OCG Project #** | Canonical `projects.fldProjNumber` |
+| **Project Description** | Canonical `projects.fldProjDescription` — **synonymous** with Scope of Work for RAS reports. TDLR Scope of Work remains a separate snapshot. **Do not** use `fldNarrative`. |
+| **Tenant Funded** | Canonical `projects.fldTenantFunded` (Yes/No when populated). Not Type of Funding / Owner Class. |
+| **RAS Name / Number** | Assigned professional name + RAS registration number, rendered `Name / RAS {n}` |
+
+**Project Description and Scope of Work are not two cover fields.** Earlier planning listed both; they are one canonical Project value for this sister report.
+
+**`projects.fldExternalRef`** is **Architect / Design Professional Project #**, not TABS. It is not on the approved RAS Inspection Report cover map above; keep it as Project metadata for design-professional job numbers.
+
+TDLR dual-track: snapshots may later seed canonical fields after staff review; they do not silently overwrite them.
+
+### Other header candidates (still planning)
+
+| Field | Note |
+|-------|------|
+| Review / Inspection Date | Project vs report instance vs facility — TBD |
+| Project Name | Existing `fldProjName` |
+| Facility Name / address / city / state / ZIP | Facility record |
+| Owner name / address / city / state / ZIP | Owner party (not Client by default) |
+| Architect / Design Professional / Design Firm | Design Firm party; job # is `fldExternalRef` |
 
 ---
 

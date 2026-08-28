@@ -1,11 +1,11 @@
 # FREDAsoft Project Field-Level Mapping
 
-**Status:** Documentation-only (D1). **Not implemented.**  
-**Last updated:** 2026-06-05  
-**Branch context:** `d1-field-level-mapping`  
+**Status:** Documentation-only (D1). **Not implemented.**
+**Last updated:** 2026-08-28
+**Branch context:** `d1-field-level-mapping` (amended for RAS Inspection Report cover ownership)
 **Audience:** Product owner (Kenneth), architecture review (Archie), D2/D4 planning
 
-> **Disclaimer:** This document defines a **field-level mapping framework** across TDLR source layers and FREDAsoft operational candidates. It does **not** specify Firestore collections, field names in code, importers, scrapers, or UI. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data.
+> **Disclaimer:** This document defines a **field-level mapping framework** across TDLR source layers and FREDAsoft operational candidates. It does **not** specify Firestore collections, importers, scrapers, or UI. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data. Canonical Project field **names** for the RAS Inspection Report cover (`fldTabsProjectNumber`, `fldTenantFunded`, reassigned `fldExternalRef`, and existing `fldProjNumber` / `fldProjDescription`) are product decisions in **`docs/ARCHITECTURE_DESIGN.md`** (2026-08-28). Those names are **not** live schema except where noted as already existing on `projects`.
 
 ---
 
@@ -94,7 +94,7 @@ D1 reconciles **what each business concept means** across four naming layers so 
 
 | Business Concept | EAB205N Intended Field | TABS UI Field | TDLR Export Field | Source-of-Truth Role | FREDAsoft Canonical / Operational Target | Transformation / Parsing | Reviewer Action Needed | Notes |
 |------------------|------------------------|---------------|-------------------|----------------------|----------------------------------------|---------------------------|------------------------|-------|
-| **TABS / project number** | *(post-submit output; not form input)* | Details **Project Number**; `filter-project-number`; Manage `lblProjectId` (legacy cross-ref) | `Project Number` | Post-registration · Live display · Export | TDLR project source snapshot **primary id**; optional link to FREDAsoft **Project** metadata | Normalize TABS vs EABPRJ era (`DataVersionId`, version filter); do not merge ids silently | **Match** Project link; **Snapshot** always | Assigned after registration; export may mix numbering eras |
+| **TABS / project number** | *(post-submit output; not form input)* | Details **Project Number**; `filter-project-number`; Manage `lblProjectId` (legacy cross-ref) | `Project Number` | Post-registration · Live display · Export | TDLR project source snapshot **primary id**; staff-approved operational copy on **`projects.fldTabsProjectNumber`** (do **not** use `fldExternalRef`) | Normalize TABS vs EABPRJ era (`DataVersionId`, version filter); do not merge ids silently; `lblProjectId` may differ from public TABS # | **Match** Project link; **Snapshot** always; optional **draft** `fldTabsProjectNumber` after review | Canonical TABS number is FREDA-owned; TDLR values never silent-overwrite. See ARCHITECTURE_DESIGN 2026-08-28. |
 | **Project name** | Project Name (§2) | Details **Project Name**; `lblProjectName` | `Project Name` | Registration intent · All layers | TDLR snapshot + **draft Project** name candidate | Trim for compare only | **Match** or draft Project; **Snapshot** | |
 | **Project status** | *(not on EAB205N form)* | Details **Current Status**; `lblProjectStatus`; search enums `3001`–`3009` | `Current Status` | Post-registration · Live display · Export | TDLR **milestone/status snapshot**; not canonical Project status without review | Map enum codes ↔ display text when scraping | **Snapshot**; optional draft milestone | Workflow state; changes over time |
 | **Project created / registered date** | *(not on EAB205N form)* | Registration date filters; Project Status Updates **Registration** row | `ProjectCreatedOn` | Post-registration · Export | TDLR **milestone snapshot**; not FREDAsoft extraction timestamp | Date parse; timezone TBD | **Snapshot**; **Defer** semantic binding | Registration date vs system created-on TBD |
@@ -104,8 +104,8 @@ D1 reconciles **what each business concept means** across four naming layers so 
 | **Estimated construction cost** | Estimated Cost: $ (§2) | Details **Estimated Cost**; `lblProjectEstCost` | `Estimated Cost` | Registration intent · All layers | TDLR snapshot **only** (not inspection/finding cost) | Money parse; exclude A/E fees per EAB205N instructions | **Snapshot** | Not `projectData` cost fields |
 | **Square footage** | Scope of Work *(includes sq ft)* (§2) | Details **Square Footage**; `lblProjectEstimateOfSquareFootage` | `SquareFootage` | Registration intent · Live display · Export | TDLR snapshot; optional Project metadata draft | Split from combined EAB205N scope line; number parse | **Snapshot**; **Defer** split from scope | EAB205N combines; TABS/export separate |
 | **Construction / project type (work)** | Type of Work (§2) | Details **Type of Work**; `lblProjectJobClass` | `Type Of Work` | Registration intent · All layers | TDLR snapshot | Enum map: New Construction / Renovation-Alteration / Additions | **Snapshot** | Export capitalizes **Of** |
-| **Funding / owner class** | Type of Funding (§2); Renovations: tenant private funds Yes/No | Details **Type of Funds**; tenant funds flag; `lblProjectOwnerClass`, `lblProjectPrivateFunds` | `Type Of Funds` | Registration intent · Live display | TDLR snapshot | Enum + conditional renovation flag | **Snapshot** | Export lacks tenant-funds flag column |
-| **Scope of work / description** | Scope of Work (including square footage) (§2) | Details **Scope of Work**; `lblProjectScopeOfWork` | `Scope of Work` | Registration intent · All layers | TDLR snapshot + **draft Project** description | May need sq ft stripped for canonical description | **Match** draft Project; **Snapshot** | CONVERT_TO_RAS §11 **Project Description** candidate |
+| **Funding / owner class** | Type of Funding (§2) | Details **Type of Funds**; `lblProjectOwnerClass` | `Type Of Funds` | Registration intent · Live display | TDLR snapshot **only** | Enum: public vs private funds/lands (etc.) | **Snapshot** | **Not** Tenant Funded. Do not conflate with `lblProjectPrivateFunds`. |
+| **Scope of work / description** | Scope of Work (including square footage) (§2) | Details **Scope of Work**; `lblProjectScopeOfWork` | `Scope of Work` | Registration intent · All layers | TDLR snapshot **always**; optional **draft** of canonical **`projects.fldProjDescription`** after review | May need sq ft stripped when drafting canonical description; TABS/export split Square Footage | **Match** draft Project; **Snapshot** | For RAS reports, **Project Description** and **Scope of Work** are **one** canonical field (`fldProjDescription`). TDLR scope text stays a separate snapshot. Do not use `fldNarrative`. |
 | **Start date** | Estimated Start Date (§2) | Details **Start Date**; `lblProjectEstStartdate` | `Start Date` | Registration intent · All layers | TDLR snapshot + Project schedule metadata draft | Date parse | **Snapshot** + optional draft | |
 | **Completion date** | Estimated Completion Date (§2) | Details **Completion Date**; `lblProjectEstEnddate` | `Completion Date` | Registration intent · All layers | TDLR snapshot + Project schedule metadata draft | Date parse | **Snapshot** + optional draft | |
 | **CAD account number** | CAD Account # (§2) | `lblProjectCADNumber` | `ProjectCADNumber` | Registration intent · Live display · Export | TDLR snapshot + **document attachment metadata** | camelCase export header | **Snapshot**; document workflow | CAD copy required at registration |
@@ -125,8 +125,8 @@ D1 reconciles **what each business concept means** across four naming layers so 
 | **Design firm phone** | Phone number (§5) | Details **Design Firm Phone**; modal `Phone` | `DesignFirmPhone` | Registration intent · All layers | Contact person candidate; snapshot | | **Snapshot** + contact link | |
 | **Design firm email** | Email (§5) | Design Firm modal `Email` | *(not in export)* | Registration intent · TABS | Contact person candidate; snapshot | | **Snapshot** | Export omits |
 | **Designer license type / number** | License Type; License Number (§5) | Design Firm modal `LicenseNumber` | *(not in export)* | Registration intent · TABS | Snapshot only | Enum + conditional number | **Snapshot** | Export omits |
-| **RAS name** | Name (§1) | Details **RAS Name**; `lblProjectRAS` | `RASName` | Registration intent · All layers | Party snapshot + **RAS Firm** party + assigned RAS display | camelCase `RASName` | **Match** / **Create**; split firm vs individual TBD | EAB205N name+# only |
-| **RAS license / registration number** | RAS # (§1) | Details **RAS #**; `filter-ras-number`; RAS modal `LicenseNumber` | `RAS#` | Registration intent · All layers | Snapshot + canonical credential candidate | `#` in export header | **Match** by license #; **Snapshot** | Strong match signal |
+| **RAS name** | Name (§1) | Details **RAS Name**; `lblProjectRAS` | `RASName` | Registration intent · All layers | Party snapshot + **RAS Firm** party; **not** automatically the assigned operational RAS | camelCase `RASName` | **Match** / **Create**; optional link to Assigned RAS after review | Registration RAS ≠ assigned professional by default (D5). RAS Inspection Report reads Assigned RAS name. |
+| **RAS license / registration number** | RAS # (§1) | Details **RAS #**; `filter-ras-number`; RAS modal `LicenseNumber` | `RAS#` | Registration intent · All layers | Snapshot + match key for canonical **credential**; Assigned RAS stores the operational number (not duplicated report text) | `#` in export header | **Match** by license #; **Snapshot**; optional draft credential after review | Strong match signal. Cover format `Name / RAS {n}` is **render-time**. |
 | **RAS address** | *(not on EAB205N form)* | Details **RAS Address** | `RASAddress` | Live display · Export | Party snapshot + canonical stakeholder address | | **Match** canonical; **Snapshot** | EAB205N omits; export includes |
 | **RAS phone** | *(not on EAB205N form)* | Details **RAS Phone** | *(not in export)* | TABS only | Contact person candidate; snapshot | | **Snapshot** | |
 | **Designated agent name** | Designated Agent Name (§4) | Agent modal `Name`; `ContactType` = `Agent` | *(not in export)* | Registration intent · TABS | Party snapshot + **Agent project party** + canonical stakeholder | Requires EAB243N if section used | **Match** / **Create** / unmatched | Entire party absent from export |
@@ -134,7 +134,19 @@ D1 reconciles **what each business concept means** across four naming layers so 
 | **Agent address** | Agent Address (§4) | Agent modal address block | *(not in export)* | Registration intent · TABS | Party snapshot + canonical address | | **Match**; **Snapshot** | |
 | **Agent email / phone** | Email; Phone Number (§4) | Agent modal `Email`, `Phone` | *(not in export)* | Registration intent · TABS | Contact person candidates; snapshot | | **Snapshot** | |
 | **Person filing form / registrant** | *(not a numbered EAB205N section on form p.3)* | Details **PERSON FILING FORM** Contact Name | *(not in export)* | TABS only | **Contact person** (registrant)—not necessarily Owner | | **Defer** separate track vs owner rep | Distinct from Owner representative |
-| **Tenant private funds (renovation)** | Renovations Only: private funds by tenant? (§2) | Details tenant funds question; `lblProjectPrivateFunds` | *(not in export)* | Registration intent · TABS | TDLR snapshot flag | Yes/No | **Snapshot** | Conditional on renovation work type |
+| **Tenant private funds (renovation)** | Renovations Only: private funds by tenant? (§2) | Details tenant funds question; `lblProjectPrivateFunds` | *(not in export)* | Registration intent · TABS | TDLR snapshot flag; staff-approved operational copy on **`projects.fldTenantFunded`** | Yes/No → `true` / `false`; absent → `null` | **Snapshot**; optional **draft** `fldTenantFunded` after review | Canonical meaning: tenant **exclusively and unilaterally** funds alterations (`true`) vs owner participates (`false`). **Not** Type of Funding / Owner Class / Tenant party. Report displays Yes/No when populated. |
+
+### FREDAsoft-origin Project identifiers (not TDLR fields)
+
+These are **canonical operational** Project fields. They do not originate on EAB205N / TABS / export. RAS Inspection Report cover ownership: **`docs/ARCHITECTURE_DESIGN.md`** (2026-08-28).
+
+| Business concept | Canonical field | Notes |
+|------------------|-----------------|-------|
+| **OCG Project #** | `projects.fldProjNumber` **(existing)** | FREDA/OCG identifier. Already used on the assessment cover. |
+| **TABS Project Number** | `projects.fldTabsProjectNumber` **(new concept)** | Staff-approved operational TABS number. TDLR Project Number remains snapshot. **Not implemented** as of this amendment. |
+| **Architect / Design Professional Project #** | `projects.fldExternalRef` **(existing; reassigned meaning)** | Design professional’s internal job/project number. **Not** TABS. Production UI still shows `External Ref / TABS #` — relabel in a later implementation task. |
+| **Project Description / Scope of Work** | `projects.fldProjDescription` **(existing)** | One canonical meaning for RAS reports. Unused on the current assessment cover. Not `fldNarrative`. |
+| **Tenant Funded** | `projects.fldTenantFunded` **(new concept)** | Alteration-only: tenant exclusively funds vs owner participates; `null` if unanswered/N/A. **Not implemented** as of this amendment. |
 
 ---
 
@@ -148,7 +160,7 @@ Per **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** (D5):
 |------------------------------|------------------------|----------------------------------|
 | Building/Facility Owner | **Owner** | Canonical **stakeholder** (org or individual) |
 | Design Firm + Design Professional | **Design Firm** + contact | Stakeholder + **contact person** |
-| RAS Name / RAS # | **RAS Firm** / **assigned RAS** | Stakeholder; license # as match signal |
+| RAS Name / RAS # | **RAS Firm** (registration party) | Stakeholder; license # as match signal. **Assigned RAS** (operational) is a separate assignment + credential — see ARCHITECTURE_DESIGN 2026-08-28. |
 | Tenant Contact Name | **Tenant** | Stakeholder or contact-only party TBD |
 | Designated Agent | **Agent** | Stakeholder + contact |
 | Person Filing Form | *(no project party)* | **Contact person** / registrant track |
@@ -190,8 +202,12 @@ Client
 | TDLR concept | FREDAsoft mapping (conceptual) |
 |--------------|--------------------------------|
 | **TDLR project registration record** | **TDLR project source snapshot**—not the FREDAsoft Project document |
-| **TABS / project number** | Snapshot primary identifier; optional **approved link** to FREDAsoft Project |
-| **Project name, scope, dates, cost, classification** | Snapshot always; may **draft** FREDAsoft Project metadata after review |
+| **TABS / project number** | Snapshot primary identifier; staff-approved operational copy is **`projects.fldTabsProjectNumber`**. Do **not** store this on `fldExternalRef`. |
+| **OCG Project #** | Canonical FREDA identifier **`projects.fldProjNumber`** — not a TDLR field |
+| **Architect / Design Professional Project #** | Canonical **`projects.fldExternalRef`** — design professional’s internal job number; **not** TABS |
+| **Project Description / Scope of Work** | Canonical **`projects.fldProjDescription`**. TDLR Scope of Work is a **separate snapshot** (may draft the canonical field after review). |
+| **Tenant Funded** | Canonical **`projects.fldTenantFunded`**. TDLR `lblProjectPrivateFunds` is snapshot only. Distinct from Type of Funding / Owner Class. |
+| **Project name, dates, cost, Type of Funding / work classification** | Snapshot always; may **draft** FREDAsoft Project metadata after review |
 | **Building / facility name + site address** | Snapshot always; may **draft** or **link** FREDAsoft **Facility** |
 | **Owner on registration** | **Owner project party**—not FREDAsoft **Client** unless explicit same-as link |
 | **Post-registration status / milestones** | Snapshot timeline; may inform RAS **report instance** hints (CONVERT_TO_RAS)—binding deferred |
@@ -220,7 +236,7 @@ Client
 | Owner email, representative, Business Type | EAB205N, TABS | Contact + entity typing |
 | Designer license type/number, email | EAB205N, TABS | Snapshot + credential metadata |
 | Tenant email | EAB205N, TABS | Contact person |
-| Renovation tenant-funds flag | EAB205N, TABS | Snapshot flag |
+| Renovation tenant-funds flag | EAB205N, TABS | Snapshot flag; canonical operational target **`fldTenantFunded`** (ARCHITECTURE_DESIGN 2026-08-28) |
 | Person Filing Form / registrant | TABS | Separate from Owner rep |
 | RAS phone | TABS | Contact |
 | Plan Review By / Inspection By | TABS Manage | Assigned professional—report instance (D3) |
@@ -236,7 +252,7 @@ Client
 | `Address2` | Decomposed address; merge policy TBD |
 | `RASAddress` | RAS location; EAB205N has name+# only |
 | `TenantAddress` | EAB205N tenant block has no address |
-| `Project Number` | Output field, not registration input |
+| `Project Number` | Output field, not registration input; canonical FREDA copy is **`fldTabsProjectNumber`**, not `fldExternalRef` |
 
 ### Naming / shape differences (mapping attention)
 
@@ -297,10 +313,10 @@ User input (TABS # / URL / optional export row key)
 
 ### D1 / mapping refinement
 
-1. Should **scope** and **square footage** remain one FREDAsoft Project description field or two?
+1. **Partially resolved (2026-08-28):** **Project Description** and **Scope of Work** are **one** canonical Project field (`fldProjDescription`) for RAS reports. **Square footage** remains a **separate TDLR snapshot** (not merged into that description). How (or whether) square footage is stored on canonical Project is still open.
 2. How should **Address2** / export decomposed address map to FREDAsoft Facility address fields?
 3. Is **Owner Representative** the same concept as TABS Owner modal **DesignProfessionalName**?
-4. **RAS firm vs assigned RAS individual**—single party row or split on canonical model?
+4. **Resolved (2026-08-28):** TDLR **RAS Firm / RAS Name / RAS #** is a registration **snapshot**. **Assigned RAS** is a separate operational assignment (name + RAS registration number). They are **not** automatically identical. Beta may temporarily use `projects.fldInspector` as the assignment link; that does **not** make Inspector permanently synonymous with Assigned RAS.
 5. Should **Person Filing Form** be a first-class source party or registrant metadata only?
 
 ### D2 (workflow wireframes)
