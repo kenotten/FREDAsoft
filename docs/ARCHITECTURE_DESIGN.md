@@ -2479,13 +2479,13 @@ Add a concise future phase section covering:
 
 | Cover label | Canonical owner |
 |-------------|-----------------|
-| TABS Project Number | `projects.fldTabsProjectNumber` (**new** first-class operational field; not implemented yet) |
+| TABS Project Number | `projects.fldTabsProjectNumber` (**new** first-class operational field; persisted on Project create/edit) |
 | OCG Project # | `projects.fldProjNumber` (existing) |
 | Project Description | `projects.fldProjDescription` (existing; **synonymous** with Scope of Work for RAS reports) |
 | Tenant Funded | `projects.fldTenantFunded` (**new**; Yes/No when populated; `null` = unanswered / not applicable / not yet determined) |
 | RAS Name / Number | Assigned professional **name** + **RAS registration number**, rendered `Kenneth Otten / RAS 149` |
 
-**`projects.fldExternalRef`** is **Architect / Design Professional Project #** (design professional’s internal job number)—**not** a TABS number. Current production UI still labels it `External Ref / TABS #`; future implementation must relabel it and must **not** reuse it for TABS. TDLR/TABS values remain as-recorded **source snapshots**; they may later **seed/draft** canonical fields after staff review and must **not** silently overwrite canonical data. Dual-track mapping detail: **`docs/FREDASOFT_PROJECT_FIELD_LEVEL_MAPPING.md`**. Cover field list in **`docs/CONVERT_TO_RAS.md` §11** is superseded by this block for the RAS Inspection Report cover. **No** Firestore schema, UI, report rendering, or migration in this documentation step.
+**`projects.fldExternalRef`** is **Architect / Design Professional Project #** (design professional’s internal job number)—**not** a TABS number. Production New/Edit Project labels this field accordingly. TDLR/TABS values remain as-recorded **source snapshots**; they may later **seed/draft** canonical fields after staff review and must **not** silently overwrite canonical data. Dual-track mapping detail: **`docs/FREDASOFT_PROJECT_FIELD_LEVEL_MAPPING.md`**. Cover field list in **`docs/CONVERT_TO_RAS.md` §11** is superseded by this block for the RAS Inspection Report cover. RAS report **rendering** is not part of the metadata UI implementation.
 
 ### RAS Inspection Report — Project identifiers and cover source (authoritative)
 
@@ -2506,11 +2506,11 @@ These strings belong on the RAS report profile. They are **not** stored as Proje
 |------------------------------------------|---------|-------------------|
 | `projects.fldProjNumber` **(existing)** | **OCG Project #** — canonical FREDA/OCG project identifier | Not a TDLR field |
 | `projects.fldTabsProjectNumber` **(new concept)** | **TABS Project Number** — staff-approved operational TABS number used by FREDA and the RAS report | TDLR Details **Project Number** / export `Project Number` / `lblProjectId` remain **snapshots**. May seed this field after review. Never silent overwrite. **Do not** use `fldExternalRef`. |
-| `projects.fldExternalRef` **(existing; semantic reassignment)** | **Architect / Design Professional Project #** — the architect’s, engineer’s, or other design professional’s internal project/job number | Not a TDLR TABS number. Production UI currently says `External Ref / TABS #` — **relabel in a later implementation task**; do not change UI in this documentation step. |
+| `projects.fldExternalRef` **(existing; semantic reassignment)** | **Architect / Design Professional Project #** — the architect’s, engineer’s, or other design professional’s internal project/job number | Not a TDLR TABS number. Production New/Edit Project uses this label. |
 | `projects.fldProjDescription` **(existing)** | Canonical FREDA **Project Description / Scope of Work** (one meaning for RAS reports) | TDLR `lblProjectScopeOfWork` / EAB205N Scope of Work remains a **separate snapshot**. Future ingestion may draft this field after review. RAS report reads the **canonical** value. **Do not** use `fldNarrative` or `fldFacilityNarratives`. |
 | `projects.fldTenantFunded` **(new concept)** | Alteration-funding question only: *Does the tenant exclusively and unilaterally fund the alterations?* `true` = Yes; `false` = No (owner participates); `null` = unanswered / N/A / not yet determined. Report displays **Yes** / **No** when populated. | Distinct from Type of Funding, Owner Class, public/private funding, and Tenant **party**. TDLR `lblProjectPrivateFunds` remains snapshot and may seed after review. |
 
-`fldTabsProjectNumber` and `fldTenantFunded` are **product field concepts** for future schema/UI. They are **not** live Firestore fields as of this decision.
+`fldTabsProjectNumber` and `fldTenantFunded` are persisted on **`projects`** via New/Edit Project (production metadata UI). `inspectors.fldRasNumber` holds the assigned professional’s RAS registration number (digits/token only). RAS Inspection Report **rendering** is still not implemented. TDLR dual-track rules are unchanged.
 
 #### Assigned RAS identity
 

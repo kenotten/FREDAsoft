@@ -3,6 +3,8 @@ export interface Inspector {
   fldInspName: string;
   fldTitle?: string;
   fldCredentials?: string;
+  /** RAS registration number only (e.g. `149`), not `RAS 149`. Optional on legacy records. */
+  fldRasNumber?: string;
   fldDeleted?: boolean;
   fldIsDeleted?: boolean;
 }
@@ -40,12 +42,26 @@ export interface Project {
   fldProjID: string;
   fldClient: string; // FK from tblClient.fldClientID
   fldDesigner: string; // FK from tblDesignFirm.fldDesignID
-  fldInspector: string; // FK from tblInspectors.fldInspID
+  /**
+   * FK to inspectors.fldInspID.
+   * Beta: temporary assigned-professional (RAS) bridge. Not permanently synonymous with Assigned RAS.
+   */
+  fldInspector: string;
   fldProjName: string;
   fldProjNumber?: string;
+  /** Architect / Design Professional Project # (not TABS). */
   fldExternalRef?: string;
+  /** Staff-approved operational TABS Project Number. Optional until TABS registration exists. */
+  fldTabsProjectNumber?: string;
   fldProjType?: 'Assessment' | 'TAS/RAS';
+  /** Canonical Project Description / Scope of Work. Not report narrative (`fldNarrative`). */
   fldProjDescription?: string;
+  /**
+   * Tenant exclusively/unilaterally funds alterations.
+   * `true` = Yes; `false` = No (owner participates); `null`/absent = unanswered / N/A.
+   * Distinct from Type of Funding / Owner Class.
+   */
+  fldTenantFunded?: boolean | null;
   fldFacilities?: string[];
   fldFacID?: string; // Legacy/Filter compatibility
   fldPDDate: string;

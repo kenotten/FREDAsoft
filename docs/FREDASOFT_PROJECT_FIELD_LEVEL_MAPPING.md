@@ -143,10 +143,10 @@ These are **canonical operational** Project fields. They do not originate on EAB
 | Business concept | Canonical field | Notes |
 |------------------|-----------------|-------|
 | **OCG Project #** | `projects.fldProjNumber` **(existing)** | FREDA/OCG identifier. Already used on the assessment cover. |
-| **TABS Project Number** | `projects.fldTabsProjectNumber` **(new concept)** | Staff-approved operational TABS number. TDLR Project Number remains snapshot. **Not implemented** as of this amendment. |
-| **Architect / Design Professional Project #** | `projects.fldExternalRef` **(existing; reassigned meaning)** | Design professional’s internal job/project number. **Not** TABS. Production UI still shows `External Ref / TABS #` — relabel in a later implementation task. |
+| **TABS Project Number** | `projects.fldTabsProjectNumber` | Staff-approved operational TABS number. TDLR Project Number remains snapshot. Persisted on Project create/edit; optional until registered. |
+| **Architect / Design Professional Project #** | `projects.fldExternalRef` **(existing; reassigned meaning)** | Design professional’s internal job/project number. **Not** TABS. Production UI label: **Architect / Design Professional Project #**. |
 | **Project Description / Scope of Work** | `projects.fldProjDescription` **(existing)** | One canonical meaning for RAS reports. Unused on the current assessment cover. Not `fldNarrative`. |
-| **Tenant Funded** | `projects.fldTenantFunded` **(new concept)** | Alteration-only: tenant exclusively funds vs owner participates; `null` if unanswered/N/A. **Not implemented** as of this amendment. |
+| **Tenant Funded** | `projects.fldTenantFunded` | Alteration-only: tenant exclusively funds vs owner participates; `null` if unanswered/N/A. Persisted as `true` / `false` / `null`. |
 
 ---
 

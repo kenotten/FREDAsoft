@@ -4,6 +4,7 @@ import { Button, Input, Select } from '../ui/core';
 import { AlertCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Client, Facility, Project, Inspector } from '../../types';
+import { tenantFundedSelectValue } from '../../lib/projectMetadataFields';
 
 interface ClientModalProps {
   isOpen: boolean;
@@ -177,10 +178,18 @@ export const ProjectModal = ({
         </div>
 
         <Input label="Project Name" name="name" defaultValue={editingProject?.fldProjName || ''} required />
-        
-        <div className="grid grid-cols-2 gap-4">
-          <Input label="OCG Project #" name="projNumber" placeholder="YY-MM-XXXXX" defaultValue={editingProject?.fldProjNumber || ''} required />
-          <Input label="External Ref / TABS #" name="externalRef" defaultValue={editingProject?.fldExternalRef || ''} />
+
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Project identifiers</p>
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="OCG Project #" name="projNumber" placeholder="YY-MM-XXXXX" defaultValue={editingProject?.fldProjNumber || ''} required />
+            <Input label="TABS Project Number" name="tabsProjectNumber" placeholder="Optional until registered" defaultValue={editingProject?.fldTabsProjectNumber || ''} />
+          </div>
+          <Input
+            label="Architect / Design Professional Project #"
+            name="externalRef"
+            defaultValue={editingProject?.fldExternalRef || ''}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -211,7 +220,21 @@ export const ProjectModal = ({
           </div>
         </div>
 
-        <Input label="Project Description" name="projDescription" defaultValue={editingProject?.fldProjDescription || ''} />
+        <Input
+          label="Project Description / Scope of Work"
+          name="projDescription"
+          defaultValue={editingProject?.fldProjDescription || ''}
+        />
+        <Select
+          label="Tenant Funded"
+          name="tenantFunded"
+          placeholder="Not selected"
+          defaultValue={tenantFundedSelectValue(editingProject?.fldTenantFunded)}
+          options={[
+            { value: 'true', label: 'Yes' },
+            { value: 'false', label: 'No' },
+          ]}
+        />
       </div>
     </Modal>
   );
@@ -243,6 +266,12 @@ export const InspectorModal = ({ isOpen, editingInspector, onClose, onSubmit }: 
         <Input label="Inspector Name" name="name" defaultValue={editingInspector?.fldInspName || ''} required />
         <Input label="Title" name="title" defaultValue={editingInspector?.fldTitle || ''} placeholder="e.g. Senior Inspector" />
         <Input label="Credentials" name="credentials" defaultValue={editingInspector?.fldCredentials || ''} placeholder="e.g. CASp, AIA" />
+        <Input
+          label="RAS Registration Number"
+          name="rasNumber"
+          placeholder="e.g. 149"
+          defaultValue={editingInspector?.fldRasNumber || ''}
+        />
       </div>
     </Modal>
   );

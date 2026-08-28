@@ -2,6 +2,7 @@ import { firestoreService } from './firestoreService';
 import { toast } from 'sonner';
 import { Client, Facility, Project, Inspector } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { buildInspectorSavePayload, buildProjectSavePayload } from '../lib/projectMetadataFields';
 
 export const entityService = {
   handleEditClient: (client: Client, setEditingClient: (c: Client) => void, setIsAddingClient: (b: boolean) => void) => {
@@ -152,18 +153,20 @@ export const entityService = {
         return;
       }
 
-      const data = {
+      const data = buildProjectSavePayload({
         fldProjID: id,
         fldProjName: formData.get('name'),
         fldProjNumber: formData.get('projNumber'),
         fldExternalRef: formData.get('externalRef'),
+        fldTabsProjectNumber: formData.get('tabsProjectNumber'),
         fldPDDate: formData.get('date'),
         fldInspector: formData.get('inspector'),
         fldProjType: formData.get('projType'),
         fldProjDescription: formData.get('projDescription'),
+        fldTenantFunded: formData.get('tenantFunded'),
         fldClient: finalClientId,
-        fldFacilities: formData.getAll('facilities')
-      };
+        fldFacilities: formData.getAll('facilities'),
+      });
       
       await firestoreService.save('projects', data, id);
       toast.success(editingProject ? 'Project updated' : 'Project added');
@@ -184,12 +187,13 @@ export const entityService = {
     const formData = new FormData(e.currentTarget);
     try {
       const id = editingInspector?.fldInspID || uuidv4();
-      const data = {
+      const data = buildInspectorSavePayload({
         fldInspID: id,
         fldInspName: formData.get('name'),
         fldTitle: formData.get('title'),
         fldCredentials: formData.get('credentials'),
-      };
+        fldRasNumber: formData.get('rasNumber'),
+      });
       await firestoreService.save('inspectors', data, id);
       toast.success(editingInspector ? 'Inspector updated' : 'Inspector added');
       setIsAddingInspector(false);
