@@ -25,6 +25,10 @@ import { db, storage } from '../firebase';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { firestoreService } from '../services/firestoreService';
 import { buildProjectDataCloneSeed, type ProjectDataCloneSeed } from '../lib/cloneProjectData';
+import {
+  currentWorkflowResponsibleProfessionalLabel,
+  missingResponsibleProfessionalMessage,
+} from '../lib/responsibleProfessional';
 import { ACTIVE_GLOSSARY_STORAGE_KEY, FREDASOFT_DRAFT_LOCAL_STORAGE_KEY } from '../lib/storageKeys';
 import type { MasterStandard } from '../types';
 import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
@@ -544,6 +548,8 @@ export default function ProjectDataEntry({
   }, [navRecords, locations]);
 
   const hasRequiredContext = Boolean(selections.projectId && inspector?.fldInspID);
+  const missingProfessionalMessage = missingResponsibleProfessionalMessage(project);
+  const responsibleProfessionalLabel = currentWorkflowResponsibleProfessionalLabel(project);
   
   /** Single source of truth: parent `selections.dataEntryMode` (persists across ProjectDataEntry remounts). */
   const dataEntryMode: 'glossary' | 'custom' = selections.dataEntryMode === 'custom' ? 'custom' : 'glossary';
@@ -553,7 +559,7 @@ export default function ProjectDataEntry({
   const selectedCat = selections.categoryId;
   const setSelectedCat = (val: string) => {
     if (!hasRequiredContext && val !== '') {
-      toast.error('Select a project and inspector before entering data.');
+      toast.error(missingProfessionalMessage);
       return;
     }
     // Cascading Reset: Clear everything downstream
@@ -1595,11 +1601,11 @@ export default function ProjectDataEntry({
 
   const handleSave = async () => {
     if (!hasRequiredContext) {
-      toast.error('Select a project and inspector before saving.');
+      toast.error(missingProfessionalMessage);
       return;
     }
     if (!fldLocation) { toast.error('Location is required'); return; }
-    if (!inspector?.fldInspID) { toast.error('Inspector context is missing. Please select an inspector in Setup.'); return; }
+    if (!inspector?.fldInspID) { toast.error(missingProfessionalMessage); return; }
     
     // Ensure we have a valid ID before saving
     const finalizedId = editingRecordId || uuidv4();
@@ -2997,11 +3003,11 @@ export default function ProjectDataEntry({
                   </div>
                 </div>
 
-                {inspector && (
+                {inspector?.fldInspID && (
                   <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg shadow-sm">
                     <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse shadow-[0_0_6px_rgba(245,158,11,0.5)]" />
                     <div className="flex flex-col min-w-0">
-                      <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider leading-none">Active Inspector</span>
+                      <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider leading-none">{responsibleProfessionalLabel}</span>
                       <span className="text-[11px] font-bold text-zinc-900 tracking-tight truncate max-w-[10rem]">
                         {inspector.fldInspName || inspector.fldInspID}
                       </span>
@@ -3248,7 +3254,9 @@ export default function ProjectDataEntry({
               <div className="rounded-xl border border-zinc-200 bg-zinc-50/90 p-3 text-zinc-700 shadow-sm">
                 <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Workspace incomplete</p>
                 <p className="mt-1 text-sm leading-snug text-zinc-600">
-                  Select a client, facility, project, and inspector to enable data entry.
+                  {selections.projectId
+                    ? missingProfessionalMessage
+                    : 'Select a client, facility, and project to enable data entry.'}
                 </p>
               </div>
             )}

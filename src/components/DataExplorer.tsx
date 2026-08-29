@@ -19,10 +19,13 @@ import { cn, sortEntities, sortCategoriesForDropdown, sortItemsForDropdown, comp
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useAuth } from '../hooks/useAuth';
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'sonner';
 import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
+import {
+  getCurrentWorkflowResponsibleProfessionalId,
+  missingResponsibleProfessionalMessage,
+} from '../lib/responsibleProfessional';
 
 function explorerNormId(value: unknown): string {
   return String(value ?? '')
@@ -118,7 +121,6 @@ export function DataExplorer({
     id: string;
     standard: MasterStandard | null;
   } | null>(null);
-  const { user } = useAuth();
   const preSearchExpandedRef = React.useRef<Record<string, boolean>>({});
   const isSearchingRef = React.useRef(false);
 
@@ -201,10 +203,14 @@ export function DataExplorer({
       const batch = writeBatch(db);
       const selectedRecords = projectData.filter((d: any) => selectedIds.has(d.fldPDataID));
       const clonedRecords: any[] = [];
-      const currentUserId = user?.uid || selections.inspectorId;
+      const targetProjectIdForAuthorship = selections.projectId || selectedRecords[0]?.fldPDataProject;
+      const cloneProject = projects.find((p: any) => p.fldProjID === targetProjectIdForAuthorship) || null;
+      const responsibleProfessionalId = getCurrentWorkflowResponsibleProfessionalId(cloneProject);
 
-      if (!currentUserId) {
-        throw new Error("User session not found. Please re-login.");
+      if (!responsibleProfessionalId) {
+        toast.error(missingResponsibleProfessionalMessage(cloneProject));
+        setIsCloning(false);
+        return;
       }
       
       selectedRecords.forEach((original: any) => {
@@ -236,7 +242,7 @@ export function DataExplorer({
           fldMeasurement: null,
           fldUnitType: original.fldUnitType || "Decimal",
           fldImages: [],
-          fldInspID: currentUserId,
+          fldInspID: responsibleProfessionalId,
           fldTimestamp: new Date().toISOString()
         };
 

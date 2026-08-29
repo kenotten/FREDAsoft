@@ -15,6 +15,7 @@ import type {
 } from '../../types';
 import { Button, Card, Select } from '../ui/core';
 import { resolveFacilityReportNarrative, type ReportRecordSortOrder } from '../../lib/reportPreviewShared';
+import { resolveCurrentWorkflowResponsibleProfessional } from '../../lib/responsibleProfessional';
 import {
   applyWebReportRecordInclusion,
   cloneWebReportRecordInclusion,
@@ -272,10 +273,10 @@ export function WebReportViewer({
     return clients.find((c) => c.fldClientID === selectedProject.fldClient) || null;
   }, [clients, selectedProject]);
 
-  const selectedInspector = useMemo(() => {
-    if (!selectedProject?.fldInspector) return null;
-    return inspectors.find((i) => i.fldInspID === selectedProject.fldInspector) || null;
-  }, [inspectors, selectedProject]);
+  const selectedInspector = useMemo(
+    () => resolveCurrentWorkflowResponsibleProfessional(selectedProject, inspectors),
+    [inspectors, selectedProject]
+  );
 
   const dataInScope =
     Boolean(localProjectId) &&

@@ -270,7 +270,7 @@ Registered RAS facts live on **`projects.tdlrRegistered`** (TDLR as-recorded; Be
 
 Template title (`Inspection Report`) and standards line remain RAS report-profile constants.
 
-**Production (feat/ras-beta-project-metadata):** New/Edit Project persists `tdlrRegistered` for TAS/RAS. Sole Project Name is `fldProjName`. No nested `tdlrRegistered.projectName` or generic `tdlrRegistered.tdlrRas`. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer written. Leftover keys on older documents (if any) are unused; no migration.
+**Production (feat/ras-beta-project-metadata + feat/professional-hydration):** New/Edit Project persists `tdlrRegistered` for TAS/RAS. Sole Project Name is `fldProjName`. Current-workflow professional hydrates from `fldInspector` (Assessment) or `fldInspectionRas` (TAS/RAS Inspection). Session Active Inspector is not an assignment. Plan Review hydration remains deferred. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer written.
 
 Do **not** treat FREDA normalized stakeholder names as substitutes for official registered report text.
 

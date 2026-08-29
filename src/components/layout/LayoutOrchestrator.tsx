@@ -59,6 +59,8 @@ import {
 } from '../../types';
 import { UnsavedChangesModal } from '../modals/UnsavedChangesModal';
 import { LibraryManagerHandle } from '../LibraryManager';
+import { toast } from 'sonner';
+import { missingResponsibleProfessionalMessage } from '../../lib/responsibleProfessional';
 
 const ReportPreview = React.lazy(() =>
   import('../ReportPreview').then((m) => ({ default: m.ReportPreview }))
@@ -442,7 +444,13 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setShowReportSectionDialog(true)}
+                  onClick={() => {
+                    if (!selectedInspector) {
+                      toast.error(missingResponsibleProfessionalMessage(selectedProject));
+                      return;
+                    }
+                    setShowReportSectionDialog(true);
+                  }}
                   className="bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100"
                 >
                   <FileText size={14} className="mr-2" /> View Report

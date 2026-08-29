@@ -46,6 +46,7 @@ import { FREDASOFT_SELECTIONS_LOCAL_STORAGE_KEY } from './lib/storageKeys';
 import { clearProjectAuditSessionState } from './lib/projectAuditSessionState';
 import { clearWebReportSessionState } from './lib/webReportSessionState';
 import { isSelectableLibraryMaster } from './lib/libraryMasterLifecycle';
+import { resolveCurrentWorkflowResponsibleProfessional } from './lib/responsibleProfessional';
 import { motion, AnimatePresence } from 'motion/react';
 import { entityService } from './services/entityService';
 
@@ -601,11 +602,10 @@ export default function App() {
   const selectedProject = useMemo(() => projects.find(p => p.fldProjID === selections.projectId) || null, [projects, selections.projectId]);
   const selectedFacility = useMemo(() => facilities.find(f => f.fldFacID === selections.facilityId) || null, [facilities, selections.facilityId]);
   const selectedClient = useMemo(() => clients.find(c => c.fldClientID === selections.clientId) || null, [clients, selections.clientId]);
-  const selectedInspector = useMemo(() => {
-    const inspectorId = selectedProject?.fldInspector || selections.inspectorId;
-    if (!inspectorId) return null;
-    return inspectors.find(i => i.fldInspID === inspectorId) || null;
-  }, [selectedProject, inspectors, selections.inspectorId]);
+  const selectedInspector = useMemo(
+    () => resolveCurrentWorkflowResponsibleProfessional(selectedProject, inspectors),
+    [selectedProject, inspectors]
+  );
 
   const project = selectedProject; // Alias for compatibility
   const facility = selectedFacility; // Alias for compatibility

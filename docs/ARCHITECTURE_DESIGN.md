@@ -2657,7 +2657,9 @@ Do **not** treat FREDA normalized stakeholder names as substitutes for official 
 
 ✅ DECIDED (Beta RAS / Assessment data model — documentation only, 2026-08-28): Clarifies Assessment vs TAS/RAS data ownership, one TDLR source for RAS registration facts (`projects.tdlrRegistered`), Beta professional fields, Review/Inspection work mode, dates, and future report-instance multiplicity. Dual-track rules above remain in force. The original decision was documentation only.
 
-✅ IMPLEMENTED (Beta RAS Project metadata foundation, feat/ras-beta-project-metadata): New/Edit Project persists `tdlrRegistered`, `fldPlanReviewRas`, and `fldInspectionRas` for TAS/RAS. **Sole Project Name** is `projects.fldProjName` (Assessment = FREDA-entered; TAS/RAS = TDLR registered name). Nested `tdlrRegistered.projectName` and generic `tdlrRegistered.tdlrRas` are **not** in the Beta model. Assessment continues to use `fldInspector` and FREDA `fldProjDescription`. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer on the Project type or save payload. **Not implemented:** Review/Inspection toggle, Sheet, Active Inspector cleanup, ProjectData authorship, report instances, RAS rendering, extraction, stakeholders.
+✅ IMPLEMENTED (Beta RAS Project metadata foundation, feat/ras-beta-project-metadata): New/Edit Project persists `tdlrRegistered`, `fldPlanReviewRas`, and `fldInspectionRas` for TAS/RAS. **Sole Project Name** is `projects.fldProjName` (Assessment = FREDA-entered; TAS/RAS = TDLR registered name). Nested `tdlrRegistered.projectName` and generic `tdlrRegistered.tdlrRas` are **not** in the Beta model. Assessment continues to use `fldInspector` and FREDA `fldProjDescription`. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer on the Project type or save payload.
+
+✅ IMPLEMENTED (professional hydration, feat/professional-hydration): Current-workflow responsible professional hydrates from the Project assignment. Assessment → `fldInspector`. TAS/RAS Data Entry / Inspection → `fldInspectionRas` (no session `inspectorId` fallback, no auth `uid`, no `fldInspector` on TAS/RAS, no Plan Review fallback). Setup generic Inspector assignment removed; Inspector directory CRUD remains. ProjectData `fldInspID` uses that professional. **Not implemented:** Review/Inspection toggle, Plan Review hydration, Sheet, report instances, RAS rendering, extraction, stakeholders.
 
 **Product behavior implications:** New/Edit Project metadata and Project persistence only. Reports unchanged.
 
@@ -2749,7 +2751,7 @@ The same RAS may be assigned to both RAS services, or different professionals. A
 | RAS Review | `project.fldPlanReviewRas` |
 | RAS Inspection | `project.fldInspectionRas` |
 
-Do **not** create another editable copy of either RAS assignment. Do **not** maintain a generic `tdlrRegistered.tdlrRas`. Session Active Inspector must not compete with these fields. **Do not implement App.tsx / ProjectDataEntry hydration in this slice.**
+Do **not** create another editable copy of either RAS assignment. Do **not** maintain a generic `tdlrRegistered.tdlrRas`. Session Active Inspector must not compete with these fields. Current Inspection workflow hydrates from `fldInspectionRas` (`feat/professional-hydration`). Plan Review hydration remains deferred until Review mode.
 
 #### Review / Inspection work mode (planned — not implemented)
 
@@ -2777,7 +2779,7 @@ The professional responsible for the work is the record author. Target `projectD
 | RAS Plan Review | `fldPlanReviewRas` |
 | RAS Inspection | `fldInspectionRas` |
 
-Auth `uid` is not a substitute. Session Active Inspector is not a substitute. **Do not implement** — `ProjectDataEntry` is protected; dedicated implementation slice required.
+Auth `uid` is not a substitute. Session Active Inspector is not a substitute. **Current Inspection/Assessment Data Entry** stamps `projectData.fldInspID` from the Project assignment (`feat/professional-hydration`). Plan Review authorship remains deferred until Review mode.
 
 #### Active Inspector (target)
 
@@ -2789,7 +2791,7 @@ Display may show “Responsible Inspector” or “Responsible RAS” **derived 
 - RAS Review → `fldPlanReviewRas`
 - RAS Inspection → `fldInspectionRas`
 
-Current Setup picker / session fallback is **transitional**. **Do not remove Active Inspector code in this docs task.**
+Current Setup picker / session fallback is **removed** as an assignment control (`feat/professional-hydration`). Inspector directory CRUD remains. Plan Review display/hydration remains deferred until Review mode.
 
 #### Dates (Beta)
 
@@ -2855,4 +2857,4 @@ RAS Plan Review and Inspection **report content** (when rendering is implemented
 
 #### Explicitly deferred
 
-Review/Inspection toggle; Sheet field / ProjectData schema; ProjectData division or report-instance association; Active Inspector code cleanup; ProjectData authorship change; report-instance collection; revised/multiple report workflows; stakeholder/project-party implementation; TDLR extraction automation; TDLR version history / provenance timestamps (`capturedAt`); document copy/distribution permissions; RAS report rendering.
+Review/Inspection toggle; Sheet field / ProjectData schema; ProjectData division or report-instance association; Plan Review workflow hydration; report-instance collection; revised/multiple report workflows; stakeholder/project-party implementation; TDLR extraction automation; TDLR version history / provenance timestamps (`capturedAt`); document copy/distribution permissions; RAS report rendering.

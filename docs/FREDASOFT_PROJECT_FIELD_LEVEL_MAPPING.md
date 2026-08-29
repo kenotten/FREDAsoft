@@ -321,7 +321,7 @@ User input (TABS # / URL / optional export row key)
 1. **Resolved (2026-08-28, Beta model):** **RAS report** Project Description = `tdlrRegistered.scopeOfWork`. **Assessment** = `projects.fldProjDescription`. **Square footage** remains a **separate TDLR snapshot**. How (or whether) square footage is stored on FREDA Project is still open.
 2. How should **Address2** / export decomposed address map to FREDAsoft Facility address fields?
 3. Is **Owner Representative** the same concept as TABS Owner modal **DesignProfessionalName**?
-4. **Resolved (2026-08-28, revised on feat/ras-beta-project-metadata):** Operational assignment is **`fldPlanReviewRas` / `fldInspectionRas`** (one entry per role; downstream screens hydrate). **`fldInspector` = Assessment Inspector only**. No generic Beta `tdlrRegistered.tdlrRas`. Inspector directory **`fldRasNumber`** is the professional’s RAS #. Missing Plan Review RAS is legitimate for Inspection-only work. **Active Inspector** is transitional/non-authoritative.
+4. **Resolved (2026-08-28, revised feat/professional-hydration):** Operational assignment is **`fldPlanReviewRas` / `fldInspectionRas`**. Current production Inspection/Data Entry hydrates **`fldInspectionRas`**. Assessment hydrates **`fldInspector`**. Session Active Inspector is **not** an assignment. Plan Review hydration remains deferred until Review mode. Inspector directory **`fldRasNumber`** is the professional’s RAS #.
 5. Should **Person Filing Form** be a first-class source party or registrant metadata only?
 
 ### D2 (workflow wireframes)
