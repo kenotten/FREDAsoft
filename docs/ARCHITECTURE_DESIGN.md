@@ -2753,7 +2753,7 @@ The same RAS may be assigned to both RAS services, or different professionals. A
 
 Do **not** create another editable copy of either RAS assignment. Do **not** maintain a generic `tdlrRegistered.tdlrRas`. Session Active Inspector must not compete with these fields. Current Inspection workflow hydrates from `fldInspectionRas` (`feat/professional-hydration`). Plan Review hydration remains deferred until Review mode.
 
-#### Review / Inspection work mode (planned — not implemented)
+#### Review / Inspection work mode (decided — not implemented)
 
 Selector **Review | Inspection** chooses which RAS work product is being created. It does **not** change Project type (still TAS/RAS).
 
@@ -2763,11 +2763,81 @@ RAS Project
   → Inspection mode → responsible professional = fldInspectionRas
 ```
 
-This maps naturally to future report/service instances. **Do not implement the toggle in this docs task.**
+This maps naturally to future report/service instances. **Not implemented.**
 
-#### Plan Review Sheet (planned — not implemented)
+#### Beta RAS work-mode model — ✅ DECIDED (2026-08-29, `docs-ras-work-mode`)
 
-Inspection records commonly identify **Location**. Plan Review records may identify **Location** and optional **Sheet** (e.g. Location “Men’s Restroom”, Sheet “A2.1”). Sheet does **not** replace Location. Review mode: Location + optional Sheet. Inspection mode: Location; Sheet need not be shown unless later requirements justify it. **Do not modify ProjectData schema in this task.** Storage of Sheet and report-instance association is a later slice.
+**Not implemented.** Production TAS/RAS Data Entry remains Inspection-only (`fldInspectionRas`).
+
+✅ DECIDED: TAS/RAS Data Entry will have a **Review | Inspection** current-work-context selector. Assessment has **no** selector. The selector does **not** change `fldProjType` and does **not** assign a professional.
+
+```text
+Review     → projects.fldPlanReviewRas
+Inspection → projects.fldInspectionRas
+```
+
+No cross-role fallback. Missing Plan Review RAS in Review mode: block Review record entry with a Plan Review RAS message. Missing Inspection RAS: existing Inspection block. User does not re-enter the professional after Project assignment.
+
+✅ DECIDED: Current Review/Inspection mode is **sticky workspace/local state keyed by Project**. Do **not** write it on the Project document. Default TAS/RAS mode: **Inspection** until the user selects Review. A Project may contain both work products.
+
+✅ DECIDED: Explicit record discriminator:
+
+```text
+projectData.fldWorkProduct?: 'assessment' | 'plan_review' | 'inspection'
+```
+
+Do **not** infer from author, RAS identity, Sheet, or Project type alone. New records must be stamped explicitly. **No migration.**
+
+| Record | Interpretation |
+|--------|----------------|
+| Explicit `fldWorkProduct` | Stored value wins |
+| Missing + Project Assessment | `assessment` |
+| Missing + Project TAS/RAS | `inspection` |
+
+After future `reportInstanceId`: **`fldWorkProduct` remains the broad work division**; **`reportInstanceId` identifies a particular Review or Inspection instance**. Do not replace the discriminator with instance id.
+
+✅ DECIDED dates (current/default context, not instance history):
+
+| Work | Field |
+|------|--------|
+| Assessment | `projects.fldPDDate` |
+| RAS Plan Review | `projects.fldPlanReviewDate` |
+| RAS Inspection | `projects.fldInspectionDate` |
+
+Do **not** use `fldPDDate` as the RAS Inspection date. Do **not** split service date vs report issue date in Beta. Inspection Date = Inspection Report Date. Plan Review: one Plan Review/report date. Long-term instances own their own dates.
+
+✅ DECIDED Sheet: `projectData.fldSheet?: string` (optional; e.g. `A2.1`, `3/A2.1`). Review: Location + optional Sheet. Inspection: Location; Sheet not shown initially. Sheet does **not** replace Location.
+
+✅ DECIDED Facility: keep currently selected Facility required for Plan Review records. Organization: Project → Facility → Location → optional Sheet. Inspection: Project → Facility → Location. No Facility redesign.
+
+✅ DECIDED RAS consumption: Assessment may consume Finding + Recommendation + citations + cost. RAS consumes **Finding + TAS citations only**. TAS/RAS Data Entry must **hide** Recommendation and cost/financial controls, **not** require `recId`, and **not** auto-create rec/cost on new RAS `projectData`. Shared Glossary may still hold Recommendations for Assessment. Do **not** fork Glossary. **Not implemented.**
+
+✅ DECIDED Review images: **hide** existing inspection photo UI in Review mode. Inspection keeps current photos. Plan excerpts / sheet screenshots / reference images are a later intentional design — not inspection photos. No plan-markup system now.
+
+✅ DECIDED filtering: use `fldWorkProduct`. Plan Review Report → `plan_review` only. Inspection Report → `inspection` plus legacy TAS/RAS rows with missing `fldWorkProduct`. Never classify by author, RAS, or Sheet presence.
+
+##### First implementation slice — **not implemented**
+
+Coherent first production slice (includes a **deliberately approved minimal** `ProjectDataEntry.tsx` change). Implement the selector and `fldWorkProduct` discriminator **together** — do **not** introduce a selector that does not classify saved records.
+
+- `fldWorkProduct` and `fldSheet` type/schema support
+- `fldPlanReviewDate` and `fldInspectionDate`
+- sticky Review/Inspection work context (local, keyed by Project)
+- `responsibleProfessional` helper extended for explicit work context
+- Data Entry Review | Inspection selector; writes `fldWorkProduct`
+- Review: optional Sheet; hide inspection photo UI
+- Inspection: hide Sheet; keep photos
+- RAS: hide Recommendation/cost; hydrate correct RAS by mode
+
+**Out of that slice unless strictly required:** RAS report rendering, `ReportPreview` redesign, Data Explorer UX beyond compatibility, report instances, stakeholders, TDLR extraction, Plan Review image/reference system. Data Explorer filtering/display can follow once the record model is stable.
+
+##### Later slices — **not implemented**
+
+Data Explorer filter/display; RAS report profile (filter by `fldWorkProduct`; omit Rec/Financial; Location+Sheet on Plan Review); report instances.
+
+#### Plan Review Sheet (decided — not implemented)
+
+Inspection records commonly identify **Location**. Plan Review records may identify **Location** and optional **Sheet** (`fldSheet`). Sheet does **not** replace Location. Inspection mode does not show Sheet initially. **Not implemented.**
 
 #### Record author
 
@@ -2799,11 +2869,11 @@ Each current work product has **one** operative report/service date. Do **not** 
 
 | Work | Beta date |
 |------|-----------|
-| RAS Inspection | One **Inspection Date** = Inspection Report Date (TDLR requires them the same for this workflow) |
-| RAS Plan Review | One Plan Review/report date unless a later documented requirement splits them |
-| Assessment | One operative assessment/report date |
+| RAS Inspection | `projects.fldInspectionDate` — Inspection Date = Inspection Report Date |
+| RAS Plan Review | `projects.fldPlanReviewDate` — one Plan Review/report date |
+| Assessment | `projects.fldPDDate` |
 
-Long-term instances may own service date, issue date, revision date, and history if required. **Do not implement dates in this docs task.**
+Do **not** use `fldPDDate` as the RAS Inspection date. Do **not** split service vs issue date in Beta. Long-term instances own date/history. Project-level RAS dates are transitional current/default values. **Not implemented.**
 
 #### Multiplicity / future report instances
 
@@ -2847,7 +2917,7 @@ RAS registered Design Firm is `tdlrRegistered.designFirm`. Do **not** use Client
 | Inspection RAS | N/A | `projects.fldInspectionRas` |
 | Finding Location | available | available |
 | Finding Sheet | not currently needed | Review mode only, optional |
-| Report date | assessment operative date | Review or Inspection operative date |
+| Report date | `projects.fldPDDate` | Review: `fldPlanReviewDate`. Inspection: `fldInspectionDate` (not `fldPDDate`) |
 | Standards | Assessment profile | RAS report template: 2012 TAS |
 | Architect/DP internal project # | FREDA `fldExternalRef` if used | FREDA `fldExternalRef` |
 
@@ -2857,4 +2927,4 @@ RAS Plan Review and Inspection **report content** (when rendering is implemented
 
 #### Explicitly deferred
 
-Review/Inspection toggle; Sheet field / ProjectData schema; ProjectData division or report-instance association; Plan Review workflow hydration; report-instance collection; revised/multiple report workflows; stakeholder/project-party implementation; TDLR extraction automation; TDLR version history / provenance timestamps (`capturedAt`); document copy/distribution permissions; RAS report rendering.
+Review/Inspection toggle; `fldWorkProduct` / Sheet on ProjectData; Plan Review Data Entry; Plan Review workflow hydration; `ReportPreview` / RAS Plan Review and Inspection report layouts; Data Explorer work-product UX beyond compatibility; report-instance collection / `reportInstanceId`; revised/multiple Review and Inspection workflows; stakeholder/project-party implementation; TDLR extraction automation; TDLR version history / provenance timestamps (`capturedAt`); document copy/distribution permissions; Plan Review image/reference system; RAS report rendering.

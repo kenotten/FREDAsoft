@@ -1,7 +1,7 @@
 # FREDAsoft RAS Report Instance Crosswalk
 
 **Status:** Documentation-only conceptual crosswalk (D3). **Not implemented.**
-**Last updated:** 2026-08-28 (Beta defaults vs future instances)
+**Last updated:** 2026-08-29 (Beta defaults vs future instances; work-mode decisions, not implemented)
 **Branch context:** `docs-ras-beta-model`
 **Audience:** Product owner (Kenneth), architecture review (Archie), D4/D6/D7 implementation planning
 
@@ -24,15 +24,11 @@ This is a **D3 conceptual crosswalk**, not implementation or schema. It builds o
 
 ### Beta Project-level defaults vs future instances
 
-**`docs/ARCHITECTURE_DESIGN.md`** (Beta RAS / Assessment data model) is authoritative for Beta fields. D3 remains the long-term instance crosswalk.
-
-Beta `fldPlanReviewRas`, `fldInspectionRas`, `tdlrRegistered`, and one operative date per work mode are the **current/default work context**. They do **not** mean a RAS project has only one Plan Review or one Inspection.
-
-Long-term instances (Preliminary / Revised / Official Plan Review; Special / official / follow-up Inspection) may each own kind, responsible RAS, date, state, records, and issued-report history. Beta Project fields should later seed **defaults** when creating an instance.
+**Beta vs instances:** **`docs/ARCHITECTURE_DESIGN.md`** (✅ DECIDED Beta RAS work-mode model, 2026-08-29; **not implemented**) is the home for current work context: Data Entry Review | Inspection selector (sticky local state keyed by Project; default Inspection), `fldWorkProduct`, optional `fldSheet`, `fldPlanReviewDate` / `fldInspectionDate`. This D3 file remains the long-term **report-instance** crosswalk. `fldWorkProduct` = broad division; future `reportInstanceId` = particular instance. Beta does **not** mean one Review + one Inspection forever.
 
 **Review vs Inspection** is a work mode on a TAS/RAS Project (not a Project type change). Plan Review findings may include optional **Sheet** in addition to Location; Sheet does not replace Location; Inspection mode need not show Sheet unless later required.
 
-**Do not** implement instances, Sheet storage, or the Review/Inspection toggle in this documentation task.
+**Not implemented:** work-mode toggle, Sheet storage, `fldWorkProduct`, or report instances.
 
 ---
 
