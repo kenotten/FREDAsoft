@@ -1,7 +1,7 @@
 # Convert to RAS
 
 **Status:** Planning / architecture note. Data Entry work mode and work-mode-aware professional gating are implemented; RAS report rendering is **not** implemented.
-**Last updated:** 2026-08-29 (TAS/RAS Scope → `fldProjDescription` save sync implemented; RAS report rendering still not implemented)
+**Last updated:** 2026-08-29 (report Slice A semantics implemented, not wired; RAS report rendering still not implemented)
 **Audience:** Product owner, architecture review, implementation planning
 
 > **Disclaimer:** This document captures internal planning for adapting FREDAsoft toward Registered Accessibility Specialist (RAS) workflows under the Texas Department of Licensing and Regulation (TDLR). It does **not** assert legal compliance, required forms, or final field lists. All TDLR/RAS requirements must be verified from official sources, sample deliverables, and qualified review before any implementation.

@@ -2808,7 +2808,7 @@ Cover label for RAS remains **Project Description** even though the stored field
 
 **Future TDLR import:** TABS source snapshots stay immutable. Current Project `tdlrRegistered` is **current canonical registered state** on the Project document and **may** be refreshed when staff approve a new snapshot (copy downward onto current Project metadata). That refresh updates `scopeOfWork`, and Model C then copies into `fldProjDescription`. Issued reports / historical `projectData` are not silently rewritten.
 
-**Implementation timing:** TAS/RAS save copy is ✅ IMPLEMENTED (`feat/ras-scope-description-sync`). Report Slice A still **not** started. Adapter must read `scopeOfWork` directly. **Not** `ProjectDataEntry.tsx`. **Not** `ReportPreview.tsx`. No Firestore backfill.
+**Implementation timing:** TAS/RAS save copy is ✅ IMPLEMENTED (`feat/ras-scope-description-sync`). Report Slice A semantics are ✅ IMPLEMENTED (`feat/ras-report-semantics`) and **not** wired to `ReportPreview`. Adapter reads `scopeOfWork` directly.
 
 #### Project Name (one stored value)
 
@@ -3213,18 +3213,18 @@ Still unresolved after this investigation:
 | Slice | Work | Touches `ReportPreview.tsx`? |
 |-------|------|------------------------------|
 | **P — metadata sync** | ✅ IMPLEMENTED (`feat/ras-scope-description-sync`): TAS/RAS save `fldProjDescription` ← `tdlrRegistered.scopeOfWork` (including blank). TABS Scope remains authoritative. RAS report still reads Scope directly when rendering is implemented. No Firestore backfill. | **No** |
-| **A** | `reportProfile` type, adapter/view-model, `fldWorkProduct` filter helper, registered source resolution, section inclusion + sequential lettering rules, image terminology rules, tests. Adapter reads RAS Project Description from `tdlrRegistered.scopeOfWork`. No visible rendering. | **No** if practical |
+| **A** | ✅ IMPLEMENTED (`feat/ras-report-semantics`): `reportProfile` type, `selectReportProfile`, `filterRecordsForReportProfile`, `buildReportViewModel`, RAS section inclusion/lettering, source resolution. Adapter reads RAS Project Description from `tdlrRegistered.scopeOfWork`. **Not wired** to `ReportPreview` — no visible rendering. | **No** |
 | **B** | Consume adapter in `ReportPreview` for established OCG RAS cover (title, standards, registered Facility/project, TABS Scope as Project Description, Owner, professional/RAS #, date, OCG + Project information). Assessment cover unchanged. | **Yes** (cover) |
 | **C** | RAS body: Narrative; filtered Findings; TAS citations; Location + Sheet; images/addendum; sequential section letters; Rec/cost/Financial omitted structurally; pagination check. Assessment body unchanged. | **Yes** (cards / section stream) |
 | **D** | Web Report heading/records consume the same adapter (no print-engine redesign) | No ReportPreview; `WebReportViewer` only |
 
 Do not implement RAS report rendering in the metadata-sync slice.
 
-#### Implementation status (as of `feat/ras-scope-description-sync`)
+#### Implementation status (as of `feat/ras-report-semantics`)
 
-**Implemented (production):** RAS Review/Inspection Data Entry work mode; `fldWorkProduct`; Sheet entry (Review); RAS dates on New/Edit Project; work-mode professional hydration/gating; image entry (shared ProjectData UI); RAS Data Entry Recommendation/cost hiding; **TAS/RAS `fldProjDescription` ← `scopeOfWork` synchronization**.
+**Implemented (production):** RAS Review/Inspection Data Entry work mode; `fldWorkProduct`; Sheet entry (Review); RAS dates on New/Edit Project; work-mode professional hydration/gating; image entry (shared ProjectData UI); RAS Data Entry Recommendation/cost hiding; TAS/RAS `fldProjDescription` ← `scopeOfWork` synchronization; **report profile semantic type/config; report data adapter/view-model; work-product report filter helper; RAS section sequencing helper; RAS source resolution semantics** (`src/lib/reportProfile.ts`, `src/lib/reportAdapter.ts`). **Not consumed by `ReportPreview`.**
 
-**✅ DECIDED, not implemented:** report profile + data adapter; report `fldWorkProduct` filtering; RAS cover (OCG structure); RAS Narrative rendering; RAS body; sequential RAS section letters; Owner/addressee rendering; RAS report images/addenda; RAS Recommendation/Financial omission in **rendered** reports; Web Report parity. RAS report still reads `tdlrRegistered.scopeOfWork` **when rendering is implemented**.
+**✅ DECIDED, not implemented:** `ReportPreview` integration; visible RAS cover; visible RAS Narrative; visible RAS Findings/cards; RAS image/photo rendering changes; RAS section lettering in rendered PDF; visible Recommendation/Financial omission; Web Report parity. RAS report still reads `tdlrRegistered.scopeOfWork` **when rendering is implemented**.
 
 **Future (not Beta report profile):** `reportInstanceId`; multiple report instances/history; TDLR extraction/snapshot automation; stakeholder/project-party links.
 
