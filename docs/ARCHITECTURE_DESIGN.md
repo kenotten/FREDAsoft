@@ -2475,7 +2475,7 @@ Add a concise future phase section covering:
 
 ✅ DECIDED (D8 Portal stakeholder implications - documentation only): **`docs/FREDASOFT_PROJECT_PORTAL_STAKEHOLDER_IMPLICATIONS.md`** clarifies portal stakeholder visibility, submission, and review implications for TDLR/RAS workflows. **Portal user**, **stakeholder**, **contact**, and **project party** remain distinct—no automatic portal access from TDLR source data; portal submissions are **pending proposals**; raw TDLR/TABS source snapshots are **internal by default**; **no** direct canonical/source overwrite or auto-approval. No Firestore schema, auth rules, UI, or app code in this phase.
 
-✅ DECIDED (RAS Inspection Report cover ownership — documentation only, 2026-08-28): The RAS Inspection Report is a **sister report profile** within FREDAreports (not a replacement for the assessment report). Cover **title** (`Inspection Report`) and **standards line** (`2012 Texas Accessibility Standards`) are **report-profile/template constants**, not Project metadata.
+✅ DECIDED (RAS Inspection Report cover ownership — documentation only, 2026-08-28): The RAS Inspection Report is a **sister report profile** within FREDAreports (not a replacement for the assessment report). Cover **title** (`Inspection Report`) and **standards line** (`2012 Texas Accessibility Standards`) are **report-profile/template constants**, not Project metadata. **2026-08-29:** Plan Review cover title is likewise a template constant: **`Plan Review Report`** (same standards line). See **Beta RAS report-profile architecture** below. Rendering is **not** implemented.
 
 **Operational Project field names** in this block described persisted metadata UI as of 2026-08-28. **Superseded for RAS registration facts and professional assignment** by **Beta RAS / Assessment data model** below: TABS Project Number and Tenant Funded belong on `projects.tdlrRegistered`, not as long-term flat operational copies; `fldInspector` is **Assessment Inspector**, not RAS Inspection RAS.
 
@@ -2497,10 +2497,11 @@ The following expands the 2026-08-28 **field-name** decision. TDLR dual-track ru
 
 ```text
 Inspection Report
+Plan Review Report
 2012 Texas Accessibility Standards
 ```
 
-These strings belong on the RAS report profile. They are **not** stored as Project fields.
+These strings belong on the RAS report profile. They are **not** stored as Project fields. Plan Review title ✅ DECIDED 2026-08-29. Rendering is **not** implemented.
 
 #### Operational Project fields (storage — not automatic RAS report wording)
 
@@ -2509,7 +2510,7 @@ These strings belong on the RAS report profile. They are **not** stored as Proje
 | `projects.fldProjNumber` **(existing)** | **OCG Project #** — FREDA/OCG project identifier | Not a TDLR field. RAS reports use this operational value. |
 | `projects.fldTabsProjectNumber` **(removed from production type/UI)** | Transitional flat field; no longer written. | Authoritative RAS value: `tdlrRegistered.tabsProjectNumber`. |
 | `projects.fldExternalRef` **(existing; semantic reassignment)** | **Architect / Design Professional Project #** — the architect’s, engineer’s, or other design professional’s internal project/job number | Not a TDLR TABS number. RAS reports use this FREDA operational value. |
-| `projects.fldProjDescription` **(existing)** | Internal FREDA **Project Description / Scope of Work** — **Assessment** wording | TDLR Scope of Work is `tdlrRegistered.scopeOfWork`. **Do not** use `fldNarrative` or `fldFacilityNarratives`. **RAS** reports use TDLR Scope of Work — they must **not** treat this field as the official registered wording. |
+| `projects.fldProjDescription` **(existing)** | **Assessment:** FREDA-authored canonical Project Description. **TAS/RAS:** inherited/synchronized copy of TABS Scope of Work — **not** independently edited, **not** the RAS report source. | Authoritative TAS/RAS wording is `tdlrRegistered.scopeOfWork`. **Do not** use `fldNarrative` or `fldFacilityNarratives`. See **Project Description vs TABS Scope of Work** below. |
 | `projects.fldTenantFunded` **(removed from production type/UI)** | Transitional flat field; no longer written. Independent of TABS number. | Authoritative RAS value: `tdlrRegistered.tenantFunded`. |
 
 `fldTabsProjectNumber` and `fldTenantFunded` were removed from the Project type, New/Edit Project UI, and save payload (feat/ras-beta-project-metadata). Authoritative RAS values are `tdlrRegistered.tabsProjectNumber` / `tdlrRegistered.tenantFunded`. Leftover flat keys on older Firestore documents (if any) are unused and are not migrated. `inspectors.fldRasNumber` holds the professional’s RAS registration number (digits/token only). RAS Inspection Report **rendering** is still not implemented.
@@ -2554,10 +2555,10 @@ Do **not** collapse these layers.
 
 | Project family | Authoritative **report** Project Description |
 |----------------|-----------------------------------------------|
-| **RAS** | TDLR/TABS as-recorded **Scope of Work** when an official TDLR snapshot exists. Do **not** use internal `projects.fldProjDescription` as the official RAS report wording in that case. |
-| **Assessment** | FREDA-entered Project Description / Scope of Work (`projects.fldProjDescription`). |
+| **RAS** | TDLR/TABS as-recorded **Scope of Work** (`tdlrRegistered.scopeOfWork`). Cover **label** is **Project Description**. Do **not** read a derived `fldProjDescription` copy. |
+| **Assessment** | FREDA-authored `projects.fldProjDescription`. |
 
-Keep both concepts distinct. `fldProjDescription` remains appropriate for assessment/internal operational use.
+Keep both fields. TAS/RAS may persist `fldProjDescription` as a synchronized Project-level copy of Scope of Work; that copy is **not** independently edited and is **not** the RAS report source. See **Project Description vs TABS Scope of Work** below.
 
 #### Service-specific professional assignment (target — not implemented)
 
@@ -2636,16 +2637,17 @@ Documented only:
 
 | RAS report concept | Authoritative display source |
 |--------------------|------------------------------|
-| Inspection Report title | RAS report template |
+| Inspection Report title | RAS report template (`Inspection Report`) |
+| Plan Review Report title | RAS report template (`Plan Review Report`) ✅ DECIDED 2026-08-29; not implemented |
 | Standards line | RAS report template |
 | TABS Project Number | **`tdlrRegistered.tabsProjectNumber`** (not flat `fldTabsProjectNumber`) |
 | OCG Project # | FREDA Project |
 | Project Name | **`projects.fldProjName`** (TAS/RAS: this is the registered TDLR name; no nested copy) |
-| Project Description | TDLR Scope of Work (`tdlrRegistered.scopeOfWork`) |
+| Project Description | TDLR/TABS **Scope of Work** (`tdlrRegistered.scopeOfWork`) — cover **label** is Project Description; do **not** read `fldProjDescription` |
 | Tenant Funded | **`tdlrRegistered.tenantFunded`** (not flat `fldTenantFunded`) |
 | Owner / Addressee | TDLR as-recorded Owner |
 | Registered Design Firm | TDLR as-recorded Design Firm |
-| Facility/site registered data | TDLR as-recorded source where the report represents registration |
+| Facility (registered TABS location) | `tdlrRegistered.site` (internal property name **site**; report meaning = registered **Facility**/location, not a separate Site entity) |
 | Plan Review RAS | Plan Review service assignment |
 | Inspection RAS | Inspection service assignment |
 | Assessment Inspector | Assessment service assignment |
@@ -2671,7 +2673,7 @@ FREDAsoft supports at least two different project/report families.
 
 **Assessment** is not dependent on TDLR/TABS registration. Assessment-specific facts are entered and maintained in FREDA (Project Description / Scope, Assessment Inspector, assessment/report date, Facility operational data, Client and other internal relationships). Assessment does **not** require TABS Project Number, Tenant Funded, TDLR Owner, TDLR Design Firm, TDLR Scope of Work, or other RAS registration-only fields.
 
-**TAS/RAS** projects are registered TDLR projects. Official registered-project facts come from the TDLR/TABS as-recorded layer (`tdlrRegistered`). They are **not** generic FREDA Project facts and must **not** be duplicated merely for operational convenience.
+**TAS/RAS** projects are registered TDLR projects. Official registered-project facts come from the TDLR/TABS as-recorded layer (`tdlrRegistered`). They are **not** generic FREDA Project facts and must **not** be duplicated merely for operational convenience — **except** the settled Project Description inheritance below (`fldProjDescription` may hold a synchronized copy of TABS Scope of Work; it is not a second editable source of truth).
 
 #### One TDLR source for RAS registration facts
 
@@ -2717,10 +2719,105 @@ If a normalized FREDA value differs from TDLR: **RAS report uses TDLR wording**;
 
 | Family | Authoritative report wording |
 |--------|------------------------------|
-| **Assessment** | FREDA-entered `projects.fldProjDescription` |
-| **RAS** (Plan Review or Inspection Report) | `tdlrRegistered.scopeOfWork` |
+| **Assessment** | FREDA-authored `projects.fldProjDescription` |
+| **RAS** (Plan Review or Inspection Report) | `tdlrRegistered.scopeOfWork` (cover **label** = Project Description) |
 
-Do **not** use `fldProjDescription` as the official RAS report description when TDLR registered data exists.
+Do **not** use `fldProjDescription` as the RAS report source. See the inheritance decision immediately below.
+
+✅ DECIDED (Project Description vs TABS Scope of Work — documentation only, 2026-08-29): Both fields remain. Assessment has no TABS data, so `fldProjDescription` stays the FREDA-authored Project Description. TAS/RAS has one authoritative editable/imported value: `tdlrRegistered.scopeOfWork` (TABS **Scope of Work**). `fldProjDescription` may persist as a synchronized Project-level copy of that value and must **not** be independently edited. RAS reports read `tdlrRegistered.scopeOfWork` directly. TABS **Type of Work** (`tdlrRegistered.typeOfWork`) is a separate categorical field. **Not implemented:** no production save/UI/report change in this documentation slice.
+
+**Product behavior implications:** None in the running app until a later metadata-sync slice. Recommended future UX is documented here; it is **not** shipping in this branch.
+
+##### Current production (as of `feat/ras-beta-project-metadata`; code inspection 2026-08-29)
+
+| Field | Defined | Displayed | Saved | Required | Hidden by family |
+|-------|---------|-----------|-------|----------|------------------|
+| `projects.fldProjDescription` | `src/types/index.ts` (`Project.fldProjDescription?`) | New/Edit Project **Assessment only** — label **Project Description / Scope of Work** (`EntityModals.tsx`, `name="projDescription"`) | Assessment branch of `buildProjectSavePayload` only (`projectMetadataFields.ts`). `entityService` always reads `formData.get('projDescription')`; TAS/RAS payload **omits** the key. | No (`required` not set) | Hidden for TAS/RAS |
+| `tdlrRegistered.scopeOfWork` | `src/types/index.ts` (`TdlrRegistered.scopeOfWork: string`) | New/Edit Project **TAS/RAS only** — label **Scope of Work** (`name="tdlrScopeOfWork"`) under TDLR / TABS Registered Data | `buildTdlrRegisteredFromForm` → TAS/RAS `tdlrRegistered` on `buildProjectSavePayload` | No | Hidden for Assessment (no `tdlrRegistered` on Assessment save) |
+| `tdlrRegistered.typeOfWork` | `src/types/index.ts` (`typeOfWork?: string`) | TAS/RAS only — free-text **Type of Work** (`name="tdlrTypeOfWork"`) | Same nested object | No | Hidden for Assessment |
+
+Helpers: `emptyTdlrRegistered`, `buildTdlrRegisteredFromForm`, `buildProjectSavePayload`, `isAssessmentProjectType` in `src/lib/projectMetadataFields.ts`. Firestore `save` uses `{ merge: true }`.
+
+**Not used in production UI:** Data Entry, Data Explorer, Portfolio, `ReportPreview.tsx`, Web Report Viewer, `cloneProjectData`. **Tests:** `src/lib/__tests__/projectMetadataFields.test.ts` — Assessment payload includes `fldProjDescription`; TAS/RAS payload explicitly **does not** (`keeps Scope of Work independent of fldProjDescription`). **Schema sketch:** `firebase-blueprint.json`. **pm-prototype** has a separate mock `scopeOfWork` (not production Project persistence).
+
+Current semantics of `fldProjDescription` uses: **B. generic Project Description** on the type/comment; **A. Assessment Project Description** in New/Edit UI and Assessment save; **D. unused in RAS** for display/save/report (field omitted from TAS/RAS payload). **Not C** — production does not treat it as RAS Scope of Work.
+
+Current semantics of `tdlrRegistered.scopeOfWork`: production treats it as **TABS Scope of Work** (New/Edit TDLR block). It is **not** labeled RAS Project Description, **not** a duplicate write of `fldProjDescription`, and **not** rendered on any report.
+
+**Can they diverge today? Yes.** TAS/RAS UI does not show `fldProjDescription`, and TAS/RAS save **does not write** it. Because Firestore merge leaves omitted keys in place, a leftover `fldProjDescription` (converted Assessment, older doc, or any prior write) can disagree with `tdlrRegistered.scopeOfWork`. Staff cannot currently edit both at once on TAS/RAS, but they also cannot keep the copy in sync.
+
+**Firestore contents of Beta RAS Projects were not inspected** in this documentation task (no production data access). Possible saved states from code alone:
+
+- `tdlrRegistered.scopeOfWork` only (typical new TAS/RAS if staff typed Scope)
+- `fldProjDescription` only (Assessment converted to TAS/RAS, or leftover after type change, with empty Scope)
+- both, possibly different (merge leftover + later TABS entry)
+- neither (new TAS/RAS with blank Scope)
+
+##### TABS terminology (Ken)
+
+| TABS field | Meaning | Persisted as |
+|------------|---------|--------------|
+| **Type of Work** | Categorical classification (e.g. New Construction, Alterations, Additions) | `tdlrRegistered.typeOfWork` |
+| **Scope of Work** | Narrative description of the registered project | `tdlrRegistered.scopeOfWork` |
+
+Do **not** equate Type of Work with Scope of Work. Do **not** equate Scope of Work with an independently authored FREDA RAS description. On OCG RAS covers, TABS Scope of Work is displayed under the label **Project Description**.
+
+##### Inheritance models evaluated
+
+| Model | Rule | Verdict |
+|-------|------|---------|
+| **A — one-time copy on create** | First TABS entry copies into `fldProjDescription`; fields may then diverge | **Reject.** Creates a competing editable/stale SoT after the first edit. Already the failure mode of leftover merge values. |
+| **B — derived, not persisted** | TAS/RAS UI/report always read Scope; `fldProjDescription` unused on TAS/RAS | Feasible today (Assessment-only save already works). Weaker than Ken’s “FREDA Project can inherit the same description.” Portfolio/search that later read `fldProjDescription` would miss RAS text. |
+| **C — authoritative TABS + synchronized copy** | Editing/importing `scopeOfWork` writes `fldProjDescription = scopeOfWork` on TAS/RAS save. TAS/RAS UI does **not** show a second description box. Report still reads `scopeOfWork`. | **Recommend.** Single-write source; copy is persistence convenience; drift only if someone writes `fldProjDescription` outside this path. Backward compatible: Assessment unchanged. Future TDLR import updates current Project metadata (canonical current state) the same way as manual edit. Historical `projectData` / issued reports are **not** silently mutated (copy downward / snapshot rule). |
+| **D — no persisted inheritance** | RAS report/UI use Scope only; `fldProjDescription` may stay blank on TAS/RAS | Safest for report correctness (same as C’s report read). Defeats Project-level inheritance unless every consumer special-cases TAS/RAS. |
+| **E — report reads Scope; optional copy** | Same as C for report; copy is optional | Collapses to C if the copy is always written on TAS/RAS save. No cleaner hook exists in current metadata helpers. |
+
+**Recommended rule (supported by the codebase):**
+
+```text
+Assessment:
+  fldProjDescription
+    = FREDA-authored canonical Project Description
+
+TAS/RAS:
+  tdlrRegistered.scopeOfWork
+    = authoritative TABS Scope of Work (only independently editable/imported value)
+  fldProjDescription
+    = inherited/synchronized FREDA Project copy, not independently edited
+
+RAS report:
+  reads tdlrRegistered.scopeOfWork directly
+  (do not depend on the derived copy)
+
+Assessment report (when Project Description is added to that cover):
+  reads fldProjDescription
+```
+
+**Recommended backward-compatible read (no silent overwrite):**
+
+| Condition | RAS report / official cover | Staff correction |
+|-----------|-----------------------------|------------------|
+| `scopeOfWork` non-empty | Use `scopeOfWork` | If leftover `fldProjDescription` differs, treat as stale copy; next TAS/RAS save (once Model C is implemented) resyncs. Do **not** silently overwrite TABS from the leftover. |
+| `scopeOfWork` empty, `fldProjDescription` present | Do **not** silently promote FREDA text as official TABS Scope | Offer **explicit** staff copy into `scopeOfWork` (convert/legacy). Not a silent migration. |
+| both empty | Blank Project Description on cover | Staff enter TABS Scope of Work. |
+| both present and differ | TABS wins | No auto-merge. |
+
+Do **not** implement migration/backfill. Report correctness does **not** require a Firestore sweep if the adapter reads `scopeOfWork`.
+
+**Recommended New/Edit UX (not implemented here):**
+
+| Family | Show | Do not show |
+|--------|------|-------------|
+| **Assessment** | **Project Description** → editable `fldProjDescription` (drop “/ Scope of Work” from the Assessment label so it is not confused with TABS Scope) | Entire `tdlrRegistered` block (already hidden) |
+| **TAS/RAS** | **Scope of Work** (or **TABS Scope of Work**) under TDLR / TABS Registered Data → `tdlrRegistered.scopeOfWork` | Second Project Description textbox |
+
+Cover label for RAS remains **Project Description** even though the stored field is Scope of Work.
+
+**Type of Work** stays a separate TABS categorical field (`tdlrRegistered.typeOfWork`). Do **not** rename it to Scope. Do **not** derive it from narrative text. Production today is a free-text input, not an enum — enum UX may come with TDLR import; no consolidation with description.
+
+**Future TDLR import:** TABS source snapshots stay immutable. Current Project `tdlrRegistered` is **current canonical registered state** on the Project document and **may** be refreshed when staff approve a new snapshot (copy downward onto current Project metadata). That refresh updates `scopeOfWork`, and Model C then copies into `fldProjDescription`. Issued reports / historical `projectData` are not silently rewritten.
+
+**Implementation timing:** Settle this rule **before or with report Slice A** so the adapter starts from one SoT. The adapter can read `scopeOfWork` without waiting on the copy-write. The copy-write is a small `buildProjectSavePayload` / test change (`projectMetadataFields.ts`, `entityService.ts` already passes the form value, `EntityModals.tsx` already hides the Assessment box). **Not** `ProjectDataEntry.tsx`. **Not** `ReportPreview.tsx`. No Firestore backfill required for Slice A.
 
 #### Project Name (one stored value)
 
@@ -2838,9 +2935,311 @@ Coherent first production slice (includes a **deliberately approved minimal** `P
 
 Data Explorer filter/display; RAS report profile (filter by `fldWorkProduct`; omit Rec/Financial; Location+Sheet on Plan Review); report instances.
 
+---
+
+✅ DECIDED (Plan Review Report title — documentation only, 2026-08-29): The Beta RAS Plan Review cover title is the report-profile/template constant **`Plan Review Report`**. The Inspection cover title remains **`Inspection Report`**. Both RAS profiles use the standards line **`2012 Texas Accessibility Standards`**. These are **not** Project metadata. Do **not** invent Beta subtype titles (`Preliminary Plan Review Report`, `Revised Plan Review Report`); those may later be report-instance metadata. **Not implemented:** report rendering.
+
+✅ DECIDED (Beta RAS report-profile architecture — documentation only, 2026-08-29): Investigation of the current Assessment PDF (`ReportPreview.tsx` ~1877 lines) and Web Report Viewer. Recommends a **shared pagination/print engine + explicit report profile + data adapter**. Assessment behavior is preserved by an Assessment profile that matches today’s mapping. Plan Review and Inspection share one RAS composition with work-product-specific title, professional, date, and record filter. Recommendation and Financial omission is **structural** (not CSS-hidden). **Not implemented:** no production report code in this documentation slice.
+
+**Product behavior implications:** None in the running app.
+
+#### Current Assessment PDF — cover order (as implemented)
+
+Firm identity (logo + hard-coded OCG name/address/phone/fax/URL) → hero overlay `facility.fldFacName` → title **`Accessibility Assessment`** → four hard-coded standards lines (ADA, TAS, FHA, Rehab Act 504) → **OCG INFORMATION** (Inspector name+title; **Inspection Date** = `facility.fldInspectionDate` || `project.fldPDDate`; OCG Project # = `fldProjNumber`) → **PROJECT INFORMATION** (`fldProjName`; Facility name/address/city/state/zip from FREDA Facility) → **OWNER INFORMATION** (**Client** fields labeled as owner: `fldClientName` / address / city / state / ZIP).
+
+Not on the Assessment cover: `fldProjDescription`, `fldExternalRef`, inspector `fldRasNumber` / `fldCredentials`, signature, `tdlrRegistered`, `fldSheet`.
+
+#### Current Assessment PDF — section order (as implemented)
+
+Cover (always) → Narrative (Roman `i, ii, …`; `resolveFacilityReportNarrative` = per-facility `fldFacilityNarratives` then `fldNarrative`) → Documentation (`1, 2, …`; finding cards) → Financial Summary (`A*`) → Addendum: Referenced Standards (`B*`; empty-state bug may show `C1`) → Photo Addendum extra photos (`D*`; `fldImages` index 2+).
+
+View Report: section-selection dialog; cover always on; omitted sections leave letter-prefix gaps (already ✅ DECIDED acceptable). PDF = measured pagination + `window.print()` (not html2pdf). Filter: `filterReportProjectForPreview` = same Project + Facility, dedupe, cost multiplier, sort. **No** `fldWorkProduct` / `fldSheet` / `tdlrRegistered`. Soft-delete filtered upstream in App.
+
+#### Current Assessment finding card (Documentation)
+
+Category | Item → Location + **Estimated Cost** on the same row → Finding (`fldFindLong`) + Measurement → **Recommendation** (`fldRecLong`) → Reference (`projectData.fldStandards` via `getRecordStandardIds` / `formatGroupedStandardCitations`) → up to 2 inline `fldImages` (`alt` “Finding n”). Master `recommendations` prop is unused in render. Citations on the card are record `fldStandards`, not a separate recommendation-citation channel.
+
+#### Current Assessment source map (PDF)
+
+| Visible concept | Label | Source | Fallback | Helper / component | OK for Assessment? | Wrong for RAS? |
+|-----------------|-------|--------|----------|--------------------|--------------------|----------------|
+| Report title | (untitled H2) | Hard-coded `Accessibility Assessment` | none | `ReportPreview` cover | Yes (Assessment profile) | **Yes** — must be profile constant |
+| Standards | four lines | Hard-coded ADA/TAS/FHA/504 | none | cover | Yes | **Yes** — RAS is `2012 Texas Accessibility Standards` only |
+| Client | none as “Client” | `client.*` | TBD on address | cover OWNER block | Operationally used | **Yes if labeled Owner** |
+| Owner label | `OWNER INFORMATION` / `Name:` | **Client** `fldClientName` | TBD | cover | Assessment-specific lie | **Yes — RAS addressee is `tdlrRegistered.owner`** |
+| Addressee | same Owner block | Client | TBD | cover | Assessment-only | **Yes** |
+| Project Name | `Project Name:` | `projects.fldProjName` | none | cover | Yes | OK (TAS/RAS name **is** registered name) |
+| Project Description | **not on PDF** | `fldProjDescription` exists on Project | n/a | New/Edit Project only | Cover omission is current | RAS **must show** `tdlrRegistered.scopeOfWork` |
+| OCG Project # | `OCG Project #:` | `fldProjNumber` | `TBD` | cover | Yes | OK (FREDA operational) |
+| Architect / DP # | **not on PDF** | `fldExternalRef` | n/a | Project metadata | Optional Assessment | Not on the established OCG RAS cover block list; FREDA operational only |
+| Facility name/address | Facility Name / Project Address / City State Zip | FREDA `facilities.*` | TBD | cover + footer | Yes (operational site) | **Partial** — official RAS site is `tdlrRegistered.site`; Facility still scopes records |
+| Report/inspection date | `Inspection Date:` | `facility.fldInspectionDate` \|\| `project.fldPDDate` | `TBD` | cover | Assessment-shaped | **Yes** — do not use Facility date or `fldPDDate` for RAS Inspection |
+| Inspector | `Inspector:` | `inspector.fldInspName`, `fldTitle` | empty name | App `selectedInspector` → prop | Yes if Assessment Inspector | RAS needs role + `fldRasNumber`; prop can be work-mode professional but cover labels/fields are Assessment-shaped |
+| Credentials / RAS # | not shown | `fldCredentials`, `fldRasNumber` on Inspector | n/a | Inspector modal only | Optional gap | RAS # should appear |
+| Findings | `Finding` | `projectData.fldFindLong` | blank | `DocumentationCard` | Yes | OK |
+| Recommendations | `Recommendation` | `projectData.fldRecLong` | blank | `DocumentationCard` | Yes | **Must omit** |
+| Finding citations | `Reference` | `projectData.fldStandards` | glossary `fldStandards` if array empty and `fldData` set | `getRecordStandardIds` | Yes (record snapshot) | OK if RAS rows store Finding/TAS ids only |
+| Recommendation citations | not a separate row | mixed into record `fldStandards` for Assessment glossary union | n/a | Data Entry / glossary | Assessment union | RAS Data Entry already stamps Finding citations only on new rows; legacy mixed ids possible |
+| Locations | `Location` | `locations.fldLocName` via `fldLocation` | `N/A` | card / groups | Yes | OK; Plan Review also needs Sheet |
+| Images | unlabeled thumbs; addendum | `fldImages` 0–1 on card; 2+ Photo Addendum | hidden column if none | card / D | Yes | Reuse pipeline; Review wording may differ |
+| Photo Addendum | `Photo Addendum (extra photos)` | images index 2+ | section omitted if none | D | Yes | Reuse; title/terminology open for Review |
+| Costs | `Estimated Cost` on card; Financial table | `fldUnitCost`/`fldQTY`/`fldTotalCost` × `fldCostMultiplier` | 0 | filter enrich + Financial | Yes | **Must omit** |
+| Financial section | `Financial Summary` | same filtered records | empty table | section A | Yes | **Must omit structurally** |
+| Narrative | `Narrative:` | `fldFacilityNarratives[facId]` \|\| `fldNarrative` \|\| default | default string | `resolveFacilityReportNarrative` | Yes | **Not** official RAS registered wording |
+| Legal/disclaimer | none on PDF cover | n/a | n/a | n/a | none today | RAS certification language still unverified (CONVERT research backlog) |
+
+Web Report heading uses **Client** (not Owner), Inspector, Inspection date (`facility.fldInspectionDate` \|\| `fldPDDate`), OCG #, Facility address. Same record filter. Financial **before** Documentation. No print. Professional already work-mode-aware; label still `"Inspector"`.
+
+#### Recommended architecture (choose C)
+
+Evaluated against this codebase:
+
+| Option | Verdict |
+|--------|---------|
+| **A.** Large `isRasProject` branches in `ReportPreview` | Reject. Protected ~1877-line file; Assessment cover/card/financial/date/owner all hard-coded; conditionals would scatter and risk Assessment regressions. |
+| **B.** Shared renderer + profile **config only** (labels/flags) | Insufficient alone. RAS Owner/site/scope/filter/card shape are data-mapping changes, not just strings. |
+| **C.** Shared renderer + **explicit profile** + **data adapter** producing a view-model | **Recommend.** Pagination, `PageContainer`, print, citation addendum, image slot rules stay shared. Adapter supplies cover fields, record list, card model, section enablement. Assessment profile reproduces today’s mapping. RAS Plan Review and Inspection share RAS cover/body with work-product-specific title, professional, date, filter, Sheet. |
+| **D.** Duplicate RAS report component | Reject. Would clone measurement/print engine; Photo Addendum and standards addendum would drift. |
+
+Preferred shape (not implemented):
+
+```text
+reportProfile: 'assessment' | 'plan_review' | 'inspection'
+  → adapter (filter, cover VM, card VM, section flags)
+    → shared pagination / print engine (today’s ReportPreview internals)
+    → Web Report may consume the same adapter for heading/records later
+```
+
+Omission of Recommendation, cost-on-card, and Financial is a **profile section/card model**, not `display:none`.
+
+#### Profile selection (Beta)
+
+Do **not** infer Review vs Inspection from author, RAS identity, Sheet, or images.
+
+**Recommend:** explicit profile parameter at **View Report** time. `ReportPreview` must **not** independently infer work product.
+
+- Assessment Project → `assessment`
+- TAS/RAS + sticky **Review** context → `plan_review`
+- TAS/RAS + sticky **Inspection** context → `inspection`
+- Pass that value into the section dialog / `ReportPreview` (and later the adapter) so PDF does not re-read storage independently and drift from the click.
+
+Sticky work mode remains Data Entry’s current-work context (already implemented). Future `reportInstanceId` **replaces sticky mode as the particular report selector**, not a second assignment. `fldWorkProduct` remains the broad division.
+
+Web Report may continue to read sticky mode for its live heading until a dedicated parity slice uses the same explicit profile/adapter.
+
+#### Record filtering location
+
+Current path: App `projectData` (project-scoped, non-deleted) → `ReportPreview` / Web Report → `filterReportProjectForPreview` (Project+Facility, sort, cost enrich). **No Firestore work-product query.**
+
+**Recommend:** new helper beside `filterReportProjectForPreview` (e.g. `src/lib/reportPreviewShared.ts` or `src/lib/reportProfile.ts`) applied **after** Project/Facility scope, **before** pagination, section availability, image indexing, or financial calculations. Do **not** infer work product from author, RAS, Sheet, or images.
+
+| Profile | Records |
+|---------|---------|
+| Assessment | Current behavior (no `fldWorkProduct` requirement; do not newly exclude legacy Assessment rows) |
+| Plan Review | Explicit `fldWorkProduct === 'plan_review'` only (**no** missing-field fallback) |
+| Inspection | Explicit `inspection` **plus** TAS/RAS rows with **missing** `fldWorkProduct` |
+
+Not in Firestore. Not inside measured pagination. `getReportSectionAvailability` must use the same filtered set or Financial/Photo/Standards availability will be wrong.
+
+#### Proposed Plan Review Report source map (**not implemented**)
+
+| Concept | Source | Code obstacle today |
+|---------|--------|---------------------|
+| Title | Template `Plan Review Report` | Hard-coded Assessment title |
+| Standards | Template `2012 Texas Accessibility Standards` | Four Assessment lines |
+| Project Name | `projects.fldProjName` | Cover uses it (OK) |
+| Owner / addressee | `tdlrRegistered.owner` (name, address, city, state, zip; optional `contactName`) | Cover uses **Client** as Owner; `tdlrRegistered` unused in reports |
+| Professional | `fldPlanReviewRas` → Inspector directory → `fldInspName` / `fldTitle` / `fldRasNumber` | Prop can already be Plan Review RAS; cover still says Inspector and omits RAS # |
+| Date | `fldPlanReviewDate` | Cover uses Facility inspection date \|\| `fldPDDate` |
+| OCG # | `fldProjNumber` | Present |
+| DP job # | `fldExternalRef` | Not on established OCG RAS cover; do not require it |
+| Scope / cover Project Description | `tdlrRegistered.scopeOfWork` (cover **label** Project Description) | Not rendered; do **not** use `fldProjDescription` |
+| Type of Work | `tdlrRegistered.typeOfWork` (categorical; **not** Scope) | Unused in reports |
+| Registered Facility | `tdlrRegistered.site` (internal name **site**) | Cover uses FREDA Facility |
+| Design firm | `tdlrRegistered.designFirm` | Unused in reports |
+| TABS # | `tdlrRegistered.tabsProjectNumber` | Unused in reports |
+| Tenant Funded | `tdlrRegistered.tenantFunded` | Unused in reports |
+| Records | explicit `plan_review` only | Filter has no work product |
+| Locator | Location + optional `fldSheet` | `fldSheet` unused in reports |
+| Images | `fldImages` | Pipeline exists; Assessment “Photo” wording |
+| Findings / TAS | `fldFindLong` + `fldStandards` | Card also always shows Recommendation + cost |
+| Recommendations / costs / Financial | **OMIT** | Hard-coded card rows + Financial section |
+
+#### Proposed Inspection Report source map (**not implemented**)
+
+Same RAS registered/operational sources as Plan Review except: title `Inspection Report`; professional `fldInspectionRas`; date `fldInspectionDate` (**not** `fldPDDate`, **not** `facility.fldInspectionDate`); records = `inspection` + legacy TAS/RAS missing `fldWorkProduct`; locator = Location only (Sheet not shown initially).
+
+#### Owner / addressee
+
+Assessment PDF **must not** be used as the RAS pattern. RAS addressee = `tdlrRegistered.owner` regardless of Client / who hired OCG. Suggested RAS fields: name, address, city, state, ZIP; optional contact name if present. Do not map TDLR Owner into Client. Body does not otherwise mention Owner today.
+
+#### Registered Facility vs FREDA Facility
+
+**Cover / official identity:** `tdlrRegistered.site` (internal property **site**; report meaning = registered TABS **Facility**/location: `facilityName`, address, city, state, zip; county optional). **Record membership (Beta):** still the **selected FREDA Facility** (`fldFacility`), because Data Entry and View Report are facility-scoped. Do not overwrite FREDA Facility from registered text. If registered Facility text and selected FREDA Facility disagree, cover shows TDLR registered Facility; findings remain the selected FREDA Facility’s records (see open decisions).
+
+#### Scope / description
+
+Assessment `fldProjDescription` is **not** on the current PDF. RAS reports must render `tdlrRegistered.scopeOfWork` under the cover label **Project Description**. Do **not** read a synchronized `fldProjDescription` copy. Do **not** use `fldNarrative` / `fldFacilityNarratives` as official registered wording (those remain the **Narrative** section).
+
+#### Professional rendering
+
+Work-mode gating already resolves the correct Inspector directory row into `selectedInspector`. Adapter should **re-resolve from Project + profile** so Web/PDF cannot silently use session Inspector, auth `uid`, or Active Inspector.
+
+| Profile | Assignment | Directory | Cover display (example) | Stored `fldRasNumber` |
+|---------|------------|-----------|-------------------------|------------------------|
+| Plan Review | `projects.fldPlanReviewRas` | Inspector | `Kenneth F. Otten, RAS #149` | `149` (digits/token only) |
+| Inspection | `projects.fldInspectionRas` | Inspector | same OCG style | `149` |
+
+Assessment: name + title (current). No signature field exists.
+
+#### Dates and recommended labels
+
+| Profile | Source | Recommended cover label | Do not use |
+|---------|--------|-------------------------|------------|
+| Assessment | keep current `facility.fldInspectionDate` \|\| `fldPDDate` | keep **Inspection Date:** | — |
+| Plan Review | `fldPlanReviewDate` | **Plan Review Date:** | `fldPDDate`, Facility date |
+| Inspection | `fldInspectionDate` | **Inspection Date:** | `fldPDDate`, `facility.fldInspectionDate` |
+
+There is **no separate Beta Report Date**. Plan Review report date = Plan Review Date. Inspection report date = Inspection Date. Do **not** use `fldPDDate` or Facility inspection date for RAS. Assessment date behavior remains unchanged.
+
+#### Location + Sheet (Plan Review)
+
+Keep **Location** from `fldLocation`. Show optional **Sheet** as its own labeled value (`Sheet: A2.1`), not as a replacement or sole combined locator. Inspection: Location only.
+
+Buildings, exterior features, areas, playgrounds, walking paths, and similar elements **within one registered TABS Facility** are distinguished through record **Location**. Do **not** create separate Facility documents or report instances merely because one registered Facility contains multiple buildings or features. Assessment multi-facility behavior remains separate and unchanged.
+
+#### Images
+
+Reuse `fldImages` (2 on card, 2+ addendum). No markup system. Inspection can keep photo-oriented addendum machinery. Plan Review images are often plan excerpts — minimum Beta: same slots; avoid implying every image is a field photo. Exact Review addendum title (**Photo Addendum** vs **Image Addendum**) is open.
+
+#### Findings / TAS citations
+
+RAS card: Finding + Reference (record `fldStandards`) + measurement if present. Do not fork Glossary. New RAS Data Entry already omits rec and uses Finding citations; adapter must still **not render** `fldRecLong` even if a legacy row has it. Do not pull recommendation master citations for RAS.
+
+#### Recommendation removal (RAS)
+
+Exclude everywhere in the RAS profile: Documentation `Recommendation` row; any rec text in summaries; Financial (recs are not the only cost driver, but costs go with Financial). Photo addendum captions today are category \| item (no rec). Referenced Standards addendum is citation-driven from record `fldStandards` — keep for TAS requirements. Assessment unchanged.
+
+#### Financial / cost removal (RAS)
+
+Exclude: card **Estimated Cost**; entire **Financial Summary** section; Web Report Financial block; cost columns/totals. Do not CSS-hide. Section dialog should not offer Financial for RAS. **Section letters (Ken, 2026-08-29):** first included section after the cover is **A**, then **B**, **C**, … regardless of section type. Do **not** hard-code Findings = unlettered, Referenced Standards = A, Images = B unless that happens to be the included order. Assessment’s current fixed prefixes (`A*` financial, `B*` standards, `D*` photos) are **Assessment PDF behavior**, not the RAS profile rule.
+
+#### Proposed RAS cover content/order (both profiles; **not implemented**)
+
+The RAS cover should **mirror the existing OCG RAS cover structure**, not become a redesigned TABS data dump. FREDA stakeholder/canonical names do **not** populate official registered cover lines.
+
+**Header**
+
+- OCG identity / contact (reuse current firm block unless later branded otherwise)
+- Report title: `Plan Review Report` **or** `Inspection Report`
+- Regulatory references: `2012 Texas Accessibility Standards`, plus other established header regulatory wording where appropriate to the current OCG template
+
+**Project hero**
+
+- Prominent project / registered Facility identity (see open decision on overlay name)
+
+**OCG INFORMATION**
+
+- RAS Name / #
+- Design Firm (`tdlrRegistered.designFirm`)
+- Plan Review Date **or** Inspection Date (work-mode-specific)
+- Type of Work (`tdlrRegistered.typeOfWork` — categorical; **not** Scope of Work)
+- OCG Project # (`fldProjNumber`)
+- TABS # (`tdlrRegistered.tabsProjectNumber`)
+
+**PROJECT INFORMATION**
+
+- Project Name (`fldProjName`)
+- Facility Name (`tdlrRegistered.site.facilityName` — registered TABS Facility; internal property remains `site`)
+- Project Address (`tdlrRegistered.site.address`)
+- City/State/ZIP (`tdlrRegistered.site`)
+- **Project Description** — sourced from TABS Scope of Work (`tdlrRegistered.scopeOfWork`), **not** `fldProjDescription`
+- Tenant Funds Provided (`tdlrRegistered.tenantFunded`)
+
+**OWNER INFORMATION**
+
+- Registered TABS Owner name, address, city/state/ZIP (`tdlrRegistered.owner`)
+- Supported contact information where appropriate to the established cover (`contactName` if present)
+
+Do not show Preliminary/Revised/Official subtype titles on the Beta cover. Architect / DP Project # (`fldExternalRef`) is FREDA operational metadata — include only if the OCG cover example uses it; do not substitute stakeholder directory data for TABS Owner/Facility/Scope.
+
+#### Proposed RAS body sections (minimum Beta)
+
+Cover → **Narrative** (operational facility text via `resolveFacilityReportNarrative`; **included** on Assessment, RAS Plan Review, and RAS Inspection — Ken 2026-08-29) → **Findings** (Documentation cards without rec/cost; Plan Review includes Sheet) → **Referenced Standards** (TAS from record citations) → **Images / Photo Addendum** (reuse extra-image pipeline).
+
+**Omit:** Financial; Recommendation content; Assessment four-standard branding.
+
+**Narrative** is **not** TDLR registered wording and is **not** Project Description / TABS Scope of Work. It remains the existing FREDA narrative fields. **Do not omit** Narrative from Beta RAS.
+
+**Section letters (Ken):** first included report section after the cover → **A**; next included section → **B**; next → **C**; and so on, regardless of section type. Narrative, Findings, Referenced Standards, and Image/Photo Addendum participate in that sequence when included. Do **not** hard-code Findings = unlettered / Referenced Standards = A / Images = B.
+
+Page numbers: reuse the shared engine. Assessment’s fixed `A*`/`B*`/`D*` prefixes stay Assessment behavior until an Assessment retitle is explicitly approved.
+
+#### Web Report vs ReportPreview
+
+| | ReportPreview / PDF | Web Report |
+|--|---------------------|------------|
+| Purpose | Printable Assessment deliverable | Live on-screen viewer; no print |
+| Cover | Full Assessment cover | Compact heading (Client, not Owner) |
+| Records | `filterReportProjectForPreview` | Same + web inclusion filters |
+| Professional | App `selectedInspector` prop | Local `resolveCurrentWorkflowResponsibleProfessional` + sticky mode |
+| `fldWorkProduct` / `tdlrRegistered` / RAS dates / Sheet | Unused | Unused |
+| Shared today | filter, sort, narrative helper, citation addendum builders, photo index 2+ | — |
+
+**Recommend** one adapter for record list + cover/heading VM + section flags. Keep print pagination PDF-only. Web parity is a later slice, not a dual redesign.
+
+#### Protected `ReportPreview.tsx` risk
+
+~1877 lines: filter, measure, paginate, print, cover, cards, financial, addenda. Highest-risk edits: hard-coded cover (title/standards/owner/date/inspector), `DocumentationCard` (rec + cost + no Sheet), Financial always in the Assessment page stream, pagination budgets. **Smallest implementation path:** adapter + profile **outside** the file (Slice A, no protected edit); then ReportPreview consumes a view-model / card component and Assessment remains the default when profile is assessment (Slices B–C). Avoid wrapping the whole file in `isRasProject`.
+
+#### Future `reportInstanceId`
+
+Beta adapter inputs: `{ profile, project, facility, records, inspectors, stickyMode? }`. Future instance supplies `workProduct` (profile), `date`, `responsibleProfessionalId`, `recordIds`/`reportInstanceId` membership, status. Sticky mode is replaced as the **selector**, not the persistence model. `fldWorkProduct` remains the broad division. Do not key the engine on “whatever records exist.”
+
+#### Open product decisions (Ken)
+
+Code/docs already answer titles, standards line, Owner source, professional fields, Inspection Date = report date, record filter rules, no Rec/Financial, no Client-as-Owner, no `fldPDDate` for RAS Inspection, Sheet optional on Plan Review only.
+
+Still unresolved after this investigation:
+
+1. Plan Review extra-image section title/terminology (Photo vs Image).
+2. Cover hero overlay: registered `site.facilityName` vs selected FREDA Facility name vs omit overlay (cover **Facility Name** line is registered TABS Facility).
+3. How (or whether) square footage is stored on FREDA Project (TABS splits it from Scope of Work).
+
+**Settled in this documentation slice (2026-08-29), not implemented:**
+
+- **Plan Review Date:** / **Inspection Date:** cover labels. No separate Beta Report Date.
+- **RAS # display:** OCG style `Name, RAS #{n}`; storage remains raw `fldRasNumber`.
+- **Narrative is included** on Assessment, RAS Plan Review, and RAS Inspection reports.
+- **Section letters:** sequential A, B, C… for included sections after the cover (not a fixed Findings-unlettered / Standards=A / Images=B scheme).
+- **Type of Work** appears in OCG INFORMATION (categorical `tdlrRegistered.typeOfWork`; not Scope).
+- **Design Firm**, **Tenant Funds Provided**, and **Project Description** (from TABS Scope of Work) follow the OCG RAS cover block structure above.
+- **Registered Facility** terminology: internal `tdlrRegistered.site`; report meaning = TABS Facility/location. Buildings/features inside that Facility are distinguished by **Location**, not extra report instances. Assessment multi-facility behavior is unchanged.
+- **Project Description vs Scope:** RAS report reads `tdlrRegistered.scopeOfWork` directly; see **Project Description vs TABS Scope of Work**.
+
+#### Recommended implementation slices (**not this branch; do not start here**)
+
+| Slice | Work | Touches `ReportPreview.tsx`? |
+|-------|------|------------------------------|
+| **P — metadata sync** | TAS/RAS save: `fldProjDescription` ← `tdlrRegistered.scopeOfWork`. TABS Scope remains authoritative. RAS report still reads Scope directly. No Firestore backfill. `projectMetadataFields.ts` + tests; EntityModals/entityService only if payload requires it. **No** `ProjectDataEntry`. **No** `ReportPreview`. May immediately precede Slice A or start Slice A. | **No** |
+| **A** | `reportProfile` type, adapter/view-model, `fldWorkProduct` filter helper, registered source resolution, section inclusion + sequential lettering rules, image terminology rules, tests. Adapter reads RAS Project Description from `tdlrRegistered.scopeOfWork`. No visible rendering. | **No** if practical |
+| **B** | Consume adapter in `ReportPreview` for established OCG RAS cover (title, standards, registered Facility/project, TABS Scope as Project Description, Owner, professional/RAS #, date, OCG + Project information). Assessment cover unchanged. | **Yes** (cover) |
+| **C** | RAS body: Narrative; filtered Findings; TAS citations; Location + Sheet; images/addendum; sequential section letters; Rec/cost/Financial omitted structurally; pagination check. Assessment body unchanged. | **Yes** (cards / section stream) |
+| **D** | Web Report heading/records consume the same adapter (no print-engine redesign) | No ReportPreview; `WebReportViewer` only |
+
+Do not implement production report code or metadata sync on `docs-ras-report-profile`.
+
+#### Implementation status (as of this documentation)
+
+**Implemented (production):** RAS Review/Inspection Data Entry work mode; `fldWorkProduct`; Sheet entry (Review); RAS dates on New/Edit Project; work-mode professional hydration/gating; image entry (shared ProjectData UI); RAS Data Entry Recommendation/cost hiding.
+
+**✅ DECIDED, not implemented:** TAS/RAS `fldProjDescription` ← `scopeOfWork` synchronization; report profile + data adapter; report `fldWorkProduct` filtering; RAS cover (OCG structure); RAS Narrative rendering; RAS body; sequential RAS section letters; Owner/addressee rendering; RAS report images/addenda; RAS Recommendation/Financial omission in **rendered** reports; Web Report parity.
+
+**Future (not Beta report profile):** `reportInstanceId`; multiple report instances/history; TDLR extraction/snapshot automation; stakeholder/project-party links.
+
 #### Plan Review Sheet (✅ implemented in Data Entry)
 
-Inspection records commonly identify **Location**. Plan Review records may identify **Location** and optional **Sheet** (`fldSheet`). Sheet does **not** replace Location. Inspection mode does not show Sheet initially.
+Inspection records commonly identify **Location**. Plan Review records may identify **Location** and optional **Sheet** (`fldSheet`). Sheet does **not** replace Location. Inspection mode does not show Sheet initially. Elements inside one registered Facility (buildings, exterior features, playgrounds, paths, etc.) are distinguished through Location — not extra Facilities or report instances.
 
 #### Record author
 
@@ -2872,11 +3271,11 @@ Each current work product has **one** operative report/service date. Do **not** 
 
 | Work | Beta date |
 |------|-----------|
-| RAS Inspection | `projects.fldInspectionDate` — Inspection Date = Inspection Report Date |
-| RAS Plan Review | `projects.fldPlanReviewDate` — one Plan Review/report date |
-| Assessment | `projects.fldPDDate` |
+| RAS Inspection | `projects.fldInspectionDate` — cover label **Inspection Date:** (this **is** the report date) |
+| RAS Plan Review | `projects.fldPlanReviewDate` — cover label **Plan Review Date:** (this **is** the report date) |
+| Assessment | `projects.fldPDDate` (unchanged) |
 
-Do **not** use `fldPDDate` as the RAS Inspection date. Do **not** split service vs issue date in Beta. Long-term instances own date/history. Project-level RAS dates are transitional current/default values. Implemented on New/Edit Project.
+There is **no separate Beta Report Date**. Do **not** use `fldPDDate` or Facility inspection date for RAS. Do **not** split service vs issue date in Beta. Long-term instances own date/history. Project-level RAS dates are transitional current/default values. Implemented on New/Edit Project.
 
 #### Multiplicity / future report instances
 
@@ -2894,13 +3293,15 @@ Project
 
 Each instance may own kind/type, responsible RAS, date, report state, records/findings, issued-report history. Beta Project-level assignments should later serve as **defaults/current** when creating instances. **Do not build instances in this task.**
 
-#### Owner, Design Firm, site
+#### Owner, Design Firm, registered Facility
 
 RAS Plan Review and Inspection Reports are **addressed to** `tdlrRegistered.owner`. Client is not a substitute. Who hired OCG is not necessarily the addressee. Copy/distribution permissions remain **deferred**.
 
-RAS registered Design Firm is `tdlrRegistered.designFirm`. Do **not** use Client, dead `fldDesigner`, or unused `designFirms` production path.
+RAS registered Design Firm is `tdlrRegistered.designFirm`. Do **not** use Client, dead `fldDesigner`, unused `designFirms` production path, or FREDA canonical stakeholder names on official registered cover lines.
 
-`tdlrRegistered.site` = official as-recorded site. FREDA Facility = normalized operational site. If they disagree, RAS reports use TDLR site where representing registration; internal workflow may use Facility. Neither overwrites the other.
+Internal property **`tdlrRegistered.site`** stores registered TABS **Facility**/location information. Report terminology is **Facility**, not a separate conceptual Site entity. Do **not** rename the persisted field in this documentation slice. FREDA Facility remains the operational selected Facility for Data Entry / record membership. If they disagree, RAS covers use TDLR registered Facility text where representing registration; internal workflow may use FREDA Facility. Neither overwrites the other.
+
+Do **not** create separate report instances merely because one registered Facility contains multiple buildings or features; those are **Location** distinctions. Assessment multi-facility behavior remains separate and unchanged.
 
 #### Assessment vs RAS sourcing matrix
 
@@ -2911,8 +3312,9 @@ RAS registered Design Firm is `tdlrRegistered.designFirm`. Do **not** use Client
 | TABS Project Number | N/A | `tdlrRegistered.tabsProjectNumber` |
 | Tenant Funded | N/A | `tdlrRegistered.tenantFunded` |
 | Project Name | FREDA `fldProjName` | FREDA `fldProjName` (this **is** the TDLR registered Project Name) |
-| Project Description / Scope | `projects.fldProjDescription` | `tdlrRegistered.scopeOfWork` |
-| Facility/site report identity | FREDA Facility | `tdlrRegistered.site` |
+| Project Description / Scope | `projects.fldProjDescription` (FREDA-authored) | `tdlrRegistered.scopeOfWork` (authoritative). `fldProjDescription` may hold a synchronized copy — **not** the RAS report source |
+| Type of Work | N/A | `tdlrRegistered.typeOfWork` (categorical TABS field; **not** Scope; OCG INFORMATION on RAS cover) |
+| Facility / location report identity | FREDA Facility | `tdlrRegistered.site` (internal name **site**; report meaning = registered TABS **Facility**) |
 | Owner / addressee | Assessment-specific / current behavior (Client labeled Owner on PDF today — not a RAS pattern) | `tdlrRegistered.owner` |
 | Registered Design Firm | N/A unless assessment later needs it | `tdlrRegistered.designFirm` |
 | Responsible professional | `projects.fldInspector` | Work mode: Plan Review RAS or Inspection RAS |
@@ -2920,14 +3322,14 @@ RAS registered Design Firm is `tdlrRegistered.designFirm`. Do **not** use Client
 | Inspection RAS | N/A | `projects.fldInspectionRas` |
 | Finding Location | available | available |
 | Finding Sheet | not currently needed | Review mode only, optional |
-| Report date | `projects.fldPDDate` | Review: `fldPlanReviewDate`. Inspection: `fldInspectionDate` (not `fldPDDate`) |
+| Report date | `projects.fldPDDate` | Review: `fldPlanReviewDate` (**Plan Review Date:**). Inspection: `fldInspectionDate` (**Inspection Date:**). No separate Report Date. Not `fldPDDate`. |
 | Standards | Assessment profile | RAS report template: 2012 TAS |
-| Architect/DP internal project # | FREDA `fldExternalRef` if used | FREDA `fldExternalRef` |
+| Architect/DP internal project # | FREDA `fldExternalRef` if used | FREDA operational; **not** a required OCG RAS cover line |
 
 Do not force RAS-only concepts onto Assessment.
 
-RAS Plan Review and Inspection **report content** (when rendering is implemented): findings / applicable TAS requirements only. **No** Recommendations, cost estimates, or Financial section. Assessment reporting remains unchanged.
+RAS Plan Review and Inspection **report content** (when rendering is implemented): **Narrative included**; findings / applicable TAS requirements only. **No** Recommendations, cost estimates, or Financial section. Assessment reporting remains unchanged.
 
 #### Explicitly deferred
 
-`ReportPreview` / RAS Plan Review and Inspection report layouts; Data Explorer work-product UX beyond clone/compatibility; report-instance collection / `reportInstanceId`; revised/multiple Review and Inspection workflows; stakeholder/project-party implementation; TDLR extraction automation; TDLR version history / provenance timestamps (`capturedAt`); document copy/distribution permissions; Plan Review image/reference system; RAS report rendering.
+`ReportPreview` / RAS Plan Review and Inspection report **rendering** (architecture investigation 2026-08-29 is documentation only); Data Explorer work-product UX beyond clone/compatibility; report-instance collection / `reportInstanceId`; revised/multiple Review and Inspection workflows; stakeholder/project-party implementation; TDLR extraction automation; TDLR version history / provenance timestamps (`capturedAt`); document copy/distribution permissions; Plan Review image/reference system.

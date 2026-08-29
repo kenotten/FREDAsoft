@@ -1,7 +1,7 @@
 # Convert to RAS
 
 **Status:** Planning / architecture note. Data Entry work mode and work-mode-aware professional gating are implemented; RAS report rendering is **not** implemented.
-**Last updated:** 2026-08-29 (work-mode-aware professional gating implemented; RAS report profiles still not implemented)
+**Last updated:** 2026-08-29 (Project Description vs TABS Scope of Work; Narrative included; sequential section letters; OCG RAS cover blocks; rendering still not implemented)
 **Audience:** Product owner, architecture review, implementation planning
 
 > **Disclaimer:** This document captures internal planning for adapting FREDAsoft toward Registered Accessibility Specialist (RAS) workflows under the Texas Department of Licensing and Regulation (TDLR). It does **not** assert legal compliance, required forms, or final field lists. All TDLR/RAS requirements must be verified from official sources, sample deliverables, and qualified review before any implementation.
@@ -259,8 +259,9 @@ Registered RAS facts live on **`projects.tdlrRegistered`** (TDLR as-recorded; Be
 | TABS Project Number | N/A | `tdlrRegistered.tabsProjectNumber` |
 | Tenant Funded | N/A | `tdlrRegistered.tenantFunded` |
 | Project Name | `fldProjName` (FREDA-entered) | `fldProjName` (this **is** the TDLR registered Project Name) |
-| Project Description / Scope | `fldProjDescription` | `tdlrRegistered.scopeOfWork` |
-| Facility/site report identity | FREDA Facility | `tdlrRegistered.site` |
+| Project Description / Scope | `fldProjDescription` (FREDA-authored) | `tdlrRegistered.scopeOfWork` (authoritative TABS Scope of Work; cover label **Project Description**). `fldProjDescription` may hold a synchronized copy — not independently edited, not the RAS report source. See **`docs/ARCHITECTURE_DESIGN.md`** Project Description vs TABS Scope of Work. |
+| Type of Work | N/A | `tdlrRegistered.typeOfWork` (categorical; **not** Scope of Work) |
+| Facility / location report identity | FREDA Facility | `tdlrRegistered.site` (internal property **site**; report meaning = registered TABS **Facility**) |
 | Owner / addressee | Assessment-specific / current PDF behavior | `tdlrRegistered.owner` (required; not Client) |
 | Registered Design Firm | N/A | `tdlrRegistered.designFirm` (not Client, not `fldDesigner`) |
 | Responsible professional | `fldInspector` (Assessment Inspector) | Review mode → `fldPlanReviewRas`; Inspection mode → `fldInspectionRas` |
@@ -270,7 +271,7 @@ Registered RAS facts live on **`projects.tdlrRegistered`** (TDLR as-recorded; Be
 | Standards | Assessment profile | RAS template: 2012 TAS |
 | Architect/DP internal project # | `fldExternalRef` if used | `fldExternalRef` |
 
-Template title (`Inspection Report`) and standards line remain RAS report-profile constants.
+Template titles (`Plan Review Report`, `Inspection Report`) and the standards line (`2012 Texas Accessibility Standards`) remain RAS report-profile constants. **✅ DECIDED, not implemented.** Authoritative investigation: **`docs/ARCHITECTURE_DESIGN.md`** (Beta RAS report-profile architecture).
 
 **Production (feat/ras-beta-project-metadata + feat/professional-hydration + feat/ras-work-mode-data-entry):** New/Edit Project persists `tdlrRegistered` for TAS/RAS. Sole Project Name is `fldProjName`. Current-workflow professional hydrates from `fldInspector` (Assessment), `fldPlanReviewRas` (TAS/RAS Review), or `fldInspectionRas` (TAS/RAS Inspection). Session Active Inspector is not an assignment. RAS report rendering is **not** implemented. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer written.
 
@@ -284,7 +285,7 @@ One operative date per current work product. Assessment: `fldPDDate`. Plan Revie
 
 | Field | Note |
 |-------|------|
-| Registered project / site / owner / design firm | `tdlrRegistered` (not Project Name; name is `fldProjName`) |
+| Registered project / Facility / owner / design firm | `tdlrRegistered` (internal `site` = registered TABS Facility/location; name is `fldProjName`) |
 | OCG # / DP job # | FREDA Project |
 | Plan Review RAS / Inspection RAS | `fldPlanReviewRas` / `fldInspectionRas` — one Project assignment per role; Inspector `fldRasNumber` for the credential |
 
@@ -298,13 +299,17 @@ Assessment reports retain: Narrative, Financial, Documentation (finding + recomm
 
 ### RAS template (planning)
 
+Authoritative report-profile decisions live in **`docs/ARCHITECTURE_DESIGN.md`** (Beta RAS report-profile architecture + Project Description vs TABS Scope of Work). Summary:
+
 | Topic | Direction |
 |-------|-----------|
-| **Template count** | One shared RAS template, configured per report instance (§6) |
-| **Sections** | Likely: metadata/header, narrative/certification, comment table (category/item/location/sheet/TAS/photos), referenced standards, photo addendum — **no financial block** |
-| **Labels** | “Comment” not “Finding”; no recommendation column |
-| **Web Report** | RAS-specific viewer or mode; section toggles analogous to assessment where useful |
-| **PDF** | Separate from `ReportPreview` assessment path until explicitly integrated; protect `ReportPreview.tsx` per **AGENTS.md** |
+| **Template count** | Shared pagination/print engine + explicit report profile (Plan Review / Inspection) |
+| **Cover** | Mirror existing OCG RAS cover blocks (Header, hero, OCG INFORMATION, PROJECT INFORMATION, OWNER INFORMATION). Project Description on cover = TABS `tdlrRegistered.scopeOfWork`. Type of Work is a separate OCG INFORMATION field. Dates: **Plan Review Date:** / **Inspection Date:** (no separate Report Date). Registered Facility uses `tdlrRegistered.site` (do not treat “site” as a separate entity). Buildings/features inside a registered Facility are distinguished by Location. No FREDA stakeholder dump. |
+| **Narrative** | **Included** on Assessment, RAS Plan Review, and RAS Inspection (operational FREDA narrative — not TABS Scope). |
+| **Section letters** | First included section after cover = **A**, then B, C… regardless of section type. Do not hard-code Findings unlettered / Standards=A / Images=B. |
+| **Sections** | Cover → Narrative → Findings (no rec/cost; Review includes Sheet) → Referenced Standards → Photo/Image Addendum. **No** Financial. |
+| **Web Report** | Later adapter slice; no print |
+| **PDF** | Shared engine; protect `ReportPreview.tsx` until Slice B |
 
 ### Requirements still to investigate
 
