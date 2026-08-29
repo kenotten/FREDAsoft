@@ -232,7 +232,7 @@ export const ProjectModal = ({
 
         {isAssessment && (
           <Input
-            label="Project Description / Scope of Work"
+            label="Project Description"
             name="projDescription"
             defaultValue={editingProject?.fldProjDescription || ''}
           />
@@ -284,7 +284,7 @@ export const ProjectModal = ({
               <input type="hidden" name="tdlrSource" value={tdlr?.source || 'manual'} />
 
               <Input label="TABS Project Number" name="tdlrTabsProjectNumber" defaultValue={tdlr?.tabsProjectNumber || ''} />
-              <Input label="Scope of Work" name="tdlrScopeOfWork" defaultValue={tdlr?.scopeOfWork || ''} />
+              <Input label="TABS Scope of Work" name="tdlrScopeOfWork" defaultValue={tdlr?.scopeOfWork || ''} />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Select
                   label="Tenant Funded"

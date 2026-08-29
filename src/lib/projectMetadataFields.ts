@@ -161,13 +161,16 @@ export function buildProjectSavePayload(input: ProjectMetadataSaveInput): Projec
     };
   }
 
+  const tdlrRegistered = input.tdlrRegistered ?? emptyTdlrRegistered();
   return {
     ...base,
     fldPlanReviewRas: parseOptionalString(input.fldPlanReviewRas ?? null),
     fldInspectionRas: parseOptionalString(input.fldInspectionRas ?? null),
     fldPlanReviewDate: parseOptionalString(input.fldPlanReviewDate ?? null),
     fldInspectionDate: parseOptionalString(input.fldInspectionDate ?? null),
-    tdlrRegistered: input.tdlrRegistered ?? emptyTdlrRegistered(),
+    tdlrRegistered,
+    // TAS/RAS copy of TABS Scope (including ""). Authoritative value remains tdlrRegistered.scopeOfWork.
+    fldProjDescription: tdlrRegistered.scopeOfWork,
   };
 }
 

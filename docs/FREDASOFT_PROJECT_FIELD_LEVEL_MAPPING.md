@@ -1,8 +1,8 @@
 # FREDAsoft Project Field-Level Mapping
 
 **Status:** Documentation-only (D1) for mapping/extraction. **Project metadata persistence** for `tdlrRegistered` / RAS assignments is implemented on `feat/ras-beta-project-metadata` (New/Edit Project only; not reports). RAS report **rendering** is **not** implemented.
-**Last updated:** 2026-08-29 (Project Description vs TABS Scope of Work settled in ARCHITECTURE_DESIGN; report profiles not rendered)
-**Branch context:** `docs-ras-report-profile`
+**Last updated:** 2026-08-29 (TAS/RAS Scope → `fldProjDescription` save sync implemented; report profiles not rendered)
+**Branch context:** `feat/ras-scope-description-sync`
 **Audience:** Product owner (Kenneth), architecture review (Archie), D2/D4 planning
 
 > **Disclaimer:** This document defines a **field-level mapping framework** across TDLR source layers and FREDAsoft operational candidates. It does **not** specify Firestore collections, importers, scrapers, or UI. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data. RAS registration facts belong on **`projects.tdlrRegistered`** (**`docs/ARCHITECTURE_DESIGN.md`**, Beta RAS / Assessment data model). Flat `fldTabsProjectNumber` / `fldTenantFunded` were **removed from the production Project type and New/Edit Project UI**. Canonical stakeholder names do **not** replace registered wording on RAS reports.

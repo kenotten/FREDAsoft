@@ -1,7 +1,7 @@
 # Convert to RAS
 
 **Status:** Planning / architecture note. Data Entry work mode and work-mode-aware professional gating are implemented; RAS report rendering is **not** implemented.
-**Last updated:** 2026-08-29 (Project Description vs TABS Scope of Work; Narrative included; sequential section letters; OCG RAS cover blocks; rendering still not implemented)
+**Last updated:** 2026-08-29 (TAS/RAS Scope → `fldProjDescription` save sync implemented; RAS report rendering still not implemented)
 **Audience:** Product owner, architecture review, implementation planning
 
 > **Disclaimer:** This document captures internal planning for adapting FREDAsoft toward Registered Accessibility Specialist (RAS) workflows under the Texas Department of Licensing and Regulation (TDLR). It does **not** assert legal compliance, required forms, or final field lists. All TDLR/RAS requirements must be verified from official sources, sample deliverables, and qualified review before any implementation.
@@ -273,7 +273,7 @@ Registered RAS facts live on **`projects.tdlrRegistered`** (TDLR as-recorded; Be
 
 Template titles (`Plan Review Report`, `Inspection Report`) and the standards line (`2012 Texas Accessibility Standards`) remain RAS report-profile constants. **✅ DECIDED, not implemented.** Authoritative investigation: **`docs/ARCHITECTURE_DESIGN.md`** (Beta RAS report-profile architecture).
 
-**Production (feat/ras-beta-project-metadata + feat/professional-hydration + feat/ras-work-mode-data-entry):** New/Edit Project persists `tdlrRegistered` for TAS/RAS. Sole Project Name is `fldProjName`. Current-workflow professional hydrates from `fldInspector` (Assessment), `fldPlanReviewRas` (TAS/RAS Review), or `fldInspectionRas` (TAS/RAS Inspection). Session Active Inspector is not an assignment. RAS report rendering is **not** implemented. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer written.
+**Production (feat/ras-beta-project-metadata + feat/professional-hydration + feat/ras-work-mode-data-entry + feat/ras-scope-description-sync):** New/Edit Project persists `tdlrRegistered` for TAS/RAS. Sole Project Name is `fldProjName`. TAS/RAS save synchronizes `fldProjDescription` from `tdlrRegistered.scopeOfWork` (including blank); Assessment `fldProjDescription` remains independently authored. Current-workflow professional hydrates from `fldInspector` (Assessment), `fldPlanReviewRas` (TAS/RAS Review), or `fldInspectionRas` (TAS/RAS Inspection). Session Active Inspector is not an assignment. RAS report rendering is **not** implemented (future report reads Scope directly). Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer written.
 
 Do **not** treat FREDA normalized stakeholder names as substitutes for official registered report text.
 

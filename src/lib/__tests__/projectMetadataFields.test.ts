@@ -207,6 +207,18 @@ describe('buildProjectSavePayload', () => {
     expect(payload).not.toHaveProperty('fldArchitectProjectNumber');
   });
 
+  it('does not derive Assessment fldProjDescription from TDLR data', () => {
+    const registered = emptyTdlrRegistered();
+    registered.scopeOfWork = 'TABS registered scope';
+    const payload = buildProjectSavePayload({
+      ...assessmentBase,
+      fldProjDescription: 'FREDA Assessment description',
+      tdlrRegistered: registered,
+    });
+    expect(payload.fldProjDescription).toBe('FREDA Assessment description');
+    expect(payload).not.toHaveProperty('tdlrRegistered');
+  });
+
   it('omits Assessment Inspector from TAS/RAS payload so legacy fldInspector is not cleared', () => {
     const payload = buildProjectSavePayload({
       ...rasBase,
@@ -244,16 +256,56 @@ describe('tdlrRegistered payload', () => {
     expect(payload.fldPlanReviewRas).toBe('insp-1');
   });
 
-  it('keeps Scope of Work independent of fldProjDescription', () => {
+  it('synchronizes fldProjDescription from TABS Scope of Work on TAS/RAS save', () => {
     const registered = emptyTdlrRegistered();
-    registered.scopeOfWork = 'TDLR registered scope';
+    registered.scopeOfWork = 'Renovation of existing office...';
     const payload = buildProjectSavePayload({
       ...rasBase,
       fldProjDescription: 'Internal FREDA description',
       tdlrRegistered: registered,
     });
-    expect(payload.tdlrRegistered.scopeOfWork).toBe('TDLR registered scope');
-    expect(payload).not.toHaveProperty('fldProjDescription');
+    expect(payload.tdlrRegistered.scopeOfWork).toBe('Renovation of existing office...');
+    expect(payload.fldProjDescription).toBe('Renovation of existing office...');
+  });
+
+  it('writes blank fldProjDescription when TAS/RAS Scope is blank', () => {
+    const registered = emptyTdlrRegistered();
+    registered.scopeOfWork = '';
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      fldProjDescription: 'Stale leftover description',
+      tdlrRegistered: registered,
+    });
+    expect(payload.tdlrRegistered.scopeOfWork).toBe('');
+    expect(payload.fldProjDescription).toBe('');
+    expect(payload).toHaveProperty('fldProjDescription');
+  });
+
+  it('does not reverse-copy fldProjDescription into TABS Scope of Work', () => {
+    const registered = emptyTdlrRegistered();
+    registered.scopeOfWork = '';
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      fldProjDescription: 'Old FREDA description',
+      tdlrRegistered: registered,
+    });
+    expect(payload.tdlrRegistered.scopeOfWork).toBe('');
+    expect(payload.fldProjDescription).toBe('');
+  });
+
+  it('keeps typeOfWork independent of Scope and fldProjDescription', () => {
+    const registered = emptyTdlrRegistered();
+    registered.scopeOfWork = 'Alter restrooms.';
+    registered.typeOfWork = 'Alterations';
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      fldProjDescription: 'should be replaced',
+      tdlrRegistered: registered,
+    });
+    expect(payload.tdlrRegistered.typeOfWork).toBe('Alterations');
+    expect(payload.tdlrRegistered.scopeOfWork).toBe('Alter restrooms.');
+    expect(payload.fldProjDescription).toBe('Alter restrooms.');
+    expect(payload.fldProjDescription).not.toBe('Alterations');
   });
 
   it('preserves tenantFunded true, false, and null', () => {

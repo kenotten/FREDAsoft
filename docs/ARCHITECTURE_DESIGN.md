@@ -2724,34 +2724,25 @@ If a normalized FREDA value differs from TDLR: **RAS report uses TDLR wording**;
 
 Do **not** use `fldProjDescription` as the RAS report source. See the inheritance decision immediately below.
 
-✅ DECIDED (Project Description vs TABS Scope of Work — documentation only, 2026-08-29): Both fields remain. Assessment has no TABS data, so `fldProjDescription` stays the FREDA-authored Project Description. TAS/RAS has one authoritative editable/imported value: `tdlrRegistered.scopeOfWork` (TABS **Scope of Work**). `fldProjDescription` may persist as a synchronized Project-level copy of that value and must **not** be independently edited. RAS reports read `tdlrRegistered.scopeOfWork` directly. TABS **Type of Work** (`tdlrRegistered.typeOfWork`) is a separate categorical field. **Not implemented:** no production save/UI/report change in this documentation slice.
+✅ DECIDED (Project Description vs TABS Scope of Work — documentation only, 2026-08-29): Both fields remain. Assessment has no TABS data, so `fldProjDescription` stays the FREDA-authored Project Description. TAS/RAS has one authoritative editable/imported value: `tdlrRegistered.scopeOfWork` (TABS **Scope of Work**). `fldProjDescription` may persist as a synchronized Project-level copy of that value and must **not** be independently edited. RAS reports read `tdlrRegistered.scopeOfWork` directly. TABS **Type of Work** (`tdlrRegistered.typeOfWork`) is a separate categorical field.
 
-**Product behavior implications:** None in the running app until a later metadata-sync slice. Recommended future UX is documented here; it is **not** shipping in this branch.
+✅ IMPLEMENTED (TAS/RAS Scope → Project Description sync, `feat/ras-scope-description-sync`): TAS/RAS `buildProjectSavePayload` writes `fldProjDescription` = `tdlrRegistered.scopeOfWork` (including `""` so Firestore merge cannot keep a stale leftover). No reverse copy. No migration/backfill. Assessment save unchanged. New/Edit labels: Assessment **Project Description**; TAS/RAS **TABS Scope of Work**. **Not implemented:** RAS report rendering still reads nothing for these fields; future adapter reads `tdlrRegistered.scopeOfWork` directly.
 
-##### Current production (as of `feat/ras-beta-project-metadata`; code inspection 2026-08-29)
+**Product behavior implications:** TAS/RAS New/Edit save now overwrites `fldProjDescription` from current TABS Scope (including blank). No second TAS/RAS description textbox. Assessment description remains independently editable. Reports unchanged.
+
+##### Current production (as of `feat/ras-scope-description-sync`)
 
 | Field | Defined | Displayed | Saved | Required | Hidden by family |
 |-------|---------|-----------|-------|----------|------------------|
-| `projects.fldProjDescription` | `src/types/index.ts` (`Project.fldProjDescription?`) | New/Edit Project **Assessment only** — label **Project Description / Scope of Work** (`EntityModals.tsx`, `name="projDescription"`) | Assessment branch of `buildProjectSavePayload` only (`projectMetadataFields.ts`). `entityService` always reads `formData.get('projDescription')`; TAS/RAS payload **omits** the key. | No (`required` not set) | Hidden for TAS/RAS |
-| `tdlrRegistered.scopeOfWork` | `src/types/index.ts` (`TdlrRegistered.scopeOfWork: string`) | New/Edit Project **TAS/RAS only** — label **Scope of Work** (`name="tdlrScopeOfWork"`) under TDLR / TABS Registered Data | `buildTdlrRegisteredFromForm` → TAS/RAS `tdlrRegistered` on `buildProjectSavePayload` | No | Hidden for Assessment (no `tdlrRegistered` on Assessment save) |
-| `tdlrRegistered.typeOfWork` | `src/types/index.ts` (`typeOfWork?: string`) | TAS/RAS only — free-text **Type of Work** (`name="tdlrTypeOfWork"`) | Same nested object | No | Hidden for Assessment |
+| `projects.fldProjDescription` | `src/types/index.ts` | New/Edit **Assessment only** — **Project Description** | Assessment: form input. TAS/RAS: synchronized from `tdlrRegistered.scopeOfWork` (including `""`) | No | Hidden for TAS/RAS |
+| `tdlrRegistered.scopeOfWork` | `src/types/index.ts` | New/Edit **TAS/RAS only** — **TABS Scope of Work** | `buildTdlrRegisteredFromForm` → TAS/RAS `tdlrRegistered` | No | Hidden for Assessment |
+| `tdlrRegistered.typeOfWork` | `src/types/index.ts` | TAS/RAS **Type of Work** (free text) | Same nested object; **not** copied into `fldProjDescription` | No | Hidden for Assessment |
 
-Helpers: `emptyTdlrRegistered`, `buildTdlrRegisteredFromForm`, `buildProjectSavePayload`, `isAssessmentProjectType` in `src/lib/projectMetadataFields.ts`. Firestore `save` uses `{ merge: true }`.
+Helpers: `emptyTdlrRegistered`, `buildTdlrRegisteredFromForm`, `buildProjectSavePayload`, `isAssessmentProjectType` in `src/lib/projectMetadataFields.ts`. Firestore `save` uses `{ merge: true }`. Empty-string `fldProjDescription` is written so merge replaces leftovers.
 
-**Not used in production UI:** Data Entry, Data Explorer, Portfolio, `ReportPreview.tsx`, Web Report Viewer, `cloneProjectData`. **Tests:** `src/lib/__tests__/projectMetadataFields.test.ts` — Assessment payload includes `fldProjDescription`; TAS/RAS payload explicitly **does not** (`keeps Scope of Work independent of fldProjDescription`). **Schema sketch:** `firebase-blueprint.json`. **pm-prototype** has a separate mock `scopeOfWork` (not production Project persistence).
+**Not used in production UI:** Data Entry, Data Explorer, Portfolio, `ReportPreview.tsx`, Web Report Viewer, `cloneProjectData`. **Tests:** `src/lib/__tests__/projectMetadataFields.test.ts`. **Schema sketch:** `firebase-blueprint.json`.
 
-Current semantics of `fldProjDescription` uses: **B. generic Project Description** on the type/comment; **A. Assessment Project Description** in New/Edit UI and Assessment save; **D. unused in RAS** for display/save/report (field omitted from TAS/RAS payload). **Not C** — production does not treat it as RAS Scope of Work.
-
-Current semantics of `tdlrRegistered.scopeOfWork`: production treats it as **TABS Scope of Work** (New/Edit TDLR block). It is **not** labeled RAS Project Description, **not** a duplicate write of `fldProjDescription`, and **not** rendered on any report.
-
-**Can they diverge today? Yes.** TAS/RAS UI does not show `fldProjDescription`, and TAS/RAS save **does not write** it. Because Firestore merge leaves omitted keys in place, a leftover `fldProjDescription` (converted Assessment, older doc, or any prior write) can disagree with `tdlrRegistered.scopeOfWork`. Staff cannot currently edit both at once on TAS/RAS, but they also cannot keep the copy in sync.
-
-**Firestore contents of Beta RAS Projects were not inspected** in this documentation task (no production data access). Possible saved states from code alone:
-
-- `tdlrRegistered.scopeOfWork` only (typical new TAS/RAS if staff typed Scope)
-- `fldProjDescription` only (Assessment converted to TAS/RAS, or leftover after type change, with empty Scope)
-- both, possibly different (merge leftover + later TABS entry)
-- neither (new TAS/RAS with blank Scope)
+**Investigation note (2026-08-29, before this slice):** TAS/RAS save previously **omitted** `fldProjDescription`, so leftover Assessment/converted values could disagree with Scope. After this slice, the next TAS/RAS save overwrites the copy from current Scope. No reverse promotion of leftover FREDA text into TABS. Historical `projectData` is not rewritten. RAS report still **not** implemented; when implemented it reads `tdlrRegistered.scopeOfWork` directly.
 
 ##### TABS terminology (Ken)
 
@@ -2804,12 +2795,12 @@ Assessment report (when Project Description is added to that cover):
 
 Do **not** implement migration/backfill. Report correctness does **not** require a Firestore sweep if the adapter reads `scopeOfWork`.
 
-**Recommended New/Edit UX (not implemented here):**
+**Recommended New/Edit UX (✅ IMPLEMENTED labels + TAS/RAS save copy):**
 
 | Family | Show | Do not show |
 |--------|------|-------------|
-| **Assessment** | **Project Description** → editable `fldProjDescription` (drop “/ Scope of Work” from the Assessment label so it is not confused with TABS Scope) | Entire `tdlrRegistered` block (already hidden) |
-| **TAS/RAS** | **Scope of Work** (or **TABS Scope of Work**) under TDLR / TABS Registered Data → `tdlrRegistered.scopeOfWork` | Second Project Description textbox |
+| **Assessment** | **Project Description** → editable `fldProjDescription` | Entire `tdlrRegistered` block (already hidden) |
+| **TAS/RAS** | **TABS Scope of Work** under TDLR / TABS Registered Data → `tdlrRegistered.scopeOfWork` | Second Project Description textbox |
 
 Cover label for RAS remains **Project Description** even though the stored field is Scope of Work.
 
@@ -2817,7 +2808,7 @@ Cover label for RAS remains **Project Description** even though the stored field
 
 **Future TDLR import:** TABS source snapshots stay immutable. Current Project `tdlrRegistered` is **current canonical registered state** on the Project document and **may** be refreshed when staff approve a new snapshot (copy downward onto current Project metadata). That refresh updates `scopeOfWork`, and Model C then copies into `fldProjDescription`. Issued reports / historical `projectData` are not silently rewritten.
 
-**Implementation timing:** Settle this rule **before or with report Slice A** so the adapter starts from one SoT. The adapter can read `scopeOfWork` without waiting on the copy-write. The copy-write is a small `buildProjectSavePayload` / test change (`projectMetadataFields.ts`, `entityService.ts` already passes the form value, `EntityModals.tsx` already hides the Assessment box). **Not** `ProjectDataEntry.tsx`. **Not** `ReportPreview.tsx`. No Firestore backfill required for Slice A.
+**Implementation timing:** TAS/RAS save copy is ✅ IMPLEMENTED (`feat/ras-scope-description-sync`). Report Slice A still **not** started. Adapter must read `scopeOfWork` directly. **Not** `ProjectDataEntry.tsx`. **Not** `ReportPreview.tsx`. No Firestore backfill.
 
 #### Project Name (one stored value)
 
@@ -3221,19 +3212,19 @@ Still unresolved after this investigation:
 
 | Slice | Work | Touches `ReportPreview.tsx`? |
 |-------|------|------------------------------|
-| **P — metadata sync** | TAS/RAS save: `fldProjDescription` ← `tdlrRegistered.scopeOfWork`. TABS Scope remains authoritative. RAS report still reads Scope directly. No Firestore backfill. `projectMetadataFields.ts` + tests; EntityModals/entityService only if payload requires it. **No** `ProjectDataEntry`. **No** `ReportPreview`. May immediately precede Slice A or start Slice A. | **No** |
+| **P — metadata sync** | ✅ IMPLEMENTED (`feat/ras-scope-description-sync`): TAS/RAS save `fldProjDescription` ← `tdlrRegistered.scopeOfWork` (including blank). TABS Scope remains authoritative. RAS report still reads Scope directly when rendering is implemented. No Firestore backfill. | **No** |
 | **A** | `reportProfile` type, adapter/view-model, `fldWorkProduct` filter helper, registered source resolution, section inclusion + sequential lettering rules, image terminology rules, tests. Adapter reads RAS Project Description from `tdlrRegistered.scopeOfWork`. No visible rendering. | **No** if practical |
 | **B** | Consume adapter in `ReportPreview` for established OCG RAS cover (title, standards, registered Facility/project, TABS Scope as Project Description, Owner, professional/RAS #, date, OCG + Project information). Assessment cover unchanged. | **Yes** (cover) |
 | **C** | RAS body: Narrative; filtered Findings; TAS citations; Location + Sheet; images/addendum; sequential section letters; Rec/cost/Financial omitted structurally; pagination check. Assessment body unchanged. | **Yes** (cards / section stream) |
 | **D** | Web Report heading/records consume the same adapter (no print-engine redesign) | No ReportPreview; `WebReportViewer` only |
 
-Do not implement production report code or metadata sync on `docs-ras-report-profile`.
+Do not implement RAS report rendering in the metadata-sync slice.
 
-#### Implementation status (as of this documentation)
+#### Implementation status (as of `feat/ras-scope-description-sync`)
 
-**Implemented (production):** RAS Review/Inspection Data Entry work mode; `fldWorkProduct`; Sheet entry (Review); RAS dates on New/Edit Project; work-mode professional hydration/gating; image entry (shared ProjectData UI); RAS Data Entry Recommendation/cost hiding.
+**Implemented (production):** RAS Review/Inspection Data Entry work mode; `fldWorkProduct`; Sheet entry (Review); RAS dates on New/Edit Project; work-mode professional hydration/gating; image entry (shared ProjectData UI); RAS Data Entry Recommendation/cost hiding; **TAS/RAS `fldProjDescription` ← `scopeOfWork` synchronization**.
 
-**✅ DECIDED, not implemented:** TAS/RAS `fldProjDescription` ← `scopeOfWork` synchronization; report profile + data adapter; report `fldWorkProduct` filtering; RAS cover (OCG structure); RAS Narrative rendering; RAS body; sequential RAS section letters; Owner/addressee rendering; RAS report images/addenda; RAS Recommendation/Financial omission in **rendered** reports; Web Report parity.
+**✅ DECIDED, not implemented:** report profile + data adapter; report `fldWorkProduct` filtering; RAS cover (OCG structure); RAS Narrative rendering; RAS body; sequential RAS section letters; Owner/addressee rendering; RAS report images/addenda; RAS Recommendation/Financial omission in **rendered** reports; Web Report parity. RAS report still reads `tdlrRegistered.scopeOfWork` **when rendering is implemented**.
 
 **Future (not Beta report profile):** `reportInstanceId`; multiple report instances/history; TDLR extraction/snapshot automation; stakeholder/project-party links.
 

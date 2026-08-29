@@ -1,8 +1,8 @@
 # FREDAsoft RAS Report Instance Crosswalk
 
 **Status:** Documentation-only conceptual crosswalk (D3). **Not implemented.**
-**Last updated:** 2026-08-29 (Project Description vs TABS Scope of Work settled in ARCHITECTURE_DESIGN; Narrative included on RAS reports; sequential section letters; registered Facility terminology; report instances and RAS report rendering still not implemented)
-**Branch context:** `docs-ras-report-profile`
+**Last updated:** 2026-08-29 (TAS/RAS Scope → `fldProjDescription` save sync implemented; report instances and RAS report rendering still not implemented)
+**Branch context:** `feat/ras-scope-description-sync`
 **Audience:** Product owner (Kenneth), architecture review (Archie), D4/D6/D7 implementation planning
 
 > **Disclaimer:** This document clarifies how **TDLR/TABS registration milestones, statuses, and RAS-related fields** relate to **FREDAsoft RAS report instances** and related operational concepts. It does **not** specify Firestore collections, security rules, scrapers, UI, correspondence generation, or legal compliance. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data.
@@ -28,7 +28,7 @@ This is a **D3 conceptual crosswalk**, not implementation or schema. It builds o
 
 **Review vs Inspection** is a work mode on a TAS/RAS Project (not a Project type change). Plan Review findings may include optional **Sheet** in addition to Location; Sheet does not replace Location; Inspection mode need not show Sheet unless later required.
 
-**Not implemented:** report instances / `reportInstanceId`, RAS report rendering (see **`docs/ARCHITECTURE_DESIGN.md`** Beta RAS report-profile architecture + Project Description vs TABS Scope of Work), Data Explorer work-product UX. RAS cover Project Description reads `tdlrRegistered.scopeOfWork`. Narrative is included. Sequential A/B/C… lettering. Internal `tdlrRegistered.site` = registered TABS Facility.
+**Not implemented:** report instances / `reportInstanceId`, RAS report rendering (see **`docs/ARCHITECTURE_DESIGN.md`** Beta RAS report-profile architecture). TAS/RAS save copy `fldProjDescription` ← Scope is implemented; the future RAS report still reads `tdlrRegistered.scopeOfWork` directly. Data Explorer work-product UX remains unimplemented.
 
 ---
 

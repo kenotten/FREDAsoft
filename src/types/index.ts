@@ -106,7 +106,12 @@ export interface Project {
   /** Architect / Design Professional Project # (not TABS). */
   fldExternalRef?: string;
   fldProjType?: 'Assessment' | 'TAS/RAS';
-  /** FREDA / Assessment Project Description. Not TDLR Scope of Work. Not report narrative (`fldNarrative`). */
+  /**
+   * Project Description.
+   * Assessment: FREDA-authored canonical value.
+   * TAS/RAS: synchronized copy of `tdlrRegistered.scopeOfWork` (not independently edited; not the RAS report source).
+   * Not report narrative (`fldNarrative`).
+   */
   fldProjDescription?: string;
   /** TDLR/TABS as-recorded registered-project facts. TAS/RAS only. Not implemented as a separate collection. */
   tdlrRegistered?: TdlrRegistered;
