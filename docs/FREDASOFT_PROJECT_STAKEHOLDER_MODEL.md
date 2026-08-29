@@ -1,8 +1,8 @@
 # FREDAsoft Project — Stakeholder Model (D5 Discovery)
 
 **Status:** Documentation-only decision/discovery (D5). **Not implemented.**
-**Last updated:** 2026-08-28
-**Branch context:** `project-stakeholder-model` (amended for RAS Inspection Report Assigned RAS)
+**Last updated:** 2026-08-28 (RAS source-of-truth reconciliation)
+**Branch context:** `docs-ras-source-of-truth`
 **Audience:** Product owner (Kenneth), architecture review (Archie), implementation planning
 
 > **Disclaimer:** This document defines **requirement candidates**, **workflow candidates**, and **UI references** for FREDAsoft Project stakeholder modeling. It does **not** specify Firestore collections, security rules, migrations, importers, or application code. It does **not** port Lovable/Supabase prototype code or schema. Official **TDLR/TABS** legal requirements are **not asserted here** unless separately sourced (see §18).
@@ -53,7 +53,7 @@ This doc completes discovery phase **D5** (see **`docs/FREDASOFT_PROJECT_APP_DIS
 |--------|-----------------|
 | **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** | Lovable prototype summary; §15 product-owner domain clarification (dual-track TDLR vs canonical) |
 | **`docs/ARCHITECTURE_DESIGN.md`** | Client/Facility/Project hierarchy; `projectData`; reporting; preferences |
-| **`docs/CONVERT_TO_RAS.md`** | RAS project type; report instances; §11 header fields (Owner, Design firm, etc.) |
+| **`docs/CONVERT_TO_RAS.md`** | RAS project type; report instances; §11 sourcing matrix (TDLR as-recorded vs FREDA operational) |
 | **`docs/CLIENT_PORTAL_SPEC.md`** | Portal entry flow (Client → Projects); expanded report workspace |
 | **`docs/REPORTING_SPEC.md`** | Assessment report ordering (distinct from correspondence PDFs) |
 | Lovable prototype (external) | `types.ts` field names; polymorphic project link; correspondence recipient typing — **UI reference only** |
@@ -137,15 +137,30 @@ Canonical stakeholders may be typed as:
 
 **What it is not:** Internal staff login; not automatically every contact person in the directory.
 
-### 3.8 Assigned RAS / assigned professional
+### 3.8 Assigned professional / service assignment
 
-**Definition:** **Workflow candidate:** The RAS (or other professional) **assigned by FREDAsoft** to perform plan review or inspection work on a project—may reference an internal staff user and/or a **RAS Firm** project party. Distinct from “RAS Firm on TDLR registration” though they may match.
+**Definition:** The professional **assigned by FREDAsoft** to perform a **specific service** on a project (Plan Review, Inspection, or Assessment). Distinct from “RAS Firm on TDLR registration” though they may match after an approved link.
 
-**What it is not:** The same as **portal user** or **canonical RAS Firm** without an explicit assignment link. **Not** automatically identical to the TDLR-recorded RAS snapshot.
+**What it is not:** The same as **portal user** or **canonical RAS Firm** without an explicit assignment link. **Not** automatically identical to the TDLR-recorded RAS snapshot. **Not** Setup / Active Inspector session selection.
 
-**Long-term (✅ DECIDED in `docs/ARCHITECTURE_DESIGN.md`, 2026-08-28):** Project → Assigned RAS person → **name** + **RAS registration number**. RAS Inspection Report renders `Name / RAS {n}` at display time; do not permanently store that string as duplicated report text.
+**✅ DECIDED (service-specific — target; schema not implemented):** A RAS Project may have Plan Review RAS and Inspection RAS; they may be the same person or different people. A single Project-wide “Inspector/RAS” is not the long-term model.
 
-**Beta / interim bridge:** Production `projects.fldInspector` may temporarily serve as the assigned-professional relationship, and the selected professional needs a dedicated RAS registration number field. This is **compatibility only**. **Do not** redefine Inspector and Assigned RAS as permanently synonymous. Future FREDA PM migrates to explicit Assigned RAS relationship and credential ownership.
+```text
+Project
+  → Plan Review service → Responsible RAS
+  → Inspection service  → Responsible RAS
+
+Project (non-RAS assessment)
+  → Assessment service  → Responsible Inspector
+```
+
+The responsible professional for that service is the author/signer and the identity associated with records created for that service. `projectData.fldInspID` should conceptually be the **responsible professional / record author**. Authentication `uid` is not a substitute (current Data Explorer clone stamping from `uid` is a **transitional defect**).
+
+RAS Plan Review records/report → Plan Review RAS. RAS Inspection records/report → Inspection RAS. Assessment records/report → Inspector.
+
+Display of RAS identity on reports: `Name / RAS {n}` at render time; do not permanently store that string as duplicated report text. Full sourcing matrix: **`docs/ARCHITECTURE_DESIGN.md`**.
+
+**Beta / interim bridge:** Production `projects.fldInspector` may temporarily serve as a **single** assigned-professional relationship. It **cannot** represent both Plan Review RAS and Inspection RAS long-term when different professionals are assigned. **Do not** redefine Inspector and Assigned RAS as permanently synonymous. **Active Inspector** is a workflow convenience, not a competing source of truth (UI future: remove, display-only, or derive — not decided here).
 
 ---
 
@@ -158,7 +173,7 @@ These concepts are **separate**. A real person may occupy **multiple roles**, bu
 | **Canonical stakeholder** | Master org/person directory entry |
 | **Contact person** | Person linked to a stakeholder (or delegate for an individual stakeholder) |
 | **Project party** | Stakeholder + role on a specific **Project** |
-| **Assigned RAS / assigned professional** | FREDAsoft operational assignment for delivery work |
+| **Assigned RAS / assigned professional** | FREDAsoft **service assignment** (Plan Review RAS, Inspection RAS, or Assessment Inspector) |
 | **Portal user** | External Auth account with portal scope |
 | **Internal staff user** | FREDAsoft staff Auth account (Data Entry, reporting, project admin) |
 | **Admin** | Elevated internal capabilities (user mgmt, maintenance)—exact scope deferred |
@@ -220,11 +235,12 @@ Client
 Project
   ├── TDLR registration snapshot(s)     [source / legal track]
   ├── Project parties                   [canonical stakeholder + role]
+  ├── Service assignment(s)             [Plan Review RAS / Inspection RAS / Assessment Inspector — target]
   ├── (optional) links to Client/Facility
   └── correspondence / milestone metadata (separate from projectData)
 ```
 
-**Two graphs coexist:** Portfolio hierarchy (**Client → Facility → Project**) and stakeholder graph (**TDLR snapshot → alias → canonical → project party**). Intersections are **optional links**, not forced equality.
+**Two graphs coexist:** Portfolio hierarchy (**Client → Facility → Project**) and stakeholder graph (**TDLR snapshot → alias → canonical → project party**). **Service assignment** is a third operational layer (responsible professional per service). Intersections are **optional links**, not forced equality.
 
 ---
 
@@ -234,9 +250,9 @@ Prototype used separate `tbl*` firm tables (artifact only). **Requirement candid
 
 | Project role | Typical meaning | CONVERT_TO_RAS / TDLR relevance |
 |--------------|-----------------|----------------------------------|
-| **Owner** | Building owner on registration | §11 header: Owner name / address |
-| **Design Firm** | Architect / design professional | §11: Architect / Design Professional / Design Firm |
-| **RAS Firm** | Registered accessibility consultant firm on registration | §11: RAS Name / # (firm may differ from assigned individual) |
+| **Owner** | Building owner on registration | RAS **addressee** = TDLR as-recorded Owner name/address (§11 / ARCHITECTURE_DESIGN) |
+| **Design Firm** | Architect / design professional | RAS **Registered Design Firm** = TDLR as-recorded; job # is FREDA `fldExternalRef` |
+| **RAS Firm** | Registered accessibility consultant firm on registration | Registration snapshot; **not** automatically Plan Review or Inspection RAS |
 | **Tenant** | Occupant / tenant funding party | Tenant funds flags on project metadata |
 | **Agent** | Owner’s agent or representative | Correspondence routing candidate |
 | **Misc** | Other party with `role_description` | Lovable **UI reference** (`tblprojectstakeholder.role_description`) |
@@ -247,21 +263,28 @@ Prototype used separate `tbl*` firm tables (artifact only). **Requirement candid
 
 ---
 
-## 7. Client vs Owner — decision space
+## 7. Client vs Owner — ✅ DECIDED
 
-Discovery §14 Q2 and §15 establish that **canonical stakeholders are separate from raw TDLR names**. The remaining product decision is how **FREDAsoft Client** relates to **Owner**.
+Discovery §14 Q2 and §15 establish that **canonical stakeholders are separate from raw TDLR names**. **Client** and **Owner** are also separate roles.
 
-| Option | Model | When it fits | Risk |
-|--------|--------|--------------|------|
-| **A — Separate (recommended default)** | **Client** = portfolio customer FREDA contracts with. **Owner** = project party role (canonical stakeholder). Optional **link** when same org. | Typical RAS/TDLR: consultant’s client ≠ registered building owner | UI label “Client” vs TDLR “Owner” must be clear in portal and staff UI |
-| **B — Client subsumes Owner when linked** | One canonical record; Client record also carries Owner project party when same entity | Nonprofit/government owns its buildings and is the contract client | Breaks when Client hires FREDA for a third-party owner’s site |
-| **C — Project-type split** | Assessment uses Client anchor; RAS emphasizes Owner anchor | If product lines diverge sharply | Splits correspondence and portal rules |
+| Option | Model | Status |
+|--------|--------|--------|
+| **A — Separate** | **Client** = portfolio customer FREDA contracts with (who hired OCG). **Owner** = legally responsible party for the property/building/facility (TDLR registered Owner on RAS work). Optional **link** when same org. | **✅ DECIDED** |
+| **B — Client subsumes Owner when linked** | One canonical record; Client record also carries Owner project party when same entity | Rejected as default (breaks third-party owner sites) |
+| **C — Project-type split** | Assessment uses Client anchor; RAS emphasizes Owner anchor | Not adopted as a data-model split; RAS **addressee** still follows Owner even if the portfolio anchor is Client |
 
-### Recommended default (pending Kenneth confirmation)
+**✅ DECIDED:** Treat **Client** as **billing / portfolio / portal anchor**, and **Owner** as the **registered property party**. Same real-world org may appear as both with an explicit **same-as** link—not an automatic merge.
 
-**Option A:** Treat **Client** as **billing / portfolio / portal anchor**, and **Owner** as a **project party role** on the canonical stakeholder directory. Same real-world org may appear as both with an explicit **same-as** link—not an automatic merge.
+**RAS reporting:**
 
-**Portal note:** `CLIENT_PORTAL_SPEC.md` entry flow is **Client → Projects**. Portal users likely map to **Client** (or contact under Client), while RAS report headers may require **Owner** lines from TDLR snapshot and/or canonical Owner party—sources may differ (§14).
+- RAS Plan Review and RAS Inspection reports must be **addressed to the registered Owner**.
+- RAS Owner/addressee **display** = **TDLR/TABS as-recorded Owner identity**, not the FREDA canonical stakeholder name.
+- Client ≠ Owner. Who hired OCG ≠ necessarily the report addressee.
+- Current Assessment PDF behavior that labels Client data as “Owner” must **not** be used as the RAS Owner source.
+
+**Copies (deferred):** Other stakeholders (Architect, Design Professional, Tenant, Owner representative, Client, Developer, Contractor, etc.) may later receive copies. Copying does **not** make them the addressee. Document-distribution / permission rules are **DEFERRED** — do not design or implement now.
+
+**Portal note:** `CLIENT_PORTAL_SPEC.md` entry flow is **Client → Projects**. Portal users likely map to **Client** (or contact under Client). RAS report addressee remains TDLR Owner regardless of portal identity.
 
 ---
 
@@ -288,6 +311,7 @@ Discovery §14 Q2 and §15 establish that **canonical stakeholders are separate 
 | **TDLR / source** | Official legal/source registration record as captured | Append/version only; never corrected/overwritten by FREDAsoft |
 | **Canonical** | Internal operational directory | Staff-maintained; portal changes via approval |
 | **Project party** | Who is on this project in which role | Links canonical to Project |
+| **Service assignment** | Responsible professional for Plan Review / Inspection / Assessment | Target operational layer; Beta `projects.fldInspector` is an interim single-assignment bridge |
 | **Alias** | Observed name variants | Accumulates; links to canonical |
 
 ### End-to-end flow (requirement candidate)
@@ -326,7 +350,7 @@ TDLR extract / manual capture
 2. **Promotion path:** parsed field → proposed alias or proposed canonical → review → link.  
 3. **No automatic propagation:** updating canonical address does **not** rewrite historical TDLR snapshots or past correspondence `merged_data`.  
 4. **Display:** Staff UI may show **TDLR as-recorded** vs **canonical (internal)** side-by-side when they differ.  
-5. **Report headers:** CONVERT_TO_RAS §11 Owner/Design fields—which track feeds PDF—is **open** (§15 Q3).
+5. **RAS report headers:** Official registered facts (Owner/addressee, Design Firm, Scope of Work, tenant-funded response, registered site data) use **TDLR as-recorded** text. FREDA operational facts (OCG Project #, DP internal job #, service-assigned professional) use canonical/operational data. See **`docs/ARCHITECTURE_DESIGN.md`** RAS source-of-truth matrix. Canonical names do **not** replace official TDLR wording on RAS reports.
 
 ---
 
@@ -381,7 +405,7 @@ Per discovery §15 points 7–9:
 | **Developer / super-admin** | Platform/environment access |
 | **Admin** | Organization admin (users, templates, maintenance) |
 | **Internal staff** | FREDAsoft operational users (projects, Data Entry, reporting) |
-| **Assigned RAS** | Professional assigned to deliver plan review / inspection on a project |
+| **Assigned RAS** | Professional assigned to a **service** (Plan Review or Inspection) on a RAS project; Assessment uses Inspector |
 | **Client portal user** | External Auth account with Client/project scope |
 | **Stakeholder contact / project viewer** | Narrow portal or read-only access tied to contact/project party |
 
@@ -447,7 +471,7 @@ Prototype `correspondence_records` (structure only, not porting): `template_id`,
 | **SM-1** | Dual-track TDLR vs canonical | **Adopt** (discovery §15) — formalized in §9 |
 | **SM-2** | Single canonical directory + role on project party | **Recommend** over Lovable six-table split |
 | **SM-2b** | Typed sub-collections per party kind | Document as **alternative** — reject unless Kenneth wants Lovable parity |
-| **SM-3** | Client ≠ Owner default; optional same-as link | **Recommend default** pending §15 Q1 |
+| **SM-3** | Client ≠ Owner; RAS addressee = TDLR as-recorded Owner | **✅ DECIDED** (2026-08-28) |
 | **SM-4** | Facility holds site address; TDLR duplicates until linked | **Recommend** |
 | **SM-5** | Stakeholder entity types include individual / sole prop / unknown | **Adopt** (§3.3) |
 | **SM-6** | Separate stakeholder / contact / user / assignment records | **Adopt** (§4) |
@@ -459,18 +483,19 @@ Prototype `correspondence_records` (structure only, not porting): `template_id`,
 
 ## 17. Open questions for Kenneth
 
-1. **Client vs Owner:** For typical RAS projects, is **Client** always the contract customer when TDLR **Owner** is a different entity?
+1. **Resolved (2026-08-28):** **Client ≠ Owner.** Client is who hired OCG / portfolio anchor. Owner is the legally responsible registered party. They may be the same org (explicit link) or different. RAS reports are addressed to the registered Owner regardless of who hired OCG.
 2. **Portal identity:** Does a portal user log in as **Client org**, **Owner**, or **any project-party contact**?
-3. **Report header authority:** For remaining RAS header lines (Owner/Design), must they use **TDLR as-recorded**, **canonical**, or staff choice per report? (Cover identifiers/description/tenant-funded/assigned RAS: see **`docs/ARCHITECTURE_DESIGN.md`** 2026-08-28.)
+3. **Resolved (2026-08-28):** RAS registered-project header lines (Owner/addressee, Design Firm, Scope of Work, tenant-funded, registered site) use **TDLR as-recorded**. Internal/operational lines use FREDA data. Canonical stakeholder names do not replace official TDLR wording. Full matrix: **`docs/ARCHITECTURE_DESIGN.md`**.
 4. **Primary party:** Multiple Owners or Design Firms allowed—with one **primary** for correspondence?
 5. **Misc role:** Is **Misc** sufficient, or are additional TDLR party types expected?
-6. **Agent vs Owner:** Default correspondence recipient when both appear on registration?
+6. **Agent vs Owner:** Default **correspondence** recipient when both appear on registration? (RAS **report addressee** is already Owner.)
 7. **Facility duplication:** Should TDLR site address **create/link a Facility**, or stay on snapshot until reviewed?
 8. **Re-scrape:** When TDLR owner name changes on re-scrape, new snapshot + new alias, or update existing snapshot?
 9. **Individual owners:** How often are owners persons without an org wrapper—and should UI default to **individual** entity type?
 10. **Existing Clients:** Should current FREDAsoft **Client** records ever auto-become **Owner** stakeholders, or stay separate?
-11. **Resolved (2026-08-28):** Assigned professional need **not** match TDLR **RAS Firm** project party. TDLR RAS snapshot may later link after review; it does not automatically define Assigned RAS.
+11. **Resolved (2026-08-28):** Assigned professional need **not** match TDLR **RAS Firm** project party. Assignment is **service-specific** (Plan Review RAS vs Inspection RAS). TDLR RAS snapshot may later link after review; it does not automatically define the service assignment. Beta `projects.fldInspector` is an interim single-assignment bridge only.
 12. **Sole proprietor:** Treat as **individual**, **organization**, or dedicated type for merge fields?
+13. **Deferred:** Document-distribution / permission model for **copies** of RAS documentation to non-Owner stakeholders. Owner remains the required addressee.
 
 ---
 
@@ -520,7 +545,7 @@ Before finalizing **D6** extraction field lists, scraping scope, or any **legal/
 | **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** | Prototype discovery; §15 domain clarification |
 | **`docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md`** | D6 extraction pipeline sketch (ingest → snapshot → match → review) |
 | **`docs/ARCHITECTURE_DESIGN.md`** | Core data model; DECIDED blocks |
-| **`docs/CONVERT_TO_RAS.md`** | RAS headers; report instances |
+| **`docs/CONVERT_TO_RAS.md`** | RAS sourcing matrix; report instances |
 | **`docs/CLIENT_PORTAL_SPEC.md`** | Portal navigation and report workspace |
 | **`docs/REPORTING_SPEC.md`** | Assessment PDF ordering |
 | **`AGENTS.md`** | Protected areas; no Firestore writes without approval |

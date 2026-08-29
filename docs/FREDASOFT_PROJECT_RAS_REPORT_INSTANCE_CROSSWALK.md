@@ -1,8 +1,8 @@
 # FREDAsoft RAS Report Instance Crosswalk
 
-**Status:** Documentation-only conceptual crosswalk (D3). **Not implemented.**  
-**Last updated:** 2026-06-05  
-**Branch context:** `d3-ras-report-instance-crosswalk`  
+**Status:** Documentation-only conceptual crosswalk (D3). **Not implemented.**
+**Last updated:** 2026-08-28 (service-assignment pointer)
+**Branch context:** `d3-ras-report-instance-crosswalk`
 **Audience:** Product owner (Kenneth), architecture review (Archie), D4/D6/D7 implementation planning
 
 > **Disclaimer:** This document clarifies how **TDLR/TABS registration milestones, statuses, and RAS-related fields** relate to **FREDAsoft RAS report instances** and related operational concepts. It does **not** specify Firestore collections, security rules, scrapers, UI, correspondence generation, or legal compliance. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data.
@@ -131,11 +131,11 @@ Labels below combine indexed sources. Where TABS may use additional values not y
 | **RAS Firm** | Details **RAS Name**, **RAS #**, **RAS Address**; export **`RASName`**, **`RAS#`**, **`RASAddress`**; EAB205N §1 | **RAS Firm** project party → canonical **stakeholder** | Approved party link | **Match** / **Create** / **Defer** | Registration RAS ≠ assigned professional by default |
 | **RAS Name** (display) | `lblProjectRAS`; party snapshot `asRecorded.name` | Alias text + stakeholder candidate | Alias / party link | **Match** or **alias** | May be firm or individual spelling |
 | **RAS License / registration number** | **`RAS#`**; `filter-ras-number`; RAS modal `LicenseNumber` | Match key for canonical stakeholder; snapshot only | Strong **candidate** signal | **Match** by license #; **Snapshot** always | Do not auto-merge |
-| **Plan Review By** | `lblProjectPlanReviewBy` (Manage Project) | **Assigned RAS** / professional **candidate**; or canonical **contact** | Assignment or party link | **Defer** — user vs stakeholder vs contact (**D3 open**) | Display text only on TABS; not on export |
-| **Inspection By** | `lblProjectInspectionBy` | Same as Plan Review By for inspection division | Assignment link | **Defer** | |
+| **Plan Review By** | `lblProjectPlanReviewBy` (Manage Project) | **Plan Review service assignment** candidate (not automatic) | Assignment or party link | **Defer** ingest auto-link | TDLR display text is source evidence. Target FREDAsoft assignment is **Plan Review RAS** (`docs/ARCHITECTURE_DESIGN.md`). |
+| **Inspection By** | `lblProjectInspectionBy` | **Inspection service assignment** candidate (not automatic) | Assignment link | **Defer** ingest auto-link | May differ from Plan Review RAS. TDLR text is not operational truth. |
 | **Assigned FREDAsoft RAS user** | *(FREDAsoft operational — not on TDLR form)* | Auth **user** + **assignment** to project/report instance | Explicit assignment record | Staff assigns in FREDAsoft; optional link to TDLR hint | **D5** §3.8 |
 | **Staff Reviewer** | *(D2 workflow actor)* | **`tdlrReviewSessions`** submitter; not TDLR party | Audit / workflow | N/A for TDLR ingest | Distinct from RAS professional |
-| **Inspector user** | Operational role on inspection instance | Same as assigned RAS **or** separate inspector Auth user | Assignment | Staff decision | **Open** whether always same as assigned RAS |
+| **Inspector user** | Operational role on inspection instance | **Inspection RAS** (RAS) or **Assessment Inspector** | Service assignment | Staff decision | May differ from Plan Review RAS. `fldInspID` = record author for that service. |
 | **Contact person** | Owner/Design/RAS modal emails/phones; **Person Filing Form** | **Contact person** under stakeholder | Contact link | **Match** / **Create** | Registrant ≠ Owner by default |
 
 ---
@@ -197,9 +197,9 @@ FREDAsoft **RAS report instance** documents (operational deliverable track) are 
 
 ### RAS identity and assignment
 
-5. Should **Plan Review By** / **Inspection By** link to **Auth user**, **canonical stakeholder**, **contact person**, or a new **assignment** entity?  
-6. Split **RAS Firm** canonical record vs **assigned RAS individual** on the same review row—or always separate links?  
-7. Can Plan Review By name differ from registered **RAS Firm** on the same project—and how should FREDAsoft display both?
+5. **Resolved (2026-08-28):** Operational assignment is a **service assignment** (Plan Review RAS vs Inspection RAS), not Auth uid and not TDLR Manage labels by themselves. TDLR **Plan Review By** / **Inspection By** remain source evidence until staff-approved links.
+6. **Resolved (2026-08-28):** Keep **RAS Firm** (registration party / canonical stakeholder) separate from the **service-assigned** RAS individual. Optional approved link only.
+7. **Yes — they can differ.** Display both: TDLR as-recorded RAS Firm on registration-sourced lines; service-assigned professional on RAS work-product lines. See ARCHITECTURE_DESIGN sourcing matrix.
 
 ### Report instance model (D4 / CONVERT_TO_RAS)
 

@@ -2475,21 +2475,23 @@ Add a concise future phase section covering:
 
 ✅ DECIDED (D8 Portal stakeholder implications - documentation only): **`docs/FREDASOFT_PROJECT_PORTAL_STAKEHOLDER_IMPLICATIONS.md`** clarifies portal stakeholder visibility, submission, and review implications for TDLR/RAS workflows. **Portal user**, **stakeholder**, **contact**, and **project party** remain distinct—no automatic portal access from TDLR source data; portal submissions are **pending proposals**; raw TDLR/TABS source snapshots are **internal by default**; **no** direct canonical/source overwrite or auto-approval. No Firestore schema, auth rules, UI, or app code in this phase.
 
-✅ DECIDED (RAS Inspection Report cover ownership — documentation only, 2026-08-28): The RAS Inspection Report is a **sister report profile** within FREDAreports (not a replacement for the assessment report). Cover **title** (`Inspection Report`) and **standards line** (`2012 Texas Accessibility Standards`) are **report-profile/template constants**, not Project metadata. Canonical Project fields for cover hydration:
+✅ DECIDED (RAS Inspection Report cover ownership — documentation only, 2026-08-28): The RAS Inspection Report is a **sister report profile** within FREDAreports (not a replacement for the assessment report). Cover **title** (`Inspection Report`) and **standards line** (`2012 Texas Accessibility Standards`) are **report-profile/template constants**, not Project metadata.
 
-| Cover label | Canonical owner |
-|-------------|-----------------|
-| TABS Project Number | `projects.fldTabsProjectNumber` (**new** first-class operational field; persisted on Project create/edit) |
-| OCG Project # | `projects.fldProjNumber` (existing) |
-| Project Description | `projects.fldProjDescription` (existing; **synonymous** with Scope of Work for RAS reports) |
-| Tenant Funded | `projects.fldTenantFunded` (**new**; Yes/No when populated; `null` = unanswered / not applicable / not yet determined) |
-| RAS Name / Number | Assigned professional **name** + **RAS registration number**, rendered `Kenneth Otten / RAS 149` |
+**Operational Project field names** in this block remain in force (persisted metadata UI). **RAS report display sourcing** for official registered-project facts was **refined later the same day** — see **RAS source-of-truth and professional assignment** below. That later block **supersedes** any earlier statement that RAS reports read canonical `fldProjDescription` / `fldTenantFunded` / normalized stakeholder names as the official registered wording.
 
-**`projects.fldExternalRef`** is **Architect / Design Professional Project #** (design professional’s internal job number)—**not** a TABS number. Production New/Edit Project labels this field accordingly. TDLR/TABS values remain as-recorded **source snapshots**; they may later **seed/draft** canonical fields after staff review and must **not** silently overwrite canonical data. Dual-track mapping detail: **`docs/FREDASOFT_PROJECT_FIELD_LEVEL_MAPPING.md`**. Cover field list in **`docs/CONVERT_TO_RAS.md` §11** is superseded by this block for the RAS Inspection Report cover. RAS report **rendering** is not part of the metadata UI implementation.
+| Cover label | Operational owner (storage) | RAS report display when a TDLR snapshot exists |
+|-------------|-----------------------------|-----------------------------------------------|
+| TABS Project Number | `projects.fldTabsProjectNumber` (first-class operational copy; persist provenance) | TDLR official/as-recorded, or this approved operational copy preserving provenance |
+| OCG Project # | `projects.fldProjNumber` (existing) | FREDA Project |
+| Project Description | `projects.fldProjDescription` (existing; internal/assessment wording) | TDLR/TABS as-recorded **Scope of Work** — **not** the internal FREDA description |
+| Tenant Funded | `projects.fldTenantFunded` (Yes/No when populated; `null` = unanswered / N/A / not yet determined) | TDLR private-funds / tenant-funded registration response |
+| RAS Name / Number | Service assignment (Plan Review RAS or Inspection RAS); Beta may use `projects.fldInspector` | Responsible professional for **that** service: name + RAS registration number, rendered `Kenneth Otten / RAS 149` |
 
-### RAS Inspection Report — Project identifiers and cover source (authoritative)
+**`projects.fldExternalRef`** is **Architect / Design Professional Project #** (design professional’s internal job number)—**not** a TABS number. Production New/Edit Project labels this field accordingly. TDLR/TABS values remain as-recorded **source snapshots**; they may later **seed/draft** canonical operational fields after staff review and must **not** silently overwrite canonical data **or** the TDLR snapshot. Dual-track mapping detail: **`docs/FREDASOFT_PROJECT_FIELD_LEVEL_MAPPING.md`**. Cover field list in **`docs/CONVERT_TO_RAS.md` §11** follows this file. RAS report **rendering** is not implemented in this documentation task.
 
-The following expands the 2026-08-28 decision. TDLR dual-track rules in D1/D5/D6 are **unchanged**.
+### RAS Inspection Report — Project identifiers (operational storage)
+
+The following expands the 2026-08-28 **field-name** decision. TDLR dual-track rules in D1/D5/D6 are **unchanged**. **Display source** for official registered facts: see **RAS source-of-truth and professional assignment** below.
 
 #### Report identity (template, not Project)
 
@@ -2500,41 +2502,152 @@ Inspection Report
 
 These strings belong on the RAS report profile. They are **not** stored as Project fields.
 
-#### Canonical Project fields
+#### Operational Project fields (storage — not automatic RAS report wording)
 
 | Field (conceptual unless noted existing) | Meaning | TDLR relationship |
 |------------------------------------------|---------|-------------------|
-| `projects.fldProjNumber` **(existing)** | **OCG Project #** — canonical FREDA/OCG project identifier | Not a TDLR field |
-| `projects.fldTabsProjectNumber` **(new concept)** | **TABS Project Number** — staff-approved operational TABS number used by FREDA and the RAS report | TDLR Details **Project Number** / export `Project Number` / `lblProjectId` remain **snapshots**. May seed this field after review. Never silent overwrite. **Do not** use `fldExternalRef`. |
-| `projects.fldExternalRef` **(existing; semantic reassignment)** | **Architect / Design Professional Project #** — the architect’s, engineer’s, or other design professional’s internal project/job number | Not a TDLR TABS number. Production New/Edit Project uses this label. |
-| `projects.fldProjDescription` **(existing)** | Canonical FREDA **Project Description / Scope of Work** (one meaning for RAS reports) | TDLR `lblProjectScopeOfWork` / EAB205N Scope of Work remains a **separate snapshot**. Future ingestion may draft this field after review. RAS report reads the **canonical** value. **Do not** use `fldNarrative` or `fldFacilityNarratives`. |
-| `projects.fldTenantFunded` **(new concept)** | Alteration-funding question only: *Does the tenant exclusively and unilaterally fund the alterations?* `true` = Yes; `false` = No (owner participates); `null` = unanswered / N/A / not yet determined. Report displays **Yes** / **No** when populated. | Distinct from Type of Funding, Owner Class, public/private funding, and Tenant **party**. TDLR `lblProjectPrivateFunds` remains snapshot and may seed after review. |
+| `projects.fldProjNumber` **(existing)** | **OCG Project #** — FREDA/OCG project identifier | Not a TDLR field. RAS reports use this operational value. |
+| `projects.fldTabsProjectNumber` **(existing)** | **TABS Project Number** — staff-approved operational TABS number with provenance | TDLR Details **Project Number** / export `Project Number` / `lblProjectId` remain **snapshots**. May seed this field after review. Never silent overwrite. **Do not** use `fldExternalRef`. RAS display: TDLR as-recorded **or** this approved operational copy. |
+| `projects.fldExternalRef` **(existing; semantic reassignment)** | **Architect / Design Professional Project #** — the architect’s, engineer’s, or other design professional’s internal project/job number | Not a TDLR TABS number. RAS reports use this FREDA operational value. |
+| `projects.fldProjDescription` **(existing)** | Internal FREDA **Project Description / Scope of Work** — assessment/operational wording | TDLR `lblProjectScopeOfWork` / EAB205N Scope of Work remains a **separate snapshot**. Future ingestion may draft this field after review. **Do not** use `fldNarrative` or `fldFacilityNarratives`. **Assessment** reports may use this field. **RAS** reports use TDLR Scope of Work when a snapshot exists — they must **not** treat this field as the official registered wording. |
+| `projects.fldTenantFunded` **(existing)** | Operational copy of the alteration-funding question: *Does the tenant exclusively and unilaterally fund the alterations?* `true` = Yes; `false` = No (owner participates); `null` = unanswered / N/A / not yet determined. | Distinct from Type of Funding, Owner Class, public/private funding, and Tenant **party**. TDLR `lblProjectPrivateFunds` remains snapshot. RAS **report display** uses the TDLR as-recorded response when a snapshot exists. |
 
-`fldTabsProjectNumber` and `fldTenantFunded` are persisted on **`projects`** via New/Edit Project (production metadata UI). `inspectors.fldRasNumber` holds the assigned professional’s RAS registration number (digits/token only). RAS Inspection Report **rendering** is still not implemented. TDLR dual-track rules are unchanged.
+`fldTabsProjectNumber` and `fldTenantFunded` are persisted on **`projects`** via New/Edit Project (production metadata UI). `inspectors.fldRasNumber` holds the professional’s RAS registration number (digits/token only). RAS Inspection Report **rendering** is still not implemented.
 
-#### Assigned RAS identity
+---
 
-Long-term:
+✅ DECIDED (RAS source-of-truth and professional assignment — documentation only, 2026-08-28): RAS projects have **two legitimate parallel data layers** that must **not** be collapsed. RAS reports mix **TDLR as-recorded** facts for official registration with **FREDA operational** facts for internal work. Professional assignment is **service-specific**. No production code, UI, Firestore, rules, migrations, or report rendering in this decision.
+
+**Product behavior implications:** None in the running app. This records architecture/product rules only.
+
+#### Two layers (do not collapse)
+
+| Layer | Role | Example |
+|-------|------|---------|
+| **TDLR/TABS as-recorded** | Official registered-project representation. Preserve exactly as recorded. | Owner name/address, Design Firm name, project name, facility/site, Scope of Work, TABS Project Number, tenant-private-funds response, other registered facts. TDLR `"A.B.C. Architects, Inc."` stays available even if FREDA has a normalized entity. |
+| **FREDA canonical stakeholder / operational** | Normalized internal identity and operational project data for portfolio tracking, search, consistency, relationship management, analytics, and internal operations. | TDLR `"A.B.C. Architects, Inc."`, `"ABC Arch"`, and `"ABC Architecture"` may all be **approved links** to FREDA `"ABC Architects"`. |
+
+An approved match/link means the representations **refer to the same party**. The FREDA canonical value **does not overwrite** the TDLR snapshot. FREDA normalized stakeholder names **must not** replace official TDLR wording on RAS reports.
+
+**Corrected “reports consume canonical” rule:** Assessment/internal reports may consume canonical operational data as appropriate. RAS reports consume:
+
+- **TDLR as-recorded** values for official registered-project facts
+- **FREDA operational** values for internal facts (OCG Project #, architect/design-professional internal project #, internal workflow status, assigned professional where that is an OCG operational assignment)
+- **Service assignment** for the responsible professional
+
+Canonical stakeholder normalization does **not** overwrite official project data.
+
+#### Target architecture (layers)
+
+```text
+TDLR/TABS source snapshot     = official as-recorded project facts
+FREDA stakeholder             = normalized person/organization identity
+Approved match/link           = relationship between source representation and canonical stakeholder
+Project party                 = role that stakeholder has on a particular Project
+Service assignment            = responsible professional for Plan Review / Inspection / Assessment
+RAS report                    = official TDLR facts + relevant FREDA operational facts + responsible service professional
+```
+
+Do **not** collapse these layers.
+
+#### Project Description by project family
+
+| Project family | Authoritative **report** Project Description |
+|----------------|-----------------------------------------------|
+| **RAS** | TDLR/TABS as-recorded **Scope of Work** when an official TDLR snapshot exists. Do **not** use internal `projects.fldProjDescription` as the official RAS report wording in that case. |
+| **Assessment** | FREDA-entered Project Description / Scope of Work (`projects.fldProjDescription`). |
+
+Keep both concepts distinct. `fldProjDescription` remains appropriate for assessment/internal operational use.
+
+#### Service-specific professional assignment (target — not implemented)
+
+A RAS Project may have **Plan Review RAS** and **Inspection RAS**. They may be the **same** RAS or **different** RAS professionals. A single Project-wide “Inspector/RAS” assignment is **not** sufficient as the long-term model.
 
 ```text
 Project
-  → Assigned RAS person
-      → name
-      → RAS registration number
+  → Plan Review service
+       → Responsible RAS
+  → Inspection service
+       → Responsible RAS
+
+Project (non-RAS assessment)
+  → Assessment service
+       → Responsible Inspector
 ```
 
-Display: `Name / RAS {number}` (example: `Kenneth Otten / RAS 149`). Store the number on the **assigned professional / credential**, not as duplicated report text. TDLR-recorded RAS Name / RAS # is a **registration snapshot** (often RAS Firm) and is **not** automatically the assigned operational RAS.
+**Do not** implement the service-assignment schema in this documentation task.
 
-**Beta / interim bridge** (stakeholder/project-party assignment is not yet implemented): `projects.fldInspector` may temporarily serve as the assigned-professional relationship. The selected professional needs a **dedicated RAS registration number** field. This bridge is **compatibility only**. Inspector and Assigned RAS are **not** permanently synonymous. Future FREDA PM migrates to explicit Assigned RAS relationship + credential ownership.
+**Beta / interim:** Production `projects.fldInspector` may remain a **bridge** until service-specific assignment exists. It **cannot** represent both Plan Review RAS and Inspection RAS long-term when different professionals are assigned. Inspector directory and Assigned RAS are **not** permanently synonymous. TDLR-recorded RAS Name / RAS # is a **registration snapshot** (often RAS Firm) and is **not** automatically the operational assignment.
 
-#### Intended RAS Inspection Report cover source map
+#### Responsible professional and record authorship
 
-```text
-Inspection Report                         ← RAS report-profile constant
-2012 Texas Accessibility Standards        ← RAS report-profile constant
-TABS Project Number                       ← projects.fldTabsProjectNumber
-OCG Project #                             ← projects.fldProjNumber
-Project Description                       ← projects.fldProjDescription
-Tenant Funded                             ← projects.fldTenantFunded
-RAS Name / Number                         ← assigned professional name + RAS registration number
-```
+The responsible professional for the service/work product is:
+
+- author / responsible professional for that Plan Review or Inspection
+- report professional / signing professional
+- source for the professional identity associated with records created for that service
+
+| Work product | Responsible professional |
+|--------------|--------------------------|
+| RAS Plan Review records / report | Plan Review RAS |
+| RAS Inspection records / report | Inspection RAS |
+| Assessment records / report | Inspector |
+
+The inspector/RAS responsible for the work is also the **record author**. `projectData.fldInspID` should conceptually represent the **responsible professional / record author** for that record. **Do not** use authentication `uid` as a substitute for the responsible professional id.
+
+**Transitional production defect (not target behavior):** Data Explorer clone currently stamps authorship from the authenticated user’s `uid` in some paths. That is **not** the approved model.
+
+#### Active Inspector is not a source of truth
+
+Setup / **Active Inspector** (`selections.inspectorId` and related session picker) is a **workflow convenience**. It currently creates ambiguity with `projects.fldInspector`.
+
+**Approved target:** there must be **one** authoritative responsible-professional assignment for the relevant **service**. “Active Inspector” must **not** become a second competing assignment. Session selection is **not** authoritative.
+
+Future UI options may include: remove the picker, make it display-only, or derive it from the active service assignment. **UI implementation is not decided** in this documentation task.
+
+#### RAS Owner / addressee (legal/reporting role)
+
+For RAS Plan Reviews and RAS Inspection Reports:
+
+- The report must be **addressed to the registered Owner**.
+- The Owner is the legally responsible party for the property/building/facility.
+- This remains true even if another stakeholder hired OCG/RAS (architect, design professional, tenant, developer, contractor, owner representative, or other party).
+
+Therefore:
+
+- **Client ≠ Owner.**
+- Who hired OCG ≠ necessarily the report addressee.
+- **RAS report addressee = registered Owner.**
+- RAS Owner/addressee display uses the **TDLR/TABS as-recorded Owner identity** (e.g. `"A.B.C. Property Holdings, LLC"`), not the FREDA canonical name (e.g. `"ABC Property Holdings"`). The approved stakeholder link remains available internally for portfolio/relationship management.
+- Current Assessment PDF behavior that labels **Client** data as “Owner” must **not** be used as the RAS Owner source.
+
+#### Copies / distribution (deferred)
+
+Other project stakeholders may be **copied** on RAS documentation (Architect, Design Professional, Tenant, Owner representative, Client, Developer, Contractor, etc.). Copying a stakeholder does **not** make them the report addressee.
+
+**DEFERRED:** a document-distribution / permission model (who may receive copies, which document types, when authorization applies). Do not design or implement it now.
+
+Documented only:
+
+- **Owner** = required RAS addressee
+- **Other stakeholders** = possible copy recipients subject to future permission rules
+
+#### RAS report sourcing matrix
+
+| RAS report concept | Authoritative display source |
+|--------------------|------------------------------|
+| Inspection Report title | RAS report template |
+| Standards line | RAS report template |
+| TABS Project Number | TDLR official/as-recorded or approved operational copy preserving provenance |
+| OCG Project # | FREDA Project |
+| Project Description | TDLR Scope of Work |
+| Tenant Funded | TDLR private-funds response |
+| Owner / Addressee | TDLR as-recorded Owner |
+| Registered Design Firm | TDLR as-recorded Design Firm |
+| Facility/site registered data | TDLR as-recorded source where the report represents registration |
+| Plan Review RAS | Plan Review service assignment |
+| Inspection RAS | Inspection service assignment |
+| Assessment Inspector | Assessment service assignment |
+| Architect/DP internal project # | FREDA operational metadata |
+
+Do **not** treat FREDA normalized stakeholder names as substitutes for official registered report text.

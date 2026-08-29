@@ -1,7 +1,7 @@
 # Convert to RAS
 
 **Status:** Planning / architecture note (not an implementation spec). **Not implemented.**
-**Last updated:** 2026-08-28
+**Last updated:** 2026-08-28 (RAS source-of-truth reconciliation)
 **Audience:** Product owner, architecture review, implementation planning
 
 > **Disclaimer:** This document captures internal planning for adapting FREDAsoft toward Registered Accessibility Specialist (RAS) workflows under the Texas Department of Licensing and Regulation (TDLR). It does **not** assert legal compliance, required forms, or final field lists. All TDLR/RAS requirements must be verified from official sources, sample deliverables, and qualified review before any implementation.
@@ -227,37 +227,46 @@ RAS conversion must not reintroduce category/item/comment resolution bugs audite
 
 ## 11. Report metadata and header fields
 
-**RAS Inspection Report cover ownership (authoritative):** **`docs/ARCHITECTURE_DESIGN.md`** (✅ DECIDED 2026-08-28). That block supersedes the earlier §11 list wherever they disagree.
+**Authoritative RAS report sourcing:** **`docs/ARCHITECTURE_DESIGN.md`** (✅ DECIDED RAS source-of-truth and professional assignment, 2026-08-28). That block supersedes earlier §11 rows that treated canonical Project fields or normalized stakeholder names as RAS registered-project wording.
 
-From sample RAS report review, header/metadata may also include dates, site/owner/design-firm lines, etc. Binding of those remaining fields to **project** vs **report instance** vs **facility** is still to be finalized. TDLR-mandatory vs operational fields still require verification.
+From sample RAS report review, header/metadata may also include dates and site lines. Binding of remaining **non-registered** fields to **project** vs **report instance** vs **facility** may still need implementation detail. TDLR-mandatory vs operational fields still require verification from official sources.
 
-### RAS Inspection Report cover (decided 2026-08-28)
+### RAS report sourcing (decided 2026-08-28)
 
-| Cover content | Source |
-|---------------|--------|
-| **Inspection Report** | RAS report-profile / template constant — **not** Project metadata |
-| **2012 Texas Accessibility Standards** | RAS report-profile / template constant — **not** Project metadata |
-| **TABS Project Number** | Canonical `projects.fldTabsProjectNumber` (new concept; TDLR Project Number is snapshot only) |
-| **OCG Project #** | Canonical `projects.fldProjNumber` |
-| **Project Description** | Canonical `projects.fldProjDescription` — **synonymous** with Scope of Work for RAS reports. TDLR Scope of Work remains a separate snapshot. **Do not** use `fldNarrative`. |
-| **Tenant Funded** | Canonical `projects.fldTenantFunded` (Yes/No when populated). Not Type of Funding / Owner Class. |
-| **RAS Name / Number** | Assigned professional name + RAS registration number, rendered `Name / RAS {n}` |
+Two layers must not be collapsed: **TDLR/TABS as-recorded** (official registration) vs **FREDA canonical/operational** (normalized identity and internal facts). RAS reports use TDLR as-recorded text for registered facts; FREDA operational values for internal facts; **service assignment** for the responsible professional.
 
-**Project Description and Scope of Work are not two cover fields.** Earlier planning listed both; they are one canonical Project value for this sister report.
+| RAS report concept | Authoritative display source |
+|--------------------|------------------------------|
+| Inspection Report title | RAS report template |
+| Standards line | RAS report template |
+| TABS Project Number | TDLR official/as-recorded or approved operational copy preserving provenance (`projects.fldTabsProjectNumber`) |
+| OCG Project # | FREDA Project (`projects.fldProjNumber`) |
+| Project Description | TDLR Scope of Work (when a snapshot exists). **Not** internal `projects.fldProjDescription` as official RAS wording. Assessment reports use `fldProjDescription`. |
+| Tenant Funded | TDLR private-funds response (when a snapshot exists) |
+| Owner / Addressee | TDLR as-recorded Owner — **not** Client; **not** FREDA canonical Owner name |
+| Registered Design Firm | TDLR as-recorded Design Firm |
+| Facility/site registered data | TDLR as-recorded source where the report represents registration |
+| Plan Review RAS | Plan Review **service assignment** |
+| Inspection RAS | Inspection **service assignment** |
+| Architect/DP internal project # | FREDA operational metadata (`projects.fldExternalRef`) |
 
-**`projects.fldExternalRef`** is **Architect / Design Professional Project #**, not TABS. It is not on the approved RAS Inspection Report cover map above; keep it as Project metadata for design-professional job numbers.
+Do **not** treat FREDA normalized stakeholder names as substitutes for official registered report text. Assessment PDF labeling of Client as “Owner” is **not** the RAS Owner source.
 
-TDLR dual-track: snapshots may later seed canonical fields after staff review; they do not silently overwrite them.
+**Project Description is family-specific:** RAS report wording = TDLR Scope of Work when a snapshot exists. Assessment report wording = `projects.fldProjDescription`. Keep both concepts distinct. **Do not** use `fldNarrative`.
+
+**Professional assignment is service-specific** (target; schema not implemented): Plan Review RAS and Inspection RAS may be the same person or different people. Beta `projects.fldInspector` may remain an interim bridge; it cannot represent both services long-term when they differ.
+
+TDLR dual-track: snapshots may later seed canonical operational fields after staff review; they do not silently overwrite snapshots or canonical records.
 
 ### Other header candidates (still planning)
 
 | Field | Note |
 |-------|------|
 | Review / Inspection Date | Project vs report instance vs facility — TBD |
-| Project Name | Existing `fldProjName` |
-| Facility Name / address / city / state / ZIP | Facility record |
-| Owner name / address / city / state / ZIP | Owner party (not Client by default) |
-| Architect / Design Professional / Design Firm | Design Firm party; job # is `fldExternalRef` |
+| Project Name | Existing `fldProjName`; if the line represents **registered** project name, use TDLR as-recorded |
+| Facility Name / address / city / state / ZIP | TDLR as-recorded where the report represents registration; FREDA Facility for operational site identity |
+| Owner name / address / city / state / ZIP | **TDLR as-recorded Owner** (required RAS addressee). Client ≠ Owner. |
+| Architect / Design Professional / Design Firm | TDLR as-recorded Design Firm on RAS reports; job # is FREDA `fldExternalRef` |
 
 ---
 
@@ -385,11 +394,11 @@ Research backlog — confirm against official sources and sample deliverables:
 - **`docs/RAS_FINDINGS_SPREADSHEET_TEMPLATE.md`** — spreadsheet layout spec for the workbook
 - **`docs/RAS_FINDING_AUTHORING_STYLE.md`** — Plan Review library finding prose (Batch 1+ conventions)
 - **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md`** — Lovable Project prototype discovery (metadata/stakeholder workflows; not inspection Data Entry)
-- **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** — D5 stakeholder model (Owner/Design/RAS parties; TDLR vs canonical; §11 header field sources TBD)
+- **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** — D5 stakeholder model (Owner/Design/RAS parties; TDLR vs canonical; RAS addressee = TDLR Owner)
 - **`docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md`** — D6 TDLR/TABS extraction pipeline sketch (source snapshots vs canonical; milestone/report-instance hints)
 - **`docs/reference/EAB205N_PROJECT_REGISTRATION_FIELD_INDEX.md`** — EAB205N registration field index (pre-D1; §11 header field sources)
 - **`docs/reference/TDLR_OPEN_RECORDS_EXPORT_FIELD_INDEX.md`** — TDLR open-records export column headers (pre-D1; bulk/legacy field-name layer)
-- `docs/ARCHITECTURE_DESIGN.md` — durable ✅ DECIDED blocks (add RAS decisions when implementation begins)
+- `docs/ARCHITECTURE_DESIGN.md` — durable ✅ DECIDED blocks (RAS source-of-truth, cover field names, dual-track)
 - `AGENTS.md` — protected areas, behavior disclosure, Firestore data safety
 
 When implementation starts, add concise **✅ DECIDED** entries to `ARCHITECTURE_DESIGN.md` and keep this file as the full planning context.
