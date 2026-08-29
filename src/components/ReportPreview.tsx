@@ -48,6 +48,10 @@ import {
   type PhotoAddendumPageLocationGroup
 } from '../lib/reportPreviewShared';
 import type { ReportSectionSelection } from './ReportSectionSelectionDialog';
+import type { ReportViewModel } from '../lib/reportAdapter';
+import type { ReportProfile } from '../lib/reportProfile';
+import { rasCoverFooterIdentityText, usesRasCover } from '../lib/rasReportCoverDisplay';
+import { RasReportCover } from './report/RasReportCover';
 
 interface ReportPreviewProps {
   project: Project;
@@ -67,6 +71,10 @@ interface ReportPreviewProps {
   toggleSidebar: () => void;
   /** When omitted, all sections render (legacy full report). */
   sectionSelection?: ReportSectionSelection;
+  /** Explicit View Report profile. Do not infer from records. Defaults to assessment. */
+  reportProfile?: ReportProfile;
+  /** Slice A view-model. Required for RAS cover; Assessment cover ignores it. */
+  reportViewModel?: ReportViewModel | null;
 }
 
 // Helper functions for pagination
@@ -720,7 +728,9 @@ export function ReportPreview({
   onClose,
   isSidebarOpen,
   toggleSidebar,
-  sectionSelection
+  sectionSelection,
+  reportProfile,
+  reportViewModel
 }: ReportPreviewProps) {
   
   const reportRef = useRef<HTMLDivElement>(null);
@@ -1459,6 +1469,11 @@ export function ReportPreview({
           <div className="report-container-wrapper print:bg-white print:w-full print:h-auto print:overflow-visible print:block">
             <div ref={reportRef} className="flex flex-col items-center gap-12 print:gap-0 bg-transparent py-12 print:py-0 print:block print:h-auto print:overflow-visible">
               {/* Cover Page */}
+              {usesRasCover(reportProfile ?? 'assessment') && reportViewModel?.ras ? (
+                <PageContainer facilityName={rasCoverFooterIdentityText()}>
+                  <RasReportCover viewModel={reportViewModel} />
+                </PageContainer>
+              ) : (
               <PageContainer>
                 <div className="absolute top-[203px] left-0 right-0 flex justify-center pointer-events-none z-10">
                   <div className="text-[18.6px] font-semibold text-zinc-900 uppercase tracking-tight text-center max-w-[80%]">
@@ -1512,6 +1527,7 @@ export function ReportPreview({
                   </div>
                 </div>
               </PageContainer>
+              )}
 
               {/* Narrative Pages */}
               {sectionSel.narrative &&

@@ -112,6 +112,10 @@ describe('buildReportViewModel RAS sources', () => {
     expect(vm.ras?.registeredFacility.facilityName).toBe('Registered Facility');
     expect(vm.ras?.registeredFacility.address).toBe('100 Main');
     expect(vm.ras?.cover.projectInformation.facilityName).toBe('Registered Facility');
+    expect(vm.ras?.cover.projectInformation.projectName).toBe('Tower Alterations');
+    expect(vm.ras?.cover.projectInformation.projectName).not.toBe(
+      vm.ras?.cover.projectInformation.facilityName
+    );
   });
 
   it('reads Owner from tdlrRegistered.owner, never Client', () => {

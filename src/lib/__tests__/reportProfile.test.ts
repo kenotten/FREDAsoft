@@ -5,6 +5,7 @@ import {
   getRasLetteredSections,
   getRecordLocator,
   getReportProfileSemantics,
+  resolveViewReportProfile,
   selectReportProfile,
 } from '../reportProfile';
 
@@ -24,6 +25,21 @@ describe('selectReportProfile', () => {
 
   it('does not infer from omitted records/sheet — TAS/RAS without mode defaults to inspection', () => {
     expect(selectReportProfile({ fldProjType: 'TAS/RAS' }, null)).toBe('inspection');
+  });
+
+  it('switches Review ↔ Inspection from sticky work mode only', () => {
+    const project = { fldProjType: 'TAS/RAS' as const };
+    expect(selectReportProfile(project, 'plan_review')).toBe('plan_review');
+    expect(selectReportProfile(project, 'inspection')).toBe('inspection');
+    expect(resolveViewReportProfile(project, 'plan_review')).toBe('plan_review');
+    expect(resolveViewReportProfile(project, 'inspection')).toBe('inspection');
+  });
+
+  it('does not infer profile from records — only project type + sticky work mode', () => {
+    const project = { fldProjType: 'TAS/RAS' as const };
+    expect(selectReportProfile(project, 'inspection')).toBe('inspection');
+    expect(selectReportProfile(project, 'plan_review')).toBe('plan_review');
+    expect(resolveViewReportProfile(project, 'inspection')).toBe('inspection');
   });
 });
 
@@ -91,6 +107,7 @@ describe('getReportProfileSemantics', () => {
     expect(s.dateLabel).toBe('Inspection Date');
     expect(s.dateField).toBe('fldInspectionDate');
     expect(s.includeSheet).toBe(false);
+    expect(s.includeFinancial).toBe(false);
     expect(s.imageTerminology.addendum).toBe('Photo Addendum');
     expect(s.imageTerminology.singular).toBe('Photo');
   });

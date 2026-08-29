@@ -2,6 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { Modal } from './ui/modal';
 import { Button } from './ui/button';
 import type { ReportRecordSortOrder } from '../lib/reportPreviewShared';
+import {
+  listOfferedReportSectionKeys,
+  type SelectableReportSections
+} from '../lib/reportSectionAvailability';
+
+/** Dialog option keys for the given availability. Omitted keys are absent, not disabled. */
+export function offeredReportSectionDialogKeys(availability: SelectableReportSections) {
+  return listOfferedReportSectionKeys(availability);
+}
 
 export type ReportSectionSelection = {
   cover: true;
@@ -25,6 +34,7 @@ export const DEFAULT_REPORT_SECTION_SELECTION: ReportSectionSelection = {
 
 export interface ReportSectionSelectionDialogProps {
   isOpen: boolean;
+  hasFinancial: boolean;
   hasReferencedStandards: boolean;
   hasPhotoAddendum: boolean;
   onClose: () => void;
@@ -33,6 +43,7 @@ export interface ReportSectionSelectionDialogProps {
 
 export function ReportSectionSelectionDialog({
   isOpen,
+  hasFinancial,
   hasReferencedStandards,
   hasPhotoAddendum,
   onClose,
@@ -49,18 +60,18 @@ export function ReportSectionSelectionDialog({
     if (!isOpen) return;
     setNarrative(true);
     setDocumentation(true);
-    setFinancial(true);
+    setFinancial(hasFinancial);
     setReferencedStandards(hasReferencedStandards);
     setPhotoAddendum(hasPhotoAddendum);
     setRecordSortOrder('category_location_item');
-  }, [isOpen, hasReferencedStandards, hasPhotoAddendum]);
+  }, [isOpen, hasFinancial, hasReferencedStandards, hasPhotoAddendum]);
 
   const handleConfirm = () => {
     onConfirm({
       cover: true,
       narrative,
       documentation,
-      financial,
+      financial: hasFinancial ? financial : false,
       referencedStandards: hasReferencedStandards ? referencedStandards : false,
       photoAddendum: hasPhotoAddendum ? photoAddendum : false,
       recordSortOrder
@@ -128,18 +139,20 @@ export function ReportSectionSelectionDialog({
               Documentation
             </label>
           </li>
-          <li className="flex items-start gap-3">
-            <input
-              id="rs-financial"
-              type="checkbox"
-              checked={financial}
-              onChange={(e) => setFinancial(e.target.checked)}
-              className="mt-1 h-4 w-4 shrink-0 rounded border-zinc-300 text-blue-600 focus:ring-blue-500/30"
-            />
-            <label htmlFor="rs-financial" className="text-sm font-medium text-zinc-800">
-              Financial summary
-            </label>
-          </li>
+          {hasFinancial ? (
+            <li className="flex items-start gap-3">
+              <input
+                id="rs-financial"
+                type="checkbox"
+                checked={financial}
+                onChange={(e) => setFinancial(e.target.checked)}
+                className="mt-1 h-4 w-4 shrink-0 rounded border-zinc-300 text-blue-600 focus:ring-blue-500/30"
+              />
+              <label htmlFor="rs-financial" className="text-sm font-medium text-zinc-800">
+                Financial summary
+              </label>
+            </li>
+          ) : null}
           {hasReferencedStandards ? (
             <li className="flex items-start gap-3">
               <input

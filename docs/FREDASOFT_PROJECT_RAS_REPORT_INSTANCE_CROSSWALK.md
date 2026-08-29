@@ -1,8 +1,8 @@
 # FREDAsoft RAS Report Instance Crosswalk
 
 **Status:** Documentation-only conceptual crosswalk (D3). **Not implemented.**
-**Last updated:** 2026-08-29 (report Slice A semantics implemented, not wired; report instances and RAS report rendering still not implemented)
-**Branch context:** `feat/ras-report-semantics`
+**Last updated:** 2026-08-29 (report Slice B covers wired; report instances and RAS report body still not implemented)
+**Branch context:** `feat/ras-report-cover`
 **Audience:** Product owner (Kenneth), architecture review (Archie), D4/D6/D7 implementation planning
 
 > **Disclaimer:** This document clarifies how **TDLR/TABS registration milestones, statuses, and RAS-related fields** relate to **FREDAsoft RAS report instances** and related operational concepts. It does **not** specify Firestore collections, security rules, scrapers, UI, correspondence generation, or legal compliance. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data.
@@ -28,7 +28,7 @@ This is a **D3 conceptual crosswalk**, not implementation or schema. It builds o
 
 **Review vs Inspection** is a work mode on a TAS/RAS Project (not a Project type change). Plan Review findings may include optional **Sheet** in addition to Location; Sheet does not replace Location; Inspection mode need not show Sheet unless later required.
 
-**Not implemented:** report instances / `reportInstanceId`, RAS report **rendering** in `ReportPreview` (Slice A semantics live in `src/lib/reportProfile.ts` / `src/lib/reportAdapter.ts` but are not wired). Future RAS cover Project Description reads `tdlrRegistered.scopeOfWork` directly.
+**Not implemented:** report instances / `reportInstanceId`; RAS report **body** in `ReportPreview` (Slice B wires explicit profile + RAS **cover** only; body remains legacy until Slice C). RAS cover Project Description reads `tdlrRegistered.scopeOfWork` directly.
 
 ---
 

@@ -1,7 +1,7 @@
 # Convert to RAS
 
-**Status:** Planning / architecture note. Data Entry work mode and work-mode-aware professional gating are implemented; RAS report rendering is **not** implemented.
-**Last updated:** 2026-08-29 (report Slice A semantics implemented, not wired; RAS report rendering still not implemented)
+**Status:** Planning / architecture note. Data Entry work mode and RAS **covers** are implemented; RAS report **body** is **not** implemented.
+**Last updated:** 2026-08-29 (report Slice B: explicit profile wiring + RAS covers; RAS body still legacy until Slice C)
 **Audience:** Product owner, architecture review, implementation planning
 
 > **Disclaimer:** This document captures internal planning for adapting FREDAsoft toward Registered Accessibility Specialist (RAS) workflows under the Texas Department of Licensing and Regulation (TDLR). It does **not** assert legal compliance, required forms, or final field lists. All TDLR/RAS requirements must be verified from official sources, sample deliverables, and qualified review before any implementation.
@@ -271,9 +271,9 @@ Registered RAS facts live on **`projects.tdlrRegistered`** (TDLR as-recorded; Be
 | Standards | Assessment profile | RAS template: 2012 TAS |
 | Architect/DP internal project # | `fldExternalRef` if used | `fldExternalRef` |
 
-Template titles (`Plan Review Report`, `Inspection Report`) and the standards line (`2012 Texas Accessibility Standards`) remain RAS report-profile constants. **✅ DECIDED, not implemented.** Authoritative investigation: **`docs/ARCHITECTURE_DESIGN.md`** (Beta RAS report-profile architecture).
+Template titles (`Plan Review Report`, `Inspection Report`) and the standards line (`2012 Texas Accessibility Standards`) remain RAS report-profile constants. **✅ IMPLEMENTED on cover** (`feat/ras-report-cover`). RAS body remains Slice C. Authoritative investigation: **`docs/ARCHITECTURE_DESIGN.md`** (Beta RAS report-profile architecture).
 
-**Production (feat/ras-beta-project-metadata + feat/professional-hydration + feat/ras-work-mode-data-entry + feat/ras-scope-description-sync):** New/Edit Project persists `tdlrRegistered` for TAS/RAS. Sole Project Name is `fldProjName`. TAS/RAS save synchronizes `fldProjDescription` from `tdlrRegistered.scopeOfWork` (including blank); Assessment `fldProjDescription` remains independently authored. Current-workflow professional hydrates from `fldInspector` (Assessment), `fldPlanReviewRas` (TAS/RAS Review), or `fldInspectionRas` (TAS/RAS Inspection). Session Active Inspector is not an assignment. RAS report rendering is **not** implemented (future report reads Scope directly). Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer written.
+**Production (feat/ras-beta-project-metadata + feat/professional-hydration + feat/ras-work-mode-data-entry + feat/ras-scope-description-sync):** New/Edit Project persists `tdlrRegistered` for TAS/RAS. Sole Project Name is `fldProjName`. TAS/RAS save synchronizes `fldProjDescription` from `tdlrRegistered.scopeOfWork` (including blank); Assessment `fldProjDescription` remains independently authored. Current-workflow professional hydrates from `fldInspector` (Assessment), `fldPlanReviewRas` (TAS/RAS Review), or `fldInspectionRas` (TAS/RAS Inspection). Session Active Inspector is not an assignment. RAS **cover** rendering is implemented (`feat/ras-report-cover`; cover Project Description reads Scope directly). RAS **body** is not. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer written.
 
 Do **not** treat FREDA normalized stakeholder names as substitutes for official registered report text.
 
@@ -309,7 +309,7 @@ Authoritative report-profile decisions live in **`docs/ARCHITECTURE_DESIGN.md`**
 | **Section letters** | First included section after cover = **A**, then B, C… regardless of section type. Do not hard-code Findings unlettered / Standards=A / Images=B. |
 | **Sections** | Cover → Narrative → Findings (no rec/cost; Review includes Sheet) → Referenced Standards → Photo/Image Addendum. **No** Financial. |
 | **Web Report** | Later adapter slice; no print |
-| **PDF** | Shared engine; protect `ReportPreview.tsx` until Slice B |
+| **PDF** | Shared engine; Slice B cover wiring done; protect `ReportPreview.tsx` for Slice C body |
 
 ### Requirements still to investigate
 

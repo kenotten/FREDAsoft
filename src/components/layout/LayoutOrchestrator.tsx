@@ -31,6 +31,7 @@ import {
   type ReportSectionSelection
 } from '../ReportSectionSelectionDialog';
 import { getReportSectionAvailability } from '../../lib/reportPreviewShared';
+import { getSelectableReportSections } from '../../lib/reportSectionAvailability';
 import { 
   ClientModal, 
   FacilityModal, 
@@ -65,6 +66,8 @@ import {
   currentWorkflowWorkContext,
 } from '../../lib/responsibleProfessional';
 import type { RasWorkMode } from '../../lib/workProduct';
+import { resolveViewReportProfile } from '../../lib/reportProfile';
+import { buildReportViewModel } from '../../lib/reportAdapter';
 
 const ReportPreview = React.lazy(() =>
   import('../ReportPreview').then((m) => ({ default: m.ReportPreview }))
@@ -253,22 +256,52 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
   const [reportSectionSelection, setReportSectionSelection] = React.useState<ReportSectionSelection | null>(null);
   const [showFacilityNarrativeModal, setShowFacilityNarrativeModal] = React.useState(false);
 
-  const reportSectionAvailability = React.useMemo(() => {
-    if (!selectedProject || !selectedFacility) {
-      return { hasReferencedStandards: false, hasPhotoAddendum: false };
-    }
-    return getReportSectionAvailability(
-      projectData,
-      selectedProject,
-      selectedFacility,
-      glossary,
-      standards,
-      categories,
-      items,
+  const reportProfile = React.useMemo(
+    () => resolveViewReportProfile(selectedProject, rasWorkMode),
+    [selectedProject, rasWorkMode]
+  );
+
+  const reportViewModel = React.useMemo(() => {
+    if (!selectedProject) return null;
+    return buildReportViewModel({
+      profile: reportProfile,
+      project: selectedProject,
+      facility: selectedFacility,
+      inspectors,
+      records: projectData,
+      client: selectedClient,
       locations,
-      findings
-    );
+      glossary,
+    });
   }, [
+    reportProfile,
+    selectedProject,
+    selectedFacility,
+    inspectors,
+    projectData,
+    selectedClient,
+    locations,
+    glossary,
+  ]);
+
+  const reportSectionAvailability = React.useMemo(() => {
+    const content =
+      !selectedProject || !selectedFacility
+        ? { hasReferencedStandards: false, hasPhotoAddendum: false }
+        : getReportSectionAvailability(
+            projectData,
+            selectedProject,
+            selectedFacility,
+            glossary,
+            standards,
+            categories,
+            items,
+            locations,
+            findings
+          );
+    return getSelectableReportSections(reportProfile, content);
+  }, [
+    reportProfile,
     projectData,
     selectedProject,
     selectedFacility,
@@ -539,6 +572,7 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
 
       <ReportSectionSelectionDialog
         isOpen={showReportSectionDialog}
+        hasFinancial={reportSectionAvailability.hasFinancial}
         hasReferencedStandards={reportSectionAvailability.hasReferencedStandards}
         hasPhotoAddendum={reportSectionAvailability.hasPhotoAddendum}
         onClose={() => setShowReportSectionDialog(false)}
@@ -578,6 +612,8 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
             recommendations={recommendations as any}
             findings={findings}
             sectionSelection={reportSectionSelection ?? undefined}
+            reportProfile={reportProfile}
+            reportViewModel={reportViewModel}
             onClose={() => {
               setShowReportPreview(false);
               setReportSectionSelection(null);

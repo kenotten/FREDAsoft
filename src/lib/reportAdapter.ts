@@ -1,7 +1,7 @@
 /**
  * RAS report data adapter / view-model (Slice A).
  * Pure functions — no React, no Firestore, no mutation of source objects.
- * Not wired to ReportPreview.
+ * Slice B: LayoutOrchestrator builds the view-model; RAS cover consumes it.
  */
 
 import type { Client, Facility, Inspector, Location, Project, ProjectData } from '../types';

@@ -1,7 +1,7 @@
 /**
  * Beta RAS report-profile semantics (Slice A).
  * Pure config, selection, record filter, locator, and section lettering.
- * Not wired to ReportPreview — no visible report change.
+ * Slice B: View Report selects profile via selectReportProfile / resolveViewReportProfile.
  */
 
 import { isAssessmentProjectType } from './projectMetadataFields';
@@ -62,6 +62,14 @@ export function selectReportProfile(
 ): ReportProfile {
   if (!project || isAssessmentProjectType(project.fldProjType)) return 'assessment';
   return rasWorkMode === 'plan_review' ? 'plan_review' : 'inspection';
+}
+
+/** View Report boundary: same explicit context as `selectReportProfile`. Does not inspect records. */
+export function resolveViewReportProfile(
+  project: Pick<Project, 'fldProjType'> | null | undefined,
+  rasWorkMode?: RasWorkMode | null
+): ReportProfile {
+  return selectReportProfile(project, rasWorkMode);
 }
 
 export function getReportProfileSemantics(profile: ReportProfile): ReportProfileSemantics {
