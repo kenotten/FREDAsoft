@@ -28,8 +28,26 @@ import { buildProjectDataCloneSeed, type ProjectDataCloneSeed } from '../lib/clo
 import {
   currentWorkflowResponsibleProfessionalLabel,
   missingResponsibleProfessionalMessage,
+  resolveCurrentWorkflowResponsibleProfessional,
 } from '../lib/responsibleProfessional';
-import { ACTIVE_GLOSSARY_STORAGE_KEY, FREDASOFT_DRAFT_LOCAL_STORAGE_KEY } from '../lib/storageKeys';
+import { isAssessmentProjectType } from '../lib/projectMetadataFields';
+import {
+  ACTIVE_GLOSSARY_STORAGE_KEY,
+  FREDASOFT_DRAFT_LOCAL_STORAGE_KEY,
+  rasDraftStorageKey,
+} from '../lib/storageKeys';
+import { loadRasWorkMode, saveRasWorkMode } from '../lib/rasWorkModeStorage';
+import {
+  glossaryPathCompleteForSave,
+  imagesValueForSave,
+  rasNewRecordConsumptionFields,
+  rasWorkModeSwitchClearsImages,
+  recordMatchesRasWorkMode,
+  resolveRecordWorkProduct,
+  sheetValueForSave,
+  workProductStampForSave,
+  type RasWorkMode,
+} from '../lib/workProduct';
 import type { MasterStandard } from '../types';
 import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { ImagePreviewModal } from './ui/ImagePreviewModal';
@@ -43,7 +61,7 @@ import { cn, sortEntities, sortCategoriesForDropdown, sortItemsForDropdown, form
 import { v4 as uuidv4 } from 'uuid';
 import { resizeImage } from '../lib/imageUtils';
 import { normalizeId, idsEqual } from '../lib/idUtils';
-import { normalizeCitationIds, standardsIdsFromGlossaryRow } from '../lib/citationStandards';
+import { normalizeCitationIds, standardsIdsFromGlossaryRow, findingCitationIdsFromGlossaryRow } from '../lib/citationStandards';
 import { toFraction, fromFraction } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
@@ -243,17 +261,21 @@ function isGlossaryDraftLinkageSafe(parsed: any): boolean {
   const item = String(s.itemId ?? '').trim();
   const find = String(s.findId ?? '').trim();
   const rec = String(s.recId ?? '').trim();
+  const isRasDraft =
+    parsed.workProduct === 'plan_review' || parsed.workProduct === 'inspection';
+  if (isRasDraft) return Boolean(cat && item && find);
   return Boolean(cat && item && find && rec);
 }
 
 export default function ProjectDataEntry({ 
-  project = {}, facility = {}, inspector = {}, glossary = [], standards = [], projectData = [],
+  project = {}, facility = {}, inspector = {}, inspectors = [], glossary = [], standards = [], projectData = [],
   onSave, onReset, items = [], findings = [], resolvableFindings, recommendations = [], masterRecommendations = [],
   resolvableMasterRecommendations,
   unitTypes = [], mergedCategories = [], locations = [], selections = {}, onSelectionChange, onDirtyChange,
   onDeleteRecord,
   pendingCloneSeed = null,
-  onPendingCloneSeedConsumed
+  onPendingCloneSeedConsumed,
+  onRasWorkModeChange
 }: any) {
   const resolvableFindingsList = resolvableFindings ?? findings;
   const resolvableMasterRecsList = resolvableMasterRecommendations ?? masterRecommendations;
@@ -285,6 +307,41 @@ export default function ProjectDataEntry({
   }, [selections.editingRecordId, resolveProjectDataRecordForJumpSelection]);
 
   const editingRecordId = selections.editingRecordId;
+
+  const isRasProject = !isAssessmentProjectType(project?.fldProjType);
+  const [rasWorkMode, setRasWorkMode] = useState<RasWorkMode>(() =>
+    loadRasWorkMode(project?.fldProjID || selections.projectId)
+  );
+  const rasWorkContext: RasWorkMode | null = isRasProject ? rasWorkMode : null;
+  const directoryInspectors = Array.isArray(inspectors) && inspectors.length
+    ? inspectors
+    : inspector?.fldInspID
+      ? [inspector]
+      : [];
+  const workModeProfessional = resolveCurrentWorkflowResponsibleProfessional(
+    project,
+    directoryInspectors,
+    rasWorkContext
+  );
+  const persistRasWorkMode = (mode: RasWorkMode) => {
+    setRasWorkMode(mode);
+    saveRasWorkMode(project?.fldProjID || selections.projectId, mode);
+    onRasWorkModeChange?.(mode);
+  };
+  const [fldSheet, setFldSheet] = useState('');
+
+  useEffect(() => {
+    const pid = String(project?.fldProjID || selections.projectId || '').trim();
+    if (!isRasProject) return;
+    setRasWorkMode(loadRasWorkMode(pid));
+  }, [isRasProject, project?.fldProjID, selections.projectId]);
+
+  const draftKeyRef = useRef(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+  useEffect(() => {
+    const pid = String(selections.projectId || '').trim();
+    draftKeyRef.current =
+      isRasProject && pid ? rasDraftStorageKey(pid, rasWorkMode) : FREDASOFT_DRAFT_LOCAL_STORAGE_KEY;
+  }, [isRasProject, selections.projectId, rasWorkMode]);
 
   /** Scope StandardsBrowser UI (search + tree + item expand) per Data Entry record; sessionStorage-backed. */
   const dataEntryStandardsUiKey = useMemo(
@@ -505,7 +562,11 @@ export default function ProjectDataEntry({
       if (!d?.fldPDataID) return false;
       const recordProjectId = String(d.fldPDataProject || '').trim().toLowerCase();
       const recordFacilityId = String(d.fldFacility || '').trim().toLowerCase();
-      return recordProjectId === activeProjectId && recordFacilityId === activeFacilityId;
+      if (recordProjectId !== activeProjectId || recordFacilityId !== activeFacilityId) return false;
+      if (!isRasProject) {
+        return resolveRecordWorkProduct(d, project?.fldProjType) === 'assessment';
+      }
+      return recordMatchesRasWorkMode(d, project?.fldProjType, rasWorkMode);
     });
 
     const categories = mergedCategories || [];
@@ -529,7 +590,7 @@ export default function ProjectDataEntry({
       const itemB = itemsList.find((i: any) => i.fldItemID === ctxB.itemId);
       return compareEntities(itemA, itemB, 'fldItemID');
     });
-  }, [projectData, selections.projectId, selections.facilityId, glossary, mergedCategories, items, locations]);
+  }, [projectData, selections.projectId, selections.facilityId, glossary, mergedCategories, items, locations, isRasProject, rasWorkMode, project?.fldProjType]);
 
   const navIndex = useMemo(() => {
     if (!editingRecordId) return -1;
@@ -547,9 +608,9 @@ export default function ProjectDataEntry({
     });
   }, [navRecords, locations]);
 
-  const hasRequiredContext = Boolean(selections.projectId && inspector?.fldInspID);
-  const missingProfessionalMessage = missingResponsibleProfessionalMessage(project);
-  const responsibleProfessionalLabel = currentWorkflowResponsibleProfessionalLabel(project);
+  const hasRequiredContext = Boolean(selections.projectId && workModeProfessional?.fldInspID);
+  const missingProfessionalMessage = missingResponsibleProfessionalMessage(project, rasWorkContext);
+  const responsibleProfessionalLabel = currentWorkflowResponsibleProfessionalLabel(project, rasWorkContext);
   
   /** Single source of truth: parent `selections.dataEntryMode` (persists across ProjectDataEntry remounts). */
   const dataEntryMode: 'glossary' | 'custom' = selections.dataEntryMode === 'custom' ? 'custom' : 'glossary';
@@ -701,6 +762,7 @@ export default function ProjectDataEntry({
         // fldTotalCost is derived from fldUnitCost * fldQTY (see effect below). Comparing to
         // activeRecord.fldTotalCost caused false DIRTY when stored totals lagged or differed.
         fldLocation !== (activeRecord.fldLocation || '') ||
+        (fldSheet || '') !== (activeRecord.fldSheet || '') ||
         JSON.stringify(fldImages) !== JSON.stringify(activeRecord.fldImages || []) ||
         JSON.stringify(safeArray(fldStandards)) !== JSON.stringify(safeArray(activeRecord.fldStandards))
       );
@@ -714,6 +776,7 @@ export default function ProjectDataEntry({
         fldMeasurement !== '' ||
         fldUnitType !== 'Decimal' ||
         fldImages.length > 0 ||
+        String(fldSheet || '').trim() !== '' ||
         safeArray(fldStandards).length > 0 ||
         (Number(fldUnitCost) || 0) !== 0
       );
@@ -722,7 +785,7 @@ export default function ProjectDataEntry({
     isHydratingRecord,
     activeRecord, selections.categoryId, selections.itemId, selections.findId, selections.recId,
     fldFindShort, fldFindLong, fldRecShort, fldRecLong,
-    fldQTY, fldMeasurement, fldMeasurementType, fldMeasurementUnit, fldUnitType, fldUnitCost, fldLocation, fldImages, fldStandards
+    fldQTY, fldMeasurement, fldMeasurementType, fldMeasurementUnit, fldUnitType, fldUnitCost, fldLocation, fldSheet, fldImages, fldStandards
   ]);
 
   useEffect(() => {
@@ -772,10 +835,12 @@ export default function ProjectDataEntry({
       fldMeasurementUnit,
       fldUnitType,
       fldLocation,
+      fldSheet,
       fldImages,
       fldStandards,
       fldUnitCost,
-      fldTotalCost
+      fldTotalCost,
+      workProduct: isRasProject ? rasWorkMode : 'assessment'
     };
   }, [
     selections,
@@ -791,10 +856,13 @@ export default function ProjectDataEntry({
     fldMeasurementUnit,
     fldUnitType,
     fldLocation,
+    fldSheet,
     fldImages,
     fldStandards,
     fldUnitCost,
-    fldTotalCost
+    fldTotalCost,
+    isRasProject,
+    rasWorkMode
   ]);
 
   useEffect(() => {
@@ -809,7 +877,7 @@ export default function ProjectDataEntry({
       try {
         const payload = buildDraftPayloadRef.current();
         if (!isDraftPayloadPersistable(payload)) return;
-        localStorage.setItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY, JSON.stringify(payload));
+        localStorage.setItem(draftKeyRef.current, JSON.stringify(payload));
       } catch {
         /* ignore quota errors */
       }
@@ -868,7 +936,7 @@ export default function ProjectDataEntry({
     const hadRecordOrDirty = Boolean(rid) || isFormDirtyRef.current;
 
     try {
-      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+      localStorage.removeItem(draftKeyRef.current);
     } catch {
       /* ignore */
     }
@@ -900,6 +968,7 @@ export default function ProjectDataEntry({
     setFldTotalCost(0);
     setFldLocation('');
     setFldImages([]);
+    setFldSheet('');
     setFldStandards([]);
     setCustomMasterRecId('');
     setCustomMasterFindId('');
@@ -987,9 +1056,23 @@ export default function ProjectDataEntry({
     const cat = normalizeId(selections.categoryId);
     const item = normalizeId(selections.itemId);
     const find = normalizeId(selections.findId);
+    if (!cat || !item || !find) return undefined;
+    if (isRasProject) {
+      const gid = normalizeId(selections.glosId);
+      const byPath = (glossaryRowsForDataEntry || []).filter((g: any) =>
+        normalizeId(g.fldCat) === cat &&
+        normalizeId(g.fldItem) === item &&
+        normalizeId(g.fldFind) === find
+      );
+      if (gid) {
+        const byId = byPath.find((g: any) => normalizeId(g.fldGlosId || g.id) === gid);
+        if (byId) return byId;
+      }
+      return byPath[0];
+    }
     const recRaw = recIdOverride !== undefined ? recIdOverride : selections.recId;
     const rec = normalizeId(recRaw);
-    if (!cat || !item || !find || !rec) return undefined;
+    if (!rec) return undefined;
     return (glossaryRowsForDataEntry || []).find((g: any) =>
       normalizeId(g.fldCat) === cat &&
       normalizeId(g.fldItem) === item &&
@@ -1054,6 +1137,21 @@ export default function ProjectDataEntry({
   /** Hydrate from a single approved glossary row (rec master + costs + selections.glosId). */
   const applyGlossaryRecommendationRow = (gRow: any, hydrateCostsFromRow = false) => {
     if (!gRow) return;
+
+    if (isRasProject) {
+      if (!activeRecord) {
+        setFldStandards(findingCitationIdsFromGlossaryRow(gRow, resolvableFindingsList || []));
+      }
+      const gid = String(gRow.fldGlosId || gRow.id || '').trim();
+      onSelectionChange({
+        ...selections,
+        recId: '',
+        glosId: gid || selections.glosId,
+        isDirty: true,
+      });
+      setIsDirty(true);
+      return;
+    }
 
     if (dataEntryMode === 'glossary') {
       if (!activeRecord) {
@@ -1272,6 +1370,7 @@ export default function ProjectDataEntry({
       setFldUnitCost(rec.fldUnitCost || 0);
       setFldTotalCost(rec.fldTotalCost || 0);
       setFldLocation(rec.fldLocation || '');
+      setFldSheet(rec.fldSheet || '');
       setFldImages(Array.isArray(rec.fldImages) ? rec.fldImages : []);
 
       setFldStandards(normalizeCitationIds(rec.fldStandards));
@@ -1293,7 +1392,7 @@ export default function ProjectDataEntry({
     (seed: ProjectDataCloneSeed) => {
       skipHydrationAfterDraftRef.current = true;
       try {
-        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+        localStorage.removeItem(draftKeyRef.current);
       } catch {
         /* ignore */
       }
@@ -1331,21 +1430,33 @@ export default function ProjectDataEntry({
 
       setFldFindShort(seed.form.fldFindShort);
       setFldFindLong(seed.form.fldFindLong);
-      setFldRecShort(seed.form.fldRecShort);
-      setFldRecLong(seed.form.fldRecLong);
+      if (isRasProject) {
+        const srcWp = seed.sourceWorkProduct === 'plan_review' ? 'plan_review' : 'inspection';
+        persistRasWorkMode(srcWp);
+        setFldRecShort('');
+        setFldRecLong('');
+        setFldUnitCost(0);
+        setCustomMasterRecId('');
+        setFldSheet(srcWp === 'plan_review' ? seed.fldSheet || '' : '');
+      } else {
+        setFldRecShort(seed.form.fldRecShort);
+        setFldRecLong(seed.form.fldRecLong);
+        setFldUnitCost(seed.form.fldUnitCost);
+        setFldSheet('');
+      }
       setFldQTY(0);
       setFldMeasurement('');
       setFldMeasurementType('');
       setFldMeasurementUnit('');
-      setFldUnitType(seed.form.fldUnitType);
-      setFldUnitCost(seed.form.fldUnitCost);
+      setFldUnitType(isRasProject ? 'Decimal' : seed.form.fldUnitType);
+      if (!isRasProject) setFldUnitCost(seed.form.fldUnitCost);
       setFldTotalCost(0);
       setFldLocation('');
       setFldImages([]);
       setFldStandards([...seed.form.fldStandards]);
       setIsDirty(true);
     },
-    [onSelectionChange, selections]
+    [onSelectionChange, selections, isRasProject, project?.fldProjID]
   );
 
   useEffect(() => {
@@ -1361,7 +1472,12 @@ export default function ProjectDataEntry({
     if (!proj || !fac) return;
     if (isSavingRef.current) return;
 
-    const draft = localStorage.getItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+    const keyed = localStorage.getItem(draftKeyRef.current);
+    const legacy =
+      isRasProject && rasWorkMode === 'inspection' && draftKeyRef.current !== FREDASOFT_DRAFT_LOCAL_STORAGE_KEY
+        ? localStorage.getItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY)
+        : null;
+    const draft = keyed || legacy;
     if (!draft) {
       draftRecoveryOfferedSigRef.current = '';
       return;
@@ -1369,7 +1485,7 @@ export default function ProjectDataEntry({
     try {
       const parsed = JSON.parse(draft);
       if (!isRecoverableDataEntryDraft(parsed)) {
-        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+        localStorage.removeItem(draftKeyRef.current);
         draftRecoveryOfferedSigRef.current = '';
         return;
       }
@@ -1378,13 +1494,13 @@ export default function ProjectDataEntry({
         return;
       }
       if (!isDraftContextCompatible(parsed, selections, projectData)) {
-        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+        localStorage.removeItem(draftKeyRef.current);
         draftRecoveryOfferedSigRef.current = '';
         toast.info('Old draft discarded because it belonged to another context or is outdated.');
         return;
       }
       if (parsed.dataEntryMode !== 'custom' && !isGlossaryDraftLinkageSafe(parsed)) {
-        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+        localStorage.removeItem(draftKeyRef.current);
         draftRecoveryOfferedSigRef.current = '';
         setShowRecoveryModal(false);
         setSavedDraft(null);
@@ -1397,7 +1513,7 @@ export default function ProjectDataEntry({
       setSavedDraft(parsed);
       setShowRecoveryModal(true);
     } catch {
-      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+      localStorage.removeItem(draftKeyRef.current);
       draftRecoveryOfferedSigRef.current = '';
     }
   }, [
@@ -1405,7 +1521,9 @@ export default function ProjectDataEntry({
     selections.facilityId,
     selections.clientId,
     selections.editingRecordId,
-    projectData
+    projectData,
+    isRasProject,
+    rasWorkMode
   ]);
 
   useEffect(() => {
@@ -1423,7 +1541,7 @@ export default function ProjectDataEntry({
         if (isSavingRef.current) return;
         const payload = buildDraftPayload();
         if (!isDraftPayloadPersistable(payload)) return;
-        localStorage.setItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY, JSON.stringify(payload));
+        localStorage.setItem(draftKeyRef.current, JSON.stringify(payload));
       } catch {
         /* quota */
       }
@@ -1440,7 +1558,7 @@ export default function ProjectDataEntry({
         if (isSavingRef.current) return;
         const payload = buildDraftPayload();
         if (!isDraftPayloadPersistable(payload)) return;
-        localStorage.setItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY, JSON.stringify(payload));
+        localStorage.setItem(draftKeyRef.current, JSON.stringify(payload));
       } catch {
         /* quota */
       }
@@ -1452,7 +1570,7 @@ export default function ProjectDataEntry({
     if (!savedDraft) return;
     const d: any = savedDraft;
     if (!isRecoverableDataEntryDraft(d)) {
-      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+      localStorage.removeItem(draftKeyRef.current);
       setShowRecoveryModal(false);
       setSavedDraft(null);
       draftRecoveryOfferedSigRef.current = '';
@@ -1460,7 +1578,7 @@ export default function ProjectDataEntry({
       return;
     }
     if (!isDraftContextCompatible(d, selections, projectData)) {
-      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+      localStorage.removeItem(draftKeyRef.current);
       setShowRecoveryModal(false);
       setSavedDraft(null);
       draftRecoveryOfferedSigRef.current = '';
@@ -1468,7 +1586,7 @@ export default function ProjectDataEntry({
       return;
     }
     if (d.dataEntryMode !== 'custom' && !isGlossaryDraftLinkageSafe(d)) {
-      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+      localStorage.removeItem(draftKeyRef.current);
       setShowRecoveryModal(false);
       setSavedDraft(null);
       draftRecoveryOfferedSigRef.current = '';
@@ -1511,6 +1629,7 @@ export default function ProjectDataEntry({
     setFldUnitCost(d.fldUnitCost ?? 0);
     setFldTotalCost(d.fldTotalCost ?? 0);
     setFldLocation(d.fldLocation || '');
+    setFldSheet(d.fldSheet || '');
     setFldImages(Array.isArray(d.fldImages) ? d.fldImages : []);
     setFldStandards(safeArray(d.fldStandards));
     setCustomMasterRecId(d.customMasterRecId || '');
@@ -1523,7 +1642,7 @@ export default function ProjectDataEntry({
         : null;
     syncInitialSelectionRefFromRecord(rec);
 
-    localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+    localStorage.removeItem(draftKeyRef.current);
     setShowRecoveryModal(false);
     setSavedDraft(null);
     setIsDirty(true);
@@ -1531,7 +1650,7 @@ export default function ProjectDataEntry({
   };
 
   const handleDiscardDraft = () => {
-    localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+    localStorage.removeItem(draftKeyRef.current);
     draftRecoveryOfferedSigRef.current = '';
     setShowRecoveryModal(false);
     setSavedDraft(null);
@@ -1573,6 +1692,13 @@ export default function ProjectDataEntry({
     isHydratingFromRecordRef.current = true;
     setIsHydratingRecord(true);
     lastHydratedRecordIdRef.current = rid;
+    if (isRasProject) {
+      const wp = resolveRecordWorkProduct(record, project?.fldProjType);
+      const mode: RasWorkMode = wp === 'plan_review' ? 'plan_review' : 'inspection';
+      if (mode !== rasWorkMode) {
+        persistRasWorkMode(mode);
+      }
+    }
     const newSel = hydrateProjectDataFormFromRecord(
       record,
       { ...selections, editingRecordId: record.fldPDataID, isDirty: false },
@@ -1605,7 +1731,7 @@ export default function ProjectDataEntry({
       return;
     }
     if (!fldLocation) { toast.error('Location is required'); return; }
-    if (!inspector?.fldInspID) { toast.error(missingProfessionalMessage); return; }
+    if (!workModeProfessional?.fldInspID) { toast.error(missingProfessionalMessage); return; }
     
     // Ensure we have a valid ID before saving
     const finalizedId = editingRecordId || uuidv4();
@@ -1622,18 +1748,22 @@ export default function ProjectDataEntry({
       if (!hasCat) { toast.error('Category is required for a custom record.'); return; }
       if (!hasItem) { toast.error('Item is required for a custom record.'); return; }
       if (!hasFindingText) { toast.error('Finding Summary or Finding Detailed Description is required.'); return; }
-      if (!hasRecText) { toast.error('Recommendation Summary or Recommendation Detailed Description is required.'); return; }
+      if (!isRasProject && !hasRecText) { toast.error('Recommendation Summary or Recommendation Detailed Description is required.'); return; }
     }
 
     const resolvedGlossary = isCustomMode ? undefined : resolveGlossaryForSelection();
-    const hasFullPath = !!(
-      (selections.categoryId || '').trim() &&
-      (selections.itemId || '').trim() &&
-      (selections.findId || '').trim() &&
-      (selections.recId || '').trim()
-    );
+    const hasFullPath = glossaryPathCompleteForSave(isRasProject, {
+      categoryId: selections.categoryId,
+      itemId: selections.itemId,
+      findId: selections.findId,
+      recId: selections.recId
+    });
     if (!isCustomMode && hasFullPath && !resolvedGlossary) {
-      toast.error('Unable to save: selected finding/recommendation is not linked to a glossary record.');
+      toast.error(
+        isRasProject
+          ? 'Unable to save: selected finding is not linked to a glossary record.'
+          : 'Unable to save: selected finding/recommendation is not linked to a glossary record.'
+      );
       return;
     }
 
@@ -1675,9 +1805,45 @@ export default function ProjectDataEntry({
         fldTotalCost: Number(fldTotalCost) || 0,
         fldImages,
         fldStandards: safeArray(fldStandards),
-        fldInspID: inspector.fldInspID,
+        fldInspID: workModeProfessional.fldInspID,
         fldTimestamp: new Date().toISOString()
       };
+
+      const stampedWorkProduct = workProductStampForSave({
+        isNew: !wasExisting,
+        existingWorkProduct: activeRecord?.fldWorkProduct,
+        projectType: project?.fldProjType,
+        rasWorkMode
+      });
+      if (stampedWorkProduct) {
+        basePayload.fldWorkProduct = stampedWorkProduct;
+      }
+
+      const sheetToSave = sheetValueForSave({
+        isNew: !wasExisting,
+        workProduct: stampedWorkProduct || resolveRecordWorkProduct(activeRecord, project?.fldProjType),
+        existingWorkProduct: activeRecord?.fldWorkProduct,
+        formSheet: fldSheet
+      });
+      if (sheetToSave !== undefined) {
+        basePayload.fldSheet = sheetToSave;
+      }
+
+      const imagesToSave = imagesValueForSave({
+        isNew: !wasExisting,
+        workProduct: stampedWorkProduct,
+        formImages: Array.isArray(fldImages) ? fldImages : []
+      });
+      if (imagesToSave !== undefined) {
+        basePayload.fldImages = imagesToSave;
+      }
+
+      if (isRasProject && !wasExisting) {
+        Object.assign(basePayload, rasNewRecordConsumptionFields());
+        if (isCustomMode) {
+          delete basePayload.fldPDataMasterRecID;
+        }
+      }
 
       const cp = clonePersistRef.current;
       if (!wasExisting && cp?.saveContext) {
@@ -1702,7 +1868,7 @@ export default function ProjectDataEntry({
 
     try {
       try {
-        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+        localStorage.removeItem(draftKeyRef.current);
       } catch {
         /* ignore */
       }
@@ -1747,6 +1913,7 @@ export default function ProjectDataEntry({
       setFldUnitCost(0);
       setFldTotalCost(0);
       setFldImages([]);
+      setFldSheet('');
       setFldStandards([]);
 
       setIsDirty(false);
@@ -1804,6 +1971,13 @@ export default function ProjectDataEntry({
       isHydratingFromRecordRef.current = true;
       setIsHydratingRecord(true);
       lastHydratedRecordIdRef.current = rid;
+      if (isRasProject) {
+        const wp = resolveRecordWorkProduct(record, project?.fldProjType);
+        const mode: RasWorkMode = wp === 'plan_review' ? 'plan_review' : 'inspection';
+        if (mode !== rasWorkMode) {
+          persistRasWorkMode(mode);
+        }
+      }
       const newSel = hydrateProjectDataFormFromRecord(
         record,
         { ...selections, editingRecordId: record.fldPDataID, isDirty: false },
@@ -1872,11 +2046,12 @@ export default function ProjectDataEntry({
     setFldUnitCost(0);
     setFldTotalCost(0);
     setFldImages([]);
+    setFldSheet('');
     setFldStandards([]);
     isFormDirtyRef.current = false;
     setIsDirty(false);
     try {
-      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+      localStorage.removeItem(draftKeyRef.current);
     } catch {
       /* ignore */
     }
@@ -1904,6 +2079,31 @@ export default function ProjectDataEntry({
       /* ignore */
     }
   }, [onSelectionChange, selections]);
+
+  const applyRasWorkModeChange = (next: RasWorkMode) => {
+    if (!isRasProject || next === rasWorkMode) return;
+    const run = () => {
+      persistRasWorkMode(next);
+      const keep =
+        Boolean(activeRecord) &&
+        recordMatchesRasWorkMode(activeRecord, project?.fldProjType, next);
+      if (activeRecord && !keep) {
+        applyNewBlankRecord();
+      }
+      setFldSheet('');
+      if (rasWorkModeSwitchClearsImages()) setFldImages([]);
+      setFldRecShort('');
+      setFldRecLong('');
+      setFldUnitCost(0);
+      setFldQTY(0);
+      setFldTotalCost(0);
+    };
+    confirmAction(
+      'Switch Review / Inspection',
+      'You have unsaved changes. Switching Review/Inspection will discard unsaved edits unless you save first. Continue?',
+      run
+    );
+  };
 
   const handleClearForm = () => {
     confirmAction(
@@ -1970,7 +2170,7 @@ export default function ProjectDataEntry({
         setFldLocation(activeRecord.fldLocation || '');
         setFldImages(Array.isArray(activeRecord.fldImages) ? activeRecord.fldImages : []);
         setFldStandards(safeArray(activeRecord.fldStandards));
-        localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+        localStorage.removeItem(draftKeyRef.current);
         setShowRecoveryModal(false);
         setSavedDraft(null);
         draftRecoveryOfferedSigRef.current = '';
@@ -2006,12 +2206,13 @@ export default function ProjectDataEntry({
     setFldUnitCost(0);
     setFldTotalCost(0);
     setFldImages([]);
+    setFldSheet('');
     setFldStandards([]);
     setCustomMasterRecId('');
     setCustomMasterFindId('');
     setIsDirty(false);
     try {
-      localStorage.removeItem(FREDASOFT_DRAFT_LOCAL_STORAGE_KEY);
+      localStorage.removeItem(draftKeyRef.current);
     } catch {
       /* ignore */
     }
@@ -2451,11 +2652,13 @@ export default function ProjectDataEntry({
       ) ||
       (glossary || []).find((g: any) => normalizeId(g.fldGlosId || g.id) === gid);
     if (!gRow) return;
-    const next = standardsIdsFromGlossaryRow(
-      gRow,
-      resolvableFindingsList || [],
-      resolvableMasterRecsList || []
-    );
+    const next = isRasProject
+      ? findingCitationIdsFromGlossaryRow(gRow, resolvableFindingsList || [])
+      : standardsIdsFromGlossaryRow(
+          gRow,
+          resolvableFindingsList || [],
+          resolvableMasterRecsList || []
+        );
     lastNewRecordCitationFallbackKeyRef.current = key;
     if (next.length === 0) return;
     setFldStandards(next);
@@ -2466,7 +2669,8 @@ export default function ProjectDataEntry({
     resolvableFindingsList,
     resolvableMasterRecsList,
     glossaryRowsForDataEntry,
-    glossary
+    glossary,
+    isRasProject
   ]);
 
   const sortedCategories = useMemo(
@@ -2966,6 +3170,37 @@ export default function ProjectDataEntry({
               )}
 
               <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 ml-auto">
+                {isRasProject && (
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Work</label>
+                    <div className="flex items-center bg-zinc-100 rounded-lg p-0.5 border border-zinc-200">
+                      <button
+                        type="button"
+                        disabled={!selections.projectId}
+                        onClick={() => applyRasWorkModeChange('plan_review')}
+                        className={cn(
+                          "px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-md transition-all",
+                          rasWorkMode === 'plan_review' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+                        )}
+                        title="Current work context for this project. Does not change Project type."
+                      >
+                        Review
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!selections.projectId}
+                        onClick={() => applyRasWorkModeChange('inspection')}
+                        className={cn(
+                          "px-2 py-1 text-[9px] font-bold uppercase tracking-widest rounded-md transition-all",
+                          rasWorkMode === 'inspection' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+                        )}
+                        title="Current work context for this project. Does not change Project type."
+                      >
+                        Inspection
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center gap-1.5">
                   <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Mode</label>
                   <div className="flex items-center bg-zinc-100 rounded-lg p-0.5 border border-zinc-200">
@@ -3003,13 +3238,13 @@ export default function ProjectDataEntry({
                   </div>
                 </div>
 
-                {inspector?.fldInspID && (
+                {workModeProfessional?.fldInspID && (
                   <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg shadow-sm">
                     <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse shadow-[0_0_6px_rgba(245,158,11,0.5)]" />
                     <div className="flex flex-col min-w-0">
                       <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider leading-none">{responsibleProfessionalLabel}</span>
                       <span className="text-[11px] font-bold text-zinc-900 tracking-tight truncate max-w-[10rem]">
-                        {inspector.fldInspName || inspector.fldInspID}
+                        {workModeProfessional.fldInspName || workModeProfessional.fldInspID}
                       </span>
                     </div>
                   </div>
@@ -3147,6 +3382,20 @@ export default function ProjectDataEntry({
                         <Edit2 size={16} />
                       </Button>
                     </div>
+                    {isRasProject && rasWorkMode === 'plan_review' && (
+                      <div className="flex-1 min-w-[140px]">
+                        <Input
+                          label="Sheet"
+                          value={fldSheet}
+                          onChange={(e: any) => {
+                            setFldSheet(e.target.value);
+                            setIsDirty(true);
+                          }}
+                          className={focusClasses}
+                          placeholder="A2.1"
+                        />
+                      </div>
+                    )}
                   </div>
                 </Card>
                 <Button
@@ -3246,6 +3495,20 @@ export default function ProjectDataEntry({
                       <Edit2 size={16} />
                     </Button>
                   </div>
+                  {isRasProject && rasWorkMode === 'plan_review' && (
+                    <div className="flex-1 min-w-[140px]">
+                      <Input
+                        label="Sheet"
+                        value={fldSheet}
+                        onChange={(e: any) => {
+                          setFldSheet(e.target.value);
+                          setIsDirty(true);
+                        }}
+                        className={focusClasses}
+                        placeholder="A2.1"
+                      />
+                    </div>
+                  )}
                 </div>
               </Card>
             )}
@@ -3426,6 +3689,7 @@ export default function ProjectDataEntry({
             </div>
           </Card>
 
+          {!isRasProject && (
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
              <label className="text-base font-bold text-zinc-900 leading-tight block mb-2">Recommendation</label>
              {dataEntryMode === 'glossary' && (
@@ -3589,6 +3853,7 @@ export default function ProjectDataEntry({
               </div>
             </div>
           </Card>
+          )}
 
           {/* Record-level citations (projectData.fldStandards) */}
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">

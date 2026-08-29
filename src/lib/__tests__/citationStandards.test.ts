@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  findingCitationIdsFromGlossaryRow,
   findingMatchesGlossaryRow,
   normalizeCitationIds,
   recommendationMatchesGlossaryRow,
@@ -101,5 +102,16 @@ describe('standardsIdsFromGlossaryRow', () => {
         recs
       )
     ).toEqual([]);
+  });
+});
+
+describe('findingCitationIdsFromGlossaryRow', () => {
+  it('uses finding citations and ignores recommendation citations', () => {
+    expect(
+      findingCitationIdsFromGlossaryRow(
+        { fldFind: 'find-1', fldRec: 'rec-1', fldStandards: [] },
+        [{ id: 'f1', fldFindID: 'find-1', fldStandards: ['TAS-A'] }]
+      )
+    ).toEqual(['TAS-A']);
   });
 });

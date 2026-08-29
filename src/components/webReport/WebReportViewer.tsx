@@ -15,7 +15,8 @@ import type {
 } from '../../types';
 import { Button, Card, Select } from '../ui/core';
 import { resolveFacilityReportNarrative, type ReportRecordSortOrder } from '../../lib/reportPreviewShared';
-import { resolveCurrentWorkflowResponsibleProfessional } from '../../lib/responsibleProfessional';
+import { resolveCurrentWorkflowResponsibleProfessional, currentWorkflowWorkContext } from '../../lib/responsibleProfessional';
+import { loadRasWorkMode } from '../../lib/rasWorkModeStorage';
 import {
   applyWebReportRecordInclusion,
   cloneWebReportRecordInclusion,
@@ -273,10 +274,13 @@ export function WebReportViewer({
     return clients.find((c) => c.fldClientID === selectedProject.fldClient) || null;
   }, [clients, selectedProject]);
 
-  const selectedInspector = useMemo(
-    () => resolveCurrentWorkflowResponsibleProfessional(selectedProject, inspectors),
-    [inspectors, selectedProject]
-  );
+  const selectedInspector = useMemo(() => {
+    const workContext = currentWorkflowWorkContext(
+      selectedProject,
+      loadRasWorkMode(selectedProject?.fldProjID)
+    );
+    return resolveCurrentWorkflowResponsibleProfessional(selectedProject, inspectors, workContext);
+  }, [inspectors, selectedProject]);
 
   const dataInScope =
     Boolean(localProjectId) &&

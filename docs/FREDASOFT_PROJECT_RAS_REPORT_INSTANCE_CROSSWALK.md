@@ -1,7 +1,7 @@
 # FREDAsoft RAS Report Instance Crosswalk
 
 **Status:** Documentation-only conceptual crosswalk (D3). **Not implemented.**
-**Last updated:** 2026-08-29 (Beta defaults vs future instances; work-mode decisions, not implemented)
+**Last updated:** 2026-08-29 (Beta Data Entry work mode implemented; report instances still not implemented)
 **Branch context:** `docs-ras-beta-model`
 **Audience:** Product owner (Kenneth), architecture review (Archie), D4/D6/D7 implementation planning
 
@@ -24,11 +24,11 @@ This is a **D3 conceptual crosswalk**, not implementation or schema. It builds o
 
 ### Beta Project-level defaults vs future instances
 
-**Beta vs instances:** **`docs/ARCHITECTURE_DESIGN.md`** (✅ DECIDED Beta RAS work-mode model, 2026-08-29; **not implemented**) is the home for current work context: Data Entry Review | Inspection selector (sticky local state keyed by Project; default Inspection), `fldWorkProduct`, optional `fldSheet`, `fldPlanReviewDate` / `fldInspectionDate`. This D3 file remains the long-term **report-instance** crosswalk. `fldWorkProduct` = broad division; future `reportInstanceId` = particular instance. Beta does **not** mean one Review + one Inspection forever.
+**Beta vs instances:** **`docs/ARCHITECTURE_DESIGN.md`** (✅ IMPLEMENTED Data Entry work mode, 2026-08-29) is the home for current work context: Data Entry Review | Inspection selector (sticky local state keyed by Project; default Inspection), `fldWorkProduct`, optional `fldSheet`, `fldPlanReviewDate` / `fldInspectionDate`. This D3 file remains the long-term **report-instance** crosswalk. `fldWorkProduct` = broad division; future `reportInstanceId` = particular instance. Beta does **not** mean one Review + one Inspection forever.
 
 **Review vs Inspection** is a work mode on a TAS/RAS Project (not a Project type change). Plan Review findings may include optional **Sheet** in addition to Location; Sheet does not replace Location; Inspection mode need not show Sheet unless later required.
 
-**Not implemented:** work-mode toggle, Sheet storage, `fldWorkProduct`, or report instances.
+**Not implemented:** report instances / `reportInstanceId`, RAS report rendering, Data Explorer work-product UX.
 
 ---
 

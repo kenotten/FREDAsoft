@@ -37,7 +37,11 @@ export function PortfolioView({ selectionProps, entityProps, projectProps }: Por
         <div className="space-y-6 pt-4">
           <ProjectContextForm selectionProps={selectionProps} entityProps={entityProps} />
           
-          <InspectorSelection selectionProps={selectionProps} entityProps={entityProps} />
+          <InspectorSelection
+            selectionProps={selectionProps}
+            entityProps={entityProps}
+            rasWorkMode={projectProps.rasWorkMode}
+          />
 
           <div className="pt-4">
             <Button 

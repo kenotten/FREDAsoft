@@ -1,8 +1,16 @@
 /** Workspace sticky selections persisted in localStorage (App). */
 export const FREDASOFT_SELECTIONS_LOCAL_STORAGE_KEY = 'fredasoft_selections';
 
-/** Data Entry draft recovery (localStorage). */
+/** Data Entry draft recovery (localStorage). Assessment and legacy RAS drafts use this key. */
 export const FREDASOFT_DRAFT_LOCAL_STORAGE_KEY = 'fredasoft_draft';
+
+/** Sticky TAS/RAS Review|Inspection work context, keyed by Project ID. Not stored on the Project. */
+export const FREDASOFT_RAS_WORK_MODE_STORAGE_KEY = 'fredasoft_ras_work_mode_by_project_v1';
+
+/** TAS/RAS Data Entry drafts keyed by project + work product so Review/Inspection drafts do not collide. */
+export function rasDraftStorageKey(projectId: string, mode: 'plan_review' | 'inspection'): string {
+  return `${FREDASOFT_DRAFT_LOCAL_STORAGE_KEY}:${String(projectId || '').trim()}:${mode}`;
+}
 
 /**
  * Data Entry Active Glossary path filter (localStorage).

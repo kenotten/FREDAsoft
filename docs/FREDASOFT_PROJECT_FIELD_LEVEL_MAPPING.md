@@ -1,8 +1,8 @@
 # FREDAsoft Project Field-Level Mapping
 
 **Status:** Documentation-only (D1) for mapping/extraction. **Project metadata persistence** for `tdlrRegistered` / RAS assignments is implemented on `feat/ras-beta-project-metadata` (New/Edit Project only; not reports).
-**Last updated:** 2026-08-29 (Beta RAS work-mode decisions; not implemented)
-**Branch context:** `docs-ras-work-mode`
+**Last updated:** 2026-08-29 (Beta RAS work-mode Data Entry implemented)
+**Branch context:** `feat/ras-work-mode-data-entry`
 **Audience:** Product owner (Kenneth), architecture review (Archie), D2/D4 planning
 
 > **Disclaimer:** This document defines a **field-level mapping framework** across TDLR source layers and FREDAsoft operational candidates. It does **not** specify Firestore collections, importers, scrapers, or UI. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data. RAS registration facts belong on **`projects.tdlrRegistered`** (**`docs/ARCHITECTURE_DESIGN.md`**, Beta RAS / Assessment data model). Flat `fldTabsProjectNumber` / `fldTenantFunded` were **removed from the production Project type and New/Edit Project UI**. Canonical stakeholder names do **not** replace registered wording on RAS reports.
@@ -151,9 +151,9 @@ These are **FREDA operational** Project fields unless noted. RAS **registered** 
 | **Assessment Inspector** | `projects.fldInspector` | **Assessment only.** Not RAS Inspection RAS. |
 | **Plan Review RAS** | `projects.fldPlanReviewRas` | `inspectors.fldInspID`. Optional if Inspection-only. |
 | **Inspection RAS** | `projects.fldInspectionRas` | `inspectors.fldInspID`. Independent of Plan Review RAS. |
-| **Current RAS work product (Beta, not implemented)** | `projectData.fldWorkProduct` **(✅ DECIDED)** | `'assessment' \| 'plan_review' \| 'inspection'`. Explicit stamp. Legacy: missing + Assessment → assessment; missing + TAS/RAS → inspection. Not inferred from author/Sheet/Project type. Remains useful after `reportInstanceId` as the broad division. |
-| **Plan Review Sheet (Beta, not implemented)** | `projectData.fldSheet` **(✅ DECIDED)** | Optional string. Review UI only. Does not replace Location. |
-| **Plan Review date / Inspection date (Beta, not implemented)** | `projects.fldPlanReviewDate` / `projects.fldInspectionDate` | RAS current/default dates. Do **not** use `fldPDDate` as RAS Inspection date. Assessment remains `fldPDDate`. |
+| **Current RAS work product (Beta, Data Entry implemented)** | `projectData.fldWorkProduct` **(✅ IMPLEMENTED)** | `'assessment' \| 'plan_review' \| 'inspection'`. Explicit stamp. Legacy: missing + Assessment → assessment; missing + TAS/RAS → inspection. Not inferred from author/Sheet/Project type. Remains useful after `reportInstanceId` as the broad division. |
+| **Plan Review Sheet (Beta, Data Entry implemented)** | `projectData.fldSheet` **(✅ IMPLEMENTED)** | Optional string. Review UI only. Does not replace Location. |
+| **Plan Review date / Inspection date (Beta, New/Edit Project implemented)** | `projects.fldPlanReviewDate` / `projects.fldInspectionDate` | RAS current/default dates. Do **not** use `fldPDDate` as RAS Inspection date. Assessment remains `fldPDDate`. |
 
 ---
 
@@ -324,7 +324,7 @@ User input (TABS # / URL / optional export row key)
 1. **Resolved (2026-08-28, Beta model):** **RAS report** Project Description = `tdlrRegistered.scopeOfWork`. **Assessment** = `projects.fldProjDescription`. **Square footage** remains a **separate TDLR snapshot**. How (or whether) square footage is stored on FREDA Project is still open.
 2. How should **Address2** / export decomposed address map to FREDAsoft Facility address fields?
 3. Is **Owner Representative** the same concept as TABS Owner modal **DesignProfessionalName**?
-4. **Resolved (2026-08-28, revised feat/professional-hydration):** Operational assignment is **`fldPlanReviewRas` / `fldInspectionRas`**. Current production Inspection/Data Entry hydrates **`fldInspectionRas`**. Assessment hydrates **`fldInspector`**. Session Active Inspector is **not** an assignment. Plan Review hydration remains deferred until Review mode. Inspector directory **`fldRasNumber`** is the professional’s RAS #.
+4. **Resolved (2026-08-28, revised feat/professional-hydration; work-mode hydration 2026-08-29):** Operational assignment is **`fldPlanReviewRas` / `fldInspectionRas`**. Assessment hydrates **`fldInspector`**. TAS/RAS Review hydrates **`fldPlanReviewRas`**. TAS/RAS Inspection hydrates **`fldInspectionRas`**. Session Active Inspector is **not** an assignment. Inspector directory **`fldRasNumber`** is the professional’s RAS #.
 5. Should **Person Filing Form** be a first-class source party or registrant metadata only?
 
 ### D2 (workflow wireframes)

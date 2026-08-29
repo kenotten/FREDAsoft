@@ -113,6 +113,10 @@ export interface Project {
   fldFacilities?: string[];
   fldFacID?: string; // Legacy/Filter compatibility
   fldPDDate: string;
+  /** RAS Plan Review current/default date. TAS/RAS only. Not Assessment fldPDDate. */
+  fldPlanReviewDate?: string;
+  /** RAS Inspection current/default date (Inspection Date = Inspection Report Date). TAS/RAS only. Not fldPDDate. */
+  fldInspectionDate?: string;
   fldNarrative?: string;
   /** Per-facility report narrative within this project (key = fldFacID). */
   fldFacilityNarratives?: Record<string, string>;
@@ -289,6 +293,13 @@ export interface ProjectData {
   fldPDataMasterFindID?: string;
   fldPDataMasterRecID?: string;
   fldLocation: string; // FK to tblLocation.fldLocID
+  /**
+   * Broad work division. Explicit stamp on new records.
+   * Legacy missing: Assessment Project → assessment; TAS/RAS → inspection.
+   */
+  fldWorkProduct?: 'assessment' | 'plan_review' | 'inspection';
+  /** Optional Plan Review sheet/detail reference. Does not replace Location. Review UI only. */
+  fldSheet?: string;
   fldFindShort: string;
   fldFindLong: string;
   fldRecShort: string;

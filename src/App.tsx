@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Fuse from 'fuse.js';
 import { initializeApp, deleteApp, getApp } from 'firebase/app';
 import firebaseConfig from '../firebase-applet-config.json';
@@ -46,7 +46,12 @@ import { FREDASOFT_SELECTIONS_LOCAL_STORAGE_KEY } from './lib/storageKeys';
 import { clearProjectAuditSessionState } from './lib/projectAuditSessionState';
 import { clearWebReportSessionState } from './lib/webReportSessionState';
 import { isSelectableLibraryMaster } from './lib/libraryMasterLifecycle';
-import { resolveCurrentWorkflowResponsibleProfessional } from './lib/responsibleProfessional';
+import {
+  currentWorkflowWorkContext,
+  resolveCurrentWorkflowResponsibleProfessional,
+} from './lib/responsibleProfessional';
+import { loadRasWorkMode } from './lib/rasWorkModeStorage';
+import type { RasWorkMode } from './lib/workProduct';
 import { motion, AnimatePresence } from 'motion/react';
 import { entityService } from './services/entityService';
 
@@ -602,9 +607,27 @@ export default function App() {
   const selectedProject = useMemo(() => projects.find(p => p.fldProjID === selections.projectId) || null, [projects, selections.projectId]);
   const selectedFacility = useMemo(() => facilities.find(f => f.fldFacID === selections.facilityId) || null, [facilities, selections.facilityId]);
   const selectedClient = useMemo(() => clients.find(c => c.fldClientID === selections.clientId) || null, [clients, selections.clientId]);
+  const [rasWorkMode, setRasWorkMode] = useState<RasWorkMode>(() =>
+    loadRasWorkMode(selections.projectId)
+  );
+  useEffect(() => {
+    setRasWorkMode(loadRasWorkMode(selections.projectId));
+  }, [selections.projectId]);
+  const handleRasWorkModeChange = useCallback((mode: RasWorkMode) => {
+    setRasWorkMode(mode);
+  }, []);
+  const workflowWorkContext = useMemo(
+    () => currentWorkflowWorkContext(selectedProject, rasWorkMode),
+    [selectedProject, rasWorkMode]
+  );
   const selectedInspector = useMemo(
-    () => resolveCurrentWorkflowResponsibleProfessional(selectedProject, inspectors),
-    [selectedProject, inspectors]
+    () =>
+      resolveCurrentWorkflowResponsibleProfessional(
+        selectedProject,
+        inspectors,
+        workflowWorkContext
+      ),
+    [selectedProject, inspectors, workflowWorkContext]
   );
 
   const project = selectedProject; // Alias for compatibility
@@ -817,6 +840,8 @@ export default function App() {
     selectedFacility,
     selectedClient,
     selectedInspector,
+    rasWorkMode,
+    onRasWorkModeChange: handleRasWorkModeChange,
     documents,
     handleSaveRecord,
     handleDeleteRecord,

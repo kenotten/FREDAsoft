@@ -3,15 +3,18 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { EntityManagementProps, SelectionProps } from '../layout/LayoutOrchestrator';
 import {
   currentWorkflowResponsibleProfessionalLabel,
+  currentWorkflowWorkContext,
   resolveCurrentWorkflowResponsibleProfessional,
 } from '../../lib/responsibleProfessional';
+import type { RasWorkMode } from '../../lib/workProduct';
 
 interface InspectorSelectionProps {
   selectionProps: SelectionProps;
   entityProps: EntityManagementProps;
+  rasWorkMode?: RasWorkMode;
 }
 
-export function InspectorSelection({ selectionProps, entityProps }: InspectorSelectionProps) {
+export function InspectorSelection({ selectionProps, entityProps, rasWorkMode }: InspectorSelectionProps) {
   const { selections } = selectionProps;
   const {
     inspectors,
@@ -27,8 +30,13 @@ export function InspectorSelection({ selectionProps, entityProps }: InspectorSel
     [projects, selections.projectId]
   );
 
-  const responsible = resolveCurrentWorkflowResponsibleProfessional(selectedProject, inspectors);
-  const responsibleLabel = currentWorkflowResponsibleProfessionalLabel(selectedProject);
+  const workContext = currentWorkflowWorkContext(selectedProject, rasWorkMode);
+  const responsible = resolveCurrentWorkflowResponsibleProfessional(
+    selectedProject,
+    inspectors,
+    workContext
+  );
+  const responsibleLabel = currentWorkflowResponsibleProfessionalLabel(selectedProject, workContext);
 
   const directoryInspectors = useMemo(
     () => [...inspectors].sort((a, b) => a.fldInspName.localeCompare(b.fldInspName)),

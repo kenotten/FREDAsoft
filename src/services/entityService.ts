@@ -162,6 +162,8 @@ export const entityService = {
         fldInspector: formData.get('inspector'),
         fldPlanReviewRas: formData.get('planReviewRas'),
         fldInspectionRas: formData.get('inspectionRas'),
+        fldPlanReviewDate: formData.get('planReviewDate'),
+        fldInspectionDate: formData.get('inspectionDate'),
         fldProjType: formData.get('projType'),
         fldProjDescription: formData.get('projDescription'),
         tdlrRegistered: isAssessmentProjectType(formData.get('projType'))

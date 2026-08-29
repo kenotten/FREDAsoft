@@ -196,7 +196,11 @@ export const ProjectModal = ({
         </div>
 
         <div className={isAssessment ? 'grid grid-cols-2 gap-4' : undefined}>
-          <Input label="Date" name="date" type="date" defaultValue={editingProject?.fldPDDate || ''} required />
+          {isAssessment ? (
+            <Input label="Date" name="date" type="date" defaultValue={editingProject?.fldPDDate || ''} required />
+          ) : (
+            <input type="hidden" name="date" value={editingProject?.fldPDDate || ''} />
+          )}
           {isAssessment && (
             <Select
               label="Assessment Inspector"
@@ -255,6 +259,21 @@ export const ProjectModal = ({
                   options={inspectorOptions}
                 />
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="Plan Review Date"
+                  name="planReviewDate"
+                  type="date"
+                  defaultValue={editingProject?.fldPlanReviewDate || ''}
+                />
+                <Input
+                  label="Inspection Date"
+                  name="inspectionDate"
+                  type="date"
+                  defaultValue={editingProject?.fldInspectionDate || ''}
+                />
+              </div>
+              <p className="text-[11px] text-zinc-500">Inspection Date is also the Inspection Report Date. Plan Review uses one review/report date.</p>
             </div>
 
             <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-4">

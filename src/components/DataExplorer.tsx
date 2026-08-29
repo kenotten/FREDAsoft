@@ -26,6 +26,7 @@ import {
   getCurrentWorkflowResponsibleProfessionalId,
   missingResponsibleProfessionalMessage,
 } from '../lib/responsibleProfessional';
+import { parseWorkProduct, resolveRecordWorkProduct, type RasWorkMode } from '../lib/workProduct';
 
 function explorerNormId(value: unknown): string {
   return String(value ?? '')
@@ -205,12 +206,20 @@ export function DataExplorer({
       const clonedRecords: any[] = [];
       const targetProjectIdForAuthorship = selections.projectId || selectedRecords[0]?.fldPDataProject;
       const cloneProject = projects.find((p: any) => p.fldProjID === targetProjectIdForAuthorship) || null;
-      const responsibleProfessionalId = getCurrentWorkflowResponsibleProfessionalId(cloneProject);
 
-      if (!responsibleProfessionalId) {
-        toast.error(missingResponsibleProfessionalMessage(cloneProject));
-        setIsCloning(false);
-        return;
+      for (const original of selectedRecords) {
+        const wp = resolveRecordWorkProduct(original, cloneProject?.fldProjType);
+        const workContext: RasWorkMode | undefined =
+          wp === 'plan_review' ? 'plan_review' : wp === 'assessment' ? undefined : 'inspection';
+        const responsibleProfessionalId = getCurrentWorkflowResponsibleProfessionalId(
+          cloneProject,
+          workContext
+        );
+        if (!responsibleProfessionalId) {
+          toast.error(missingResponsibleProfessionalMessage(cloneProject, workContext ?? null));
+          setIsCloning(false);
+          return;
+        }
       }
       
       selectedRecords.forEach((original: any) => {
@@ -220,6 +229,15 @@ export function DataExplorer({
         if (!targetProjectId) {
           throw new Error("Project ID missing for record: " + original.fldPDataID);
         }
+
+        const wp = resolveRecordWorkProduct(original, cloneProject?.fldProjType);
+        const workContext: RasWorkMode | undefined =
+          wp === 'plan_review' ? 'plan_review' : wp === 'assessment' ? undefined : 'inspection';
+        const responsibleProfessionalId = getCurrentWorkflowResponsibleProfessionalId(
+          cloneProject,
+          workContext
+        );
+        const explicitWp = parseWorkProduct(original.fldWorkProduct);
 
         // Clean Slate Logic: Copy only static data matching BLUEPRINT
         const originalIsCustom = original?.fldRecordSource === 'custom';
@@ -243,7 +261,9 @@ export function DataExplorer({
           fldUnitType: original.fldUnitType || "Decimal",
           fldImages: [],
           fldInspID: responsibleProfessionalId,
-          fldTimestamp: new Date().toISOString()
+          fldTimestamp: new Date().toISOString(),
+          ...(explicitWp ? { fldWorkProduct: explicitWp } : {}),
+          ...(original.fldSheet && explicitWp === 'plan_review' ? { fldSheet: original.fldSheet } : {}),
         };
 
         const docRef = doc(db, 'projectData', newId);

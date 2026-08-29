@@ -4,6 +4,7 @@
  */
 
 import type { Glossary } from '../types';
+import { parseWorkProduct } from './workProduct';
 
 /** Glossary row fields used for clone lookup (canonical shape + legacy rec id alias on stored rows). */
 type GlossaryCloneLookup = Glossary & { fldRecID?: string };
@@ -43,6 +44,8 @@ export type ProjectDataCloneSeed = {
   };
   /** Lineage-only fields merged into payload on first save */
   provenance: Record<string, unknown>;
+  sourceWorkProduct?: 'assessment' | 'plan_review' | 'inspection';
+  fldSheet?: string;
 };
 
 function safeString(v: unknown): string {
@@ -138,5 +141,7 @@ export function buildProjectDataCloneSeed(
       fldPDataMasterRecID: safeString(source.fldPDataMasterRecID),
     },
     provenance,
+    sourceWorkProduct: parseWorkProduct(source.fldWorkProduct) || undefined,
+    fldSheet: safeString(source.fldSheet) || undefined,
   };
 }

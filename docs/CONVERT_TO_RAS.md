@@ -1,7 +1,7 @@
 # Convert to RAS
 
-**Status:** Planning / architecture note (not an implementation spec). **Not implemented.**
-**Last updated:** 2026-08-29 (Beta RAS work-mode decisions; not implemented)
+**Status:** Planning / architecture note. Data Entry work mode and work-mode-aware professional gating are implemented; RAS report rendering is **not** implemented.
+**Last updated:** 2026-08-29 (work-mode-aware professional gating implemented; RAS report profiles still not implemented)
 **Audience:** Product owner, architecture review, implementation planning
 
 > **Disclaimer:** This document captures internal planning for adapting FREDAsoft toward Registered Accessibility Specialist (RAS) workflows under the Texas Department of Licensing and Regulation (TDLR). It does **not** assert legal compliance, required forms, or final field lists. All TDLR/RAS requirements must be verified from official sources, sample deliverables, and qualified review before any implementation.
@@ -37,7 +37,7 @@ Existing areas that may **carry forward** for RAS (with gaps noted):
 | **Glossary (TAS 2012, UFAS, etc.)** | Templates | RAS projects: **TAS 2012 only**; separate **rasFindings** library for Plan Review |
 | **Findings / recommendations** | Masters + snapshots | RAS uses **comments**; no recommendations on RAS reports |
 | **Standards / citations** | TAS references | Retained; no recommendation citations |
-| **Photos** | Per-record images | Inspection retains current photos. Review mode **hides** inspection photo UI initially. Plan excerpts/reference images later. |
+| **Photos** | Per-record images | Inspection: inspection photos. Review: same image UI for plan excerpts / sheet screenshots / visual references. Dedicated markup system later. |
 | **Costs / financial** | Assessment reports | **Excluded** from RAS reports |
 | **Web Report Viewer** | Read-only sections | RAS template likely drops Financial; other sections TBD |
 | **PDF / Report Preview** | Sectioned PDF | RAS template separate from assessment template |
@@ -114,18 +114,18 @@ All RAS report kinds can share **one RAS report template**, differentiated by co
 
 Exact legal wording for each kind remains subject to TDLR/sample verification.
 
-### Review / Inspection work mode (Beta — not implemented)
+### Review / Inspection work mode (✅ implemented in Data Entry)
 
-A **Review | Inspection** selector (✅ DECIDED, not implemented) chooses which RAS work product is being created. It does **not** change Project type (still TAS/RAS).
+A **Review | Inspection** selector (✅ IMPLEMENTED in Data Entry) chooses which RAS work product is being created. It does **not** change Project type (still TAS/RAS).
 
 - **Review mode** → responsible professional = `projects.fldPlanReviewRas`
 - **Inspection mode** → responsible professional = `projects.fldInspectionRas`
 
 Missing Plan Review RAS is **legitimate** when OCG performs Inspection only. Require only the professional for the active work mode. Do **not** silently copy assignments.
 
-**Beta model (✅ DECIDED, not implemented):** **`docs/ARCHITECTURE_DESIGN.md`**. Data Entry **Review | Inspection** selector; sticky local state keyed by Project (default Inspection); not stored on the Project document. Records: `fldWorkProduct`. Sheet: `fldSheet` (Review only). Dates: `fldPlanReviewDate` / `fldInspectionDate` (not `fldPDDate` for RAS Inspection).
+**Beta model (✅ IMPLEMENTED in Data Entry, `feat/ras-work-mode-data-entry`):** **`docs/ARCHITECTURE_DESIGN.md`**. Data Entry **Review | Inspection** selector; sticky local state keyed by Project (default Inspection); not stored on the Project document. Records: `fldWorkProduct`. Sheet: `fldSheet` (Review only). Dates: `fldPlanReviewDate` / `fldInspectionDate` (not `fldPDDate` for RAS Inspection). RAS report rendering is **not** implemented.
 
-### Plan Review Sheet (Beta — not implemented)
+### Plan Review Sheet (✅ implemented in Data Entry)
 
 Inspection findings commonly use **Location**. Plan Review findings may use **Location** plus optional **Sheet** (e.g. A2.1). Sheet does **not** replace Location. Inspection mode need not show Sheet unless later requirements justify it. Do **not** change ProjectData schema in this task.
 
@@ -158,14 +158,14 @@ Assessment projects retain all of the above unchanged.
 | **Sheet / detail #** | **Plan Review:** support alongside location/area. **One free-text field**, e.g. `5/A4.2; 1/A15.3; C2.11` |
 | **Comment** | Report-visible text (see §8) |
 | **TAS reference(s)** | Standards/citations on record |
-| **Photos / drawing references** | Inspection: current photos. Review: hide inspection photo UI initially. Plan excerpts/reference images later. |
+| **Photos / drawing references** | Inspection: inspection photos. Review: existing image UI for plan excerpts / sheet screenshots / details. Not a work-product discriminator. |
 
 ### Division-specific UI (planning)
 
 - **Plan Review:** show **Location / area** and **Sheet / detail #** (both meaningful).
 - **Inspection:** **Location / area** primary; **Sheet** not shown initially.
 
-Internal storage may reuse existing `projectData` fields where possible. TAS/RAS Data Entry **hides** Recommendation and cost/financial controls and does **not** require `recId`. New RAS rows must **not** auto-create Recommendation/cost content. Shared Glossary may still contain Recommendations for Assessment. **Not implemented.**
+Internal storage may reuse existing `projectData` fields where possible. TAS/RAS Data Entry **hides** Recommendation and cost/financial controls and does **not** require `recId`. New RAS rows must **not** auto-create Recommendation/cost content. Shared Glossary may still contain Recommendations for Assessment. RAS **reports** still omit Rec/Financial when rendering is implemented.
 
 ---
 
@@ -272,13 +272,13 @@ Registered RAS facts live on **`projects.tdlrRegistered`** (TDLR as-recorded; Be
 
 Template title (`Inspection Report`) and standards line remain RAS report-profile constants.
 
-**Production (feat/ras-beta-project-metadata + feat/professional-hydration):** New/Edit Project persists `tdlrRegistered` for TAS/RAS. Sole Project Name is `fldProjName`. Current-workflow professional hydrates from `fldInspector` (Assessment) or `fldInspectionRas` (TAS/RAS Inspection). Session Active Inspector is not an assignment. Plan Review hydration remains deferred. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer written.
+**Production (feat/ras-beta-project-metadata + feat/professional-hydration + feat/ras-work-mode-data-entry):** New/Edit Project persists `tdlrRegistered` for TAS/RAS. Sole Project Name is `fldProjName`. Current-workflow professional hydrates from `fldInspector` (Assessment), `fldPlanReviewRas` (TAS/RAS Review), or `fldInspectionRas` (TAS/RAS Inspection). Session Active Inspector is not an assignment. RAS report rendering is **not** implemented. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer written.
 
 Do **not** treat FREDA normalized stakeholder names as substitutes for official registered report text.
 
 ### RAS dates (Beta)
 
-One operative date per current work product. Assessment: `fldPDDate`. Plan Review: `fldPlanReviewDate`. Inspection: `fldInspectionDate` (Inspection Date = Inspection Report Date). Do **not** use `fldPDDate` as the RAS Inspection date. Long-term instances own additional dates. **Not implemented.**
+One operative date per current work product. Assessment: `fldPDDate`. Plan Review: `fldPlanReviewDate`. Inspection: `fldInspectionDate` (Inspection Date = Inspection Report Date). Do **not** use `fldPDDate` as the RAS Inspection date. Long-term instances own additional dates. Project-level RAS dates are implemented on New/Edit Project.
 
 ### Other header notes
 

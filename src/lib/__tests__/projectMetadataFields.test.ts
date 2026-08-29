@@ -132,6 +132,27 @@ describe('buildProjectSavePayload', () => {
     expect(payload.fldInspectionRas).toBe('insp-inspect');
   });
 
+  it('round-trips Plan Review Date and Inspection Date on TAS/RAS', () => {
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      fldPlanReviewDate: '2026-09-01',
+      fldInspectionDate: '2026-09-15',
+      tdlrRegistered: emptyTdlrRegistered(),
+    });
+    expect(payload.fldPlanReviewDate).toBe('2026-09-01');
+    expect(payload.fldInspectionDate).toBe('2026-09-15');
+  });
+
+  it('does not write RAS dates on Assessment', () => {
+    const payload = buildProjectSavePayload({
+      ...assessmentBase,
+      fldPlanReviewDate: '2026-09-01',
+      fldInspectionDate: '2026-09-15',
+    });
+    expect(payload).not.toHaveProperty('fldPlanReviewDate');
+    expect(payload).not.toHaveProperty('fldInspectionDate');
+  });
+
   it('allows the same RAS in both assignment fields', () => {
     const payload = buildProjectSavePayload({
       ...rasBase,

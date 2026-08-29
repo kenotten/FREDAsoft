@@ -62,7 +62,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
   const { selections, setSelections } = selectionProps;
   const currentEditingRecordId = selections?.editingRecordId || '';
   const { clients, facilities, projects, inspectors, rawInspectors, isAddingClient, setIsAddingClient, isAddingFacility, setIsAddingFacility, isAddingProject, setIsAddingProject, isAddingInspector, setIsAddingInspector, initiateDelete, handleEditClient, handleEditFacility, handleEditProject, handleEditInspector, deletedRecords, onRestoreClient, onRestoreFacility, onRestoreProject, onCleanupOrphans } = entityProps;
-  const { projectData, selectedProject, selectedFacility, selectedInspector, documents, handleSaveRecord, handleDeleteRecord, handleSetActiveProject, onResetForm, pendingChanges } = projectProps;
+  const { projectData, selectedProject, selectedFacility, selectedInspector, documents, handleSaveRecord, handleDeleteRecord, handleSetActiveProject, onResetForm, pendingChanges, onRasWorkModeChange } = projectProps;
   const { categories, items, findings, resolvableFindings, masterRecommendations, resolvableMasterRecommendations, recommendations, standards, glossary, allLocations, unitTypes, mergedCategories, mergedItems, mergedFindings, mergedRecommendations, mergedGlossary, setRawFindings, setRawRecommendations, setRawMasterRecommendations, setGlossary, setStandards, importMasterGlossary, onEditGlossaryItem, onActivateGlossaryBuilderRecord, locations } = masterDataProps;
   const { isDeduplicating, dedupStatus, setIsSynced, setActiveGlossaryId, setUserPreferences, isUpdatingRef, runStandardsMigration, migrateUomToUnit, sessionReads, sessionWrites, collectionCounts, setIsDeduplicating, setDedupStatus } = opsProps;
 
@@ -132,6 +132,8 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           project={selectedProject} 
           facility={selectedFacility} 
           inspector={selectedInspector}
+          inspectors={inspectors}
+          onRasWorkModeChange={onRasWorkModeChange}
           glossary={glossary}
           items={items} 
           findings={findings}

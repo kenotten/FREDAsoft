@@ -113,6 +113,8 @@ export type ProjectMetadataSaveInput = {
   fldInspector: FormDataEntryValue | null;
   fldPlanReviewRas?: FormDataEntryValue | null;
   fldInspectionRas?: FormDataEntryValue | null;
+  fldPlanReviewDate?: FormDataEntryValue | null;
+  fldInspectionDate?: FormDataEntryValue | null;
   fldProjType: FormDataEntryValue | null;
   fldProjDescription: FormDataEntryValue | null;
   tdlrRegistered?: TdlrRegistered | null;
@@ -133,6 +135,8 @@ export type ProjectSavePayload = {
   fldProjDescription?: FormDataEntryValue | null;
   fldPlanReviewRas?: string;
   fldInspectionRas?: string;
+  fldPlanReviewDate?: string;
+  fldInspectionDate?: string;
   tdlrRegistered?: TdlrRegistered;
 };
 
@@ -161,6 +165,8 @@ export function buildProjectSavePayload(input: ProjectMetadataSaveInput): Projec
     ...base,
     fldPlanReviewRas: parseOptionalString(input.fldPlanReviewRas ?? null),
     fldInspectionRas: parseOptionalString(input.fldInspectionRas ?? null),
+    fldPlanReviewDate: parseOptionalString(input.fldPlanReviewDate ?? null),
+    fldInspectionDate: parseOptionalString(input.fldInspectionDate ?? null),
     tdlrRegistered: input.tdlrRegistered ?? emptyTdlrRegistered(),
   };
 }

@@ -60,7 +60,11 @@ import {
 import { UnsavedChangesModal } from '../modals/UnsavedChangesModal';
 import { LibraryManagerHandle } from '../LibraryManager';
 import { toast } from 'sonner';
-import { missingResponsibleProfessionalMessage } from '../../lib/responsibleProfessional';
+import {
+  currentWorkflowReportGate,
+  currentWorkflowWorkContext,
+} from '../../lib/responsibleProfessional';
+import type { RasWorkMode } from '../../lib/workProduct';
 
 const ReportPreview = React.lazy(() =>
   import('../ReportPreview').then((m) => ({ default: m.ReportPreview }))
@@ -165,6 +169,8 @@ export interface ProjectContextProps {
   selectedFacility: Facility | null;
   selectedClient: Client | null;
   selectedInspector: Inspector | null;
+  rasWorkMode: RasWorkMode;
+  onRasWorkModeChange: (mode: RasWorkMode) => void;
   documents: AppDocument[];
   handleSaveRecord: (data: any) => Promise<void> | void;
   handleDeleteRecord: (
@@ -232,8 +238,8 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
 
   // Destructure for Shell Header/Sidebar needs
   const { selections, isTrayOpen, setIsTrayOpen, traySelections, setTraySelections, handleApplyTraySelections } = selectionProps;
-  const { projects, clients, facilities, rawInspectors, isAddingClient, editingClient, setIsAddingClient, setEditingClient, handleSubmitClient, isAddingFacility, editingFacility, setIsAddingFacility, setEditingFacility, handleSubmitFacility, isAddingProject, editingProject, setIsAddingProject, setEditingProject, handleSubmitProject, isAddingInspector, editingInspector, setIsAddingInspector, setEditingInspector, handleSubmitInspector, deleteConfirmation, setDeleteConfirmation } = entityProps; 
-  const { selectedProject, selectedClient, selectedFacility, selectedInspector, projectData } = projectProps;
+  const { projects, clients, facilities, inspectors, rawInspectors, isAddingClient, editingClient, setIsAddingClient, setEditingClient, handleSubmitClient, isAddingFacility, editingFacility, setIsAddingFacility, setEditingFacility, handleSubmitFacility, isAddingProject, editingProject, setIsAddingProject, setEditingProject, handleSubmitProject, isAddingInspector, editingInspector, setIsAddingInspector, setEditingInspector, handleSubmitInspector, deleteConfirmation, setDeleteConfirmation } = entityProps;
+  const { selectedProject, selectedClient, selectedFacility, selectedInspector, projectData, rasWorkMode } = projectProps;
   const { standards, glossary, categories, items, locations, activeGlossary, recommendations, findings } = masterDataProps;
   const { isDeduplicating, dedupStatus, setIsDeduplicating, setDedupStatus } = opsProps;
 
@@ -445,8 +451,14 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
                   variant="secondary"
                   size="sm"
                   onClick={() => {
-                    if (!selectedInspector) {
-                      toast.error(missingResponsibleProfessionalMessage(selectedProject));
+                    const workContext = currentWorkflowWorkContext(selectedProject, rasWorkMode);
+                    const gate = currentWorkflowReportGate(
+                      selectedProject,
+                      inspectors,
+                      workContext
+                    );
+                    if (!gate.allowed) {
+                      toast.error(gate.message);
                       return;
                     }
                     setShowReportSectionDialog(true);

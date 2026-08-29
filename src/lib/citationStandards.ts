@@ -60,3 +60,11 @@ export function standardsIdsFromGlossaryRow(
   const rec = (masterRecs || []).find((r: any) => recommendationMatchesGlossaryRow(r, gRow));
   return unionFindingAndRecommendationCitationIds(find, rec);
 }
+
+/** RAS: Finding / TAS citations only — not recommendation citations. */
+export function findingCitationIdsFromGlossaryRow(gRow: any, findingsList: any[]): string[] {
+  const find = (findingsList || []).find((f: any) => findingMatchesGlossaryRow(f, gRow));
+  const fromFind = normalizeCitationIds(find?.fldStandards);
+  if (fromFind.length > 0) return fromFind;
+  return normalizeCitationIds(gRow?.fldStandards);
+}
