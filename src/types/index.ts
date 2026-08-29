@@ -38,30 +38,78 @@ export interface DesignFirm {
   fldDesignFirmName: string;
 }
 
+export type TdlrRegisteredSource = 'manual' | 'tabs' | 'export';
+
+/** TDLR/TABS as-recorded site. Distinct from FREDA Facility. */
+export interface TdlrRegisteredSite {
+  facilityName: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  county?: string;
+}
+
+/** TDLR/TABS as-recorded Owner. Distinct from FREDA Client. */
+export interface TdlrRegisteredOwner {
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  contactName?: string;
+}
+
+/** TDLR/TABS as-recorded Design Firm. Distinct from Client and unused `fldDesigner`. */
+export interface TdlrRegisteredDesignFirm {
+  name: string;
+  designProfessionalName?: string;
+}
+
+/**
+ * Current TDLR/TABS as-recorded snapshot on a TAS/RAS Project (Beta: manual entry).
+ * Project Name is `projects.fldProjName` (sole name). RAS professionals are
+ * `fldPlanReviewRas` / `fldInspectionRas`. County and owner contactName are optional.
+ * Does not include capturedAt / versioning.
+ */
+export interface TdlrRegistered {
+  source: TdlrRegisteredSource;
+  tabsProjectNumber: string;
+  scopeOfWork: string;
+  tenantFunded: boolean | null;
+  typeOfWork?: string;
+  site: TdlrRegisteredSite;
+  owner: TdlrRegisteredOwner;
+  designFirm: TdlrRegisteredDesignFirm;
+}
+
 export interface Project {
   fldProjID: string;
   fldClient: string; // FK from tblClient.fldClientID
   fldDesigner: string; // FK from tblDesignFirm.fldDesignID
   /**
    * FK to inspectors.fldInspID.
-   * Beta: temporary assigned-professional (RAS) bridge. Not permanently synonymous with Assigned RAS.
+   * Assessment Inspector only. Not Plan Review RAS or Inspection RAS.
    */
   fldInspector: string;
+  /** Responsible RAS for Plan Review (`inspectors.fldInspID`). TAS/RAS only. Independent of Inspection RAS. */
+  fldPlanReviewRas?: string;
+  /** Responsible RAS for Inspection (`inspectors.fldInspID`). TAS/RAS only. Independent of Plan Review RAS. */
+  fldInspectionRas?: string;
+  /**
+   * Sole Project Name.
+   * Assessment: FREDA-entered name.
+   * TAS/RAS: TDLR/TABS registered Project Name (not a nested tdlrRegistered copy).
+   */
   fldProjName: string;
   fldProjNumber?: string;
   /** Architect / Design Professional Project # (not TABS). */
   fldExternalRef?: string;
-  /** Staff-approved operational TABS Project Number. Optional until TABS registration exists. */
-  fldTabsProjectNumber?: string;
   fldProjType?: 'Assessment' | 'TAS/RAS';
-  /** Canonical Project Description / Scope of Work. Not report narrative (`fldNarrative`). */
+  /** FREDA / Assessment Project Description. Not TDLR Scope of Work. Not report narrative (`fldNarrative`). */
   fldProjDescription?: string;
-  /**
-   * Tenant exclusively/unilaterally funds alterations.
-   * `true` = Yes; `false` = No (owner participates); `null`/absent = unanswered / N/A.
-   * Distinct from Type of Funding / Owner Class.
-   */
-  fldTenantFunded?: boolean | null;
+  /** TDLR/TABS as-recorded registered-project facts. TAS/RAS only. Not implemented as a separate collection. */
+  tdlrRegistered?: TdlrRegistered;
   fldFacilities?: string[];
   fldFacID?: string; // Legacy/Filter compatibility
   fldPDDate: string;

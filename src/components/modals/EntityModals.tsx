@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal } from '../ui/modal';
 import { Button, Input, Select } from '../ui/core';
 import { AlertCircle } from 'lucide-react';
@@ -108,14 +108,34 @@ export const ProjectModal = ({
   allowClientChange // Add this line
 }: ProjectModalProps) => {
 
-  if (!isOpen) return null;
+  const [projType, setProjType] = useState<'Assessment' | 'TAS/RAS'>(
+    editingProject?.fldProjType === 'Assessment' ? 'Assessment' : 'TAS/RAS'
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setProjType(editingProject?.fldProjType === 'Assessment' ? 'Assessment' : 'TAS/RAS');
+  }, [isOpen, editingProject?.fldProjID, editingProject?.fldProjType]);
+  const isAssessment = projType === 'Assessment';
+  const tdlr = editingProject?.tdlrRegistered;
   const clientName = clients.find(c => c.fldClientID === (editingProject?.fldClient || selections.clientId))?.fldClientName || "Unknown Client";
+
+  const inspectorOptions = useMemo(
+    () =>
+      [...inspectors]
+        .sort((a, b) => a.fldInspName.localeCompare(b.fldInspName))
+        .map((i) => ({ value: i.fldInspID, label: i.fldInspName })),
+    [inspectors]
+  );
+
+  if (!isOpen) return null;
 
   return (
     <Modal 
-      key="project-modal"
+      key={isOpen ? `project-modal-${editingProject?.fldProjID || 'new'}` : 'project-modal-closed'}
       title={editingProject ? "Edit Project" : "New Project"} 
       subTitle={clientName}
+      maxWidth="2xl"
       onClose={onClose}
       onSubmit={onSubmit}
       footer={
@@ -126,7 +146,6 @@ export const ProjectModal = ({
       }
     >
       <div className="space-y-4">
-        {/* NEW CLIENT SELECTION BLOCK */}
         {allowClientChange ? (
           <Select 
             label="Project Client" 
@@ -138,53 +157,37 @@ export const ProjectModal = ({
         ) : (
           <input type="hidden" name="client" value={editingProject?.fldClient || selections.clientId || ''} />
         )}
-        {/* END NEW BLOCK */}
 
         <div className="flex bg-zinc-100 p-1 rounded-lg mb-4">
-
           <button 
             type="button"
-            onClick={(e) => {
-              const form = (e.target as HTMLElement).closest('form');
-              if (form) {
-                const input = form.querySelector('input[name="projType"]') as HTMLInputElement;
-                if (input) input.value = 'Assessment';
-                form.querySelectorAll('.type-toggle').forEach(b => b.classList.remove('bg-white', 'shadow-sm', 'text-blue-600'));
-                (e.target as HTMLElement).classList.add('bg-white', 'shadow-sm', 'text-blue-600');
-              }
-            }}
+            onClick={() => setProjType('Assessment')}
             className={cn(
               "flex-1 py-1.5 text-xs font-bold rounded-md transition-all type-toggle",
-              (editingProject?.fldProjType === 'Assessment') ? "bg-white shadow-sm text-blue-600" : "text-zinc-500"
+              isAssessment ? "bg-white shadow-sm text-blue-600" : "text-zinc-500"
             )}
           >Assessment</button>
           <button 
             type="button"
-            onClick={(e) => {
-              const form = (e.target as HTMLElement).closest('form');
-              if (form) {
-                const input = form.querySelector('input[name="projType"]') as HTMLInputElement;
-                if (input) input.value = 'TAS/RAS';
-                form.querySelectorAll('.type-toggle').forEach(b => b.classList.remove('bg-white', 'shadow-sm', 'text-blue-600'));
-                (e.target as HTMLElement).classList.add('bg-white', 'shadow-sm', 'text-blue-600');
-              }
-            }}
+            onClick={() => setProjType('TAS/RAS')}
             className={cn(
               "flex-1 py-1.5 text-xs font-bold rounded-md transition-all type-toggle",
-              (!editingProject || editingProject?.fldProjType === 'TAS/RAS') ? "bg-white shadow-sm text-blue-600" : "text-zinc-500"
+              !isAssessment ? "bg-white shadow-sm text-blue-600" : "text-zinc-500"
             )}
           >TAS/RAS</button>
-          <input type="hidden" name="projType" defaultValue={editingProject?.fldProjType || 'TAS/RAS'} />
+          <input type="hidden" name="projType" value={projType} />
         </div>
 
-        <Input label="Project Name" name="name" defaultValue={editingProject?.fldProjName || ''} required />
+        <div className="space-y-1">
+          <Input label="Project Name" name="name" defaultValue={editingProject?.fldProjName || ''} required />
+          {!isAssessment && (
+            <p className="text-[11px] text-zinc-500">TDLR/TABS registered Project Name — the sole Project Name for this TAS/RAS project.</p>
+          )}
+        </div>
 
         <div className="space-y-2">
-          <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Project identifiers</p>
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="OCG Project #" name="projNumber" placeholder="YY-MM-XXXXX" defaultValue={editingProject?.fldProjNumber || ''} required />
-            <Input label="TABS Project Number" name="tabsProjectNumber" placeholder="Optional until registered" defaultValue={editingProject?.fldTabsProjectNumber || ''} />
-          </div>
+          <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">FREDA project identifiers</p>
+          <Input label="OCG Project #" name="projNumber" placeholder="YY-MM-XXXXX" defaultValue={editingProject?.fldProjNumber || ''} required />
           <Input
             label="Architect / Design Professional Project #"
             name="externalRef"
@@ -192,14 +195,17 @@ export const ProjectModal = ({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className={isAssessment ? 'grid grid-cols-2 gap-4' : undefined}>
           <Input label="Date" name="date" type="date" defaultValue={editingProject?.fldPDDate || ''} required />
-          <Select 
-            label="Inspector" 
-            name="inspector" 
-            defaultValue={editingProject?.fldInspector || ''}
-            options={[...inspectors].sort((a, b) => a.fldInspName.localeCompare(b.fldInspName)).map((i: any) => ({ value: i.fldInspID, label: i.fldInspName }))} 
-          />
+          {isAssessment && (
+            <Select
+              label="Assessment Inspector"
+              name="inspector"
+              placeholder="Not assigned"
+              defaultValue={editingProject?.fldInspector || ''}
+              options={inspectorOptions}
+            />
+          )}
         </div>
 
         <div className="space-y-2">
@@ -220,21 +226,90 @@ export const ProjectModal = ({
           </div>
         </div>
 
-        <Input
-          label="Project Description / Scope of Work"
-          name="projDescription"
-          defaultValue={editingProject?.fldProjDescription || ''}
-        />
-        <Select
-          label="Tenant Funded"
-          name="tenantFunded"
-          placeholder="Not selected"
-          defaultValue={tenantFundedSelectValue(editingProject?.fldTenantFunded)}
-          options={[
-            { value: 'true', label: 'Yes' },
-            { value: 'false', label: 'No' },
-          ]}
-        />
+        {isAssessment && (
+          <Input
+            label="Project Description / Scope of Work"
+            name="projDescription"
+            defaultValue={editingProject?.fldProjDescription || ''}
+          />
+        )}
+
+        {!isAssessment && (
+          <>
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">FREDA RAS Assignments</p>
+              <p className="text-[11px] text-zinc-500">Authoritative Project assignments. Same person may be selected in both fields; neither is copied automatically. Other screens should hydrate from these fields rather than ask again.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Select
+                  label="Plan Review RAS"
+                  name="planReviewRas"
+                  placeholder="Not assigned"
+                  defaultValue={editingProject?.fldPlanReviewRas || ''}
+                  options={inspectorOptions}
+                />
+                <Select
+                  label="Inspection RAS"
+                  name="inspectionRas"
+                  placeholder="Not assigned"
+                  defaultValue={editingProject?.fldInspectionRas || ''}
+                  options={inspectorOptions}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-4">
+              <div>
+                <p className="text-xs font-bold text-amber-800 uppercase tracking-widest">TDLR / TABS Registered Data</p>
+                <p className="text-[11px] text-amber-900/80 mt-1">As recorded with TDLR. Official registered-project facts — not FREDA Client, Facility, or Assessment description. Project Name is the field above, not a second registered name.</p>
+              </div>
+              <input type="hidden" name="tdlrSource" value={tdlr?.source || 'manual'} />
+
+              <Input label="TABS Project Number" name="tdlrTabsProjectNumber" defaultValue={tdlr?.tabsProjectNumber || ''} />
+              <Input label="Scope of Work" name="tdlrScopeOfWork" defaultValue={tdlr?.scopeOfWork || ''} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Select
+                  label="Tenant Funded"
+                  name="tdlrTenantFunded"
+                  placeholder="Not selected"
+                  defaultValue={tenantFundedSelectValue(tdlr?.tenantFunded)}
+                  options={[
+                    { value: 'true', label: 'Yes' },
+                    { value: 'false', label: 'No' },
+                  ]}
+                />
+                <Input label="Type of Work" name="tdlrTypeOfWork" defaultValue={tdlr?.typeOfWork || ''} />
+              </div>
+
+              <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest pt-1">Registered site</p>
+              <Input label="Facility / Building Name" name="tdlrSiteFacilityName" defaultValue={tdlr?.site?.facilityName || ''} />
+              <Input label="Address" name="tdlrSiteAddress" defaultValue={tdlr?.site?.address || ''} />
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="City" name="tdlrSiteCity" defaultValue={tdlr?.site?.city || ''} />
+                <Input label="State" name="tdlrSiteState" defaultValue={tdlr?.site?.state || ''} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="ZIP" name="tdlrSiteZip" defaultValue={tdlr?.site?.zip || ''} />
+                <Input label="County (optional)" name="tdlrSiteCounty" defaultValue={tdlr?.site?.county || ''} />
+              </div>
+
+              <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest pt-1">Registered Owner (report addressee)</p>
+              <Input label="Owner Name" name="tdlrOwnerName" defaultValue={tdlr?.owner?.name || ''} />
+              <Input label="Address" name="tdlrOwnerAddress" defaultValue={tdlr?.owner?.address || ''} />
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="City" name="tdlrOwnerCity" defaultValue={tdlr?.owner?.city || ''} />
+                <Input label="State" name="tdlrOwnerState" defaultValue={tdlr?.owner?.state || ''} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="ZIP" name="tdlrOwnerZip" defaultValue={tdlr?.owner?.zip || ''} />
+                <Input label="Owner Contact (optional)" name="tdlrOwnerContactName" defaultValue={tdlr?.owner?.contactName || ''} />
+              </div>
+
+              <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest pt-1">Registered Design Firm</p>
+              <Input label="Design Firm Name" name="tdlrDesignFirmName" defaultValue={tdlr?.designFirm?.name || ''} />
+              <Input label="Design Professional Name (optional)" name="tdlrDesignProfessionalName" defaultValue={tdlr?.designFirm?.designProfessionalName || ''} />
+            </div>
+          </>
+        )}
       </div>
     </Modal>
   );

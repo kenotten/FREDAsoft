@@ -3,6 +3,8 @@
  * Persistence only — RAS report rendering is separate.
  */
 
+import type { TdlrRegistered, TdlrRegisteredSource } from '../types';
+
 export function parseOptionalString(value: FormDataEntryValue | null): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -25,10 +27,81 @@ export function tenantFundedSelectValue(value: boolean | null | undefined): stri
   return '';
 }
 
-/** Store RAS registration digits/token only — not a `RAS 149` display string. */
+/** Store RAS registration digits/token only — not a `RAS 149` display string. Inspector credential field only. */
 export function normalizeRasNumber(value: FormDataEntryValue | null): string {
   const raw = parseOptionalString(value);
   return raw.replace(/^(ras[\s#:\-]*)/i, '').trim();
+}
+
+export function isAssessmentProjectType(value: FormDataEntryValue | null | undefined): boolean {
+  return parseOptionalString(value ?? null) === 'Assessment';
+}
+
+export function emptyTdlrRegistered(): TdlrRegistered {
+  return {
+    source: 'manual',
+    tabsProjectNumber: '',
+    scopeOfWork: '',
+    tenantFunded: null,
+    typeOfWork: '',
+    site: {
+      facilityName: '',
+      address: '',
+      city: '',
+      state: '',
+      zip: '',
+      county: '',
+    },
+    owner: {
+      name: '',
+      address: '',
+      city: '',
+      state: '',
+      zip: '',
+      contactName: '',
+    },
+    designFirm: {
+      name: '',
+      designProfessionalName: '',
+    },
+  };
+}
+
+function parseTdlrSource(value: FormDataEntryValue | null): TdlrRegisteredSource {
+  const raw = parseOptionalString(value);
+  if (raw === 'tabs' || raw === 'export') return raw;
+  return 'manual';
+}
+
+/** Complete nested object for TAS/RAS save — avoids partial Firestore map merges. */
+export function buildTdlrRegisteredFromForm(form: FormData): TdlrRegistered {
+  return {
+    source: parseTdlrSource(form.get('tdlrSource')),
+    tabsProjectNumber: parseOptionalString(form.get('tdlrTabsProjectNumber')),
+    scopeOfWork: parseOptionalString(form.get('tdlrScopeOfWork')),
+    tenantFunded: parseTenantFunded(form.get('tdlrTenantFunded')),
+    typeOfWork: parseOptionalString(form.get('tdlrTypeOfWork')),
+    site: {
+      facilityName: parseOptionalString(form.get('tdlrSiteFacilityName')),
+      address: parseOptionalString(form.get('tdlrSiteAddress')),
+      city: parseOptionalString(form.get('tdlrSiteCity')),
+      state: parseOptionalString(form.get('tdlrSiteState')),
+      zip: parseOptionalString(form.get('tdlrSiteZip')),
+      county: parseOptionalString(form.get('tdlrSiteCounty')),
+    },
+    owner: {
+      name: parseOptionalString(form.get('tdlrOwnerName')),
+      address: parseOptionalString(form.get('tdlrOwnerAddress')),
+      city: parseOptionalString(form.get('tdlrOwnerCity')),
+      state: parseOptionalString(form.get('tdlrOwnerState')),
+      zip: parseOptionalString(form.get('tdlrOwnerZip')),
+      contactName: parseOptionalString(form.get('tdlrOwnerContactName')),
+    },
+    designFirm: {
+      name: parseOptionalString(form.get('tdlrDesignFirmName')),
+      designProfessionalName: parseOptionalString(form.get('tdlrDesignProfessionalName')),
+    },
+  };
 }
 
 export type ProjectMetadataSaveInput = {
@@ -36,30 +109,59 @@ export type ProjectMetadataSaveInput = {
   fldProjName: FormDataEntryValue | null;
   fldProjNumber: FormDataEntryValue | null;
   fldExternalRef: FormDataEntryValue | null;
-  fldTabsProjectNumber: FormDataEntryValue | null;
   fldPDDate: FormDataEntryValue | null;
   fldInspector: FormDataEntryValue | null;
+  fldPlanReviewRas?: FormDataEntryValue | null;
+  fldInspectionRas?: FormDataEntryValue | null;
   fldProjType: FormDataEntryValue | null;
   fldProjDescription: FormDataEntryValue | null;
-  fldTenantFunded: FormDataEntryValue | null;
+  tdlrRegistered?: TdlrRegistered | null;
   fldClient: string;
   fldFacilities: FormDataEntryValue[];
 };
 
-export function buildProjectSavePayload(input: ProjectMetadataSaveInput) {
-  return {
+export type ProjectSavePayload = {
+  fldProjID: string;
+  fldProjName: FormDataEntryValue | null;
+  fldProjNumber: FormDataEntryValue | null;
+  fldExternalRef: FormDataEntryValue | null;
+  fldPDDate: FormDataEntryValue | null;
+  fldProjType: string;
+  fldClient: string;
+  fldFacilities: FormDataEntryValue[];
+  fldInspector?: FormDataEntryValue | null;
+  fldProjDescription?: FormDataEntryValue | null;
+  fldPlanReviewRas?: string;
+  fldInspectionRas?: string;
+  tdlrRegistered?: TdlrRegistered;
+};
+
+export function buildProjectSavePayload(input: ProjectMetadataSaveInput): ProjectSavePayload {
+  const fldProjType = parseOptionalString(input.fldProjType) || 'TAS/RAS';
+  const base = {
     fldProjID: input.fldProjID,
     fldProjName: input.fldProjName,
     fldProjNumber: input.fldProjNumber,
     fldExternalRef: input.fldExternalRef,
-    fldTabsProjectNumber: parseOptionalString(input.fldTabsProjectNumber),
     fldPDDate: input.fldPDDate,
-    fldInspector: input.fldInspector,
-    fldProjType: input.fldProjType,
-    fldProjDescription: input.fldProjDescription,
-    fldTenantFunded: parseTenantFunded(input.fldTenantFunded),
+    fldProjType,
     fldClient: input.fldClient,
     fldFacilities: input.fldFacilities,
+  };
+
+  if (isAssessmentProjectType(fldProjType)) {
+    return {
+      ...base,
+      fldInspector: input.fldInspector,
+      fldProjDescription: input.fldProjDescription,
+    };
+  }
+
+  return {
+    ...base,
+    fldPlanReviewRas: parseOptionalString(input.fldPlanReviewRas ?? null),
+    fldInspectionRas: parseOptionalString(input.fldInspectionRas ?? null),
+    tdlrRegistered: input.tdlrRegistered ?? emptyTdlrRegistered(),
   };
 }
 

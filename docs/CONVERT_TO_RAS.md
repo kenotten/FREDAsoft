@@ -1,7 +1,7 @@
 # Convert to RAS
 
 **Status:** Planning / architecture note (not an implementation spec). **Not implemented.**
-**Last updated:** 2026-08-28 (Beta RAS / Assessment data model)
+**Last updated:** 2026-08-28 (Beta RAS Project metadata foundation)
 **Audience:** Product owner, architecture review, implementation planning
 
 > **Disclaimer:** This document captures internal planning for adapting FREDAsoft toward Registered Accessibility Specialist (RAS) workflows under the Texas Department of Licensing and Regulation (TDLR). It does **not** assert legal compliance, required forms, or final field lists. All TDLR/RAS requirements must be verified from official sources, sample deliverables, and qualified review before any implementation.
@@ -131,6 +131,8 @@ Inspection findings commonly use **Location**. Plan Review findings may use **Lo
 
 ## 7. RAS record and report fields (decided — planning)
 
+✅ DECIDED (2026-08-29): RAS **Plan Review** and **Inspection** reports contain findings / applicable TAS requirements. They do **not** contain Recommendations, cost estimates, or the Financial section. Assessment reporting remains unchanged. Report rendering is **not** implemented in this slice.
+
 ### Excluded from RAS reports (and ideally from RAS Data Entry)
 
 RAS reports **do not include**:
@@ -242,7 +244,7 @@ RAS conversion must not reintroduce category/item/comment resolution bugs audite
 
 ## 11. Report metadata and header fields
 
-**Authoritative RAS report sourcing:** **`docs/ARCHITECTURE_DESIGN.md`** (✅ DECIDED Beta RAS / Assessment data model, 2026-08-28). That block supersedes earlier §11 rows that treated `fldTabsProjectNumber` / `fldTenantFunded` as long-term RAS sources, `fldInspector` as RAS Inspection RAS, or canonical names as registered wording.
+**Authoritative RAS report sourcing:** **`docs/ARCHITECTURE_DESIGN.md`** (Beta RAS / Assessment data model, 2026-08-28; Project metadata persistence on `feat/ras-beta-project-metadata`). That block supersedes earlier §11 rows that treated `fldTabsProjectNumber` / `fldTenantFunded` as long-term RAS sources, `fldInspector` as RAS Inspection RAS, or canonical names as registered wording.
 
 ### RAS vs Assessment sourcing (decided 2026-08-28)
 
@@ -254,7 +256,7 @@ Registered RAS facts live on **`projects.tdlrRegistered`** (TDLR as-recorded; Be
 | OCG Project # | `fldProjNumber` | `fldProjNumber` |
 | TABS Project Number | N/A | `tdlrRegistered.tabsProjectNumber` |
 | Tenant Funded | N/A | `tdlrRegistered.tenantFunded` |
-| Project Name (registered report context) | FREDA Project | `tdlrRegistered.projectName` |
+| Project Name | `fldProjName` (FREDA-entered) | `fldProjName` (this **is** the TDLR registered Project Name) |
 | Project Description / Scope | `fldProjDescription` | `tdlrRegistered.scopeOfWork` |
 | Facility/site report identity | FREDA Facility | `tdlrRegistered.site` |
 | Owner / addressee | Assessment-specific / current PDF behavior | `tdlrRegistered.owner` (required; not Client) |
@@ -268,7 +270,7 @@ Registered RAS facts live on **`projects.tdlrRegistered`** (TDLR as-recorded; Be
 
 Template title (`Inspection Report`) and standards line remain RAS report-profile constants.
 
-**Transitional:** production still has flat `fldTabsProjectNumber` / `fldTenantFunded`. They are not the desired architecture. Cleanup is a later implementation task.
+**Production (feat/ras-beta-project-metadata):** New/Edit Project persists `tdlrRegistered` for TAS/RAS. Sole Project Name is `fldProjName`. No nested `tdlrRegistered.projectName` or generic `tdlrRegistered.tdlrRas`. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer written. Leftover keys on older documents (if any) are unused; no migration.
 
 Do **not** treat FREDA normalized stakeholder names as substitutes for official registered report text.
 
@@ -280,9 +282,9 @@ One operative date per current work product. Inspection Date = Inspection Report
 
 | Field | Note |
 |-------|------|
-| Registered project / site / owner / design firm | `tdlrRegistered` |
+| Registered project / site / owner / design firm | `tdlrRegistered` (not Project Name; name is `fldProjName`) |
 | OCG # / DP job # | FREDA Project |
-| TDLR-listed RAS name/number | `tdlrRegistered.tdlrRas` — registration snapshot, not the assigned professional |
+| Plan Review RAS / Inspection RAS | `fldPlanReviewRas` / `fldInspectionRas` — one Project assignment per role; Inspector `fldRasNumber` for the credential |
 
 ---
 

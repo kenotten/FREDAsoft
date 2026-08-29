@@ -2481,10 +2481,10 @@ Add a concise future phase section covering:
 
 | Cover label | Notes (see Beta model below for authoritative RAS sources) |
 |-------------|--------------------------------------------------------------|
-| TABS Project Number | **RAS:** `tdlrRegistered.tabsProjectNumber`. Flat `fldTabsProjectNumber` is transitional/redundant. **Assessment:** N/A |
+| TABS Project Number | **RAS:** `tdlrRegistered.tabsProjectNumber`. Flat `fldTabsProjectNumber` was removed from the production type/UI. **Assessment:** N/A |
 | OCG Project # | `projects.fldProjNumber` (FREDA Project) |
 | Project Description | **RAS:** `tdlrRegistered.scopeOfWork`. **Assessment:** `fldProjDescription` |
-| Tenant Funded | **RAS:** `tdlrRegistered.tenantFunded`. Flat `fldTenantFunded` is transitional/redundant. **Assessment:** N/A |
+| Tenant Funded | **RAS:** `tdlrRegistered.tenantFunded`. Flat `fldTenantFunded` was removed from the production type/UI. **Assessment:** N/A |
 | RAS Name / Number | Work-mode assignment: Plan Review RAS or Inspection RAS (`fldPlanReviewRas` / `fldInspectionRas`). Not `fldInspector` |
 
 **`projects.fldExternalRef`** is **Architect / Design Professional Project #** (design professional’s internal job number)—**not** a TABS number. Production New/Edit Project labels this field accordingly. TDLR/TABS values remain as-recorded **source snapshots**; they may later **seed/draft** canonical operational fields after staff review and must **not** silently overwrite canonical data **or** the TDLR snapshot. Dual-track mapping detail: **`docs/FREDASOFT_PROJECT_FIELD_LEVEL_MAPPING.md`**. Cover field list in **`docs/CONVERT_TO_RAS.md` §11** follows this file. RAS report **rendering** is not implemented in this documentation task.
@@ -2507,12 +2507,12 @@ These strings belong on the RAS report profile. They are **not** stored as Proje
 | Field (conceptual unless noted existing) | Meaning | TDLR relationship |
 |------------------------------------------|---------|-------------------|
 | `projects.fldProjNumber` **(existing)** | **OCG Project #** — FREDA/OCG project identifier | Not a TDLR field. RAS reports use this operational value. |
-| `projects.fldTabsProjectNumber` **(existing; transitional)** | **Not** the long-term RAS TABS source. Added before dual-track was fully reconciled. | Authoritative RAS value: `tdlrRegistered.tabsProjectNumber`. Unnecessary on Assessment. Do not delete in this docs task. |
+| `projects.fldTabsProjectNumber` **(removed from production type/UI)** | Transitional flat field; no longer written. | Authoritative RAS value: `tdlrRegistered.tabsProjectNumber`. |
 | `projects.fldExternalRef` **(existing; semantic reassignment)** | **Architect / Design Professional Project #** — the architect’s, engineer’s, or other design professional’s internal project/job number | Not a TDLR TABS number. RAS reports use this FREDA operational value. |
 | `projects.fldProjDescription` **(existing)** | Internal FREDA **Project Description / Scope of Work** — **Assessment** wording | TDLR Scope of Work is `tdlrRegistered.scopeOfWork`. **Do not** use `fldNarrative` or `fldFacilityNarratives`. **RAS** reports use TDLR Scope of Work — they must **not** treat this field as the official registered wording. |
-| `projects.fldTenantFunded` **(existing; transitional)** | **Not** the long-term RAS Tenant Funded source. Added before dual-track was fully reconciled. Independent of TABS number. | Authoritative RAS value: `tdlrRegistered.tenantFunded`. Unnecessary on Assessment. Do not delete in this docs task. |
+| `projects.fldTenantFunded` **(removed from production type/UI)** | Transitional flat field; no longer written. Independent of TABS number. | Authoritative RAS value: `tdlrRegistered.tenantFunded`. |
 
-`fldTabsProjectNumber` and `fldTenantFunded` remain in production New/Edit Project until a later cleanup verifies they hold no needed data. They are **not** the desired RAS architecture. `inspectors.fldRasNumber` holds the professional’s RAS registration number (digits/token only). RAS Inspection Report **rendering** is still not implemented.
+`fldTabsProjectNumber` and `fldTenantFunded` were removed from the Project type, New/Edit Project UI, and save payload (feat/ras-beta-project-metadata). Authoritative RAS values are `tdlrRegistered.tabsProjectNumber` / `tdlrRegistered.tenantFunded`. Leftover flat keys on older Firestore documents (if any) are unused and are not migrated. `inspectors.fldRasNumber` holds the professional’s RAS registration number (digits/token only). RAS Inspection Report **rendering** is still not implemented.
 
 ---
 
@@ -2577,7 +2577,7 @@ Project (non-RAS assessment)
 
 **Do not** implement the service-assignment schema in this documentation task.
 
-**Beta professional fields (clarified later the same day — see Beta RAS / Assessment data model):** `projects.fldInspector` = **Assessment Inspector** only. RAS uses `fldPlanReviewRas` and `fldInspectionRas`. Do **not** treat `fldInspector` as RAS Inspection RAS. TDLR-recorded RAS Name / RAS # is a **registration snapshot** (often RAS Firm) and is **not** automatically the operational assignment.
+**Beta professional fields:** `projects.fldInspector` = **Assessment Inspector** only. RAS uses `fldPlanReviewRas` and `fldInspectionRas`. Do **not** treat `fldInspector` as RAS Inspection RAS. Do **not** store a generic TDLR-listed RAS on `tdlrRegistered.tdlrRas` in Beta; Inspector directory `fldRasNumber` is the professional’s registration number.
 
 #### Responsible professional and record authorship
 
@@ -2640,6 +2640,7 @@ Documented only:
 | Standards line | RAS report template |
 | TABS Project Number | **`tdlrRegistered.tabsProjectNumber`** (not flat `fldTabsProjectNumber`) |
 | OCG Project # | FREDA Project |
+| Project Name | **`projects.fldProjName`** (TAS/RAS: this is the registered TDLR name; no nested copy) |
 | Project Description | TDLR Scope of Work (`tdlrRegistered.scopeOfWork`) |
 | Tenant Funded | **`tdlrRegistered.tenantFunded`** (not flat `fldTenantFunded`) |
 | Owner / Addressee | TDLR as-recorded Owner |
@@ -2654,9 +2655,11 @@ Do **not** treat FREDA normalized stakeholder names as substitutes for official 
 
 ---
 
-✅ DECIDED (Beta RAS / Assessment data model — documentation only, 2026-08-28): Clarifies Assessment vs TAS/RAS data ownership, one TDLR source for RAS registration facts (`projects.tdlrRegistered`), Beta professional fields, Review/Inspection work mode, dates, and future report-instance multiplicity. Dual-track rules above remain in force. **No production code, UI, Firestore, rules, migrations, report rendering, ProjectData, Active Inspector, TDLR extraction, or stakeholder implementation in this decision.**
+✅ DECIDED (Beta RAS / Assessment data model — documentation only, 2026-08-28): Clarifies Assessment vs TAS/RAS data ownership, one TDLR source for RAS registration facts (`projects.tdlrRegistered`), Beta professional fields, Review/Inspection work mode, dates, and future report-instance multiplicity. Dual-track rules above remain in force. The original decision was documentation only.
 
-**Product behavior implications:** None in the running app.
+✅ IMPLEMENTED (Beta RAS Project metadata foundation, feat/ras-beta-project-metadata): New/Edit Project persists `tdlrRegistered`, `fldPlanReviewRas`, and `fldInspectionRas` for TAS/RAS. **Sole Project Name** is `projects.fldProjName` (Assessment = FREDA-entered; TAS/RAS = TDLR registered name). Nested `tdlrRegistered.projectName` and generic `tdlrRegistered.tdlrRas` are **not** in the Beta model. Assessment continues to use `fldInspector` and FREDA `fldProjDescription`. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer on the Project type or save payload. **Not implemented:** Review/Inspection toggle, Sheet, Active Inspector cleanup, ProjectData authorship, report instances, RAS rendering, extraction, stakeholders.
+
+**Product behavior implications:** New/Edit Project metadata and Project persistence only. Reports unchanged.
 
 #### Assessment vs TAS/RAS (project families)
 
@@ -2675,7 +2678,7 @@ Authoritative Beta sources:
 - `projects.tdlrRegistered.tabsProjectNumber`
 - `projects.tdlrRegistered.tenantFunded`
 
-Flat `projects.fldTabsProjectNumber` and `projects.fldTenantFunded` were added before dual-track architecture was fully resolved. They are **transitional/redundant implementation artifacts**. They are unnecessary on Assessment. A later implementation task should verify whether they contain meaningful production data; if not, **removal is preferred** over perpetuating duplicate sources. **Do not delete them in this docs task.**
+Flat `projects.fldTabsProjectNumber` and `projects.fldTenantFunded` were added before dual-track architecture was fully resolved. **Production New/Edit Project and the Project type no longer persist them** (feat/ras-beta-project-metadata). Authoritative RAS values are on `tdlrRegistered`. Leftover keys on older documents (if any) are unused; no migration.
 
 TABS Project Number and Tenant Funded are **independent** registration facts. Tenant Funded has **no** relationship to whether the project must be registered, whether a TABS number is assigned, or TABS number generation. They are grouped only because both are TDLR registration facts.
 
@@ -2683,22 +2686,22 @@ TABS Project Number and Tenant Funded are **independent** registration facts. Te
 
 Current TDLR/TABS as-recorded information for the RAS project. Beta may be **manually entered** by staff. Distinct from normalized FREDA Project data, Client, Facility, canonical stakeholders, and service assignments.
 
-Conceptual shape (not implemented):
+Conceptual shape (New/Edit Project persistence on this branch):
 
 ```text
 tdlrRegistered: {
   source: 'manual' | 'tabs' | 'export'
   tabsProjectNumber
-  projectName
   scopeOfWork
   tenantFunded
   typeOfWork?
   site: { facilityName, address, city, state, zip, county? }
   owner: { name, address, city, state, zip, contactName? }
   designFirm: { name, designProfessionalName? }
-  tdlrRas: { name, number }
 }
 ```
+
+**Not in Beta `tdlrRegistered`:** `projectName` (use `projects.fldProjName`) and `tdlrRas` (use `fldPlanReviewRas` / `fldInspectionRas`). Inspector directory `inspectors.fldRasNumber` remains the professional’s RAS registration number.
 
 Beta: **county** and **Owner contactName** are optional; neither is required to generate initial RAS reports. Preserve them if available.
 
@@ -2715,6 +2718,15 @@ If a normalized FREDA value differs from TDLR: **RAS report uses TDLR wording**;
 
 Do **not** use `fldProjDescription` as the official RAS report description when TDLR registered data exists.
 
+#### Project Name (one stored value)
+
+| Family | `projects.fldProjName` |
+|--------|------------------------|
+| **Assessment** | FREDA-entered Project Name |
+| **TAS/RAS** | TDLR/TABS registered Project Name — the **sole** Project Name |
+
+Do **not** store a second name on `tdlrRegistered.projectName`. Do **not** synchronize two name fields. Existing headers/cards/workspace already use `fldProjName`.
+
 #### Professional assignment (Beta fields)
 
 Do **not** add `fldAssessmentInspector`.
@@ -2729,7 +2741,15 @@ The same RAS may be assigned to both RAS services, or different professionals. A
 
 **Missing Plan Review RAS is legitimate.** OCG may perform Inspection without having performed Plan Review. Inspection work requires **Inspection RAS** only. Plan Review work requires **Plan Review RAS** only. Do **not** mark an entire RAS Project invalid because `fldPlanReviewRas` is blank. Require only the professional for the work/report currently being performed.
 
-TDLR-listed RAS name/number on `tdlrRegistered.tdlrRas` is **registration evidence**, not the signing professional.
+**One assignment entry per role.** New/Edit Project is the Beta authoritative entry surface. Downstream screens must **hydrate** (not re-prompt):
+
+| Work context | Read |
+|--------------|------|
+| Assessment | `project.fldInspector` |
+| RAS Review | `project.fldPlanReviewRas` |
+| RAS Inspection | `project.fldInspectionRas` |
+
+Do **not** create another editable copy of either RAS assignment. Do **not** maintain a generic `tdlrRegistered.tdlrRas`. Session Active Inspector must not compete with these fields. **Do not implement App.tsx / ProjectDataEntry hydration in this slice.**
 
 #### Review / Inspection work mode (planned — not implemented)
 
@@ -2815,7 +2835,7 @@ RAS registered Design Firm is `tdlrRegistered.designFirm`. Do **not** use Client
 | OCG Project # | FREDA Project | FREDA Project |
 | TABS Project Number | N/A | `tdlrRegistered.tabsProjectNumber` |
 | Tenant Funded | N/A | `tdlrRegistered.tenantFunded` |
-| Project Name (registered report context) | FREDA Project | `tdlrRegistered.projectName` |
+| Project Name | FREDA `fldProjName` | FREDA `fldProjName` (this **is** the TDLR registered Project Name) |
 | Project Description / Scope | `projects.fldProjDescription` | `tdlrRegistered.scopeOfWork` |
 | Facility/site report identity | FREDA Facility | `tdlrRegistered.site` |
 | Owner / addressee | Assessment-specific / current behavior (Client labeled Owner on PDF today — not a RAS pattern) | `tdlrRegistered.owner` |
@@ -2831,6 +2851,8 @@ RAS registered Design Firm is `tdlrRegistered.designFirm`. Do **not** use Client
 
 Do not force RAS-only concepts onto Assessment.
 
+RAS Plan Review and Inspection **report content** (when rendering is implemented): findings / applicable TAS requirements only. **No** Recommendations, cost estimates, or Financial section. Assessment reporting remains unchanged.
+
 #### Explicitly deferred
 
-Production `tdlrRegistered` implementation; removal of `fldTabsProjectNumber` / `fldTenantFunded`; Review/Inspection toggle; Sheet field / ProjectData schema; ProjectData division or report-instance association; Active Inspector code cleanup; ProjectData authorship change; report-instance collection; revised/multiple report workflows; stakeholder/project-party implementation; TDLR extraction automation; TDLR version history / provenance timestamps (`capturedAt`); document copy/distribution permissions; RAS report rendering.
+Review/Inspection toggle; Sheet field / ProjectData schema; ProjectData division or report-instance association; Active Inspector code cleanup; ProjectData authorship change; report-instance collection; revised/multiple report workflows; stakeholder/project-party implementation; TDLR extraction automation; TDLR version history / provenance timestamps (`capturedAt`); document copy/distribution permissions; RAS report rendering.

@@ -2,7 +2,7 @@ import { firestoreService } from './firestoreService';
 import { toast } from 'sonner';
 import { Client, Facility, Project, Inspector } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { buildInspectorSavePayload, buildProjectSavePayload } from '../lib/projectMetadataFields';
+import { buildInspectorSavePayload, buildProjectSavePayload, buildTdlrRegisteredFromForm, isAssessmentProjectType } from '../lib/projectMetadataFields';
 
 export const entityService = {
   handleEditClient: (client: Client, setEditingClient: (c: Client) => void, setIsAddingClient: (b: boolean) => void) => {
@@ -158,12 +158,15 @@ export const entityService = {
         fldProjName: formData.get('name'),
         fldProjNumber: formData.get('projNumber'),
         fldExternalRef: formData.get('externalRef'),
-        fldTabsProjectNumber: formData.get('tabsProjectNumber'),
         fldPDDate: formData.get('date'),
         fldInspector: formData.get('inspector'),
+        fldPlanReviewRas: formData.get('planReviewRas'),
+        fldInspectionRas: formData.get('inspectionRas'),
         fldProjType: formData.get('projType'),
         fldProjDescription: formData.get('projDescription'),
-        fldTenantFunded: formData.get('tenantFunded'),
+        tdlrRegistered: isAssessmentProjectType(formData.get('projType'))
+          ? null
+          : buildTdlrRegisteredFromForm(formData),
         fldClient: finalClientId,
         fldFacilities: formData.getAll('facilities'),
       });

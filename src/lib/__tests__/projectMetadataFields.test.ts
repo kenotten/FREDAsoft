@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildInspectorSavePayload,
   buildProjectSavePayload,
+  buildTdlrRegisteredFromForm,
+  emptyTdlrRegistered,
+  isAssessmentProjectType,
   normalizeRasNumber,
   parseOptionalString,
   parseTenantFunded,
@@ -49,51 +52,262 @@ describe('normalizeRasNumber', () => {
 });
 
 describe('parseOptionalString', () => {
-  it('trims TABS / optional strings and treats missing as empty', () => {
+  it('trims optional strings and treats missing as empty', () => {
     expect(parseOptionalString('  TABS20XX004853  ')).toBe('TABS20XX004853');
     expect(parseOptionalString('')).toBe('');
     expect(parseOptionalString(null)).toBe('');
   });
 });
 
+describe('isAssessmentProjectType', () => {
+  it('detects Assessment vs TAS/RAS', () => {
+    expect(isAssessmentProjectType('Assessment')).toBe(true);
+    expect(isAssessmentProjectType('TAS/RAS')).toBe(false);
+    expect(isAssessmentProjectType(null)).toBe(false);
+  });
+});
+
+const assessmentBase = {
+  fldProjID: 'proj-1',
+  fldProjName: 'Site A',
+  fldProjNumber: '26-08-00001',
+  fldExternalRef: 'ARCH-99',
+  fldPDDate: '2026-08-28',
+  fldInspector: 'insp-1',
+  fldProjType: 'Assessment' as const,
+  fldProjDescription: 'Alter restrooms.',
+  fldClient: 'client-1',
+  fldFacilities: ['fac-1'],
+};
+
+const rasBase = {
+  ...assessmentBase,
+  fldProjType: 'TAS/RAS' as const,
+  fldInspector: '',
+  fldPlanReviewRas: '',
+  fldInspectionRas: '',
+};
+
 describe('buildProjectSavePayload', () => {
-  const base = {
-    fldProjID: 'proj-1',
-    fldProjName: 'Site A',
-    fldProjNumber: '26-08-00001',
-    fldExternalRef: 'ARCH-99',
-    fldTabsProjectNumber: 'TABS123',
-    fldPDDate: '2026-08-28',
-    fldInspector: 'insp-1',
-    fldProjType: 'TAS/RAS',
-    fldProjDescription: 'Alter restrooms.',
-    fldTenantFunded: '' as FormDataEntryValue | null,
-    fldClient: 'client-1',
-    fldFacilities: ['fac-1'],
-  };
+  it('round-trips Assessment fldProjName', () => {
+    const payload = buildProjectSavePayload({ ...assessmentBase, fldProjName: 'FREDA Site A' });
+    expect(payload.fldProjName).toBe('FREDA Site A');
+  });
 
-  it('persists TABS, architect job #, description, and unanswered Tenant Funded as null', () => {
-    const payload = buildProjectSavePayload(base);
-    expect(payload.fldTabsProjectNumber).toBe('TABS123');
-    expect(payload.fldExternalRef).toBe('ARCH-99');
+  it('loads a legacy Assessment project without new fields', () => {
+    const payload = buildProjectSavePayload(assessmentBase);
+    expect(payload.fldInspector).toBe('insp-1');
     expect(payload.fldProjDescription).toBe('Alter restrooms.');
-    expect(payload.fldTenantFunded).toBeNull();
-    expect(payload.fldProjNumber).toBe('26-08-00001');
+    expect(payload).not.toHaveProperty('tdlrRegistered');
+    expect(payload).not.toHaveProperty('fldPlanReviewRas');
+    expect(payload).not.toHaveProperty('fldInspectionRas');
+    expect(payload).not.toHaveProperty('fldTabsProjectNumber');
+    expect(payload).not.toHaveProperty('fldTenantFunded');
   });
 
-  it('persists Tenant Funded Yes and No without collapsing them', () => {
-    expect(buildProjectSavePayload({ ...base, fldTenantFunded: 'true' }).fldTenantFunded).toBe(true);
-    expect(buildProjectSavePayload({ ...base, fldTenantFunded: 'false' }).fldTenantFunded).toBe(false);
+  it('does not require tdlrRegistered on Assessment', () => {
+    const payload = buildProjectSavePayload(assessmentBase);
+    expect(payload.fldProjType).toBe('Assessment');
+    expect('tdlrRegistered' in payload).toBe(false);
   });
 
-  it('allows blank TABS number', () => {
-    expect(buildProjectSavePayload({ ...base, fldTabsProjectNumber: '' }).fldTabsProjectNumber).toBe('');
+  it('round-trips TAS/RAS fldProjName as the sole Project Name', () => {
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      fldProjName: 'A.B.C. Tower Alterations',
+      tdlrRegistered: emptyTdlrRegistered(),
+    });
+    expect(payload.fldProjName).toBe('A.B.C. Tower Alterations');
+    expect(payload.tdlrRegistered).not.toHaveProperty('projectName');
+  });
+
+  it('round-trips Plan Review RAS and Inspection RAS independently', () => {
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      fldPlanReviewRas: 'insp-review',
+      fldInspectionRas: 'insp-inspect',
+      tdlrRegistered: emptyTdlrRegistered(),
+    });
+    expect(payload.fldPlanReviewRas).toBe('insp-review');
+    expect(payload.fldInspectionRas).toBe('insp-inspect');
+  });
+
+  it('allows the same RAS in both assignment fields', () => {
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      fldPlanReviewRas: 'insp-same',
+      fldInspectionRas: 'insp-same',
+      tdlrRegistered: emptyTdlrRegistered(),
+    });
+    expect(payload.fldPlanReviewRas).toBe('insp-same');
+    expect(payload.fldInspectionRas).toBe('insp-same');
+  });
+
+  it('changing one RAS assignment does not change the other', () => {
+    const first = buildProjectSavePayload({
+      ...rasBase,
+      fldPlanReviewRas: 'insp-review',
+      fldInspectionRas: 'insp-inspect',
+      tdlrRegistered: emptyTdlrRegistered(),
+    });
+    const second = buildProjectSavePayload({
+      ...rasBase,
+      fldPlanReviewRas: 'insp-review-updated',
+      fldInspectionRas: first.fldInspectionRas,
+      tdlrRegistered: emptyTdlrRegistered(),
+    });
+    expect(second.fldPlanReviewRas).toBe('insp-review-updated');
+    expect(second.fldInspectionRas).toBe('insp-inspect');
+  });
+
+  it('keeps empty RAS assignments blank', () => {
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      fldPlanReviewRas: '  ',
+      fldInspectionRas: '',
+      tdlrRegistered: emptyTdlrRegistered(),
+    });
+    expect(payload.fldPlanReviewRas).toBe('');
+    expect(payload.fldInspectionRas).toBe('');
+  });
+
+  it('does not write fldTabsProjectNumber or fldTenantFunded', () => {
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      tdlrRegistered: emptyTdlrRegistered(),
+    });
+    expect(payload).not.toHaveProperty('fldTabsProjectNumber');
+    expect(payload).not.toHaveProperty('fldTenantFunded');
   });
 
   it('does not rewrite architect job number storage key', () => {
-    const payload = buildProjectSavePayload({ ...base, fldExternalRef: 'keep-me' });
+    const payload = buildProjectSavePayload({ ...assessmentBase, fldExternalRef: 'keep-me' });
     expect(payload).toHaveProperty('fldExternalRef', 'keep-me');
     expect(payload).not.toHaveProperty('fldArchitectProjectNumber');
+  });
+
+  it('omits Assessment Inspector from TAS/RAS payload so legacy fldInspector is not cleared', () => {
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      fldInspector: 'legacy-insp',
+      tdlrRegistered: emptyTdlrRegistered(),
+    });
+    expect(payload).not.toHaveProperty('fldInspector');
+  });
+});
+
+describe('tdlrRegistered payload', () => {
+  it('round-trips nested registered data without projectName or tdlrRas', () => {
+    const registered = emptyTdlrRegistered();
+    registered.tabsProjectNumber = 'TABS20XX004853';
+    registered.scopeOfWork = 'Alter restrooms.';
+    registered.site.facilityName = 'Tower';
+    registered.owner.name = 'A.B.C. Property Holdings, LLC';
+    registered.designFirm.name = 'A.B.C. Architects, Inc.';
+
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      fldProjName: 'A.B.C. Tower Alterations',
+      fldPlanReviewRas: 'insp-1',
+      tdlrRegistered: registered,
+    });
+
+    expect(payload.fldProjName).toBe('A.B.C. Tower Alterations');
+    expect(payload.tdlrRegistered).not.toHaveProperty('projectName');
+    expect(payload.tdlrRegistered).not.toHaveProperty('tdlrRas');
+    expect(payload.tdlrRegistered.tabsProjectNumber).toBe('TABS20XX004853');
+    expect(payload.tdlrRegistered.scopeOfWork).toBe('Alter restrooms.');
+    expect(payload.tdlrRegistered.site.facilityName).toBe('Tower');
+    expect(payload.tdlrRegistered.owner.name).toBe('A.B.C. Property Holdings, LLC');
+    expect(payload.tdlrRegistered.designFirm.name).toBe('A.B.C. Architects, Inc.');
+    expect(payload.fldPlanReviewRas).toBe('insp-1');
+  });
+
+  it('keeps Scope of Work independent of fldProjDescription', () => {
+    const registered = emptyTdlrRegistered();
+    registered.scopeOfWork = 'TDLR registered scope';
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      fldProjDescription: 'Internal FREDA description',
+      tdlrRegistered: registered,
+    });
+    expect(payload.tdlrRegistered.scopeOfWork).toBe('TDLR registered scope');
+    expect(payload).not.toHaveProperty('fldProjDescription');
+  });
+
+  it('preserves tenantFunded true, false, and null', () => {
+    const yes = emptyTdlrRegistered();
+    yes.tenantFunded = true;
+    expect(buildProjectSavePayload({ ...rasBase, tdlrRegistered: yes }).tdlrRegistered.tenantFunded).toBe(true);
+
+    const no = emptyTdlrRegistered();
+    no.tenantFunded = false;
+    expect(buildProjectSavePayload({ ...rasBase, tdlrRegistered: no }).tdlrRegistered.tenantFunded).toBe(false);
+
+    const unanswered = emptyTdlrRegistered();
+    unanswered.tenantFunded = null;
+    expect(buildProjectSavePayload({ ...rasBase, tdlrRegistered: unanswered }).tdlrRegistered.tenantFunded).toBeNull();
+  });
+
+  it('does not copy registered site or owner onto Facility/Client fields', () => {
+    const registered = emptyTdlrRegistered();
+    registered.site.address = '100 Main';
+    registered.owner.name = 'Registered Owner LLC';
+
+    const payload = buildProjectSavePayload({
+      ...rasBase,
+      fldClient: 'client-1',
+      fldFacilities: ['fac-1'],
+      fldInspectionRas: 'insp-assigned',
+      tdlrRegistered: registered,
+    });
+
+    expect(payload.fldClient).toBe('client-1');
+    expect(payload.fldFacilities).toEqual(['fac-1']);
+    expect(payload.tdlrRegistered.owner.name).not.toBe(payload.fldClient);
+    expect(payload.tdlrRegistered.site.address).toBe('100 Main');
+    expect(payload.fldInspectionRas).toBe('insp-assigned');
+  });
+});
+
+describe('buildTdlrRegisteredFromForm', () => {
+  it('builds a complete nested object from form names', () => {
+    const form = new FormData();
+    form.set('tdlrSource', 'manual');
+    form.set('tdlrTabsProjectNumber', ' TABS1 ');
+    form.set('tdlrScopeOfWork', 'Scope');
+    form.set('tdlrTenantFunded', 'true');
+    form.set('tdlrSiteFacilityName', 'Bldg');
+    form.set('tdlrOwnerName', 'Owner LLC');
+    form.set('tdlrDesignFirmName', 'Firm Inc');
+    form.set('tdlrProjectName', 'Should be ignored');
+    form.set('tdlrRasName', 'Should be ignored');
+    form.set('tdlrRasNumber', 'RAS 149');
+
+    const snap = buildTdlrRegisteredFromForm(form);
+    expect(snap.tabsProjectNumber).toBe('TABS1');
+    expect(snap.tenantFunded).toBe(true);
+    expect(snap.owner.name).toBe('Owner LLC');
+    expect(snap.site.facilityName).toBe('Bldg');
+    expect(snap.source).toBe('manual');
+    expect(snap).not.toHaveProperty('projectName');
+    expect(snap).not.toHaveProperty('tdlrRas');
+  });
+
+  it('emptyTdlrRegistered has no projectName or tdlrRas', () => {
+    const empty = emptyTdlrRegistered();
+    expect(empty).not.toHaveProperty('projectName');
+    expect(empty).not.toHaveProperty('tdlrRas');
+  });
+
+  it('preserves tenantFunded false and null from the form', () => {
+    const no = new FormData();
+    no.set('tdlrTenantFunded', 'false');
+    expect(buildTdlrRegisteredFromForm(no).tenantFunded).toBe(false);
+
+    const unanswered = new FormData();
+    unanswered.set('tdlrTenantFunded', '');
+    expect(buildTdlrRegisteredFromForm(unanswered).tenantFunded).toBeNull();
   });
 });
 
