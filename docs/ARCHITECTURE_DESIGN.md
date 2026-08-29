@@ -2663,7 +2663,7 @@ Do **not** treat FREDA normalized stakeholder names as substitutes for official 
 
 ✅ IMPLEMENTED (professional hydration, feat/professional-hydration): Current-workflow responsible professional hydrates from the Project assignment. Assessment → `fldInspector`. TAS/RAS Data Entry / Inspection → `fldInspectionRas` (no session `inspectorId` fallback, no auth `uid`, no `fldInspector` on TAS/RAS, no Plan Review fallback). Setup generic Inspector assignment removed; Inspector directory CRUD remains. ProjectData `fldInspID` uses that professional.
 
-✅ IMPLEMENTED (RAS Review / Inspection work mode, feat/ras-work-mode-data-entry): TAS/RAS Data Entry Review | Inspection selector; sticky local mode keyed by Project (default Inspection); `fldWorkProduct` stamp on new records; optional `fldSheet` in Review; RAS hides Recommendation/cost; Review and Inspection both use the existing ProjectData image UI; Plan Review / Inspection dates on New/Edit Project; **work-mode-aware professional gating** (Assessment → `fldInspector`; Review → `fldPlanReviewRas`; Inspection → `fldInspectionRas`; no cross-role / session / `fldInspector` fallback on TAS/RAS). **Not implemented:** RAS report **body** (legacy Assessment body may still follow a RAS cover until Slice C); report instances; dedicated plan-markup/reference-image system; Data Explorer work-product UX; stakeholders; TDLR extraction. RAS **covers** are implemented (`feat/ras-report-cover`).
+✅ IMPLEMENTED (RAS Review / Inspection work mode, feat/ras-work-mode-data-entry): TAS/RAS Data Entry Review | Inspection selector; sticky local mode keyed by Project (default Inspection); `fldWorkProduct` stamp on new records; optional `fldSheet` in Review; RAS hides Recommendation/cost; Review and Inspection both use the existing ProjectData image UI; Plan Review / Inspection dates on New/Edit Project; **work-mode-aware professional gating** (Assessment → `fldInspector`; Review → `fldPlanReviewRas`; Inspection → `fldInspectionRas`; no cross-role / session / `fldInspector` fallback on TAS/RAS). RAS **covers** (`feat/ras-report-cover`) and RAS **body** (`feat/ras-report-body`) are implemented. **Not implemented:** report instances; dedicated plan-markup/reference-image system; Data Explorer work-product UX; stakeholders; TDLR extraction.
 
 **Product behavior implications:** New/Edit Project metadata and Project persistence only. Reports unchanged.
 
@@ -2808,7 +2808,7 @@ Cover label for RAS remains **Project Description** even though the stored field
 
 **Future TDLR import:** TABS source snapshots stay immutable. Current Project `tdlrRegistered` is **current canonical registered state** on the Project document and **may** be refreshed when staff approve a new snapshot (copy downward onto current Project metadata). That refresh updates `scopeOfWork`, and Model C then copies into `fldProjDescription`. Issued reports / historical `projectData` are not silently rewritten.
 
-**Implementation timing:** TAS/RAS save copy is ✅ IMPLEMENTED (`feat/ras-scope-description-sync`). Report Slice A semantics are ✅ IMPLEMENTED (`feat/ras-report-semantics`). Slice B cover wiring is ✅ IMPLEMENTED (`feat/ras-report-cover`). Adapter reads `scopeOfWork` directly for the RAS cover. RAS body remains Slice C.
+**Implementation timing:** TAS/RAS save copy is ✅ IMPLEMENTED (`feat/ras-scope-description-sync`). Report Slice A semantics are ✅ IMPLEMENTED (`feat/ras-report-semantics`). Slice B cover wiring is ✅ IMPLEMENTED (`feat/ras-report-cover`). Slice C RAS body is ✅ IMPLEMENTED (`feat/ras-report-body`). Adapter reads `scopeOfWork` directly for the RAS cover.
 
 #### Project Name (one stored value)
 
@@ -2928,9 +2928,9 @@ Data Explorer filter/display; RAS report profile (filter by `fldWorkProduct`; om
 
 ---
 
-✅ DECIDED (Plan Review Report title — documentation only, 2026-08-29): The Beta RAS Plan Review cover title is the report-profile/template constant **`Plan Review Report`**. The Inspection cover title remains **`Inspection Report`**. Both RAS profiles use the standards line **`2012 Texas Accessibility Standards`**. These are **not** Project metadata. Do **not** invent Beta subtype titles (`Preliminary Plan Review Report`, `Revised Plan Review Report`); those may later be report-instance metadata. **Implemented (cover only):** `feat/ras-report-cover`. RAS body remains Slice C.
+✅ DECIDED (Plan Review Report title — documentation only, 2026-08-29): The Beta RAS Plan Review cover title is the report-profile/template constant **`Plan Review Report`**. The Inspection cover title remains **`Inspection Report`**. Both RAS profiles use the standards line **`2012 Texas Accessibility Standards`**. These are **not** Project metadata. Do **not** invent Beta subtype titles (`Preliminary Plan Review Report`, `Revised Plan Review Report`); those may later be report-instance metadata. **Implemented:** cover `feat/ras-report-cover`; body `feat/ras-report-body`.
 
-✅ DECIDED (Beta RAS report-profile architecture — documentation only, 2026-08-29): Investigation of the current Assessment PDF (`ReportPreview.tsx` ~1877 lines) and Web Report Viewer. Recommends a **shared pagination/print engine + explicit report profile + data adapter**. Assessment behavior is preserved by an Assessment profile that matches today’s mapping. Plan Review and Inspection share one RAS composition with work-product-specific title, professional, date, and record filter. Recommendation and Financial omission is **structural** (not CSS-hidden). **Implemented (cover only):** `feat/ras-report-cover`. RAS body remains Slice C.
+✅ DECIDED (Beta RAS report-profile architecture — documentation only, 2026-08-29): Investigation of the current Assessment PDF (`ReportPreview.tsx` ~1877 lines) and Web Report Viewer. Recommends a **shared pagination/print engine + explicit report profile + data adapter**. Assessment behavior is preserved by an Assessment profile that matches today’s mapping. Plan Review and Inspection share one RAS composition with work-product-specific title, professional, date, and record filter. Recommendation and Financial omission is **structural** (not CSS-hidden). **Implemented:** cover `feat/ras-report-cover`; body `feat/ras-report-body`.
 
 **Product behavior implications:** None in the running app.
 
@@ -3156,11 +3156,15 @@ Do not show Preliminary/Revised/Official subtype titles on the Beta cover. Archi
 
 #### Proposed RAS body sections (minimum Beta)
 
-Cover → **Narrative** (operational facility text via `resolveFacilityReportNarrative`; **included** on Assessment, RAS Plan Review, and RAS Inspection — Ken 2026-08-29) → **Findings** (Documentation cards without rec/cost; Plan Review includes Sheet) → **Referenced Standards** (TAS from record citations) → **Images / Photo Addendum** (reuse extra-image pipeline).
+Cover → **Narrative** (operational FREDA text via profile-aware `resolveReportNarrative`; **included** on Assessment, RAS Plan Review, and RAS Inspection — Ken 2026-08-29; Inspection display-only template fallback when no authored text) → **Findings** (Documentation cards without rec/cost; Plan Review includes Sheet) → **Referenced Standards** (TAS from record citations) → **Images / Photo Addendum** (reuse extra-image pipeline).
 
 **Omit:** Financial; Recommendation content; Assessment four-standard branding.
 
 **Narrative** is **not** TDLR registered wording and is **not** Project Description / TABS Scope of Work. It remains the existing FREDA narrative fields. **Do not omit** Narrative from Beta RAS.
+
+✅ DECIDED (RAS PDF filename, 2026-08-29): RAS Print/Save as PDF uses stem **`TABS# - Project Name - Plan Review`** or **`TABS# - Project Name - Inspection`**. TABS # = `tdlrRegistered.tabsProjectNumber`; Project Name = `fldProjName`. Missing parts are omitted (no doubled separators); if both missing, **`Plan Review Report`** / **`Inspection Report`**. Assessment remains **`Project Name - Facility Name`**. Browser adds `.pdf`. Implemented in `feat/ras-report-body`.
+
+✅ DECIDED (RAS Inspection Narrative display fallback, 2026-08-29): Inspection reports use a user-supplied **display-only** default Narrative when no authored FREDA facility-specific or project `fldNarrative` text exists. Authored Narrative always wins. The text is **not** persisted automatically and is **not** legal guidance. Plan Review and Assessment keep the existing `'No project narrative provided.'` fallback. TABS Scope (`scopeOfWork`) remains cover Project Description only. Implemented in `feat/ras-report-body`.
 
 **Section letters (Ken):** first included report section after the cover → **A**; next included section → **B**; next → **C**; and so on, regardless of section type. Narrative, Findings, Referenced Standards, and Image/Photo Addendum participate in that sequence when included. Do **not** hard-code Findings = unlettered / Referenced Standards = A / Images = B.
 
@@ -3195,6 +3199,7 @@ Still unresolved after this investigation:
 
 1. Plan Review extra-image section title/terminology (Photo vs Image).
 2. ✅ DECIDED (RAS cover identity, `feat/ras-report-cover`): top centered hero = `projects.fldProjName`. Do **not** use registered or FREDA Facility Name in the hero. PROJECT INFORMATION still shows registered `tdlrRegistered.site.facilityName`. RAS cover omits the shared bottom-left footer identity. Assessment hero/footer unchanged.
+   ✅ DECIDED (RAS body footer identity, `feat/ras-report-body`): RAS body-page footer (Plan Review and Inspection: Narrative, Findings, Referenced Standards, Image/Photo Addendum) shows `projects.fldProjName`. Blank Project Name → blank footer identity (no FREDA Facility or registered Facility fallback). RAS cover footer stays omitted. Assessment footer remains FREDA Facility name.
 3. How (or whether) square footage is stored on FREDA Project (TABS splits it from Scope of Work).
 
 **Settled in this documentation slice (2026-08-29), not implemented:**
@@ -3214,17 +3219,17 @@ Still unresolved after this investigation:
 |-------|------|------------------------------|
 | **P — metadata sync** | ✅ IMPLEMENTED (`feat/ras-scope-description-sync`): TAS/RAS save `fldProjDescription` ← `tdlrRegistered.scopeOfWork` (including blank). TABS Scope remains authoritative. RAS report still reads Scope directly when rendering is implemented. No Firestore backfill. | **No** |
 | **A** | ✅ IMPLEMENTED (`feat/ras-report-semantics`): `reportProfile` type, `selectReportProfile`, `filterRecordsForReportProfile`, `buildReportViewModel`, RAS section inclusion/lettering, source resolution. Adapter reads RAS Project Description from `tdlrRegistered.scopeOfWork`. Wired to View Report / RAS cover in Slice B. | **No** |
-| **B** | ✅ IMPLEMENTED (`feat/ras-report-cover`): explicit `selectReportProfile` / view-model at View Report; RAS Plan Review and Inspection **covers** consume the Slice A adapter. Assessment cover unchanged. RAS **body** remains legacy until Slice C. | **Yes** (cover only) |
-| **C** | RAS body: Narrative; filtered Findings; TAS citations; Location + Sheet; images/addendum; sequential section letters; Rec/cost/Financial omitted structurally; pagination check. Assessment body unchanged. | **Yes** (cards / section stream) |
+| **B** | ✅ IMPLEMENTED (`feat/ras-report-cover`): explicit `selectReportProfile` / view-model at View Report; RAS Plan Review and Inspection **covers** consume the Slice A adapter. Assessment cover unchanged. | **Yes** (cover only) |
+| **C** | ✅ IMPLEMENTED (`feat/ras-report-body`): RAS body Narrative; filtered Findings; TAS citations; Location + Sheet (Plan Review); Image/Photo terminology; sequential section letters; Rec/cost/Financial omitted structurally; shared pagination. Assessment body unchanged. | **Yes** (cards / section stream) |
 | **D** | Web Report heading/records consume the same adapter (no print-engine redesign) | No ReportPreview; `WebReportViewer` only |
 
 Do not implement RAS report rendering in the metadata-sync slice.
 
-#### Implementation status (as of `feat/ras-report-cover`)
+#### Implementation status (as of `feat/ras-report-body`)
 
-**Implemented (production):** RAS Review/Inspection Data Entry work mode; `fldWorkProduct`; Sheet entry (Review); RAS dates on New/Edit Project; work-mode professional hydration/gating; image entry (shared ProjectData UI); RAS Data Entry Recommendation/cost hiding; TAS/RAS `fldProjDescription` ← `scopeOfWork` synchronization; report profile semantic type/config; report data adapter/view-model; work-product report filter helper; RAS section sequencing helper; RAS source resolution semantics; **explicit View Report profile wiring; visible RAS Plan Review / Inspection covers** (`selectReportProfile` + `buildReportViewModel` in `LayoutOrchestrator`; `RasReportCover` consumed by `ReportPreview`). Assessment cover unchanged. RAS cover + **legacy body** until Slice C.
+**Implemented (production):** RAS Review/Inspection Data Entry work mode; `fldWorkProduct`; Sheet entry (Review); RAS dates on New/Edit Project; work-mode professional hydration/gating; image entry (shared ProjectData UI); RAS Data Entry Recommendation/cost hiding; TAS/RAS `fldProjDescription` ← `scopeOfWork` synchronization; report profile semantic type/config; report data adapter/view-model; work-product report filter helper; RAS section sequencing helper; RAS source resolution semantics; **explicit View Report profile wiring; visible RAS Plan Review / Inspection covers**; **RAS body** (profile-filtered records; Narrative; Findings cards without Recommendation/cost; Location + Plan Review Sheet; Image/Photo terminology and addenda; sequential A/B/C lettering; Financial structurally omitted from the PDF section stream); **RAS PDF filename** `TABS# - Project Name - Plan Review|Inspection`; **RAS Inspection Narrative display fallback** (authored FREDA Narrative wins; not persisted). Assessment cover and Assessment body unchanged.
 
-**✅ DECIDED, not implemented:** RAS report **body** (Narrative presentation, Findings/cards, Sheet in body, image/photo rendering, sequential lettering in PDF, visible Recommendation/cost/Financial omission); Web Report parity; report instances. RAS cover already reads `tdlrRegistered.scopeOfWork` as Project Description.
+**✅ DECIDED, not implemented:** Web Report parity; report instances; revised/multiple report instance selection; TDLR extraction automation; stakeholder/project-party implementation.
 
 **Future (not Beta report profile):** `reportInstanceId`; multiple report instances/history; TDLR extraction/snapshot automation; stakeholder/project-party links.
 

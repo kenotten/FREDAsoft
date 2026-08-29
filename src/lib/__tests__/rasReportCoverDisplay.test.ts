@@ -227,6 +227,7 @@ describe('RAS cover display sources', () => {
     const cover = buildRasCoverDisplayModel(vm)!;
     expect(cover.ownerName).toBe('Registered Owner LLC');
     expect(cover.ownerAddress).toBe('200 Owner St');
+    expect(cover.ownerCityStateZip).toBe('Austin, TX 78702');
     expect(cover.ownerName).not.toBe(client.fldClientName);
   });
 
@@ -322,6 +323,7 @@ describe('RAS cover display sources', () => {
       left: { label: 'Project Address:', value: '100 Main' },
       right: { label: 'City/State/ZIP:', value: 'Austin, TX 78701' },
     });
+    expect(layout.projectInformation[2].kind).toBe(layout.ocgInformation[2].kind);
     expect(layout.projectInformation[3]).toMatchObject({
       kind: 'span',
       label: 'Project Description:',
@@ -335,24 +337,48 @@ describe('RAS cover display sources', () => {
     });
     expect(JSON.stringify(layout.projectInformation)).not.toContain('Tenant Funds Provided');
     expect(JSON.stringify(layout.projectInformation)).not.toContain('Type of Work');
+    expect(JSON.stringify(layout.projectInformation)).not.toContain('"label":"City:"');
+    expect(JSON.stringify(layout.projectInformation)).not.toContain('"label":"State/ZIP:"');
 
     expect(layout.ownerInformation[0]).toMatchObject({
       kind: 'span',
       label: 'Name:',
       value: 'Registered Owner LLC',
     });
-    expect(layout.ownerInformation[1]).toMatchObject({
-      kind: 'span',
-      label: 'Address:',
-      value: '200 Owner St',
-    });
-    expect(layout.ownerInformation[2]).toEqual({
+    expect(layout.ownerInformation[1]).toEqual({
       kind: 'pair',
-      left: { label: 'City:', value: 'Austin' },
-      right: { label: 'State/ZIP:', value: 'TX 78702' },
+      left: { label: 'Address:', value: '200 Owner St' },
+      right: { label: 'City/State/ZIP:', value: 'Austin, TX 78702' },
     });
-    expect(layout.ownerInformation[2].kind).toBe(layout.projectInformation[2].kind);
+    expect(layout.ownerInformation[1].kind).toBe(layout.projectInformation[2].kind);
     expect(layout.ownerInformation[0]).not.toMatchObject({ value: client.fldClientName });
+  });
+
+  it('formats RAS Project and Owner City/State/ZIP as one value and omits bad punctuation', () => {
+    const project = rasProject();
+    project.tdlrRegistered = {
+      ...project.tdlrRegistered!,
+      site: { ...project.tdlrRegistered!.site, zip: '' },
+      owner: { ...project.tdlrRegistered!.owner, city: '', zip: '78702' },
+    };
+    const cover = buildRasCoverDisplayModel(
+      buildReportViewModel({ profile: 'plan_review', project, inspectors })
+    )!;
+    expect(cover.cityStateZip).toBe('Austin, TX');
+    expect(cover.cityStateZip).not.toMatch(/,\s*$/);
+    expect(cover.ownerCityStateZip).toBe('TX 78702');
+    expect(cover.ownerCityStateZip.startsWith(',')).toBe(false);
+    const layout = buildRasCoverLayout(cover);
+    expect(layout.projectInformation[2]).toEqual({
+      kind: 'pair',
+      left: { label: 'Project Address:', value: '100 Main' },
+      right: { label: 'City/State/ZIP:', value: 'Austin, TX' },
+    });
+    expect(layout.ownerInformation[1]).toEqual({
+      kind: 'pair',
+      left: { label: 'Address:', value: '200 Owner St' },
+      right: { label: 'City/State/ZIP:', value: 'TX 78702' },
+    });
   });
 
   it('uses Tenant Funds: label with Yes/No/blank values', () => {

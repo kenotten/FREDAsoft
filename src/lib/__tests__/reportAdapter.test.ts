@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyTdlrRegistered } from '../projectMetadataFields';
 import { buildReportViewModel } from '../reportAdapter';
+import { RAS_INSPECTION_NARRATIVE_FALLBACK } from '../rasInspectionNarrative';
 import type { Client, Inspector, Project, ProjectData } from '../../types';
 
 function rasProject(overrides: Partial<Project> = {}): Project {
@@ -262,6 +263,38 @@ describe('buildReportViewModel missing RAS data', () => {
     expect(vm.ras?.tenantFunded).toBeNull();
     expect(vm.professional.id).toBe('');
     expect(vm.date).toBe('');
+  });
+
+  it('Inspection Narrative uses the display fallback, not TABS Scope', () => {
+    const vm = buildReportViewModel({
+      profile: 'inspection',
+      project: rasProject(),
+      inspectors,
+    });
+    expect(vm.narrative).toBe(RAS_INSPECTION_NARRATIVE_FALLBACK);
+    expect(vm.narrative).not.toBe(vm.ras?.projectDescription);
+    expect(vm.ras?.projectDescription).toBe('TABS registered scope');
+  });
+
+  it('Plan Review Narrative does not receive the Inspection default', () => {
+    const vm = buildReportViewModel({
+      profile: 'plan_review',
+      project: rasProject(),
+      inspectors,
+    });
+    expect(vm.narrative).toBe('No project narrative provided.');
+    expect(vm.narrative).not.toBe(RAS_INSPECTION_NARRATIVE_FALLBACK);
+  });
+
+  it('preserves Inspection Narrative paragraph breaks through the view-model pipeline', () => {
+    const vm = buildReportViewModel({
+      profile: 'inspection',
+      project: rasProject(),
+      inspectors,
+    });
+    expect(vm.narrative).toBe(RAS_INSPECTION_NARRATIVE_FALLBACK);
+    expect(vm.narrative).toContain('\n\nTEXAS ACCESSIBILITY STANDARDS\n\n');
+    expect(vm.narrative.split('\n\n').length).toBeGreaterThan(1);
   });
 });
 

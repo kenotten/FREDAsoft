@@ -176,4 +176,17 @@ describe('RAS section lettering', () => {
   it('does not letter Assessment sections', () => {
     expect(getRasLetteredSections('assessment', { hasReferencedStandards: true })).toEqual([]);
   });
+
+  it('omitting Narrative closes the letter gap so Findings is A', () => {
+    const lettered = getRasLetteredSections(
+      'plan_review',
+      { hasReferencedStandards: true, hasImageAddendum: true },
+      { narrative: false, findings: true }
+    );
+    expect(lettered.map((s) => `${s.letter} ${s.title}`)).toEqual([
+      'A Findings',
+      'B Referenced Standards',
+      'C Image Addendum',
+    ]);
+  });
 });

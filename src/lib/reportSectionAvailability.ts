@@ -3,7 +3,7 @@
  * Does not infer Review vs Inspection; callers pass an explicit profile.
  */
 
-import { getReportProfileSemantics, type ReportProfile } from './reportProfile';
+import { getReportProfileSemantics, isRasReportProfile, type ReportProfile } from './reportProfile';
 
 export type ReportSectionContentAvailability = {
   hasReferencedStandards: boolean;
@@ -43,4 +43,19 @@ export function listOfferedReportSectionKeys(
   if (availability.hasReferencedStandards) keys.push('referencedStandards');
   if (availability.hasPhotoAddendum) keys.push('photoAddendum');
   return keys;
+}
+
+/** Display labels for the section dialog. Assessment strings stay as they are today. */
+export function getReportSectionDialogLabels(profile: ReportProfile): {
+  documentation: string;
+  photoAddendum: string;
+} {
+  if (!isRasReportProfile(profile)) {
+    return { documentation: 'Documentation', photoAddendum: 'Photo addendum' };
+  }
+  const semantics = getReportProfileSemantics(profile);
+  return {
+    documentation: 'Findings',
+    photoAddendum: semantics.imageTerminology.addendum,
+  };
 }

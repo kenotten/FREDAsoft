@@ -30,8 +30,8 @@ import {
   ReportSectionSelectionDialog,
   type ReportSectionSelection
 } from '../ReportSectionSelectionDialog';
-import { getReportSectionAvailability } from '../../lib/reportPreviewShared';
-import { getSelectableReportSections } from '../../lib/reportSectionAvailability';
+import { getReportSectionAvailabilityForProfile } from '../../lib/reportBodyPipeline';
+import { getReportSectionDialogLabels, getSelectableReportSections } from '../../lib/reportSectionAvailability';
 import { 
   ClientModal, 
   FacilityModal, 
@@ -288,7 +288,7 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
     const content =
       !selectedProject || !selectedFacility
         ? { hasReferencedStandards: false, hasPhotoAddendum: false }
-        : getReportSectionAvailability(
+        : getReportSectionAvailabilityForProfile(
             projectData,
             selectedProject,
             selectedFacility,
@@ -297,7 +297,8 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
             categories,
             items,
             locations,
-            findings
+            findings,
+            reportProfile
           );
     return getSelectableReportSections(reportProfile, content);
   }, [
@@ -575,6 +576,8 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
         hasFinancial={reportSectionAvailability.hasFinancial}
         hasReferencedStandards={reportSectionAvailability.hasReferencedStandards}
         hasPhotoAddendum={reportSectionAvailability.hasPhotoAddendum}
+        documentationLabel={getReportSectionDialogLabels(reportProfile).documentation}
+        photoAddendumLabel={getReportSectionDialogLabels(reportProfile).photoAddendum}
         onClose={() => setShowReportSectionDialog(false)}
         onConfirm={(sel) => {
           setReportSectionSelection(sel);

@@ -1,7 +1,7 @@
 # Convert to RAS
 
-**Status:** Planning / architecture note. Data Entry work mode and RAS **covers** are implemented; RAS report **body** is **not** implemented.
-**Last updated:** 2026-08-29 (report Slice B: explicit profile wiring + RAS covers; RAS body still legacy until Slice C)
+**Status:** Planning / architecture note. Data Entry work mode, RAS **covers**, and RAS report **body** are implemented; Web Report parity and report instances are **not** implemented.
+**Last updated:** 2026-08-29 (report Slice C: RAS body, RAS PDF filename, Inspection Narrative fallback)
 **Audience:** Product owner, architecture review, implementation planning
 
 > **Disclaimer:** This document captures internal planning for adapting FREDAsoft toward Registered Accessibility Specialist (RAS) workflows under the Texas Department of Licensing and Regulation (TDLR). It does **not** assert legal compliance, required forms, or final field lists. All TDLR/RAS requirements must be verified from official sources, sample deliverables, and qualified review before any implementation.
@@ -123,7 +123,7 @@ A **Review | Inspection** selector (✅ IMPLEMENTED in Data Entry) chooses which
 
 Missing Plan Review RAS is **legitimate** when OCG performs Inspection only. Require only the professional for the active work mode. Do **not** silently copy assignments.
 
-**Beta model (✅ IMPLEMENTED in Data Entry, `feat/ras-work-mode-data-entry`):** **`docs/ARCHITECTURE_DESIGN.md`**. Data Entry **Review | Inspection** selector; sticky local state keyed by Project (default Inspection); not stored on the Project document. Records: `fldWorkProduct`. Sheet: `fldSheet` (Review only). Dates: `fldPlanReviewDate` / `fldInspectionDate` (not `fldPDDate` for RAS Inspection). RAS report rendering is **not** implemented.
+**Beta model (✅ IMPLEMENTED in Data Entry, `feat/ras-work-mode-data-entry`):** **`docs/ARCHITECTURE_DESIGN.md`**. Data Entry **Review | Inspection** selector; sticky local state keyed by Project (default Inspection); not stored on the Project document. Records: `fldWorkProduct`. Sheet: `fldSheet` (Review only). Dates: `fldPlanReviewDate` / `fldInspectionDate` (not `fldPDDate` for RAS Inspection). RAS PDF cover and body are implemented; Web Report parity is not.
 
 ### Plan Review Sheet (✅ implemented in Data Entry)
 
@@ -133,7 +133,7 @@ Inspection findings commonly use **Location**. Plan Review findings may use **Lo
 
 ## 7. RAS record and report fields (decided — planning)
 
-✅ DECIDED (2026-08-29): RAS **Plan Review** and **Inspection** reports contain findings / applicable TAS requirements. They do **not** contain Recommendations, cost estimates, or the Financial section. Assessment reporting remains unchanged. Report rendering is **not** implemented in this slice.
+✅ DECIDED (2026-08-29): RAS **Plan Review** and **Inspection** reports contain findings / applicable TAS requirements. They do **not** contain Recommendations, cost estimates, or the Financial section. Assessment reporting remains unchanged. RAS PDF body is ✅ IMPLEMENTED (`feat/ras-report-body`).
 
 ### Excluded from RAS reports (and ideally from RAS Data Entry)
 
@@ -271,9 +271,9 @@ Registered RAS facts live on **`projects.tdlrRegistered`** (TDLR as-recorded; Be
 | Standards | Assessment profile | RAS template: 2012 TAS |
 | Architect/DP internal project # | `fldExternalRef` if used | `fldExternalRef` |
 
-Template titles (`Plan Review Report`, `Inspection Report`) and the standards line (`2012 Texas Accessibility Standards`) remain RAS report-profile constants. **✅ IMPLEMENTED on cover** (`feat/ras-report-cover`). RAS body remains Slice C. Authoritative investigation: **`docs/ARCHITECTURE_DESIGN.md`** (Beta RAS report-profile architecture).
+Template titles (`Plan Review Report`, `Inspection Report`) and the standards line (`2012 Texas Accessibility Standards`) remain RAS report-profile constants. **✅ IMPLEMENTED** cover (`feat/ras-report-cover`) and body (`feat/ras-report-body`). Authoritative investigation: **`docs/ARCHITECTURE_DESIGN.md`** (Beta RAS report-profile architecture).
 
-**Production (feat/ras-beta-project-metadata + feat/professional-hydration + feat/ras-work-mode-data-entry + feat/ras-scope-description-sync):** New/Edit Project persists `tdlrRegistered` for TAS/RAS. Sole Project Name is `fldProjName`. TAS/RAS save synchronizes `fldProjDescription` from `tdlrRegistered.scopeOfWork` (including blank); Assessment `fldProjDescription` remains independently authored. Current-workflow professional hydrates from `fldInspector` (Assessment), `fldPlanReviewRas` (TAS/RAS Review), or `fldInspectionRas` (TAS/RAS Inspection). Session Active Inspector is not an assignment. RAS **cover** rendering is implemented (`feat/ras-report-cover`; cover Project Description reads Scope directly). RAS **body** is not. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer written.
+**Production (feat/ras-beta-project-metadata + feat/professional-hydration + feat/ras-work-mode-data-entry + feat/ras-scope-description-sync):** New/Edit Project persists `tdlrRegistered` for TAS/RAS. Sole Project Name is `fldProjName`. TAS/RAS save synchronizes `fldProjDescription` from `tdlrRegistered.scopeOfWork` (including blank); Assessment `fldProjDescription` remains independently authored. Current-workflow professional hydrates from `fldInspector` (Assessment), `fldPlanReviewRas` (TAS/RAS Review), or `fldInspectionRas` (TAS/RAS Inspection). Session Active Inspector is not an assignment. RAS **cover** and **body** rendering are implemented (`feat/ras-report-cover`, `feat/ras-report-body`; cover Project Description reads Scope directly). Web Report parity is not. Flat `fldTabsProjectNumber` / `fldTenantFunded` are no longer written.
 
 Do **not** treat FREDA normalized stakeholder names as substitutes for official registered report text.
 
@@ -305,11 +305,15 @@ Authoritative report-profile decisions live in **`docs/ARCHITECTURE_DESIGN.md`**
 |-------|-----------|
 | **Template count** | Shared pagination/print engine + explicit report profile (Plan Review / Inspection) |
 | **Cover** | Mirror existing OCG RAS cover blocks (Header, hero, OCG INFORMATION, PROJECT INFORMATION, OWNER INFORMATION). Project Description on cover = TABS `tdlrRegistered.scopeOfWork`. Type of Work is a separate OCG INFORMATION field. Dates: **Plan Review Date:** / **Inspection Date:** (no separate Report Date). Registered Facility uses `tdlrRegistered.site` (do not treat “site” as a separate entity). Buildings/features inside a registered Facility are distinguished by Location. No FREDA stakeholder dump. |
-| **Narrative** | **Included** on Assessment, RAS Plan Review, and RAS Inspection (operational FREDA narrative — not TABS Scope). |
+| **Narrative** | **Included** on Assessment, RAS Plan Review, and RAS Inspection (operational FREDA narrative — not TABS Scope). Inspection uses a user-supplied **display-only** template fallback when no authored facility-specific or project `fldNarrative` text exists; authored wins; not persisted; not legal guidance. Plan Review / Assessment keep `'No project narrative provided.'` |
 | **Section letters** | First included section after cover = **A**, then B, C… regardless of section type. Do not hard-code Findings unlettered / Standards=A / Images=B. |
 | **Sections** | Cover → Narrative → Findings (no rec/cost; Review includes Sheet) → Referenced Standards → Photo/Image Addendum. **No** Financial. |
 | **Web Report** | Later adapter slice; no print |
-| **PDF** | Shared engine; Slice B cover wiring done; protect `ReportPreview.tsx` for Slice C body |
+| **PDF** | Shared engine; Slice B cover + Slice C body implemented. RAS Print/Save as PDF filename stem: **`TABS# - Project Name - Plan Review`** or **`TABS# - Project Name - Inspection`**. Assessment remains **`Project Name - Facility Name`**. |
+
+✅ DECIDED (2026-08-29): RAS Print/Save as PDF filename stem is **`TABS# - Project Name - Plan Review`** or **`TABS# - Project Name - Inspection`**. TABS # = `tdlrRegistered.tabsProjectNumber`; Project Name = `fldProjName`. Missing parts are omitted (no doubled separators); if both missing, **`Plan Review Report`** / **`Inspection Report`**. Assessment remains **`Project Name - Facility Name`**. Browser adds `.pdf`.
+
+✅ DECIDED (2026-08-29): RAS Inspection Narrative uses a user-supplied **display-only** template fallback when no authored facility-specific or project `fldNarrative` text exists. Authored Narrative always wins. The fallback is **not** persisted automatically and is **not** legal guidance. Plan Review and Assessment keep the existing empty-narrative fallback. TABS Scope remains cover Project Description only.
 
 ### Requirements still to investigate
 

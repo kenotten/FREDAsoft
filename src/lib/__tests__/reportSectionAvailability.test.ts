@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getReportProfileSemantics, selectReportProfile } from '../reportProfile';
 import {
+  getReportSectionDialogLabels,
   getSelectableReportSections,
   listOfferedReportSectionKeys,
   type ReportSectionContentAvailability,
@@ -71,6 +72,21 @@ describe('getSelectableReportSections', () => {
       'documentation',
       'financial',
     ]);
+  });
+
+  it('dialog labels: Assessment Documentation / Photo addendum; RAS Findings and addendum terms', () => {
+    expect(getReportSectionDialogLabels('assessment')).toEqual({
+      documentation: 'Documentation',
+      photoAddendum: 'Photo addendum',
+    });
+    expect(getReportSectionDialogLabels('plan_review')).toEqual({
+      documentation: 'Findings',
+      photoAddendum: 'Image Addendum',
+    });
+    expect(getReportSectionDialogLabels('inspection')).toEqual({
+      documentation: 'Findings',
+      photoAddendum: 'Photo Addendum',
+    });
   });
 
   it('passes through content availability without inferring Review vs Inspection', () => {

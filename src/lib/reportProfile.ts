@@ -165,17 +165,34 @@ export type RasSectionContentFlags = {
   hasImageAddendum?: boolean;
 };
 
+/** User section-dialog inclusion. Defaults to included when omitted. */
+export type RasSectionUserInclusion = {
+  narrative?: boolean;
+  findings?: boolean;
+};
+
+export function isRasReportProfile(
+  profile: ReportProfile
+): profile is 'plan_review' | 'inspection' {
+  return profile === 'plan_review' || profile === 'inspection';
+}
+
 export function listRasIncludedSections(
   profile: ReportProfile,
-  content: RasSectionContentFlags = {}
+  content: RasSectionContentFlags = {},
+  userInclusion: RasSectionUserInclusion = {}
 ): { key: ReportSectionKey; title: string }[] {
   if (profile === 'assessment') return [];
   const semantics = getReportProfileSemantics(profile);
+  const includeNarrative = (userInclusion.narrative ?? true) && semantics.includeNarrative;
+  const includeFindings = userInclusion.findings ?? true;
   const sections: { key: ReportSectionKey; title: string }[] = [];
-  if (semantics.includeNarrative) {
+  if (includeNarrative) {
     sections.push({ key: 'narrative', title: 'Narrative' });
   }
-  sections.push({ key: 'findings', title: 'Findings' });
+  if (includeFindings) {
+    sections.push({ key: 'findings', title: 'Findings' });
+  }
   if (content.hasReferencedStandards) {
     sections.push({ key: 'referenced_standards', title: 'Referenced Standards' });
   }
@@ -197,7 +214,8 @@ export function assignRasSectionLetters(
 
 export function getRasLetteredSections(
   profile: ReportProfile,
-  content: RasSectionContentFlags = {}
+  content: RasSectionContentFlags = {},
+  userInclusion: RasSectionUserInclusion = {}
 ): LetterAssignedSection[] {
-  return assignRasSectionLetters(listRasIncludedSections(profile, content));
+  return assignRasSectionLetters(listRasIncludedSections(profile, content, userInclusion));
 }

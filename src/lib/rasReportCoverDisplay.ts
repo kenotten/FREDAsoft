@@ -5,6 +5,9 @@
 
 import type { ReportViewModel } from './reportAdapter';
 import type { ReportProfile } from './reportProfile';
+import { coverAddressPairRow, formatCityStateZip } from './coverAddressDisplay';
+
+export { formatCityStateZip } from './coverAddressDisplay';
 
 export function usesRasCover(profile: ReportProfile): boolean {
   return profile === 'plan_review' || profile === 'inspection';
@@ -23,18 +26,6 @@ export function formatTenantFundsProvided(value: boolean | null | undefined): st
   if (value === true) return 'Yes';
   if (value === false) return 'No';
   return '';
-}
-
-export function formatCityStateZip(city: string, state: string, zip: string): string {
-  const c = city.trim();
-  const s = state.trim();
-  const z = zip.trim();
-  const left = [c, s].filter(Boolean).join(', ');
-  return [left, z].filter(Boolean).join(' ');
-}
-
-export function formatStateZip(state: string, zip: string): string {
-  return [state.trim(), zip.trim()].filter(Boolean).join(' ');
 }
 
 /** Match Assessment cover date style (UTC month day, year). Blank when missing — not TBD. */
@@ -98,6 +89,7 @@ export type RasCoverDisplayModel = {
   ownerCity: string;
   ownerState: string;
   ownerZip: string;
+  ownerCityStateZip: string;
   ownerContactName: string;
   /** RAS cover omits the shared page-footer identity; both names already appear in cover data. */
   footerIdentityText: string;
@@ -136,6 +128,11 @@ export function buildRasCoverDisplayModel(viewModel: ReportViewModel): RasCoverD
     ownerCity: cover.ownerInformation.city,
     ownerState: cover.ownerInformation.state,
     ownerZip: cover.ownerInformation.zip,
+    ownerCityStateZip: formatCityStateZip(
+      cover.ownerInformation.city,
+      cover.ownerInformation.state,
+      cover.ownerInformation.zip
+    ),
     ownerContactName: cover.ownerInformation.contactName,
     footerIdentityText: rasCoverFooterIdentityText(),
   };
@@ -146,16 +143,11 @@ export function rasCoverFooterIdentityText(): string {
   return '';
 }
 
-/** Semantic row grouping for the established OCG RAS cover (paired, not one field per row). */
+/** OCG stays paired; Project/Owner Address shares a pair row with City/State/ZIP. */
 export function buildRasCoverLayout(display: RasCoverDisplayModel): RasCoverLayoutModel {
   const ownerRows: RasCoverLayoutRow[] = [
     { kind: 'span', label: 'Name:', value: display.ownerName },
-    { kind: 'span', label: 'Address:', value: display.ownerAddress },
-    {
-      kind: 'pair',
-      left: { label: 'City:', value: display.ownerCity },
-      right: { label: 'State/ZIP:', value: formatStateZip(display.ownerState, display.ownerZip) },
-    },
+    coverAddressPairRow('Address:', display.ownerAddress, display.ownerCityStateZip),
   ];
   if (display.ownerContactName) {
     ownerRows.push({ kind: 'span', label: 'Contact:', value: display.ownerContactName });
@@ -182,11 +174,7 @@ export function buildRasCoverLayout(display: RasCoverDisplayModel): RasCoverLayo
     projectInformation: [
       { kind: 'span', label: 'Project Name:', value: display.projectName },
       { kind: 'span', label: 'Facility Name:', value: display.facilityName },
-      {
-        kind: 'pair',
-        left: { label: 'Project Address:', value: display.projectAddress },
-        right: { label: 'City/State/ZIP:', value: display.cityStateZip },
-      },
+      coverAddressPairRow('Project Address:', display.projectAddress, display.cityStateZip),
       { kind: 'span', label: 'Project Description:', value: display.projectDescription, wrap: true },
       { kind: 'span', label: 'Tenant Funds:', value: display.tenantFundsProvided },
     ],

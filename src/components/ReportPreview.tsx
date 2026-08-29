@@ -24,8 +24,9 @@ import { toast } from 'sonner';
 import {
   buildReferencedAddendumEntries,
   filterReportProjectForPreview,
-  resolveFacilityReportNarrative,
-  buildReportPdfSuggestedFilename,
+  getReportFooterIdentity,
+  resolveReportNarrative,
+  buildViewReportPdfSuggestedFilename,
   formatGroupedStandardCitations,
   getRecordStandardIds,
   getReportRecordSortKeys,
@@ -50,8 +51,16 @@ import {
 import type { ReportSectionSelection } from './ReportSectionSelectionDialog';
 import type { ReportViewModel } from '../lib/reportAdapter';
 import type { ReportProfile } from '../lib/reportProfile';
+import { filterRecordsForReportProfile, getRasLetteredSections, isRasReportProfile } from '../lib/reportProfile';
+import {
+  normalizeReportBodySectionSelection,
+  rasBodyPageNumber,
+  rasBodySectionHeading,
+} from '../lib/reportBodyPipeline';
+import { formatCityStateZipOrFallback } from '../lib/coverAddressDisplay';
 import { rasCoverFooterIdentityText, usesRasCover } from '../lib/rasReportCoverDisplay';
 import { RasReportCover } from './report/RasReportCover';
+import { RasFindingCard } from './report/RasFindingCard';
 
 interface ReportPreviewProps {
   project: Project;
@@ -675,17 +684,25 @@ function PhotoAddendumCell({ row }: { row: PhotoAddendumRow }) {
 function PhotoAddendumPageBody({
   groups,
   showSectionTitle,
+  sectionHeading,
 }: {
   groups: PhotoAddendumPageLocationGroup<PhotoAddendumRow>[];
   showSectionTitle: boolean;
+  sectionHeading?: string;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       {showSectionTitle ? (
-        <h2 className="shrink-0 border-b-2 border-zinc-900 pb-2 text-xl font-bold text-zinc-900">
-          <span className="uppercase tracking-widest">Photo Addendum</span>
-          <span className="font-bold normal-case tracking-normal"> (extra photos)</span>
-        </h2>
+        sectionHeading ? (
+          <h2 className="shrink-0 border-b-2 border-zinc-900 pb-2 text-xl font-bold uppercase tracking-widest text-zinc-900">
+            {sectionHeading}
+          </h2>
+        ) : (
+          <h2 className="shrink-0 border-b-2 border-zinc-900 pb-2 text-xl font-bold text-zinc-900">
+            <span className="uppercase tracking-widest">Photo Addendum</span>
+            <span className="font-bold normal-case tracking-normal"> (extra photos)</span>
+          </h2>
+        )
       ) : null}
       <div className="min-h-0 flex-1 space-y-5 overflow-hidden">
         {groups.map((sec, si) => (
@@ -751,31 +768,30 @@ export function ReportPreview({
     useState(26);
   const [isMeasuring, setIsMeasuring] = useState(true);
 
+  const profile: ReportProfile = reportProfile ?? 'assessment';
+  const rasBody = isRasReportProfile(profile);
+  const bodyFooterIdentity = getReportFooterIdentity(profile, project.fldProjName, facility.fldFacName);
+
   const sectionSel = useMemo<ReportSectionSelection>(
-    () => ({
-      cover: true,
-      narrative: sectionSelection?.narrative ?? true,
-      documentation: sectionSelection?.documentation ?? true,
-      financial: sectionSelection?.financial ?? true,
-      referencedStandards: sectionSelection?.referencedStandards ?? true,
-      photoAddendum: sectionSelection?.photoAddendum ?? true,
-      recordSortOrder: sectionSelection?.recordSortOrder ?? 'category_location_item'
-    }),
-    [sectionSelection]
+    () => normalizeReportBodySectionSelection(profile, sectionSelection),
+    [profile, sectionSelection]
   );
 
   const filteredData = useMemo(
     () =>
-      filterReportProjectForPreview(
-        projectData,
-        project,
-        facility,
-        glossary,
-        categories,
-        items,
-        locations,
-        findings,
-        sectionSel.recordSortOrder
+      filterRecordsForReportProfile(
+        filterReportProjectForPreview(
+          projectData,
+          project,
+          facility,
+          glossary,
+          categories,
+          items,
+          locations,
+          findings,
+          sectionSel.recordSortOrder
+        ),
+        profile
       ),
     [
       projectData,
@@ -786,7 +802,8 @@ export function ReportPreview({
       items,
       locations,
       findings,
-      sectionSel.recordSortOrder
+      sectionSel.recordSortOrder,
+      profile
     ]
   );
 
@@ -809,6 +826,30 @@ export function ReportPreview({
     () => paginatePhotoAddendumByRows(supplementalPhotoRows),
     [supplementalPhotoRows]
   );
+
+  const rasLettered = useMemo(() => {
+    if (!rasBody) return [];
+    return getRasLetteredSections(
+      profile,
+      {
+        hasReferencedStandards: sectionSel.referencedStandards && referencedStandards.length > 0,
+        hasImageAddendum: sectionSel.photoAddendum && supplementalPhotoRows.length > 0,
+      },
+      {
+        narrative: sectionSel.narrative,
+        findings: sectionSel.documentation,
+      }
+    );
+  }, [
+    rasBody,
+    profile,
+    sectionSel.narrative,
+    sectionSel.documentation,
+    sectionSel.referencedStandards,
+    sectionSel.photoAddendum,
+    referencedStandards.length,
+    supplementalPhotoRows.length,
+  ]);
 
   const financialData = useMemo(() => {
     if (!sectionSel.financial) return [];
@@ -1000,9 +1041,9 @@ export function ReportPreview({
 
   // Pagination Chunks using measured heights
   const narrativePages = useMemo(() => {
-    const narrative = resolveFacilityReportNarrative(project, facility.fldFacID);
+    const narrative = resolveReportNarrative(profile, project, facility.fldFacID);
     return [narrative];
-  }, [project.fldFacilityNarratives, project.fldNarrative, facility.fldFacID]);
+  }, [profile, project.fldFacilityNarratives, project.fldNarrative, facility.fldFacID]);
 
   const documentationPages = useMemo(() => {
     if (!sectionSel.documentation) return [];
@@ -1301,7 +1342,7 @@ export function ReportPreview({
   const handlePrint = () => {
     // Browser Print / Save as PDF uses document.title as the default filename (adds .pdf).
     const previousTitle = document.title;
-    const printTitle = buildReportPdfSuggestedFilename(project.fldProjName, facility.fldFacName);
+    const printTitle = buildViewReportPdfSuggestedFilename(profile, project, facility.fldFacName);
     const restoreTitle = () => {
       document.title = previousTitle;
       window.removeEventListener('afterprint', restoreTitle);
@@ -1348,15 +1389,28 @@ export function ReportPreview({
                 data-id={record.fldPDataID}
                 style={{ marginBottom: DOC_CARD_GAP_PX }}
               >
-                <DocumentationCard 
-                  record={record} 
-                  index={0} 
-                  glossary={glossary} 
-                  standards={standards} 
-                  locations={locations}
-                  categories={categories}
-                  items={items}
-                />
+                {rasBody ? (
+                  <RasFindingCard
+                    record={record}
+                    index={0}
+                    profile={profile}
+                    glossary={glossary}
+                    standards={standards}
+                    locations={locations}
+                    categories={categories}
+                    items={items}
+                  />
+                ) : (
+                  <DocumentationCard
+                    record={record}
+                    index={0}
+                    glossary={glossary}
+                    standards={standards}
+                    locations={locations}
+                    categories={categories}
+                    items={items}
+                  />
+                )}
               </div>
             ))}
           </>
@@ -1512,17 +1566,31 @@ export function ReportPreview({
                     <ReportSection title="PROJECT INFORMATION">
                       <InfoRow label="Project Name:" value={project.fldProjName} />
                       <InfoRow label="Facility Name:" value={facility.fldFacName} />
-                      <InfoRow label="Project Address:" value={facility.fldFacAddress || 'TBD'} />
-                      <InfoRow label="City, State Zip:" value={`${facility.fldFacCity || ''}, ${facility.fldFacState || ''} ${facility.fldFacZip || ''}`} />
+                      <CoverPairRow
+                        leftLabel="Project Address:"
+                        leftValue={facility.fldFacAddress || 'TBD'}
+                        rightLabel="City/State/ZIP:"
+                        rightValue={formatCityStateZipOrFallback(
+                          facility.fldFacCity,
+                          facility.fldFacState,
+                          facility.fldFacZip,
+                          'TBD'
+                        )}
+                      />
                     </ReportSection>
                     <ReportSection title="OWNER INFORMATION">
                       <InfoRow label="Name:" value={client.fldClientName} />
-                      <InfoRow label="Address:" value={client.fldClientAddress || 'TBD'} />
-                      <div className="grid grid-cols-3 gap-4">
-                        <InfoRow label="City:" value={client.fldClientCity || 'TBD'} />
-                        <InfoRow label="State:" value={client.fldClientState || 'TBD'} />
-                        <InfoRow label="ZIP:" value={client.fldClientZIP || 'TBD'} />
-                      </div>
+                      <CoverPairRow
+                        leftLabel="Address:"
+                        leftValue={client.fldClientAddress || 'TBD'}
+                        rightLabel="City/State/ZIP:"
+                        rightValue={formatCityStateZipOrFallback(
+                          client.fldClientCity,
+                          client.fldClientState,
+                          client.fldClientZIP,
+                          'TBD'
+                        )}
+                      />
                     </ReportSection>
                   </div>
                 </div>
@@ -1532,9 +1600,21 @@ export function ReportPreview({
               {/* Narrative Pages */}
               {sectionSel.narrative &&
                 narrativePages.map((content, pIdx) => (
-                  <PageContainer key={`narrative-${pIdx}`} pageNumber={toRoman(pIdx + 1, false)} facilityName={facility.fldFacName}>
+                  <PageContainer
+                    key={`narrative-${pIdx}`}
+                    pageNumber={
+                      rasBody
+                        ? rasBodyPageNumber(rasLettered, 'narrative', pIdx + 1, toRoman(pIdx + 1, false))
+                        : toRoman(pIdx + 1, false)
+                    }
+                    facilityName={bodyFooterIdentity}
+                  >
                     <div className="flex flex-col">
-                      <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">Narrative:</h2>
+                      <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
+                        {rasBody
+                          ? rasBodySectionHeading(rasLettered, 'narrative', 'Narrative')
+                          : 'Narrative:'}
+                      </h2>
                       <div className="text-sm text-zinc-800 leading-relaxed space-y-6 whitespace-pre-wrap">
                         {content}
                       </div>
@@ -1542,15 +1622,25 @@ export function ReportPreview({
                   </PageContainer>
                 ))}
 
-              {/* Documentation Section */}
+              {/* Documentation / Findings Section */}
               {sectionSel.documentation ? (
                 documentationPages.length > 0 ? (
                   documentationPages.map((pageItems, pIdx) => (
-                    <PageContainer key={`doc-${pIdx}`} pageNumber={(pIdx + 1).toString()} facilityName={facility.fldFacName}>
+                    <PageContainer
+                      key={`doc-${pIdx}`}
+                      pageNumber={
+                        rasBody
+                          ? rasBodyPageNumber(rasLettered, 'findings', pIdx + 1, (pIdx + 1).toString())
+                          : (pIdx + 1).toString()
+                      }
+                      facilityName={bodyFooterIdentity}
+                    >
                       <div className="flex flex-col">
                         {pIdx === 0 && (
                           <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
-                            Documentation Section
+                            {rasBody
+                              ? rasBodySectionHeading(rasLettered, 'findings', 'Findings')
+                              : 'Documentation Section'}
                           </h2>
                         )}
                         <div className="flex flex-col">
@@ -1576,15 +1666,28 @@ export function ReportPreview({
                                 key={entry.record.fldPDataID}
                                 style={{ marginBottom: DOC_CARD_GAP_PX }}
                               >
-                                <DocumentationCard
-                                  record={entry.record}
-                                  index={globalIndex}
-                                  glossary={glossary}
-                                  standards={standards}
-                                  locations={locations}
-                                  categories={categories}
-                                  items={items}
-                                />
+                                {rasBody ? (
+                                  <RasFindingCard
+                                    record={entry.record}
+                                    index={globalIndex}
+                                    profile={profile}
+                                    glossary={glossary}
+                                    standards={standards}
+                                    locations={locations}
+                                    categories={categories}
+                                    items={items}
+                                  />
+                                ) : (
+                                  <DocumentationCard
+                                    record={entry.record}
+                                    index={globalIndex}
+                                    glossary={glossary}
+                                    standards={standards}
+                                    locations={locations}
+                                    categories={categories}
+                                    items={items}
+                                  />
+                                )}
                               </div>
                             );
                           })}
@@ -1593,12 +1696,23 @@ export function ReportPreview({
                     </PageContainer>
                   ))
                 ) : (
-                  <PageContainer facilityName={facility.fldFacName} pageNumber="1">
+                  <PageContainer
+                    facilityName={bodyFooterIdentity}
+                    pageNumber={
+                      rasBody ? rasBodyPageNumber(rasLettered, 'findings', 1, '1') : '1'
+                    }
+                  >
                     <div className="flex flex-col">
                       <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
-                        Documentation Section
+                        {rasBody
+                          ? rasBodySectionHeading(rasLettered, 'findings', 'Findings')
+                          : 'Documentation Section'}
                       </h2>
-                      <p className="text-sm text-zinc-500 italic">No documentation records found for this project.</p>
+                      <p className="text-sm text-zinc-500 italic">
+                        {rasBody
+                          ? 'No findings found for this report.'
+                          : 'No documentation records found for this project.'}
+                      </p>
                     </div>
                   </PageContainer>
                 )
@@ -1607,7 +1721,7 @@ export function ReportPreview({
               {/* Financial Section */}
               {sectionSel.financial &&
                 financialPages.map((pageRows, pIdx) => (
-                <PageContainer key={`fin-${pIdx}`} pageNumber={`A${pIdx + 1}`} facilityName={facility.fldFacName}>
+                <PageContainer key={`fin-${pIdx}`} pageNumber={`A${pIdx + 1}`} facilityName={bodyFooterIdentity}>
                   <div className="flex flex-col h-full">
                     {pIdx === 0 && (
                       <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
@@ -1670,11 +1784,25 @@ export function ReportPreview({
               {sectionSel.referencedStandards ? (
                 addendumPages.length > 0 ? (
                   addendumPages.map((pageRecords, pIdx) => (
-                    <PageContainer key={`add-${pIdx}`} pageNumber={`B${pIdx + 1}`} facilityName={facility.fldFacName}>
+                    <PageContainer
+                      key={`add-${pIdx}`}
+                      pageNumber={
+                        rasBody
+                          ? rasBodyPageNumber(rasLettered, 'referenced_standards', pIdx + 1, `B${pIdx + 1}`)
+                          : `B${pIdx + 1}`
+                      }
+                      facilityName={bodyFooterIdentity}
+                    >
                       <div className="flex flex-col">
                         {pIdx === 0 && (
                           <h2 className="mb-8 border-b-2 border-zinc-900 pb-2 text-xl font-bold uppercase tracking-widest text-zinc-900">
-                            Addendum: Referenced Standards
+                            {rasBody
+                              ? rasBodySectionHeading(
+                                  rasLettered,
+                                  'referenced_standards',
+                                  'Referenced Standards'
+                                )
+                              : 'Addendum: Referenced Standards'}
                           </h2>
                         )}
                         <AddendumPaginatedContent
@@ -1686,8 +1814,8 @@ export function ReportPreview({
                       </div>
                     </PageContainer>
                   ))
-                ) : (
-                  <PageContainer facilityName={facility.fldFacName} pageNumber="C1">
+                ) : rasBody ? null : (
+                  <PageContainer facilityName={bodyFooterIdentity} pageNumber="C1">
                     <div className="flex flex-col">
                       <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
                         Addendum: Referenced Standards
@@ -1698,17 +1826,26 @@ export function ReportPreview({
                 )
               ) : null}
 
-              {/* Photo Addendum (fldImages index 2+ only; main cards unchanged at slice(0,2)) */}
+              {/* Photo / Image Addendum (fldImages index 2+ only; main cards unchanged at slice(0,2)) */}
               {sectionSel.photoAddendum && photoAddendumPages.length > 0
                 ? photoAddendumPages.map((photoPageGroups, phIdx) => (
                     <PageContainer
                       key={`photo-add-${phIdx}`}
-                      pageNumber={`D${phIdx + 1}`}
-                      facilityName={facility.fldFacName}
+                      pageNumber={
+                        rasBody
+                          ? rasBodyPageNumber(rasLettered, 'image_addendum', phIdx + 1, `D${phIdx + 1}`)
+                          : `D${phIdx + 1}`
+                      }
+                      facilityName={bodyFooterIdentity}
                     >
                       <PhotoAddendumPageBody
                         groups={photoPageGroups}
                         showSectionTitle={phIdx === 0}
+                        sectionHeading={
+                          rasBody
+                            ? rasBodySectionHeading(rasLettered, 'image_addendum', 'Photo Addendum')
+                            : undefined
+                        }
                       />
                     </PageContainer>
                   ))
@@ -1759,9 +1896,29 @@ function ReportSection({ title, children }: { title: string, children: React.Rea
 
 function InfoRow({ label, value }: { label: string, value: string }) {
   return (
-    <div className="flex items-center text-xs py-1.5 px-3">
-      <span className="w-40 font-bold text-zinc-900">{label}</span>
-      <span className="text-zinc-700">{value}</span>
+    <div className="flex min-w-0 items-center text-xs py-1.5 px-3">
+      <span className="w-40 shrink-0 font-bold text-zinc-900">{label}</span>
+      <span className="min-w-0 text-zinc-700">{value}</span>
+    </div>
+  );
+}
+
+/** Assessment cover: same two-pair geometry as RAS PairRow (Address | City/State/ZIP). */
+function CoverPairRow({
+  leftLabel,
+  leftValue,
+  rightLabel,
+  rightValue,
+}: {
+  leftLabel: string;
+  leftValue: string;
+  rightLabel: string;
+  rightValue: string;
+}) {
+  return (
+    <div className="grid grid-cols-2 divide-x divide-zinc-100">
+      <InfoRow label={leftLabel} value={leftValue} />
+      <InfoRow label={rightLabel} value={rightValue} />
     </div>
   );
 }

@@ -11,6 +11,8 @@ import type {
 } from '../types';
 import { compareStandardCitations, formatStandardCitationLabel, type StandardCitationSortInput } from './standardCitationLabel';
 import { cn } from './utils';
+import { isRasReportProfile, type ReportProfile } from './reportProfile';
+import { RAS_INSPECTION_NARRATIVE_FALLBACK } from './rasInspectionNarrative';
 
 export interface StandardSnapshot {
   fldStandardType: string;
@@ -370,6 +372,65 @@ export function buildReportPdfSuggestedFilename(
   return `${project} - ${facility}`;
 }
 
+/**
+ * RAS Print / Save as PDF stem (browser adds `.pdf`).
+ * Pattern: `TABS# - Project Name - Plan Review|Inspection`
+ * Does not use Facility Name.
+ */
+export function buildRasReportPdfSuggestedFilename(
+  profile: 'plan_review' | 'inspection',
+  tabsProjectNumber: unknown,
+  projectName: unknown
+): string {
+  const tabs = sanitizeReportPdfFilenamePart(
+    typeof tabsProjectNumber === 'string' || typeof tabsProjectNumber === 'number'
+      ? String(tabsProjectNumber)
+      : ''
+  );
+  const name = sanitizeReportPdfFilenamePart(
+    typeof projectName === 'string' || typeof projectName === 'number' ? String(projectName) : ''
+  );
+  const suffix = profile === 'plan_review' ? 'Plan Review' : 'Inspection';
+  if (tabs && name) return `${tabs} - ${name} - ${suffix}`;
+  if (name) return `${name} - ${suffix}`;
+  if (tabs) return `${tabs} - ${suffix}`;
+  return profile === 'plan_review' ? 'Plan Review Report' : 'Inspection Report';
+}
+
+/**
+ * Shared page-footer identity (bottom-left label).
+ * RAS body (plan_review and inspection): `projects.fldProjName` only. Blank Project Name → blank identity.
+ * Does not fall back to FREDA Facility or registered Facility.
+ * Assessment body: FREDA Facility name (unchanged).
+ * RAS cover is omitted separately via rasCoverFooterIdentityText — do not use this for cover.
+ */
+export function getReportFooterIdentity(
+  profile: ReportProfile,
+  projectName: string | undefined | null,
+  facilityName: string | undefined | null
+): string {
+  if (isRasReportProfile(profile)) {
+    return String(projectName ?? '').trim();
+  }
+  return facilityName ?? '';
+}
+
+/** View Report print title: Assessment keeps Project - Facility; RAS uses TABS# - Project Name - profile. */
+export function buildViewReportPdfSuggestedFilename(
+  profile: ReportProfile,
+  project: Pick<Project, 'fldProjName' | 'tdlrRegistered'>,
+  facilityName: string | undefined | null
+): string {
+  if (!isRasReportProfile(profile)) {
+    return buildReportPdfSuggestedFilename(project.fldProjName, facilityName);
+  }
+  return buildRasReportPdfSuggestedFilename(
+    profile,
+    project.tdlrRegistered?.tabsProjectNumber,
+    project.fldProjName
+  );
+}
+
 /** Facility-specific report narrative with legacy project-level fallback. */
 export function resolveFacilityReportNarrative(
   project: Pick<Project, 'fldFacilityNarratives' | 'fldNarrative'>,
@@ -382,6 +443,33 @@ export function resolveFacilityReportNarrative(
       ? project.fldFacilityNarratives[facKey]
       : undefined;
   return perFacility ?? project.fldNarrative ?? fallback;
+}
+
+function presentAuthoredNarrative(value: string | undefined | null): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  return value;
+}
+
+/**
+ * Profile-aware report Narrative. Inspection uses a display-only default when no authored text exists.
+ * Does not read TABS Scope. Does not persist. Assessment and Plan Review keep existing fallbacks.
+ */
+export function resolveReportNarrative(
+  profile: ReportProfile,
+  project: Pick<Project, 'fldFacilityNarratives' | 'fldNarrative'>,
+  facilityId: string
+): string {
+  if (profile !== 'inspection') {
+    return resolveFacilityReportNarrative(project, facilityId);
+  }
+  const facKey = String(facilityId || '').trim();
+  const facilityAuthored = presentAuthoredNarrative(
+    facKey && project.fldFacilityNarratives ? project.fldFacilityNarratives[facKey] : undefined
+  );
+  if (facilityAuthored !== undefined) return facilityAuthored;
+  const projectAuthored = presentAuthoredNarrative(project.fldNarrative);
+  if (projectAuthored !== undefined) return projectAuthored;
+  return RAS_INSPECTION_NARRATIVE_FALLBACK;
 }
 
 /** Financial Summary table row (Report Preview pagination). */

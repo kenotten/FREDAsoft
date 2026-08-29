@@ -5,7 +5,7 @@
  */
 
 import type { Client, Facility, Inspector, Location, Project, ProjectData } from '../types';
-import { getRecordStandardIds, resolveFacilityReportNarrative } from './reportPreviewShared';
+import { getRecordStandardIds, resolveReportNarrative } from './reportPreviewShared';
 import {
   filterRecordsForReportProfile,
   getRasLetteredSections,
@@ -197,7 +197,7 @@ export function buildReportViewModel(input: BuildReportViewModelInput): ReportVi
   const professional = resolveProfessional(profile, project, input.inspectors);
   const date = resolveRasDate(profile, project);
   const facilityId = text(input.facility?.fldFacID);
-  const narrative = resolveFacilityReportNarrative(project, facilityId);
+  const narrative = resolveReportNarrative(profile, project, facilityId);
 
   const findings = records.map((record) =>
     toFindingVm(record, profile, input.locations, input.glossary)

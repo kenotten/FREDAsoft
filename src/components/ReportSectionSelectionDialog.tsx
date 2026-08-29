@@ -37,6 +37,10 @@ export interface ReportSectionSelectionDialogProps {
   hasFinancial: boolean;
   hasReferencedStandards: boolean;
   hasPhotoAddendum: boolean;
+  /** Assessment: Documentation. RAS: Findings. */
+  documentationLabel?: string;
+  /** Assessment: Photo addendum. RAS: Image Addendum / Photo Addendum. */
+  photoAddendumLabel?: string;
   onClose: () => void;
   onConfirm: (selection: ReportSectionSelection) => void;
 }
@@ -46,6 +50,8 @@ export function ReportSectionSelectionDialog({
   hasFinancial,
   hasReferencedStandards,
   hasPhotoAddendum,
+  documentationLabel = 'Documentation',
+  photoAddendumLabel = 'Photo addendum',
   onClose,
   onConfirm
 }: ReportSectionSelectionDialogProps) {
@@ -136,7 +142,7 @@ export function ReportSectionSelectionDialog({
               className="mt-1 h-4 w-4 shrink-0 rounded border-zinc-300 text-blue-600 focus:ring-blue-500/30"
             />
             <label htmlFor="rs-documentation" className="text-sm font-medium text-zinc-800">
-              Documentation
+              {documentationLabel}
             </label>
           </li>
           {hasFinancial ? (
@@ -177,7 +183,7 @@ export function ReportSectionSelectionDialog({
                 className="mt-1 h-4 w-4 shrink-0 rounded border-zinc-300 text-blue-600 focus:ring-blue-500/30"
               />
               <label htmlFor="rs-photo" className="text-sm font-medium text-zinc-800">
-                Photo addendum
+                {photoAddendumLabel}
               </label>
             </li>
           ) : null}
