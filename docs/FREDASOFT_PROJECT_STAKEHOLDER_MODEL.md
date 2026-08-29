@@ -1,8 +1,8 @@
 # FREDAsoft Project — Stakeholder Model (D5 Discovery)
 
 **Status:** Documentation-only decision/discovery (D5). **Not implemented.**
-**Last updated:** 2026-08-28 (RAS source-of-truth reconciliation)
-**Branch context:** `docs-ras-source-of-truth`
+**Last updated:** 2026-08-28 (Beta RAS / Assessment data model)
+**Branch context:** `docs-ras-beta-model`
 **Audience:** Product owner (Kenneth), architecture review (Archie), implementation planning
 
 > **Disclaimer:** This document defines **requirement candidates**, **workflow candidates**, and **UI references** for FREDAsoft Project stakeholder modeling. It does **not** specify Firestore collections, security rules, migrations, importers, or application code. It does **not** port Lovable/Supabase prototype code or schema. Official **TDLR/TABS** legal requirements are **not asserted here** unless separately sourced (see §18).
@@ -143,24 +143,21 @@ Canonical stakeholders may be typed as:
 
 **What it is not:** The same as **portal user** or **canonical RAS Firm** without an explicit assignment link. **Not** automatically identical to the TDLR-recorded RAS snapshot. **Not** Setup / Active Inspector session selection.
 
-**✅ DECIDED (service-specific — target; schema not implemented):** A RAS Project may have Plan Review RAS and Inspection RAS; they may be the same person or different people. A single Project-wide “Inspector/RAS” is not the long-term model.
+**✅ DECIDED (Beta professional fields — schema not implemented):**
 
 ```text
-Project
-  → Plan Review service → Responsible RAS
-  → Inspection service  → Responsible RAS
-
-Project (non-RAS assessment)
-  → Assessment service  → Responsible Inspector
+projects.fldInspector        = Assessment Inspector
+projects.fldPlanReviewRas    = Plan Review RAS   (inspectors.fldInspID)
+projects.fldInspectionRas    = Inspection RAS    (inspectors.fldInspID)
 ```
 
-The responsible professional for that service is the author/signer and the identity associated with records created for that service. `projectData.fldInspID` should conceptually be the **responsible professional / record author**. Authentication `uid` is not a substitute (current Data Explorer clone stamping from `uid` is a **transitional defect**).
+Do **not** add `fldAssessmentInspector`. Do **not** treat `fldInspector` as RAS Inspection RAS. Assignments are independent; do not silently copy. Missing Plan Review RAS is legitimate when OCG inspects only. Require only the professional for the active work mode (Review vs Inspection).
 
-RAS Plan Review records/report → Plan Review RAS. RAS Inspection records/report → Inspection RAS. Assessment records/report → Inspector.
+The responsible professional for that service is the author/signer. `projectData.fldInspID` should conceptually be that Inspector ID. Authentication `uid` is not a substitute (Data Explorer clone stamping from `uid` is a **transitional defect**). **Do not implement authorship** in this docs task (`ProjectDataEntry` is protected).
 
-Display of RAS identity on reports: `Name / RAS {n}` at render time; do not permanently store that string as duplicated report text. Full sourcing matrix: **`docs/ARCHITECTURE_DESIGN.md`**.
+Display of RAS identity on reports: `Name / RAS {n}` at render time. Full sourcing matrix: **`docs/ARCHITECTURE_DESIGN.md`**.
 
-**Beta / interim bridge:** Production `projects.fldInspector` may temporarily serve as a **single** assigned-professional relationship. It **cannot** represent both Plan Review RAS and Inspection RAS long-term when different professionals are assigned. **Do not** redefine Inspector and Assigned RAS as permanently synonymous. **Active Inspector** is a workflow convenience, not a competing source of truth (UI future: remove, display-only, or derive — not decided here).
+**Active Inspector** (`selections.inspectorId`) is a workflow convenience, **not** a competing assignment. Target display derives from Project/work-mode fields. Do not remove Active Inspector code in this docs task.
 
 ---
 
@@ -278,7 +275,7 @@ Discovery §14 Q2 and §15 establish that **canonical stakeholders are separate 
 **RAS reporting:**
 
 - RAS Plan Review and RAS Inspection reports must be **addressed to the registered Owner**.
-- RAS Owner/addressee **display** = **TDLR/TABS as-recorded Owner identity**, not the FREDA canonical stakeholder name.
+- RAS Owner/addressee **display** = **`tdlrRegistered.owner`** (TDLR/TABS as-recorded), not the FREDA canonical stakeholder name and not Client.
 - Client ≠ Owner. Who hired OCG ≠ necessarily the report addressee.
 - Current Assessment PDF behavior that labels Client data as “Owner” must **not** be used as the RAS Owner source.
 
@@ -295,7 +292,7 @@ Discovery §14 Q2 and §15 establish that **canonical stakeholders are separate 
 | **Facility ↔ Project** | FREDAsoft: Project references facilities (`fldFacilities`); RAS often **one facility per project** |
 | **Facility ↔ Client** | Facility belongs to **Client** in portfolio hierarchy |
 | **Facility ↔ Owner** | Owner stakeholder may own/operate facility; **optional link**, not replacement for Facility address fields |
-| **TDLR site text ↔ Facility** | TDLR snapshot may duplicate site name/address **as-recorded**; matching workflow may suggest Facility link after **review** |
+| **TDLR site text ↔ Facility** | TDLR **`tdlrRegistered.site`** is as-recorded; matching may later **link** Facility after review. RAS reports use TDLR site where representing registration. Neither overwrites the other. |
 | **Prototype inline address on project** | **UI reference only**—prefer **Facility** for site address in FREDAsoft; do not overwrite Facility from TDLR without review |
 
 **Architecture implication:** **Facility** remains the building/site entity for Data Entry and **reporting workflows**. TDLR snapshots are **parallel source text**, not authoritative over Facility without promotion.
@@ -311,7 +308,7 @@ Discovery §14 Q2 and §15 establish that **canonical stakeholders are separate 
 | **TDLR / source** | Official legal/source registration record as captured | Append/version only; never corrected/overwritten by FREDAsoft |
 | **Canonical** | Internal operational directory | Staff-maintained; portal changes via approval |
 | **Project party** | Who is on this project in which role | Links canonical to Project |
-| **Service assignment** | Responsible professional for Plan Review / Inspection / Assessment | Target operational layer; Beta `projects.fldInspector` is an interim single-assignment bridge |
+| **Service assignment** | Responsible professional for Plan Review / Inspection / Assessment | Beta: `fldPlanReviewRas` / `fldInspectionRas` / `fldInspector` (Assessment). Not Active Inspector. |
 | **Alias** | Observed name variants | Accumulates; links to canonical |
 
 ### End-to-end flow (requirement candidate)
@@ -493,7 +490,7 @@ Prototype `correspondence_records` (structure only, not porting): `template_id`,
 8. **Re-scrape:** When TDLR owner name changes on re-scrape, new snapshot + new alias, or update existing snapshot?
 9. **Individual owners:** How often are owners persons without an org wrapper—and should UI default to **individual** entity type?
 10. **Existing Clients:** Should current FREDAsoft **Client** records ever auto-become **Owner** stakeholders, or stay separate?
-11. **Resolved (2026-08-28):** Assigned professional need **not** match TDLR **RAS Firm** project party. Assignment is **service-specific** (Plan Review RAS vs Inspection RAS). TDLR RAS snapshot may later link after review; it does not automatically define the service assignment. Beta `projects.fldInspector` is an interim single-assignment bridge only.
+11. **Resolved (2026-08-28, Beta model):** Assigned professional need **not** match TDLR **RAS Firm**. RAS assignments are **`fldPlanReviewRas` / `fldInspectionRas`**. **`fldInspector` = Assessment Inspector**. Missing Plan Review RAS is legitimate for Inspection-only work.
 12. **Sole proprietor:** Treat as **individual**, **organization**, or dedicated type for merge fields?
 13. **Deferred:** Document-distribution / permission model for **copies** of RAS documentation to non-Owner stakeholders. Owner remains the required addressee.
 

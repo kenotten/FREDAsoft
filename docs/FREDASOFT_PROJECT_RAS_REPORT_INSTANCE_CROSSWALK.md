@@ -1,8 +1,8 @@
 # FREDAsoft RAS Report Instance Crosswalk
 
 **Status:** Documentation-only conceptual crosswalk (D3). **Not implemented.**
-**Last updated:** 2026-08-28 (service-assignment pointer)
-**Branch context:** `d3-ras-report-instance-crosswalk`
+**Last updated:** 2026-08-28 (Beta defaults vs future instances)
+**Branch context:** `docs-ras-beta-model`
 **Audience:** Product owner (Kenneth), architecture review (Archie), D4/D6/D7 implementation planning
 
 > **Disclaimer:** This document clarifies how **TDLR/TABS registration milestones, statuses, and RAS-related fields** relate to **FREDAsoft RAS report instances** and related operational concepts. It does **not** specify Firestore collections, security rules, scrapers, UI, correspondence generation, or legal compliance. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data.
@@ -21,6 +21,18 @@ This is a **D3 conceptual crosswalk**, not implementation or schema. It builds o
 - **RAS Firm** party vs **assigned RAS** professional vs **reviewer/inspector** user roles  
 
 **Outputs of D3:** terminology, candidate mappings, recommended product posture, and open questions for D4/D6/D7/D8—not final field names or automation rules.
+
+### Beta Project-level defaults vs future instances
+
+**`docs/ARCHITECTURE_DESIGN.md`** (Beta RAS / Assessment data model) is authoritative for Beta fields. D3 remains the long-term instance crosswalk.
+
+Beta `fldPlanReviewRas`, `fldInspectionRas`, `tdlrRegistered`, and one operative date per work mode are the **current/default work context**. They do **not** mean a RAS project has only one Plan Review or one Inspection.
+
+Long-term instances (Preliminary / Revised / Official Plan Review; Special / official / follow-up Inspection) may each own kind, responsible RAS, date, state, records, and issued-report history. Beta Project fields should later seed **defaults** when creating an instance.
+
+**Review vs Inspection** is a work mode on a TAS/RAS Project (not a Project type change). Plan Review findings may include optional **Sheet** in addition to Location; Sheet does not replace Location; Inspection mode need not show Sheet unless later required.
+
+**Do not** implement instances, Sheet storage, or the Review/Inspection toggle in this documentation task.
 
 ---
 
@@ -133,9 +145,9 @@ Labels below combine indexed sources. Where TABS may use additional values not y
 | **RAS License / registration number** | **`RAS#`**; `filter-ras-number`; RAS modal `LicenseNumber` | Match key for canonical stakeholder; snapshot only | Strong **candidate** signal | **Match** by license #; **Snapshot** always | Do not auto-merge |
 | **Plan Review By** | `lblProjectPlanReviewBy` (Manage Project) | **Plan Review service assignment** candidate (not automatic) | Assignment or party link | **Defer** ingest auto-link | TDLR display text is source evidence. Target FREDAsoft assignment is **Plan Review RAS** (`docs/ARCHITECTURE_DESIGN.md`). |
 | **Inspection By** | `lblProjectInspectionBy` | **Inspection service assignment** candidate (not automatic) | Assignment link | **Defer** ingest auto-link | May differ from Plan Review RAS. TDLR text is not operational truth. |
-| **Assigned FREDAsoft RAS user** | *(FREDAsoft operational — not on TDLR form)* | Auth **user** + **assignment** to project/report instance | Explicit assignment record | Staff assigns in FREDAsoft; optional link to TDLR hint | **D5** §3.8 |
+| **Assigned FREDAsoft RAS user** | *(FREDAsoft operational — not on TDLR form)* | **`fldPlanReviewRas` or `fldInspectionRas`** (Inspector ID), later per report instance | Explicit assignment | Staff assigns in FREDAsoft | Not Auth uid. Not `fldInspector` (Assessment Inspector). |
 | **Staff Reviewer** | *(D2 workflow actor)* | **`tdlrReviewSessions`** submitter; not TDLR party | Audit / workflow | N/A for TDLR ingest | Distinct from RAS professional |
-| **Inspector user** | Operational role on inspection instance | **Inspection RAS** (RAS) or **Assessment Inspector** | Service assignment | Staff decision | May differ from Plan Review RAS. `fldInspID` = record author for that service. |
+| **Inspector user** | Operational role on inspection instance | **Inspection RAS** (`fldInspectionRas`) or **Assessment Inspector** (`fldInspector`) | Service assignment | Staff decision | May differ from Plan Review RAS. Missing Plan Review RAS is legitimate. `fldInspID` = record author for that work. |
 | **Contact person** | Owner/Design/RAS modal emails/phones; **Person Filing Form** | **Contact person** under stakeholder | Contact link | **Match** / **Create** | Registrant ≠ Owner by default |
 
 ---
