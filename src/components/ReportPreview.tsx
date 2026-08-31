@@ -62,6 +62,7 @@ import { formatCityStateZipOrFallback } from '../lib/coverAddressDisplay';
 import { rasCoverFooterIdentityText, usesRasCover } from '../lib/rasReportCoverDisplay';
 import { RasReportCover } from './report/RasReportCover';
 import { RasFindingCard } from './report/RasFindingCard';
+import { REPORT_CARD_NUMBER_CELL_CLASS } from '../lib/reportCardNumberDisplay';
 
 interface ReportPreviewProps {
   project: Project;
@@ -1945,9 +1946,8 @@ function DocumentationCard({ record, index, glossary, standards, locations, cate
   return (
     <div className={cn('flex items-stretch break-inside-avoid', DOC_CARD_OUTER_BORDER)}>
       {/* Number Column */}
-      <div className={cn('flex w-12 shrink-0 flex-col items-center justify-start pt-2 font-black text-2xl', DOC_CARD_VERT_BORDER_R)}>
+      <div className={cn(REPORT_CARD_NUMBER_CELL_CLASS, DOC_CARD_VERT_BORDER_R)}>
         {index}
-        <span className="text-[8px] font-mono text-zinc-400 mt-1 print:hidden">{record.fldPDataID?.slice(0, 8)}</span>
       </div>
 
       {/* Content column: recommendation flex-1 absorbs height when image column is taller */}

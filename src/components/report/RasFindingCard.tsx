@@ -5,6 +5,7 @@ import {
   buildRasFindingCardDisplay,
   buildRasFindingCardMetadataRows,
 } from '../../lib/rasFindingCardDisplay';
+import { REPORT_CARD_NUMBER_CELL_CLASS } from '../../lib/reportCardNumberDisplay';
 import type { ReportProfile } from '../../lib/reportProfile';
 
 const CARD_BORDER = 'border-zinc-900';
@@ -70,11 +71,8 @@ export function RasFindingCard({
 
   return (
     <div className={cn('flex items-stretch break-inside-avoid', OUTER)}>
-      <div className={cn('flex w-12 shrink-0 flex-col items-center justify-start pt-2 font-black text-2xl', VERT_R)}>
+      <div className={cn(REPORT_CARD_NUMBER_CELL_CLASS, VERT_R)}>
         {index}
-        <span className="mt-1 font-mono text-[8px] text-zinc-400 print:hidden">
-          {record.fldPDataID?.slice(0, 8)}
-        </span>
       </div>
 
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
