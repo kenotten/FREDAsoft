@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { emptyTdlrRegistered } from '../projectMetadataFields';
 import { buildReportViewModel } from '../reportAdapter';
-import { RAS_INSPECTION_NARRATIVE_FALLBACK } from '../rasInspectionNarrative';
+import {
+  RAS_INSPECTION_ALTERATION_NARRATIVE_FALLBACK,
+  RAS_INSPECTION_NARRATIVE_FALLBACK,
+  RAS_INSPECTION_NEW_CONSTRUCTION_NARRATIVE_FALLBACK,
+} from '../rasInspectionNarrative';
 import type { Client, Inspector, Project, ProjectData } from '../../types';
 
 function rasProject(overrides: Partial<Project> = {}): Project {
@@ -271,9 +275,27 @@ describe('buildReportViewModel missing RAS data', () => {
       project: rasProject(),
       inspectors,
     });
-    expect(vm.narrative).toBe(RAS_INSPECTION_NARRATIVE_FALLBACK);
+    expect(vm.narrative).toBe(RAS_INSPECTION_ALTERATION_NARRATIVE_FALLBACK);
     expect(vm.narrative).not.toBe(vm.ras?.projectDescription);
     expect(vm.ras?.projectDescription).toBe('TABS registered scope');
+  });
+
+  it('Inspection Narrative uses the New Construction fallback from typeOfWork', () => {
+    const project = rasProject();
+    project.tdlrRegistered = {
+      ...emptyTdlrRegistered(),
+      ...project.tdlrRegistered,
+      typeOfWork: 'New Construction',
+      scopeOfWork: 'TABS registered scope',
+    };
+    const vm = buildReportViewModel({
+      profile: 'inspection',
+      project,
+      inspectors,
+    });
+    expect(vm.narrative).toBe(RAS_INSPECTION_NEW_CONSTRUCTION_NARRATIVE_FALLBACK);
+    expect(vm.narrative).not.toBe(vm.ras?.projectDescription);
+    expect(vm.ras?.typeOfWork).toBe('New Construction');
   });
 
   it('Plan Review Narrative does not receive the Inspection default', () => {
@@ -284,6 +306,8 @@ describe('buildReportViewModel missing RAS data', () => {
     });
     expect(vm.narrative).toBe('No project narrative provided.');
     expect(vm.narrative).not.toBe(RAS_INSPECTION_NARRATIVE_FALLBACK);
+    expect(vm.narrative).not.toBe(RAS_INSPECTION_NEW_CONSTRUCTION_NARRATIVE_FALLBACK);
+    expect(vm.narrative).not.toBe(RAS_INSPECTION_ALTERATION_NARRATIVE_FALLBACK);
   });
 
   it('preserves Inspection Narrative paragraph breaks through the view-model pipeline', () => {
@@ -308,6 +332,8 @@ describe('buildReportViewModel Assessment compatibility', () => {
       records: [row({ fldPDataID: 'a', fldWorkProduct: 'assessment' })],
     });
     expect(vm.ras).toBeNull();
+    expect(vm.projectName).toBe('Tower Alterations');
+    expect(vm.projectName).toBe(assessmentProject().fldProjName);
     expect(vm.includeRecommendations).toBe(true);
     expect(vm.includeFinancial).toBe(true);
     expect(vm.letteredSections).toEqual([]);

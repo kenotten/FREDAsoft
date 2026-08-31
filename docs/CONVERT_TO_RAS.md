@@ -1,7 +1,7 @@
 # Convert to RAS
 
 **Status:** Planning / architecture note. Data Entry work mode, RAS **covers**, and RAS report **body** are implemented; Web Report parity and report instances are **not** implemented.
-**Last updated:** 2026-08-29 (report Slice C: RAS body, RAS PDF filename, Inspection Narrative fallback)
+**Last updated:** 2026-08-30 (Inspection Narrative Type of Work fallback)
 **Audience:** Product owner, architecture review, implementation planning
 
 > **Disclaimer:** This document captures internal planning for adapting FREDAsoft toward Registered Accessibility Specialist (RAS) workflows under the Texas Department of Licensing and Regulation (TDLR). It does **not** assert legal compliance, required forms, or final field lists. All TDLR/RAS requirements must be verified from official sources, sample deliverables, and qualified review before any implementation.
@@ -305,7 +305,7 @@ Authoritative report-profile decisions live in **`docs/ARCHITECTURE_DESIGN.md`**
 |-------|-----------|
 | **Template count** | Shared pagination/print engine + explicit report profile (Plan Review / Inspection) |
 | **Cover** | Mirror existing OCG RAS cover blocks (Header, hero, OCG INFORMATION, PROJECT INFORMATION, OWNER INFORMATION). Project Description on cover = TABS `tdlrRegistered.scopeOfWork`. Type of Work is a separate OCG INFORMATION field. Dates: **Plan Review Date:** / **Inspection Date:** (no separate Report Date). Registered Facility uses `tdlrRegistered.site` (do not treat “site” as a separate entity). Buildings/features inside a registered Facility are distinguished by Location. No FREDA stakeholder dump. |
-| **Narrative** | **Included** on Assessment, RAS Plan Review, and RAS Inspection (operational FREDA narrative — not TABS Scope). Inspection uses a user-supplied **display-only** template fallback when no authored facility-specific or project `fldNarrative` text exists; authored wins; not persisted; not legal guidance. Plan Review / Assessment keep `'No project narrative provided.'` |
+| **Narrative** | **Included** on Assessment, RAS Plan Review, and RAS Inspection (operational FREDA narrative — not TABS Scope). Inspection uses a user-supplied **display-only** template fallback selected from registered TABS Type of Work when no authored facility-specific or project `fldNarrative` text exists: New Construction → 201.1; Alteration/Alterations → 202.3/202.4; blank/unrecognized (including Additions) → current generic Inspection fallback. Authored wins; not persisted; subject to revision; not independently verified legal guidance. Plan Review / Assessment keep `'No project narrative provided.'` |
 | **Section letters** | First included section after cover = **A**, then B, C… regardless of section type. Do not hard-code Findings unlettered / Standards=A / Images=B. |
 | **Sections** | Cover → Narrative → Findings (no rec/cost; Review includes Sheet) → Referenced Standards → Photo/Image Addendum. **No** Financial. |
 | **Web Report** | Later adapter slice; no print |
@@ -314,6 +314,8 @@ Authoritative report-profile decisions live in **`docs/ARCHITECTURE_DESIGN.md`**
 ✅ DECIDED (2026-08-29): RAS Print/Save as PDF filename stem is **`TABS# - Project Name - Plan Review`** or **`TABS# - Project Name - Inspection`**. TABS # = `tdlrRegistered.tabsProjectNumber`; Project Name = `fldProjName`. Missing parts are omitted (no doubled separators); if both missing, **`Plan Review Report`** / **`Inspection Report`**. Assessment remains **`Project Name - Facility Name`**. Browser adds `.pdf`.
 
 ✅ DECIDED (2026-08-29): RAS Inspection Narrative uses a user-supplied **display-only** template fallback when no authored facility-specific or project `fldNarrative` text exists. Authored Narrative always wins. The fallback is **not** persisted automatically and is **not** legal guidance. Plan Review and Assessment keep the existing empty-narrative fallback. TABS Scope remains cover Project Description only.
+
+✅ DECIDED (2026-08-30): Inspection fallback is selected from registered TABS Type of Work (`tdlrRegistered.typeOfWork`). New Construction → 201.1 template. Alteration/Alterations → 202.3/202.4 template. Blank, Additions, and unrecognized values keep the current generic Inspection fallback. Authored always overrides. Display-only; not persisted; user-supplied; subject to revision; not independently verified legal guidance.
 
 ### Requirements still to investigate
 

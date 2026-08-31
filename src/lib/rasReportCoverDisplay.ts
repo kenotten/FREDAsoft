@@ -6,6 +6,7 @@
 import type { ReportViewModel } from './reportAdapter';
 import type { ReportProfile } from './reportProfile';
 import { coverAddressPairRow, formatCityStateZip } from './coverAddressDisplay';
+import { getReportCoverHeroIdentity } from './reportPreviewShared';
 
 export { formatCityStateZip } from './coverAddressDisplay';
 
@@ -102,7 +103,9 @@ export function buildRasCoverDisplayModel(viewModel: ReportViewModel): RasCoverD
   return {
     title: cover.header.title,
     standardsLine: cover.header.standardsLine,
-    heroProjectName: cover.projectInformation.projectName,
+    heroProjectName: getReportCoverHeroIdentity(viewModel.profile, {
+      fldProjName: cover.projectInformation.projectName,
+    }),
     rasNameLine: formatRasProfessionalLine(
       cover.ocgInformation.professionalName,
       cover.ocgInformation.rasNumber

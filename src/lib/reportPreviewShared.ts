@@ -12,7 +12,7 @@ import type {
 import { compareStandardCitations, formatStandardCitationLabel, type StandardCitationSortInput } from './standardCitationLabel';
 import { cn } from './utils';
 import { isRasReportProfile, type ReportProfile } from './reportProfile';
-import { RAS_INSPECTION_NARRATIVE_FALLBACK } from './rasInspectionNarrative';
+import { getRasInspectionNarrativeFallback } from './rasInspectionNarrative';
 
 export interface StandardSnapshot {
   fldStandardType: string;
@@ -398,6 +398,20 @@ export function buildRasReportPdfSuggestedFilename(
 }
 
 /**
+ * Prominent cover-page hero identity for Assessment, Plan Review, and Inspection.
+ * Always `projects.fldProjName`. Blank / whitespace Project Name → blank hero.
+ * Does not fall back to FREDA Facility Name, registered Facility, Client, OCG Project #, or TABS #.
+ * Facility remains an informational / footer field, not the cover hero.
+ */
+export function getReportCoverHeroIdentity(
+  _profile: ReportProfile,
+  project: Pick<Project, 'fldProjName'>,
+  _facility?: Pick<Facility, 'fldFacName'> | null
+): string {
+  return String(project.fldProjName ?? '').trim();
+}
+
+/**
  * Shared page-footer identity (bottom-left label).
  * RAS body (plan_review and inspection): `projects.fldProjName` only. Blank Project Name → blank identity.
  * Does not fall back to FREDA Facility or registered Facility.
@@ -451,12 +465,13 @@ function presentAuthoredNarrative(value: string | undefined | null): string | un
 }
 
 /**
- * Profile-aware report Narrative. Inspection uses a display-only default when no authored text exists.
- * Does not read TABS Scope. Does not persist. Assessment and Plan Review keep existing fallbacks.
+ * Profile-aware report Narrative. Inspection uses a display-only Type-of-Work default
+ * when no authored text exists. Does not read TABS Scope. Does not persist.
+ * Assessment and Plan Review keep existing fallbacks.
  */
 export function resolveReportNarrative(
   profile: ReportProfile,
-  project: Pick<Project, 'fldFacilityNarratives' | 'fldNarrative'>,
+  project: Pick<Project, 'fldFacilityNarratives' | 'fldNarrative' | 'tdlrRegistered'>,
   facilityId: string
 ): string {
   if (profile !== 'inspection') {
@@ -469,7 +484,7 @@ export function resolveReportNarrative(
   if (facilityAuthored !== undefined) return facilityAuthored;
   const projectAuthored = presentAuthoredNarrative(project.fldNarrative);
   if (projectAuthored !== undefined) return projectAuthored;
-  return RAS_INSPECTION_NARRATIVE_FALLBACK;
+  return getRasInspectionNarrativeFallback(project.tdlrRegistered?.typeOfWork);
 }
 
 /** Financial Summary table row (Report Preview pagination). */

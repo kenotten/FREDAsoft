@@ -2936,7 +2936,7 @@ Data Explorer filter/display; RAS report profile (filter by `fldWorkProduct`; om
 
 #### Current Assessment PDF — cover order (as implemented)
 
-Firm identity (logo + hard-coded OCG name/address/phone/fax/URL) → hero overlay `facility.fldFacName` → title **`Accessibility Assessment`** → four hard-coded standards lines (ADA, TAS, FHA, Rehab Act 504) → **OCG INFORMATION** (Inspector name+title; **Inspection Date** = `facility.fldInspectionDate` || `project.fldPDDate`; OCG Project # = `fldProjNumber`) → **PROJECT INFORMATION** (`fldProjName`; Facility name/address/city/state/zip from FREDA Facility) → **OWNER INFORMATION** (**Client** fields labeled as owner: `fldClientName` / address / city / state / ZIP).
+Firm identity (logo + hard-coded OCG name/address/phone/fax/URL) → hero overlay `project.fldProjName` → title **`Accessibility Assessment`** → four hard-coded standards lines (ADA, TAS, FHA, Rehab Act 504) → **OCG INFORMATION** (Inspector name+title; **Inspection Date** = `facility.fldInspectionDate` || `project.fldPDDate`; OCG Project # = `fldProjNumber`) → **PROJECT INFORMATION** (`fldProjName`; Facility name/address/city/state/zip from FREDA Facility) → **OWNER INFORMATION** (**Client** fields labeled as owner: `fldClientName` / address / city / state / ZIP).
 
 Not on the Assessment cover: `fldProjDescription`, `fldExternalRef`, inspector `fldRasNumber` / `fldCredentials`, signature, `tdlrRegistered`, `fldSheet`.
 
@@ -3127,7 +3127,7 @@ The RAS cover should **mirror the existing OCG RAS cover structure**, not become
 
 **Project hero**
 
-- Prominent project / registered Facility identity (see open decision on overlay name)
+- Prominent cover identity is `projects.fldProjName` for Assessment, Plan Review, and Inspection. Facility remains registered/operational detail (and Assessment body footer identity), not the cover hero.
 
 **OCG INFORMATION**
 
@@ -3166,6 +3166,8 @@ Cover → **Narrative** (operational FREDA text via profile-aware `resolveReport
 
 ✅ DECIDED (RAS Inspection Narrative display fallback, 2026-08-29): Inspection reports use a user-supplied **display-only** default Narrative when no authored FREDA facility-specific or project `fldNarrative` text exists. Authored Narrative always wins. The text is **not** persisted automatically and is **not** legal guidance. Plan Review and Assessment keep the existing `'No project narrative provided.'` fallback. TABS Scope (`scopeOfWork`) remains cover Project Description only. Implemented in `feat/ras-report-body`.
 
+✅ DECIDED (RAS Inspection Narrative Type of Work fallback, 2026-08-30): After authored Narrative is exhausted, Inspection selects a **display-only** user-supplied template from registered TABS **Type of Work** (`tdlrRegistered.typeOfWork`). **New Construction** → 201.1 template. **Alteration** / **Alterations** → existing 202.3/202.4 template. Blank, Additions, and unrecognized values keep the current generic Inspection fallback (same 202.3/202.4 text until a distinct rule is decided). Authored always overrides. Do **not** infer from Scope of Work. Do **not** persist. Templates are subject to revision and are **not** independently verified legal guidance. Plan Review and Assessment unchanged. Implemented in `feat/ras-inspection-narrative-by-type`.
+
 **Section letters (Ken):** first included report section after the cover → **A**; next included section → **B**; next → **C**; and so on, regardless of section type. Narrative, Findings, Referenced Standards, and Image/Photo Addendum participate in that sequence when included. Do **not** hard-code Findings = unlettered / Referenced Standards = A / Images = B.
 
 Page numbers: reuse the shared engine. Assessment’s fixed `A*`/`B*`/`D*` prefixes stay Assessment behavior until an Assessment retitle is explicitly approved.
@@ -3198,7 +3200,8 @@ Code/docs already answer titles, standards line, Owner source, professional fiel
 Still unresolved after this investigation:
 
 1. Plan Review extra-image section title/terminology (Photo vs Image).
-2. ✅ DECIDED (RAS cover identity, `feat/ras-report-cover`): top centered hero = `projects.fldProjName`. Do **not** use registered or FREDA Facility Name in the hero. PROJECT INFORMATION still shows registered `tdlrRegistered.site.facilityName`. RAS cover omits the shared bottom-left footer identity. Assessment hero/footer unchanged.
+2. ✅ DECIDED (RAS cover identity, `feat/ras-report-cover`): top centered hero = `projects.fldProjName`. Do **not** use registered or FREDA Facility Name in the hero. PROJECT INFORMATION still shows registered `tdlrRegistered.site.facilityName`. RAS cover omits the shared bottom-left footer identity.
+   ✅ DECIDED (cover hero identity, all profiles): Cover hero for Assessment, Plan Review, and Inspection is `projects.fldProjName`. Do **not** use Facility Name, registered Facility, Client, OCG Project #, or TABS # as the hero. Blank Project Name → blank hero (no Facility fallback). Facility remains registered/operational detail in PROJECT INFORMATION and Assessment body footer identity, not the cover hero. RAS cover footer stays omitted.
    ✅ DECIDED (RAS body footer identity, `feat/ras-report-body`): RAS body-page footer (Plan Review and Inspection: Narrative, Findings, Referenced Standards, Image/Photo Addendum) shows `projects.fldProjName`. Blank Project Name → blank footer identity (no FREDA Facility or registered Facility fallback). RAS cover footer stays omitted. Assessment footer remains FREDA Facility name.
 3. How (or whether) square footage is stored on FREDA Project (TABS splits it from Scope of Work).
 
@@ -3227,7 +3230,7 @@ Do not implement RAS report rendering in the metadata-sync slice.
 
 #### Implementation status (as of `feat/ras-report-body`)
 
-**Implemented (production):** RAS Review/Inspection Data Entry work mode; `fldWorkProduct`; Sheet entry (Review); RAS dates on New/Edit Project; work-mode professional hydration/gating; image entry (shared ProjectData UI); RAS Data Entry Recommendation/cost hiding; TAS/RAS `fldProjDescription` ← `scopeOfWork` synchronization; report profile semantic type/config; report data adapter/view-model; work-product report filter helper; RAS section sequencing helper; RAS source resolution semantics; **explicit View Report profile wiring; visible RAS Plan Review / Inspection covers**; **RAS body** (profile-filtered records; Narrative; Findings cards without Recommendation/cost; Location + Plan Review Sheet; Image/Photo terminology and addenda; sequential A/B/C lettering; Financial structurally omitted from the PDF section stream); **RAS PDF filename** `TABS# - Project Name - Plan Review|Inspection`; **RAS Inspection Narrative display fallback** (authored FREDA Narrative wins; not persisted). Assessment cover and Assessment body unchanged.
+**Implemented (production):** RAS Review/Inspection Data Entry work mode; `fldWorkProduct`; Sheet entry (Review); RAS dates on New/Edit Project; work-mode professional hydration/gating; image entry (shared ProjectData UI); RAS Data Entry Recommendation/cost hiding; TAS/RAS `fldProjDescription` ← `scopeOfWork` synchronization; report profile semantic type/config; report data adapter/view-model; work-product report filter helper; RAS section sequencing helper; RAS source resolution semantics; **explicit View Report profile wiring; visible RAS Plan Review / Inspection covers**; **RAS body** (profile-filtered records; Narrative; Findings cards without Recommendation/cost; Location + Plan Review Sheet; Image/Photo terminology and addenda; sequential A/B/C lettering; Financial structurally omitted from the PDF section stream); **RAS PDF filename** `TABS# - Project Name - Plan Review|Inspection`; **RAS Inspection Narrative display fallback** (Type of Work selects 201.1 vs 202.3/202.4; authored FREDA Narrative wins; not persisted). Cover hero for all profiles is `projects.fldProjName`. Assessment PROJECT INFORMATION and Assessment body footer still show FREDA Facility Name.
 
 **✅ DECIDED, not implemented:** Web Report parity; report instances; revised/multiple report instance selection; TDLR extraction automation; stakeholder/project-party implementation.
 

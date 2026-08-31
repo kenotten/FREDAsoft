@@ -201,6 +201,20 @@ describe('RAS cover display sources', () => {
     expect(cover.facilityName).toBe('Registered Facility');
   });
 
+  it('does not fall back to Facility Name when Project Name is blank', () => {
+    const vm = buildReportViewModel({
+      profile: 'plan_review',
+      project: rasProject({ fldProjName: '' }),
+      facility: fredaFacility,
+      inspectors,
+    });
+    const cover = buildRasCoverDisplayModel(vm)!;
+    expect(cover.heroProjectName).toBe('');
+    expect(cover.heroProjectName).not.toBe(fredaFacility.fldFacName);
+    expect(cover.heroProjectName).not.toBe('Registered Facility');
+    expect(cover.facilityName).toBe('Registered Facility');
+  });
+
   it('omits bottom-left repeated identity on the RAS cover', () => {
     const vm = buildReportViewModel({
       profile: 'inspection',

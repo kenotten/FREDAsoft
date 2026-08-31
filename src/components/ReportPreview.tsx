@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import {
   buildReferencedAddendumEntries,
   filterReportProjectForPreview,
+  getReportCoverHeroIdentity,
   getReportFooterIdentity,
   resolveReportNarrative,
   buildViewReportPdfSuggestedFilename,
@@ -770,6 +771,7 @@ export function ReportPreview({
 
   const profile: ReportProfile = reportProfile ?? 'assessment';
   const rasBody = isRasReportProfile(profile);
+  const coverHeroIdentity = getReportCoverHeroIdentity(profile, project, facility);
   const bodyFooterIdentity = getReportFooterIdentity(profile, project.fldProjName, facility.fldFacName);
 
   const sectionSel = useMemo<ReportSectionSelection>(
@@ -1531,7 +1533,7 @@ export function ReportPreview({
               <PageContainer>
                 <div className="absolute top-[203px] left-0 right-0 flex justify-center pointer-events-none z-10">
                   <div className="text-[18.6px] font-semibold text-zinc-900 uppercase tracking-tight text-center max-w-[80%]">
-                    {facility.fldFacName}
+                    {coverHeroIdentity}
                   </div>
                 </div>
                 <div className="h-full flex flex-col">
