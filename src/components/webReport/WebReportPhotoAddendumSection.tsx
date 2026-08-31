@@ -7,6 +7,8 @@ import type {
   WebReportPhotoMidSection,
   WebReportPhotoTopSection
 } from '../../lib/webReportPhotoAddendum';
+import { getReportProfileSemantics, isRasReportProfile, type ReportProfile } from '../../lib/reportProfile';
+import { webReportPhotoCountLabel } from '../../lib/webReportPresentation';
 
 function SectionCollapseToggle({
   expanded,
@@ -38,7 +40,17 @@ function SectionCollapseToggle({
   );
 }
 
-function PhotoCard({ photo }: { photo: WebReportPhotoItem }) {
+function PhotoCard({
+  photo,
+  imageSingular,
+  captionIndexLabel,
+  includeRecommendations
+}: {
+  photo: WebReportPhotoItem;
+  imageSingular: string;
+  captionIndexLabel?: string;
+  includeRecommendations: boolean;
+}) {
   const [broken, setBroken] = useState(false);
   const title = [
     photo.reportNumber !== null ? `Record ${photo.reportNumber}` : null,
@@ -46,8 +58,8 @@ function PhotoCard({ photo }: { photo: WebReportPhotoItem }) {
     photo.categoryName,
     photo.itemName,
     photo.findingShort,
-    photo.recommendationShort ? `Rec: ${photo.recommendationShort}` : null,
-    `Photo ${photo.imageIndex + 1}`
+    includeRecommendations && photo.recommendationShort ? `Rec: ${photo.recommendationShort}` : null,
+    `${imageSingular} ${photo.imageIndex + 1}`
   ]
     .filter(Boolean)
     .join(' · ');
@@ -78,7 +90,9 @@ function PhotoCard({ photo }: { photo: WebReportPhotoItem }) {
             <span className="text-zinc-400">—</span>
           )}
           {photo.reportNumber !== null ? ' · ' : ''}
-          <span className="text-zinc-600">Img {photo.imageIndex + 1}</span>
+          <span className="text-zinc-600">
+            {captionIndexLabel ?? imageSingular} {photo.imageIndex + 1}
+          </span>
         </p>
         <p className="line-clamp-2" title={`${photo.categoryName} / ${photo.itemName}`}>
           <span className="font-medium">{photo.categoryName}</span>
@@ -88,11 +102,18 @@ function PhotoCard({ photo }: { photo: WebReportPhotoItem }) {
         <p className="line-clamp-2 text-zinc-600" title={photo.locationName}>
           {photo.locationName}
         </p>
-        {(photo.findingShort || photo.recommendationShort) && (
-          <p className="line-clamp-2 text-zinc-500" title={[photo.findingShort, photo.recommendationShort].filter(Boolean).join(' — ')}>
+        {(photo.findingShort || (includeRecommendations && photo.recommendationShort)) && (
+          <p
+            className="line-clamp-2 text-zinc-500"
+            title={
+              includeRecommendations
+                ? [photo.findingShort, photo.recommendationShort].filter(Boolean).join(' — ')
+                : photo.findingShort
+            }
+          >
             {photo.findingShort}
-            {photo.findingShort && photo.recommendationShort ? ' — ' : ''}
-            {photo.recommendationShort}
+            {includeRecommendations && photo.findingShort && photo.recommendationShort ? ' — ' : ''}
+            {includeRecommendations ? photo.recommendationShort : ''}
           </p>
         )}
       </figcaption>
@@ -100,27 +121,70 @@ function PhotoCard({ photo }: { photo: WebReportPhotoItem }) {
   );
 }
 
-function PhotoGrid({ photos }: { photos: WebReportPhotoItem[] }) {
+function PhotoGrid({
+  photos,
+  imageSingular,
+  captionIndexLabel,
+  includeRecommendations
+}: {
+  photos: WebReportPhotoItem[];
+  imageSingular: string;
+  captionIndexLabel?: string;
+  includeRecommendations: boolean;
+}) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {photos.map((photo) => (
-        <PhotoCard key={photo.key} photo={photo} />
+        <PhotoCard
+          key={photo.key}
+          photo={photo}
+          imageSingular={imageSingular}
+          captionIndexLabel={captionIndexLabel}
+          includeRecommendations={includeRecommendations}
+        />
       ))}
     </div>
   );
 }
 
-function MidSectionBlock({ section }: { section: WebReportPhotoMidSection }) {
+function MidSectionBlock({
+  section,
+  imageSingular,
+  captionIndexLabel,
+  includeRecommendations
+}: {
+  section: WebReportPhotoMidSection;
+  imageSingular: string;
+  captionIndexLabel?: string;
+  includeRecommendations: boolean;
+}) {
   if (section.photos.length === 0) return null;
   return (
     <div className="space-y-2">
       <h4 className="text-xs font-bold uppercase tracking-wide text-zinc-600">{section.label}</h4>
-      <PhotoGrid photos={section.photos} />
+      <PhotoGrid
+        photos={section.photos}
+        imageSingular={imageSingular}
+        captionIndexLabel={captionIndexLabel}
+        includeRecommendations={includeRecommendations}
+      />
     </div>
   );
 }
 
-function TopSectionBlock({ section }: { section: WebReportPhotoTopSection }) {
+function TopSectionBlock({
+  section,
+  imageSingular,
+  imagePlural,
+  captionIndexLabel,
+  includeRecommendations
+}: {
+  section: WebReportPhotoTopSection;
+  imageSingular: string;
+  imagePlural: string;
+  captionIndexLabel?: string;
+  includeRecommendations: boolean;
+}) {
   const flatPhotos =
     section.midSections.length > 0
       ? section.midSections.flatMap((m) => m.photos)
@@ -131,17 +195,28 @@ function TopSectionBlock({ section }: { section: WebReportPhotoTopSection }) {
       <h3 className="border-b border-zinc-300 pb-1 text-sm font-bold uppercase tracking-wide text-zinc-800">
         {section.label}
         <span className="ml-2 font-normal normal-case tracking-normal text-zinc-500">
-          ({section.photoCount} photo{section.photoCount === 1 ? '' : 's'})
+          ({section.photoCount} {section.photoCount === 1 ? imageSingular.toLowerCase() : imagePlural.toLowerCase()})
         </span>
       </h3>
       {section.midSections.length > 1 ? (
         <div className="space-y-5">
           {section.midSections.map((mid) => (
-            <MidSectionBlock key={mid.key} section={mid} />
+            <MidSectionBlock
+              key={mid.key}
+              section={mid}
+              imageSingular={imageSingular}
+              captionIndexLabel={captionIndexLabel}
+              includeRecommendations={includeRecommendations}
+            />
           ))}
         </div>
       ) : (
-        <PhotoGrid photos={flatPhotos.length > 0 ? flatPhotos : section.midSections[0]?.photos ?? []} />
+        <PhotoGrid
+          photos={flatPhotos.length > 0 ? flatPhotos : section.midSections[0]?.photos ?? []}
+          imageSingular={imageSingular}
+          captionIndexLabel={captionIndexLabel}
+          includeRecommendations={includeRecommendations}
+        />
       )}
     </section>
   );
@@ -153,6 +228,10 @@ export type WebReportPhotoAddendumSectionProps = {
   onToggleExpanded: () => void;
   includedRecordCount: number;
   filtersRestricted: boolean;
+  profile?: ReportProfile;
+  addendumLabel?: string;
+  documentationLabel?: string;
+  includeRecommendations?: boolean;
 };
 
 export function WebReportPhotoAddendumSection({
@@ -160,25 +239,45 @@ export function WebReportPhotoAddendumSection({
   expanded,
   onToggleExpanded,
   includedRecordCount,
-  filtersRestricted
+  filtersRestricted,
+  profile = 'assessment',
+  addendumLabel,
+  documentationLabel,
+  includeRecommendations
 }: WebReportPhotoAddendumSectionProps) {
-  const subtitle = view.hasPhotos
-    ? `${view.photoCount} photograph${view.photoCount === 1 ? '' : 's'}`
-    : 'No photographs';
+  const ras = isRasReportProfile(profile);
+  const semantics = getReportProfileSemantics(profile);
+  const imageSingular = ras ? semantics.imageTerminology.singular : 'Photo';
+  const imagePlural = ras ? semantics.imageTerminology.plural : 'photos';
+  const captionIndexLabel = ras ? semantics.imageTerminology.singular : 'Img';
+  const showRec = includeRecommendations ?? !ras;
+  const sectionLabel = ras
+    ? addendumLabel ?? semantics.imageTerminology.addendum
+    : 'Photo Addendum';
+  const recordsLabel = ras
+    ? (documentationLabel ?? 'Findings').toLowerCase()
+    : 'documentation';
+  const subtitle = ras
+    ? view.hasPhotos
+      ? webReportPhotoCountLabel(profile, view.photoCount)
+      : `No ${imagePlural.toLowerCase()}`
+    : view.hasPhotos
+      ? `${view.photoCount} photograph${view.photoCount === 1 ? '' : 's'}`
+      : 'No photographs';
 
   return (
     <div className="space-y-3">
       <Card className="p-4">
         <SectionCollapseToggle
-          label="Photo Addendum"
+          label={sectionLabel}
           subtitle={subtitle}
           expanded={expanded}
           onToggle={onToggleExpanded}
         />
         <p className="mt-2 border-t border-zinc-100 pt-2 text-xs leading-relaxed text-zinc-500">
-          Additional photographs from included documentation records (images beyond the first two on each
-          record card). Category, location, and item filters apply; documentation accordion collapse does
-          not change which photos appear.
+          {ras
+            ? `Additional ${imagePlural.toLowerCase()} from included ${recordsLabel} records (images beyond the first two on each record card). Category, location, and item filters apply; ${recordsLabel} accordion collapse does not change which ${imagePlural.toLowerCase()} appear.`
+            : 'Additional photographs from included documentation records (images beyond the first two on each record card). Category, location, and item filters apply; documentation accordion collapse does not change which photos appear.'}
         </p>
       </Card>
 
@@ -186,29 +285,41 @@ export function WebReportPhotoAddendumSection({
         !view.hasPhotos ? (
           <Card className="p-6 text-center">
             <p className="text-sm text-zinc-700">
-              No additional photographs for the currently included records.
+              {ras
+                ? `No additional ${imagePlural.toLowerCase()} for the currently included records.`
+                : 'No additional photographs for the currently included records.'}
             </p>
             {includedRecordCount === 0 ? (
               <p className="mt-1 text-xs text-zinc-500">
-                No records are included. Adjust filters or select a project/facility with documentation
-                records.
+                {ras
+                  ? `No records are included. Adjust filters or select a project/facility with ${recordsLabel} records.`
+                  : 'No records are included. Adjust filters or select a project/facility with documentation records.'}
               </p>
             ) : filtersRestricted ? (
               <p className="mt-1 text-xs text-zinc-500">
-                Try selecting more categories, locations, or items — filtered records may not include
-                supplemental photos.
+                {ras
+                  ? `Try selecting more categories, locations, or items — filtered records may not include supplemental ${imagePlural.toLowerCase()}.`
+                  : 'Try selecting more categories, locations, or items — filtered records may not include supplemental photos.'}
               </p>
             ) : (
               <p className="mt-1 text-xs text-zinc-500">
-                Included records have no supplemental photos (only the first two images per record appear on
-                documentation cards).
+                {ras
+                  ? `Included records have no supplemental ${imagePlural.toLowerCase()} (only the first two ${imagePlural.toLowerCase()} per record appear on ${recordsLabel} cards).`
+                  : 'Included records have no supplemental photos (only the first two images per record appear on documentation cards).'}
               </p>
             )}
           </Card>
         ) : (
           <div className="space-y-8">
             {view.topSections.map((top) => (
-              <TopSectionBlock key={top.key} section={top} />
+              <TopSectionBlock
+                key={top.key}
+                section={top}
+                imageSingular={imageSingular}
+                imagePlural={imagePlural}
+                captionIndexLabel={captionIndexLabel}
+                includeRecommendations={showRec}
+              />
             ))}
           </div>
         )

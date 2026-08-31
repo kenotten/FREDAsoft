@@ -2,6 +2,7 @@ import React from 'react';
 import { Card } from '../ui/core';
 import { cn, formatCurrency, formatMeasurement } from '../../lib/utils';
 import type { WebReportRecordView } from '../../lib/webReportTree';
+import type { WebReportFindingPresentation } from '../../lib/webReportPresentation';
 
 /** Header record # width + category meta label width; body label column matches their sum so border-r aligns with the category value cell. */
 const WR_CARD_RECORD_NUM_W = 'w-10';
@@ -15,13 +16,16 @@ const WR_CARD_LABEL_CELL = cn(
 
 export function WebReportFindingCard({
   view,
-  reportNumber
+  reportNumber,
+  presentation
 }: {
   view: WebReportRecordView;
   reportNumber: number | null;
+  presentation: WebReportFindingPresentation;
 }) {
   const { record } = view;
-  const images = Array.isArray(record.fldImages) ? record.fldImages.slice(0, 2) : [];
+  const images = presentation.imageUrls;
+  const showSheet = Boolean(presentation.sheet);
 
   return (
     <Card className="overflow-hidden border border-zinc-200">
@@ -59,20 +63,39 @@ export function WebReportFindingCard({
             </div>
           </div>
 
-          <div className="flex items-stretch border-b border-zinc-200 text-xs">
-            <div className={WR_CARD_LABEL_CELL}>Location</div>
-            <span className="flex min-w-0 flex-1 items-center truncate px-2 py-2 font-medium text-zinc-900">
-              {view.locationName}
-            </span>
-            <span className="flex shrink-0 items-center px-3 py-2 text-xs font-bold text-blue-600">
-              Est. {formatCurrency(record.totalCost ?? 0)}
-            </span>
-          </div>
+          {showSheet ? (
+            <div className="grid grid-cols-2 items-stretch border-b border-zinc-200 text-xs">
+              <div className="flex min-w-0 items-stretch border-r border-zinc-200">
+                <div className={WR_CARD_LABEL_CELL}>Location</div>
+                <span className="flex min-w-0 flex-1 items-center truncate px-2 py-2 font-medium text-zinc-900">
+                  {presentation.locationLabel}
+                </span>
+              </div>
+              <div className="flex min-w-0 items-stretch">
+                <div className={WR_CARD_LABEL_CELL}>Sheet</div>
+                <span className="flex min-w-0 flex-1 items-center truncate px-2 py-2 font-medium text-zinc-900">
+                  {presentation.sheet}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-stretch border-b border-zinc-200 text-xs">
+              <div className={WR_CARD_LABEL_CELL}>Location</div>
+              <span className="flex min-w-0 flex-1 items-center truncate px-2 py-2 font-medium text-zinc-900">
+                {presentation.locationLabel}
+              </span>
+              {presentation.includeCost ? (
+                <span className="flex shrink-0 items-center px-3 py-2 text-xs font-bold text-blue-600">
+                  Est. {formatCurrency(record.totalCost ?? 0)}
+                </span>
+              ) : null}
+            </div>
+          )}
 
           <div className="flex items-stretch border-b border-zinc-200">
             <div className={WR_CARD_LABEL_CELL}>Finding</div>
             <div className="flex min-h-0 min-w-0 flex-1 items-center px-2 py-2 text-[11px] leading-snug text-zinc-800 whitespace-pre-line">
-              {record.fldFindLong || view.findingShort}
+              {presentation.findingText}
             </div>
             <div className="w-28 shrink-0 border-l border-zinc-200 bg-zinc-50 text-center">
               <div className="border-b border-zinc-200 px-1 py-1 text-[9px] font-bold uppercase text-zinc-500">
@@ -84,12 +107,14 @@ export function WebReportFindingCard({
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-1 items-stretch border-b border-zinc-200">
-            <div className={WR_CARD_LABEL_CELL}>Recommendation</div>
-            <div className="flex min-h-0 min-w-0 flex-1 items-center px-2 py-2 text-[11px] leading-snug text-zinc-800 whitespace-pre-line">
-              {record.fldRecLong || record.fldRecShort}
+          {presentation.includeRecommendation ? (
+            <div className="flex min-h-0 flex-1 items-stretch border-b border-zinc-200">
+              <div className={WR_CARD_LABEL_CELL}>Recommendation</div>
+              <div className="flex min-h-0 min-w-0 flex-1 items-center px-2 py-2 text-[11px] leading-snug text-zinc-800 whitespace-pre-line">
+                {presentation.recommendationText}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {view.citationsLabel ? (
             <div className="flex shrink-0 items-stretch">
@@ -113,7 +138,7 @@ export function WebReportFindingCard({
                 <div key={i} className="h-28 flex-1 overflow-hidden bg-white p-1 md:h-32 md:flex-none">
                   <img
                     src={url}
-                    alt=""
+                    alt={presentation.imageAlts[i] || ''}
                     className="h-full w-full object-cover"
                     referrerPolicy="no-referrer"
                   />

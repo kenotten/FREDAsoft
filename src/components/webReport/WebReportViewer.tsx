@@ -14,9 +14,17 @@ import type {
   MasterStandard
 } from '../../types';
 import { Button, Card, Select } from '../ui/core';
-import { resolveFacilityReportNarrative, type ReportRecordSortOrder } from '../../lib/reportPreviewShared';
-import { resolveCurrentWorkflowResponsibleProfessional, currentWorkflowWorkContext } from '../../lib/responsibleProfessional';
-import { loadRasWorkMode } from '../../lib/rasWorkModeStorage';
+import { type ReportRecordSortOrder } from '../../lib/reportPreviewShared';
+import { buildReportViewModel } from '../../lib/reportAdapter';
+import {
+  formatWebReportProfessionalValue,
+  getWebReportPresentation,
+  resolveWebReportHeadingDate,
+  resolveWebReportProfile,
+  resolveWebReportWorkMode,
+  filterWebReportRecordsForProfile
+} from '../../lib/webReportPresentation';
+import type { RasWorkMode } from '../../lib/workProduct';
 import {
   applyWebReportRecordInclusion,
   cloneWebReportRecordInclusion,
@@ -115,6 +123,8 @@ type WebReportViewerProps = {
   defaultFacilityId: string;
   /** Workspace client id (selections.clientId) for extra facility inclusion */
   workspaceClientId: string;
+  /** Sticky RAS work mode for the workspace project. Not persisted on Project. */
+  rasWorkMode?: RasWorkMode;
 };
 
 export function WebReportViewer({
@@ -132,7 +142,8 @@ export function WebReportViewer({
   standards,
   defaultProjectId,
   defaultFacilityId,
-  workspaceClientId
+  workspaceClientId,
+  rasWorkMode
 }: WebReportViewerProps) {
   const [localProjectId, setLocalProjectId] = useState(defaultProjectId);
   const [localFacilityId, setLocalFacilityId] = useState(defaultFacilityId);
@@ -274,13 +285,17 @@ export function WebReportViewer({
     return clients.find((c) => c.fldClientID === selectedProject.fldClient) || null;
   }, [clients, selectedProject]);
 
-  const selectedInspector = useMemo(() => {
-    const workContext = currentWorkflowWorkContext(
-      selectedProject,
-      loadRasWorkMode(selectedProject?.fldProjID)
-    );
-    return resolveCurrentWorkflowResponsibleProfessional(selectedProject, inspectors, workContext);
-  }, [inspectors, selectedProject]);
+  const reportWorkMode = useMemo(
+    () => resolveWebReportWorkMode(localProjectId, subscribedProjectId, rasWorkMode),
+    [localProjectId, subscribedProjectId, rasWorkMode]
+  );
+
+  const reportProfile = useMemo(
+    () => resolveWebReportProfile(selectedProject, reportWorkMode),
+    [selectedProject, reportWorkMode]
+  );
+
+  const presentation = useMemo(() => getWebReportPresentation(reportProfile), [reportProfile]);
 
   const dataInScope =
     Boolean(localProjectId) &&
@@ -302,7 +317,7 @@ export function WebReportViewer({
 
   const facilityRecords = useMemo(() => {
     if (!selectedProject || !effectiveFacility || !dataInScope) return [];
-    return getWebReportFacilityRecords(
+    const scoped = getWebReportFacilityRecords(
       activeProjectData,
       selectedProject,
       effectiveFacility,
@@ -312,6 +327,7 @@ export function WebReportViewer({
       locations,
       findings
     );
+    return filterWebReportRecordsForProfile(scoped, reportProfile);
   }, [
     activeProjectData,
     selectedProject,
@@ -321,7 +337,31 @@ export function WebReportViewer({
     categories,
     items,
     locations,
-    findings
+    findings,
+    reportProfile
+  ]);
+
+  const reportViewModel = useMemo(() => {
+    if (!selectedProject) return null;
+    return buildReportViewModel({
+      profile: reportProfile,
+      project: selectedProject,
+      facility: effectiveFacility,
+      inspectors,
+      records: facilityRecords,
+      client: selectedClient,
+      locations,
+      glossary
+    });
+  }, [
+    reportProfile,
+    selectedProject,
+    effectiveFacility,
+    inspectors,
+    facilityRecords,
+    selectedClient,
+    locations,
+    glossary
   ]);
 
   const filterOptions = useMemo(
@@ -525,7 +565,7 @@ export function WebReportViewer({
       return new Map<string, number>();
     }
     return buildCanonicalReportNumberMap(
-      activeProjectData,
+      facilityRecords,
       selectedProject,
       effectiveFacility,
       glossary,
@@ -535,7 +575,7 @@ export function WebReportViewer({
       findings
     );
   }, [
-    activeProjectData,
+    facilityRecords,
     selectedProject,
     effectiveFacility,
     dataInScope,
@@ -546,10 +586,10 @@ export function WebReportViewer({
     findings
   ]);
 
-  const financialSummary = useMemo(
-    () =>
-      buildWebReportFinancialSummary(
-        includedRecords,
+  const financialSummary = useMemo(() => {
+    if (!presentation.includeFinancial) {
+      return buildWebReportFinancialSummary(
+        [],
         sortOrder,
         glossary,
         categories,
@@ -557,8 +597,9 @@ export function WebReportViewer({
         locations,
         findings,
         canonicalReportNumbers
-      ),
-    [
+      );
+    }
+    return buildWebReportFinancialSummary(
       includedRecords,
       sortOrder,
       glossary,
@@ -567,8 +608,18 @@ export function WebReportViewer({
       locations,
       findings,
       canonicalReportNumbers
-    ]
-  );
+    );
+  }, [
+    presentation.includeFinancial,
+    includedRecords,
+    sortOrder,
+    glossary,
+    categories,
+    items,
+    locations,
+    findings,
+    canonicalReportNumbers
+  ]);
 
   const documentationTree = useMemo(() => {
     if (!selectedProject || !effectiveFacility || !dataInScope) return null;
@@ -641,10 +692,7 @@ export function WebReportViewer({
 
   const resetContentFilters = () => setRecordInclusionOverride(null);
 
-  const narrativeText = useMemo(() => {
-    if (!selectedProject || !effectiveFacility) return '';
-    return resolveFacilityReportNarrative(selectedProject, effectiveFacility.fldFacID);
-  }, [selectedProject, effectiveFacility]);
+  const narrativeText = reportViewModel?.narrative ?? '';
 
   const accordionNodeIds = useMemo(
     () => collectWebReportAccordionNodeIds(documentationTree),
@@ -754,7 +802,7 @@ export function WebReportViewer({
             <Layers size={20} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Web Report Viewer</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{presentation.viewerTitle}</h1>
             <p className="text-sm text-zinc-500">
               Read-only live report · Phase 1 (heading, narrative, documentation)
             </p>
@@ -873,6 +921,7 @@ export function WebReportViewer({
               })
             }
             onResetFilters={resetContentFilters}
+            recordNoun={presentation.documentationLabel.toLowerCase()}
           />
         ) : null}
 
@@ -881,6 +930,9 @@ export function WebReportViewer({
           onSectionInclusionChange={(patch) => setSectionInclusion((s) => ({ ...s, ...patch }))}
           hasReferencedStandards={referencedStandardsView.hasReferencedStandards}
           hasPhotoAddendumPhotos={hasPhotoAddendumPhotos}
+          includeFinancial={presentation.includeFinancial}
+          documentationLabel={presentation.documentationLabel}
+          photoAddendumLabel={presentation.photoAddendumLabel}
         />
       </Card>
 
@@ -923,7 +975,9 @@ export function WebReportViewer({
             <div className="flex items-start gap-3 border-b border-zinc-200 pb-4">
               <FileText className="mt-0.5 shrink-0 text-indigo-600" size={20} />
               <div>
-                <h2 className="text-lg font-bold uppercase tracking-wide text-zinc-900">Report heading</h2>
+                <h2 className="text-lg font-bold uppercase tracking-wide text-zinc-900">
+                  {presentation.headingTitle}
+                </h2>
                 <p className="text-xs text-zinc-500">Always included · read-only</p>
               </div>
             </div>
@@ -947,20 +1001,24 @@ export function WebReportViewer({
               </div>
               <div className="space-y-3">
                 <h3 className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                  Inspection
+                  {presentation.headingGroupLabel}
                 </h3>
                 <WebReportInfoRow
-                  label="Inspector"
-                  value={
-                    selectedInspector
-                      ? `${selectedInspector.fldInspName}${selectedInspector.fldTitle ? `, ${selectedInspector.fldTitle}` : ''}`
-                      : 'TBD'
-                  }
+                  label={presentation.professionalLabel}
+                  value={formatWebReportProfessionalValue(
+                    reportProfile,
+                    reportViewModel?.professional
+                  )}
                 />
                 <WebReportInfoRow
-                  label="Inspection date"
+                  label={presentation.dateLabel}
                   value={formatInspectionDate(
-                    effectiveFacility.fldInspectionDate || selectedProject.fldPDDate
+                    resolveWebReportHeadingDate(
+                      reportProfile,
+                      reportViewModel?.date ?? '',
+                      effectiveFacility.fldInspectionDate,
+                      selectedProject.fldPDDate
+                    )
                   )}
                 />
                 <WebReportInfoRow
@@ -991,7 +1049,7 @@ export function WebReportViewer({
             </Card>
           ) : null}
 
-          {sectionInclusion.financial ? (
+          {presentation.includeFinancial && sectionInclusion.financial ? (
             <div className="space-y-3">
               <Card className="p-4">
                 <WebReportCollapseToggle
@@ -1033,7 +1091,7 @@ export function WebReportViewer({
               <Card className="p-4">
                 <WebReportCollapseToggle
                   level="top"
-                  label="Documentation"
+                  label={presentation.documentationLabel}
                   subtitle={
                     filtersRestricted && fullRecordCount > 0
                       ? `${filteredRecordCount} of ${fullRecordCount} records · ${topLevelLabel} → ${midLevelLabel} → Item`
@@ -1050,7 +1108,7 @@ export function WebReportViewer({
               {documentationExpanded ? (
                 fullRecordCount === 0 ? (
                   <Card className="p-6 text-center text-sm italic text-zinc-500">
-                    No documentation records for this project and facility.
+                    No {presentation.documentationLabel.toLowerCase()} records for this project and facility.
                   </Card>
                 ) : filteredRecordCount === 0 ? (
                   <Card className="space-y-4 p-6 text-center">
@@ -1072,6 +1130,7 @@ export function WebReportViewer({
                     <WebReportDocumentationAccordionToolbar
                       sortOrder={sortOrder}
                       nodeIds={accordionNodeIds}
+                      hierarchyLabel={presentation.documentationHierarchyLabel}
                       onExpandAll={() =>
                         applyCollapsedKeys(applyWebReportAccordionExpandAll())
                       }
@@ -1105,6 +1164,12 @@ export function WebReportViewer({
                         collapsedKeys={collapsedKeys}
                         toggleCollapsed={toggleCollapsed}
                         canonicalReportNumbers={canonicalReportNumbers}
+                        profile={reportProfile}
+                        glossary={glossary}
+                        standards={standards}
+                        locations={locations}
+                        categories={categories}
+                        items={items}
                       />
                     ))}
                   </div>
@@ -1130,6 +1195,10 @@ export function WebReportViewer({
               onToggleExpanded={() => setPhotoAddendumExpanded((v) => !v)}
               includedRecordCount={filteredRecordCount}
               filtersRestricted={filtersRestricted}
+              profile={reportProfile}
+              addendumLabel={presentation.photoAddendumLabel}
+              documentationLabel={presentation.documentationLabel}
+              includeRecommendations={presentation.includeRecommendations}
             />
           ) : null}
         </>

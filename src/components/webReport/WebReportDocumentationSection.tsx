@@ -19,26 +19,50 @@ import {
   resolveFindingSummary,
   resolveRecommendationSummary
 } from './webReportRecordSummaries';
+import { buildWebReportFindingPresentation } from '../../lib/webReportPresentation';
+import type { ReportProfile } from '../../lib/reportProfile';
+import type { Category, Glossary, Item, Location, MasterStandard } from '../../types';
+
+type WebReportFindingLookups = {
+  profile: ReportProfile;
+  glossary: Glossary[];
+  standards: MasterStandard[];
+  locations: Location[];
+  categories: Category[];
+  items: Item[];
+};
 
 function WebReportItemGroupBlock({
   group,
   collapsedKeys,
   toggleCollapsed,
-  canonicalReportNumbers
+  canonicalReportNumbers,
+  lookups
 }: {
   group: WebReportItemGroup;
   collapsedKeys: Set<string>;
   toggleCollapsed: (key: string) => void;
   canonicalReportNumbers: Map<string, number>;
+  lookups: WebReportFindingLookups;
 }) {
   const expanded = !collapsedKeys.has(group.key);
+  const includeRecommendation = lookups.profile === 'assessment';
   const summaryRows = group.records.map((view) => {
     const reportNumber = getCanonicalReportNumber(canonicalReportNumbers, view.record.fldPDataID);
     return {
       id: view.record.fldPDataID,
       reportLabel: reportNumber !== null ? `#${reportNumber}` : '#-',
       finding: resolveFindingSummary(view),
-      recommendation: resolveRecommendationSummary(view)
+      recommendation: includeRecommendation ? resolveRecommendationSummary(view) : '',
+      presentation: buildWebReportFindingPresentation(
+        view,
+        lookups.profile,
+        lookups.glossary,
+        lookups.standards,
+        lookups.locations,
+        lookups.categories,
+        lookups.items
+      )
     };
   });
 
@@ -60,17 +84,27 @@ function WebReportItemGroupBlock({
         {summaryRows[0] ? (
           <p className="truncate py-2 text-[11px] leading-snug text-zinc-600">
             <span className="font-bold text-zinc-700">{summaryRows[0].reportLabel}</span>{' '}
-            <span>{summaryRows[0].finding}</span>{' '}
-            <span className="text-zinc-400">{'->'}</span>{' '}
-            <span>{summaryRows[0].recommendation}</span>
+            <span>{summaryRows[0].finding}</span>
+            {includeRecommendation ? (
+              <>
+                {' '}
+                <span className="text-zinc-400">{'->'}</span>{' '}
+                <span>{summaryRows[0].recommendation}</span>
+              </>
+            ) : null}
           </p>
         ) : null}
         {summaryRows.slice(1).map((row) => (
           <p key={row.id} className="col-start-2 truncate text-[11px] leading-snug text-zinc-600">
             <span className="font-bold text-zinc-700">{row.reportLabel}</span>{' '}
-            <span>{row.finding}</span>{' '}
-            <span className="text-zinc-400">{'->'}</span>{' '}
-            <span>{row.recommendation}</span>
+            <span>{row.finding}</span>
+            {includeRecommendation ? (
+              <>
+                {' '}
+                <span className="text-zinc-400">{'->'}</span>{' '}
+                <span>{row.recommendation}</span>
+              </>
+            ) : null}
           </p>
         ))}
       </div>
@@ -81,6 +115,18 @@ function WebReportItemGroupBlock({
               key={view.record.fldPDataID}
               view={view}
               reportNumber={getCanonicalReportNumber(canonicalReportNumbers, view.record.fldPDataID)}
+              presentation={
+                summaryRows.find((row) => row.id === view.record.fldPDataID)?.presentation ??
+                buildWebReportFindingPresentation(
+                  view,
+                  lookups.profile,
+                  lookups.glossary,
+                  lookups.standards,
+                  lookups.locations,
+                  lookups.categories,
+                  lookups.items
+                )
+              }
             />
           ))}
         </div>
@@ -96,7 +142,8 @@ function WebReportMidGroupBlock({
   midLevelLabel,
   collapsedKeys,
   toggleCollapsed,
-  canonicalReportNumbers
+  canonicalReportNumbers,
+  lookups
 }: {
   group: WebReportMidGroup;
   topLabel: string;
@@ -105,6 +152,7 @@ function WebReportMidGroupBlock({
   collapsedKeys: Set<string>;
   toggleCollapsed: (key: string) => void;
   canonicalReportNumbers: Map<string, number>;
+  lookups: WebReportFindingLookups;
 }) {
   const expanded = !collapsedKeys.has(group.key);
   const recordCount = group.items.reduce((n, g) => n + g.records.length, 0);
@@ -127,6 +175,7 @@ function WebReportMidGroupBlock({
               collapsedKeys={collapsedKeys}
               toggleCollapsed={toggleCollapsed}
               canonicalReportNumbers={canonicalReportNumbers}
+              lookups={lookups}
             />
           ))}
         </div>
@@ -141,7 +190,8 @@ export function WebReportDocumentationAccordionToolbar({
   onExpandAll,
   onCollapseAll,
   onExpandLevel,
-  onCollapseLevel
+  onCollapseLevel,
+  hierarchyLabel = 'Documentation hierarchy (display only)'
 }: {
   sortOrder: ReportRecordSortOrder;
   nodeIds: ReturnType<typeof collectWebReportAccordionNodeIds>;
@@ -149,6 +199,7 @@ export function WebReportDocumentationAccordionToolbar({
   onCollapseAll: () => void;
   onExpandLevel: (level: 'top' | 'mid' | 'item') => void;
   onCollapseLevel: (level: 'top' | 'mid' | 'item') => void;
+  hierarchyLabel?: string;
 }) {
   const labels = webReportHierarchyLevelLabels(sortOrder);
   const disabled = nodeIds.all.length === 0;
@@ -181,7 +232,7 @@ export function WebReportDocumentationAccordionToolbar({
   return (
     <Card className="border-dashed border-zinc-200 bg-zinc-50/80 p-3">
       <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-        Documentation hierarchy (display only)
+        {hierarchyLabel}
       </p>
       <p className="mt-1 text-xs text-zinc-500">
         Does not change section inclusion, record numbers, or report data.
@@ -208,7 +259,13 @@ export function WebReportTopGroupBlock({
   midLevelLabel,
   collapsedKeys,
   toggleCollapsed,
-  canonicalReportNumbers
+  canonicalReportNumbers,
+  profile,
+  glossary,
+  standards,
+  locations,
+  categories,
+  items
 }: {
   group: WebReportTopGroup;
   sortOrder: ReportRecordSortOrder;
@@ -217,7 +274,21 @@ export function WebReportTopGroupBlock({
   collapsedKeys: Set<string>;
   toggleCollapsed: (key: string) => void;
   canonicalReportNumbers: Map<string, number>;
+  profile: ReportProfile;
+  glossary: Glossary[];
+  standards: MasterStandard[];
+  locations: Location[];
+  categories: Category[];
+  items: Item[];
 }) {
+  const lookups: WebReportFindingLookups = {
+    profile,
+    glossary,
+    standards,
+    locations,
+    categories,
+    items
+  };
   const expanded = !collapsedKeys.has(group.key);
   const recordCount = group.children.reduce(
     (n, mid) => n + mid.items.reduce((m, item) => m + item.records.length, 0),
@@ -245,6 +316,7 @@ export function WebReportTopGroupBlock({
               collapsedKeys={collapsedKeys}
               toggleCollapsed={toggleCollapsed}
               canonicalReportNumbers={canonicalReportNumbers}
+              lookups={lookups}
             />
           ))}
         </div>

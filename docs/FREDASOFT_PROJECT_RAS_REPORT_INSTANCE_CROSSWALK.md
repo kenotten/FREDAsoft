@@ -28,7 +28,7 @@ This is a **D3 conceptual crosswalk**, not implementation or schema. It builds o
 
 **Review vs Inspection** is a work mode on a TAS/RAS Project (not a Project type change). Plan Review findings may include optional **Sheet** in addition to Location; Sheet does not replace Location; Inspection mode need not show Sheet unless later required.
 
-**Not implemented:** report instances / `reportInstanceId`; Web Report parity. RAS PDF cover and body are implemented (`feat/ras-report-cover`, `feat/ras-report-body`). RAS cover Project Description reads `tdlrRegistered.scopeOfWork` directly.
+**Not implemented:** report instances / `reportInstanceId`. RAS PDF cover, body, and Web Report parity are implemented (`feat/ras-report-cover`, `feat/ras-report-body`, `feat/ras-web-report-parity`). RAS cover Project Description reads `tdlrRegistered.scopeOfWork` directly.
 
 ---
 

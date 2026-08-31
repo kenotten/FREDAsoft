@@ -220,6 +220,7 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
           defaultProjectId={selections.projectId || ''}
           defaultFacilityId={selections.facilityId || ''}
           workspaceClientId={selections.clientId || ''}
+          rasWorkMode={projectProps.rasWorkMode}
         />
       )}
       {activeTab === 'project_audit' && (

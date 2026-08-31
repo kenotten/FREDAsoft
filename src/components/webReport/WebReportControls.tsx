@@ -106,7 +106,8 @@ export function WebReportContentFilters({
   onClearAllLocations,
   onSelectAllItems,
   onClearAllItems,
-  onResetFilters
+  onResetFilters,
+  recordNoun = 'documentation'
 }: {
   filterOptions: WebReportFilterOptions;
   inclusion: WebReportRecordInclusion;
@@ -124,6 +125,7 @@ export function WebReportContentFilters({
   onSelectAllItems: () => void;
   onClearAllItems: () => void;
   onResetFilters: () => void;
+  recordNoun?: string;
 }) {
   const countLabel =
     fullCount === 0
@@ -140,7 +142,7 @@ export function WebReportContentFilters({
             Report content filters
           </p>
           <p className="mt-1 text-xs text-zinc-500">
-            Included documentation records (future print/export). Accordion collapse is display-only.
+            Included {recordNoun} records (future print/export). Accordion collapse is display-only.
           </p>
         </div>
         <Button
@@ -192,12 +194,18 @@ export function WebReportSectionInclusionControls({
   sectionInclusion,
   onSectionInclusionChange,
   hasReferencedStandards,
-  hasPhotoAddendumPhotos
+  hasPhotoAddendumPhotos,
+  includeFinancial = true,
+  documentationLabel = 'Documentation',
+  photoAddendumLabel = 'Photo Addendum'
 }: {
   sectionInclusion: WebReportSectionInclusion;
   onSectionInclusionChange: (patch: Partial<WebReportSectionInclusion>) => void;
   hasReferencedStandards: boolean;
   hasPhotoAddendumPhotos: boolean;
+  includeFinancial?: boolean;
+  documentationLabel?: string;
+  photoAddendumLabel?: string;
 }) {
   return (
     <div className="border-t border-zinc-200 pt-4">
@@ -223,18 +231,20 @@ export function WebReportSectionInclusionControls({
             Narrative
           </label>
         </li>
-        <li className="flex items-center gap-2">
-          <input
-            id="wr-financial"
-            type="checkbox"
-            checked={sectionInclusion.financial}
-            onChange={(e) => onSectionInclusionChange({ financial: e.target.checked })}
-            className="h-4 w-4 rounded border-zinc-300 text-indigo-600"
-          />
-          <label htmlFor="wr-financial" className="text-sm font-medium text-zinc-800">
-            Financial
-          </label>
-        </li>
+        {includeFinancial ? (
+          <li className="flex items-center gap-2">
+            <input
+              id="wr-financial"
+              type="checkbox"
+              checked={sectionInclusion.financial}
+              onChange={(e) => onSectionInclusionChange({ financial: e.target.checked })}
+              className="h-4 w-4 rounded border-zinc-300 text-indigo-600"
+            />
+            <label htmlFor="wr-financial" className="text-sm font-medium text-zinc-800">
+              Financial
+            </label>
+          </li>
+        ) : null}
         <li className="flex items-center gap-2">
           <input
             id="wr-documentation"
@@ -244,7 +254,7 @@ export function WebReportSectionInclusionControls({
             className="h-4 w-4 rounded border-zinc-300 text-indigo-600"
           />
           <label htmlFor="wr-documentation" className="text-sm font-medium text-zinc-800">
-            Documentation
+            {documentationLabel}
           </label>
         </li>
         <li className="flex flex-wrap items-center gap-2">
@@ -285,7 +295,7 @@ export function WebReportSectionInclusionControls({
               !hasPhotoAddendumPhotos && 'text-zinc-500'
             )}
           >
-            Photo Addendum
+            {photoAddendumLabel}
           </label>
           {!hasPhotoAddendumPhotos ? (
             <span className="text-xs text-zinc-400">(none in included records)</span>
