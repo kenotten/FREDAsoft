@@ -126,9 +126,9 @@ export function splitStandardTextParagraphs(text: string): string[] {
   return paragraphs.length > 0 ? paragraphs : [normalized];
 }
 
-/** Max lines per addendum text chunk so a single measured row can fit a page body budget. */
+/** Max lines per addendum text chunk. Fallback only when Referenced Standards DOM measurement is missing/zero. */
 export const ADDENDUM_TEXT_CHUNK_MAX_LINES = 14;
-/** Fallback char split when a paragraph has no line breaks but is very long. */
+/** Fallback char split when a paragraph has no line breaks but is very long. Used only with the line fallback. */
 export const ADDENDUM_TEXT_CHUNK_MAX_CHARS = 1800;
 
 export function splitLongParagraphIntoChunks(

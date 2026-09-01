@@ -32,7 +32,7 @@ import {
   getRecordStandardIds,
   getReportRecordSortKeys,
   compareReportRecordSortKeysLocationFirst,
-  buildStandardTextPaginationParts,
+  splitStandardTextParagraphs,
   standardTypeKey,
   type AddendumEntry,
   type FinancialTableRow,
@@ -63,6 +63,17 @@ import { rasCoverFooterIdentityText, usesRasCover } from '../lib/rasReportCoverD
 import { RasReportCover } from './report/RasReportCover';
 import { RasFindingCard } from './report/RasFindingCard';
 import { REPORT_CARD_NUMBER_CELL_CLASS } from '../lib/reportCardNumberDisplay';
+import {
+  buildReferencedStandardNaturalBlocks,
+  fragmentHeightKey,
+  isValidMeasuredHeight,
+  packReferencedStandardBlocks,
+  REFERENCED_STANDARDS_PACK_SAFETY_MARGIN_PX,
+  REFERENCED_STANDARDS_SUBSEQUENT_PAGE_BODY_PX,
+  splitOversizedBlockText,
+  wholeStandardHeightKey,
+  type PackedStandardsItem
+} from '../lib/referencedStandardsPagination';
 
 interface ReportPreviewProps {
   project: Project;
@@ -107,17 +118,8 @@ const toRoman = (num: number, uppercase = false) => {
   return uppercase ? roman : roman.toLowerCase();
 };
 
-/** Referenced Standards addendum: vertical budget for row stacking (content area inside PageContainer). */
-const ADDENDUM_SUBSEQUENT_PAGE_BODY_PX = 660;
-const ADDENDUM_FIRST_PAGE_BODY_BASE_PX = 595;
-/** Buffer after subtracting measured first-page section title. */
-const ADDENDUM_FIRST_PAGE_LAYOUT_FUDGE_PX = 8;
-/** Slack per entry when summing measured heights (borders / subpixel). */
-const ADDENDUM_ROW_PAGINATION_SLACK_PX = 18;
-/** Tighter slack for image rows (measured box is more predictable). */
-const ADDENDUM_IMAGE_ROW_SLACK_PX = 12;
-/** Fallback body padding when `__img` height is missing (image + chrome, not continuation). */
-const ADDENDUM_IMAGE_DEFAULT_EXTRA_PX = 36;
+/** Referenced Standards subsequent-page body budget (content area inside PageContainer). */
+const ADDENDUM_SUBSEQUENT_PAGE_BODY_PX = REFERENCED_STANDARDS_SUBSEQUENT_PAGE_BODY_PX;
 /** Fallback if section title probe has not laid out yet. */
 const ADDENDUM_SECTION_TITLE_FALLBACK_PX = 104;
 /** Standards figure: max height within 180–220px guidance; width capped for predictable pagination. */
@@ -146,7 +148,23 @@ function expandAddendumForPagination(entries: AddendumEntry[]): AddendumPaginate
     }
     const s = e.standard;
     const img = s.fldImageUrl && String(s.fldImageUrl).trim();
-    const textParts = buildStandardTextPaginationParts(s.fldStandardId, s.fldContentText);
+    const paragraphs = splitStandardTextParagraphs(s.fldContentText);
+    const textParts =
+      paragraphs.length > 0
+        ? paragraphs.map((text, i) => ({
+            text,
+            partKey: `${s.fldStandardId}::__p${i}`,
+            isFirst: i === 0,
+            isLastInStandard: i === paragraphs.length - 1
+          }))
+        : [
+            {
+              text: '',
+              partKey: `${s.fldStandardId}::__p0`,
+              isFirst: true,
+              isLastInStandard: true
+            }
+          ];
     textParts.forEach((part, idx) => {
       out.push({
         kind: 'standardText',
@@ -163,16 +181,34 @@ function expandAddendumForPagination(entries: AddendumEntry[]): AddendumPaginate
   return out;
 }
 
-function addendumPaginateMeasureId(unit: AddendumPaginateUnit): string {
-  if (unit.kind === 'header') return unit.key;
-  if (unit.kind === 'standardText') return unit.partKey;
-  return `${unit.standard.fldStandardId}::__img`;
+function packedItemToAddendumUnit(
+  item: PackedStandardsItem,
+  snapshots: Map<string, StandardSnapshot>,
+  idx: number
+): AddendumPaginateUnit | null {
+  if (item.kind === 'typeHeading') {
+    return { kind: 'header', key: item.blockId, standardType: item.standardType };
+  }
+  const standard = snapshots.get(item.standardId);
+  if (!standard) return null;
+  if (item.kind === 'image') return { kind: 'standardImage', standard };
+  return {
+    kind: 'standardText',
+    standard,
+    text: item.text,
+    partKey: `${item.blockId}::${idx}`,
+    isFirst: item.isFirstOfStandard,
+    isLastInStandard: item.isLastTextInStandard,
+    isLastTextBeforeImage: item.isLastTextBeforeImage
+  };
 }
 
-function estimateAddendumTextPartHeight(text: string, isFirst: boolean): number {
-  const lines = Math.max(1, String(text ?? '').split('\n').length);
-  const chrome = isFirst ? 40 : 8;
-  return chrome + lines * 15;
+function addendumPaginateMeasureId(unit: AddendumPaginateUnit, measureAs?: 'default' | 'body'): string {
+  if (unit.kind === 'header') return unit.key;
+  if (unit.kind === 'standardText') {
+    return measureAs === 'body' ? `${unit.partKey}::body` : unit.partKey;
+  }
+  return `${unit.standard.fldStandardId}::__img`;
 }
 
 /** Visible addendum page: heading once per standard; body-only between chunks on the same page. */
@@ -210,19 +246,6 @@ function addendumSnapshotCiteLabels(standard: StandardSnapshot): { citeLabel: st
   return { citeLabel, citeTitle };
 }
 
-function addendumIsTextImagePair(
-  u: AddendumPaginateUnit | undefined,
-  v: AddendumPaginateUnit | undefined
-): boolean {
-  if (!u || !v) return false;
-  return (
-    u.kind === 'standardText' &&
-    Boolean(u.standard.fldImageUrl && String(u.standard.fldImageUrl).trim()) &&
-    v.kind === 'standardImage' &&
-    v.standard.fldStandardId === u.standard.fldStandardId
-  );
-}
-
 function addendumImageIsOrphanOnPage(page: AddendumPaginateUnit[], idx: number): boolean {
   const unit = page[idx];
   if (!unit || unit.kind !== 'standardImage') return false;
@@ -237,6 +260,7 @@ function addendumImageIsOrphanOnPage(page: AddendumPaginateUnit[], idx: number):
 function AddendumPaginateRow({
   unit,
   forMeasurement,
+  measureAs = 'default',
   showImageContinuation,
   showHeading,
   showPageContinuation,
@@ -244,6 +268,8 @@ function AddendumPaginateRow({
 }: {
   unit: AddendumPaginateUnit;
   forMeasurement?: boolean;
+  /** `body` = same-page follow-on geometry (no citation heading). */
+  measureAs?: 'default' | 'body';
   /** When the figure starts a page without its citation/text block above it. */
   showImageContinuation?: boolean;
   showHeading?: boolean;
@@ -272,9 +298,10 @@ function AddendumPaginateRow({
   if (unit.kind === 'standardText') {
     const s = unit.standard;
     const { citeLabel, citeTitle } = addendumSnapshotCiteLabels(s);
-    const renderHeading = forMeasurement ? unit.isFirst : Boolean(showHeading);
+    const measureBody = Boolean(forMeasurement && measureAs === 'body');
+    const renderHeading = measureBody ? false : forMeasurement ? unit.isFirst : Boolean(showHeading);
     const renderPageCont = !forMeasurement && Boolean(showPageContinuation);
-    const samePageFlow = Boolean(continuesOnSamePage);
+    const samePageFlow = measureBody || Boolean(continuesOnSamePage);
     const marginClass = unit.isLastTextBeforeImage
       ? 'mb-2'
       : unit.isLastInStandard
@@ -284,7 +311,7 @@ function AddendumPaginateRow({
           : 'mb-3';
     const contLabel = `${citeLabel}${s.fldCitationName ? ` ${s.fldCitationName}` : ''} (cont.)`;
     return wrapMeasured(
-      unit.partKey,
+      addendumPaginateMeasureId(unit, measureAs),
       cn(marginClass, samePageFlow && 'mt-2'),
       <div className={cn(renderHeading && 'space-y-2 break-inside-avoid')}>
         {renderHeading ? (
@@ -768,6 +795,10 @@ export function ReportPreview({
   /** Measured height of compact “continued figure” line above orphan addendum images. */
   const [measuredAddendumImageContinuationLinePx, setMeasuredAddendumImageContinuationLinePx] =
     useState(26);
+  const [measuredAddendumTextContinuationPx, setMeasuredAddendumTextContinuationPx] = useState(22);
+  const [measuredAddendumFragmentHeights, setMeasuredAddendumFragmentHeights] = useState<
+    Record<string, number>
+  >({});
   const [isMeasuring, setIsMeasuring] = useState(true);
 
   const profile: ReportProfile = reportProfile ?? 'assessment';
@@ -820,6 +851,23 @@ export function ReportPreview({
     [referencedStandards]
   );
 
+  const addendumNaturalBlocks = useMemo(
+    () => buildReferencedStandardNaturalBlocks(referencedStandards),
+    [referencedStandards]
+  );
+
+  const addendumUnitsByStandard = useMemo(() => {
+    const grouped = new Map<string, AddendumPaginateUnit[]>();
+    for (const unit of addendumLayoutUnits) {
+      if (unit.kind === 'header') continue;
+      const id = unit.standard.fldStandardId;
+      const list = grouped.get(id);
+      if (list) list.push(unit);
+      else grouped.set(id, [unit]);
+    }
+    return grouped;
+  }, [addendumLayoutUnits]);
+
   const supplementalPhotoRows = useMemo(() => {
     if (!sectionSel.photoAddendum) return [];
     return buildSupplementalPhotoRows(filteredData, locations, glossary, categories, items);
@@ -853,6 +901,10 @@ export function ReportPreview({
     referencedStandards.length,
     supplementalPhotoRows.length,
   ]);
+
+  const addendumSectionTitleText = rasBody
+    ? rasBodySectionHeading(rasLettered, 'referenced_standards', 'Referenced Standards')
+    : 'Addendum: Referenced Standards';
 
   const financialData = useMemo(() => {
     if (!sectionSel.financial) return [];
@@ -1004,6 +1056,12 @@ export function ReportPreview({
         if (id) addendumHeights[id] = el.getBoundingClientRect().height;
       });
 
+      const wholeElements = measurementRef.current?.querySelectorAll('[data-measure-type="addendum-whole"]');
+      wholeElements?.forEach((el) => {
+        const id = el.getAttribute('data-id');
+        if (id) addendumHeights[wholeStandardHeightKey(id)] = el.getBoundingClientRect().height;
+      });
+
       const addendumTitleProbe = measurementRef.current?.querySelector(
         '[data-measure-type="addendum-section-title"]'
       );
@@ -1022,12 +1080,88 @@ export function ReportPreview({
         if (contLineH < 10) contLineH = 26;
       }
 
+      const textContProbe = measurementRef.current?.querySelector(
+        '[data-measure-type="addendum-text-continuation-probe"]'
+      );
+      let textContH = 22;
+      if (textContProbe) {
+        textContH = Math.ceil(textContProbe.getBoundingClientRect().height);
+        if (textContH < 10) textContH = 22;
+      }
+
+      const fragmentHeights: Record<string, number> = {};
+      const fragProbe = measurementRef.current?.querySelector(
+        '[data-measure-type="addendum-fragment-probe"]'
+      ) as HTMLElement | null;
+      const fragHeading = fragProbe?.querySelector('[data-frag-heading]') as HTMLElement | null;
+      const fragBody = fragProbe?.querySelector('[data-frag-body]') as HTMLElement | null;
+      const fragCache = new Map<string, number>();
+      const measureFrag = (text: string, heading: string | null): number => {
+        if (!fragProbe) return 0;
+        const cacheKey = `${heading ?? ''}::${text}`;
+        const cached = fragCache.get(cacheKey);
+        if (cached !== undefined) return cached;
+        if (fragHeading) {
+          fragHeading.textContent = heading ?? '';
+          fragHeading.style.display = heading ? 'block' : 'none';
+        }
+        if (fragBody) fragBody.textContent = text;
+        const h = Math.ceil(fragProbe.getBoundingClientRect().height);
+        fragCache.set(cacheKey, h);
+        return h;
+      };
+
+      const pageFit = ADDENDUM_SUBSEQUENT_PAGE_BODY_PX - REFERENCED_STANDARDS_PACK_SAFETY_MARGIN_PX;
+      const firstPageFit = Math.max(
+        1,
+        ADDENDUM_SUBSEQUENT_PAGE_BODY_PX - addendumTitleH - REFERENCED_STANDARDS_PACK_SAFETY_MARGIN_PX
+      );
+      for (const unit of addendumLayoutUnits) {
+        if (unit.kind !== 'standardText') continue;
+        const measured = addendumHeights[unit.partKey] || 0;
+        if (!(measured > firstPageFit)) continue;
+        const citeTitle = unit.isFirst ? addendumSnapshotCiteLabels(unit.standard).citeTitle : null;
+        const storeFragment = (fragment: string) => {
+          const bodyH = measureFrag(fragment, null);
+          fragmentHeights[fragmentHeightKey(unit.partKey, fragment, 'body')] = bodyH;
+          if (citeTitle) {
+            fragmentHeights[fragmentHeightKey(unit.partKey, fragment, 'start')] = measureFrag(
+              fragment,
+              citeTitle
+            );
+          }
+          return bodyH;
+        };
+        splitOversizedBlockText(
+          unit.text,
+          pageFit,
+          storeFragment,
+          REFERENCED_STANDARDS_PACK_SAFETY_MARGIN_PX
+        );
+        if (firstPageFit < pageFit) {
+          splitOversizedBlockText(
+            unit.text,
+            firstPageFit,
+            storeFragment,
+            REFERENCED_STANDARDS_PACK_SAFETY_MARGIN_PX
+          );
+        }
+        const lines = unit.text.split('\n');
+        if (lines.length > 1) {
+          for (let k = 1; k < lines.length; k++) {
+            storeFragment(lines.slice(0, k).join('\n'));
+          }
+        }
+      }
+
       setMeasuredDocHeights(docHeights);
       setMeasuredDocHeaderHeight(docHeaderH);
       setMeasuredFinHeights(finHeights);
       setMeasuredAddendumHeights(addendumHeights);
       setMeasuredAddendumSectionTitleHeight(addendumTitleH);
       setMeasuredAddendumImageContinuationLinePx(contLineH);
+      setMeasuredAddendumTextContinuationPx(textContH);
+      setMeasuredAddendumFragmentHeights(fragmentHeights);
       setIsMeasuring(false);
     };
 
@@ -1036,6 +1170,7 @@ export function ReportPreview({
     filteredData,
     financialRows,
     addendumLayoutUnits,
+    addendumSectionTitleText,
     sectionSel.documentation,
     sectionSel.financial,
     sectionSel.referencedStandards,
@@ -1220,125 +1355,51 @@ export function ReportPreview({
   const addendumPages = useMemo(() => {
     if (!sectionSel.referencedStandards) return [];
     if (isMeasuring) return [];
-    const units = addendumLayoutUnits;
-    const chunks: AddendumPaginateUnit[][] = [];
-    let currentChunk: AddendumPaginateUnit[] = [];
-    let currentHeight = 0;
     const titleReserve =
       measuredAddendumSectionTitleHeight > 0
         ? measuredAddendumSectionTitleHeight
         : ADDENDUM_SECTION_TITLE_FALLBACK_PX;
-    const firstPageRowBudget =
-      ADDENDUM_FIRST_PAGE_BODY_BASE_PX -
-      titleReserve -
-      ADDENDUM_FIRST_PAGE_LAYOUT_FUDGE_PX;
+    /** 660 − measured title. Title is subtracted once (not 595 − title − 8). */
+    const firstPageRemainingHeight = ADDENDUM_SUBSEQUENT_PAGE_BODY_PX - titleReserve;
+    const continuationOverhead =
+      measuredAddendumTextContinuationPx > 0 ? measuredAddendumTextContinuationPx : 22;
+    const imageContinuationOverhead =
+      measuredAddendumImageContinuationLinePx > 0 ? measuredAddendumImageContinuationLinePx : 26;
 
-    const contLineReserve =
-      measuredAddendumImageContinuationLinePx > 0
-        ? measuredAddendumImageContinuationLinePx
-        : 26;
+    const packed = packReferencedStandardBlocks({
+      blocks: addendumNaturalBlocks,
+      firstPageRemainingHeight,
+      subsequentPageHeight: ADDENDUM_SUBSEQUENT_PAGE_BODY_PX,
+      measuredHeights: measuredAddendumHeights,
+      continuationOverhead,
+      safetyMargin: REFERENCED_STANDARDS_PACK_SAFETY_MARGIN_PX,
+      fragmentHeights: measuredAddendumFragmentHeights,
+      getMeasuredFragmentHeight: ({ blockId, text, chrome }) => {
+        const h = measuredAddendumFragmentHeights[fragmentHeightKey(blockId, text, chrome)];
+        return isValidMeasuredHeight(h) ? h : undefined;
+      },
+      imageContinuationOverhead
+    });
 
-    const pageLimit = () =>
-      chunks.length === 0 ? firstPageRowBudget : ADDENDUM_SUBSEQUENT_PAGE_BODY_PX;
-
-    const defaultUnitH = (unit: AddendumPaginateUnit) => {
-      if (unit.kind === 'header') return 56;
-      if (unit.kind === 'standardImage')
-        return ADDENDUM_STANDARD_IMAGE_MAX_HEIGHT_PX + ADDENDUM_IMAGE_DEFAULT_EXTRA_PX;
-      if (unit.kind === 'standardText')
-        return estimateAddendumTextPartHeight(unit.text, unit.isFirst);
-      return 100;
-    };
-
-    const heightFor = (unit: AddendumPaginateUnit, opts?: { imageOrphan?: boolean }) => {
-      const key = addendumPaginateMeasureId(unit);
-      const slack =
-        unit.kind === 'standardImage' ? ADDENDUM_IMAGE_ROW_SLACK_PX : ADDENDUM_ROW_PAGINATION_SLACK_PX;
-      let h = (measuredAddendumHeights[key] || defaultUnitH(unit)) + slack;
-      if (unit.kind === 'standardImage' && opts?.imageOrphan) h += contLineReserve;
-      return h;
-    };
-
-    let i = 0;
-    while (i < units.length) {
-      const u = units[i];
-      const next = units[i + 1];
-
-      if (u.kind === 'header' && next?.kind === 'standardText' && currentChunk.length > 0) {
-        const hHeader = heightFor(u);
-        const hNext = heightFor(next);
-        const lim = pageLimit();
-        if (currentHeight + hHeader + hNext > lim && currentHeight + hHeader <= lim) {
-          chunks.push(currentChunk);
-          currentChunk = [];
-          currentHeight = 0;
-        }
-      }
-
-      if (addendumIsTextImagePair(u, next)) {
-        const h1 = heightFor(u);
-        const h2 = heightFor(next!, {});
-        const pairH = h1 + h2;
-
-        while (currentChunk.length > 0 && currentHeight + pairH > pageLimit()) {
-          chunks.push(currentChunk);
-          currentChunk = [];
-          currentHeight = 0;
-        }
-
-        if (currentHeight + pairH <= pageLimit()) {
-          currentChunk.push(u, next!);
-          currentHeight += pairH;
-          i += 2;
-          continue;
-        }
-
-        if (currentChunk.length === 0 && pairH > pageLimit()) {
-          if (h1 <= pageLimit()) {
-            currentChunk.push(u);
-            currentHeight += h1;
-            i += 1;
-            continue;
-          }
-          currentChunk.push(u);
-          currentHeight += h1;
-          i += 1;
-          continue;
-        }
-      }
-
-      const lim = pageLimit();
-      let h = heightFor(u);
-      if (u.kind === 'standardImage') {
-        const prev = currentChunk[currentChunk.length - 1];
-        const orphan =
-          !prev ||
-          prev.kind !== 'standardText' ||
-          prev.standard.fldStandardId !== u.standard.fldStandardId;
-        if (orphan) h = heightFor(u, { imageOrphan: true });
-      }
-
-      if (currentHeight + h > lim && currentChunk.length > 0) {
-        chunks.push(currentChunk);
-        currentChunk = [u];
-        currentHeight = h;
-        i += 1;
-        continue;
-      }
-
-      currentChunk.push(u);
-      currentHeight += h;
-      i += 1;
+    const snapshots = new Map<string, StandardSnapshot>();
+    for (const entry of referencedStandards) {
+      if (entry.kind === 'standard') snapshots.set(entry.standard.fldStandardId, entry.standard);
     }
 
-    if (currentChunk.length > 0) chunks.push(currentChunk);
-    return chunks;
+    return packed.map((page) =>
+      page
+        .map((item, idx) => packedItemToAddendumUnit(item, snapshots, idx))
+        .filter((unit): unit is AddendumPaginateUnit => unit !== null)
+    );
   }, [
     sectionSel.referencedStandards,
-    addendumLayoutUnits,
+    addendumNaturalBlocks,
+    referencedStandards,
     measuredAddendumHeights,
     measuredAddendumSectionTitleHeight,
     measuredAddendumImageContinuationLinePx,
+    measuredAddendumTextContinuationPx,
+    measuredAddendumFragmentHeights,
     isMeasuring
   ]);
 
@@ -1459,9 +1520,15 @@ export function ReportPreview({
           <div className="flex w-full flex-col">
             <div data-measure-type="addendum-section-title">
               <h2 className="mb-8 border-b-2 border-zinc-900 pb-2 text-xl font-bold uppercase tracking-widest text-zinc-900">
-                Addendum: Referenced Standards
+                {addendumSectionTitleText}
               </h2>
             </div>
+            <p
+              data-measure-type="addendum-text-continuation-probe"
+              className="mb-1 text-[10px] font-bold uppercase tracking-tight text-zinc-800 leading-tight"
+            >
+              TAS 502.2 Vehicle Spaces (cont.)
+            </p>
             <p
               data-measure-type="addendum-image-continuation-probe"
               className="mb-1.5 text-[10px] font-bold uppercase tracking-tight text-zinc-800 leading-tight"
@@ -1469,6 +1536,30 @@ export function ReportPreview({
               TAS 502.2 Vehicle Spaces (continued figure)
             </p>
             <AddendumPaginatedContent units={addendumLayoutUnits} forMeasurement />
+            {addendumLayoutUnits.map((unit, idx) =>
+              unit.kind === 'standardText' ? (
+                <AddendumPaginateRow
+                  key={`body-${addendumPaginateMeasureId(unit)}-${idx}`}
+                  unit={unit}
+                  forMeasurement
+                  measureAs="body"
+                />
+              ) : null
+            )}
+            {Array.from(addendumUnitsByStandard.entries()).map(([id, units]) => (
+              <div
+                key={`whole-${id}`}
+                data-measure-type="addendum-whole"
+                data-id={id}
+                className="flex w-full flex-col"
+              >
+                <AddendumPaginatedContent units={units} />
+              </div>
+            ))}
+            <div data-measure-type="addendum-fragment-probe" className="mb-3">
+              <h3 data-frag-heading className="font-bold text-zinc-900 text-sm" style={{ display: 'none' }} />
+              <p data-frag-body className="text-xs text-zinc-700 leading-relaxed whitespace-pre-line" />
+            </div>
           </div>
         ) : null}
       </div>
@@ -1799,13 +1890,7 @@ export function ReportPreview({
                       <div className="flex flex-col">
                         {pIdx === 0 && (
                           <h2 className="mb-8 border-b-2 border-zinc-900 pb-2 text-xl font-bold uppercase tracking-widest text-zinc-900">
-                            {rasBody
-                              ? rasBodySectionHeading(
-                                  rasLettered,
-                                  'referenced_standards',
-                                  'Referenced Standards'
-                                )
-                              : 'Addendum: Referenced Standards'}
+                            {addendumSectionTitleText}
                           </h2>
                         )}
                         <AddendumPaginatedContent
