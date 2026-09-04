@@ -61,7 +61,14 @@ import { cn, sortEntities, sortCategoriesForDropdown, sortItemsForDropdown, form
 import { v4 as uuidv4 } from 'uuid';
 import { resizeImage } from '../lib/imageUtils';
 import { normalizeId, idsEqual } from '../lib/idUtils';
-import { normalizeCitationIds, standardsIdsFromGlossaryRow, findingCitationIdsFromGlossaryRow } from '../lib/citationStandards';
+import {
+  normalizeCitationIds,
+  standardsIdsFromGlossaryRow,
+  findingCitationIdsFromGlossaryRow,
+  workingCitationIdsAfterExplicitGlossarySelection,
+  resolveGlossaryRowForRasCitationRefresh,
+  citationIdSetsEqual
+} from '../lib/citationStandards';
 import { toFraction, fromFraction } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { GLOSSARY_SET_DEFS, glossarySetById } from '../lib/glossarySets';
@@ -1139,9 +1146,15 @@ export default function ProjectDataEntry({
     if (!gRow) return;
 
     if (isRasProject) {
-      if (!activeRecord) {
-        setFldStandards(findingCitationIdsFromGlossaryRow(gRow, resolvableFindingsList || []));
-      }
+      setFldStandards(
+        workingCitationIdsAfterExplicitGlossarySelection({
+          isRasProject: true,
+          isExistingRecord: Boolean(activeRecord),
+          glossaryRow: gRow,
+          findingsList: resolvableFindingsList || [],
+          masterRecs: resolvableMasterRecsList || []
+        })
+      );
       const gid = String(gRow.fldGlosId || gRow.id || '').trim();
       onSelectionChange({
         ...selections,
@@ -1154,17 +1167,15 @@ export default function ProjectDataEntry({
     }
 
     if (dataEntryMode === 'glossary') {
-      if (!activeRecord) {
-        setFldStandards(
-          standardsIdsFromGlossaryRow(
-            gRow,
-            resolvableFindingsList || [],
-            resolvableMasterRecsList || []
-          )
-        );
-      } else {
-        setFldStandards(normalizeCitationIds(gRow?.fldStandards));
-      }
+      setFldStandards(
+        workingCitationIdsAfterExplicitGlossarySelection({
+          isRasProject: false,
+          isExistingRecord: Boolean(activeRecord),
+          glossaryRow: gRow,
+          findingsList: resolvableFindingsList || [],
+          masterRecs: resolvableMasterRecsList || []
+        })
+      );
     }
 
     const recIdRaw = gRow.fldRec || gRow.fldRecID;
@@ -2544,6 +2555,37 @@ export default function ProjectDataEntry({
     addRecordCitation(standard.id);
   };
 
+  const rasCitationRefreshRow = useMemo(() => {
+    if (!isRasProject || dataEntryMode !== 'glossary') return undefined;
+    return resolveGlossaryRowForRasCitationRefresh({
+      preferredGlossaryId: selections.glosId || activeRecord?.fldData,
+      categoryId: selections.categoryId,
+      itemId: selections.itemId,
+      findId: selections.findId,
+      glossaryRows: glossaryRowsForDataEntry || []
+    });
+  }, [
+    isRasProject,
+    dataEntryMode,
+    selections.glosId,
+    selections.categoryId,
+    selections.itemId,
+    selections.findId,
+    activeRecord?.fldData,
+    glossaryRowsForDataEntry
+  ]);
+
+  const handleRefreshRasTasReferences = () => {
+    if (!rasCitationRefreshRow) return;
+    const next = findingCitationIdsFromGlossaryRow(
+      rasCitationRefreshRow,
+      resolvableFindingsList || []
+    );
+    if (citationIdSetsEqual(fldStandards, next)) return;
+    setFldStandards(next);
+    setIsDirty(true);
+  };
+
   /** Glossary rows matching current Cat + Item + Finding (filtered by Active Glossary + optional record context row). */
   const rowsForPath = useMemo(() => {
     if (!selections.findId || !selections.itemId || !selections.categoryId) return [];
@@ -3858,11 +3900,29 @@ export default function ProjectDataEntry({
           {/* Record-level citations (projectData.fldStandards) */}
           <Card className="p-6 space-y-6 border-zinc-200 shadow-sm !bg-blue-50">
             <div className="flex flex-col gap-1 border-b border-zinc-100 pb-2">
-              <div>
-                <h3 className="text-base font-bold text-zinc-900 leading-tight">Record Citations</h3>
-                <p className="text-[11px] text-zinc-500 mt-0.5">
-                  Stored on this project data record as <span className="font-mono text-zinc-600">fldStandards</span>.
-                </p>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-bold text-zinc-900 leading-tight">Record Citations</h3>
+                  <p className="text-[11px] text-zinc-500 mt-0.5">
+                    Stored on this project data record as <span className="font-mono text-zinc-600">fldStandards</span>.
+                  </p>
+                </div>
+                {isRasProject && dataEntryMode === 'glossary' && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={!rasCitationRefreshRow}
+                    onClick={handleRefreshRasTasReferences}
+                    title={
+                      rasCitationRefreshRow
+                        ? 'Refresh working TAS citations from the current finding/glossary source'
+                        : 'Select a glossary Category, Item, and Finding first'
+                    }
+                  >
+                    Refresh TAS References
+                  </Button>
+                )}
               </div>
             </div>
 

@@ -1637,6 +1637,8 @@ The reconstructed set becomes the new ProjectData record’s editable snapshot. 
 
 This is **not** a replacement for Glossary → ProjectData snapshot inheritance, and it does **not** mean ProjectData generally inherits live from the master library. Broader hydration review is deferred (see `docs/MAINTENANCE_BACKLOG.md`).
 
+✅ DECIDED (Data Entry explicit glossary citation snapshot refresh): Saved `projectData.fldStandards` remains a **snapshot**. **Opening** an existing record does **not** rehydrate citations from current glossary or master data (empty `[]` stays `[]`). Assessment: explicit glossary recommendation selection refreshes the **unsaved working** list (`standardsIdsFromGlossaryRow` on new records; selected row `fldStandards` on existing records). TAS/RAS: an explicit **Refresh TAS References** action recalculates working citations via finding-first `findingCitationIdsFromGlossaryRow` from the **internally resolved** glossary row (prefer current `glosId` / `fldData` when that row still matches the selected cat/item/find; else existing path resolution). Glossary document identity is not a user-facing duplicate choice. Rec text and cost remain hidden on RAS. New RAS glossary path selection still initializes citations as before. Refreshed IDs persist only if the user **Saves**. No automatic historical backfill. No live glossary/finding union at report time.
+
 ---
 
 ## 27. Citation Reporting Policy
