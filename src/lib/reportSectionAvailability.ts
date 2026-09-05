@@ -55,7 +55,7 @@ export function getReportSectionDialogLabels(profile: ReportProfile): {
   }
   const semantics = getReportProfileSemantics(profile);
   return {
-    documentation: 'Findings',
+    documentation: 'Violations',
     photoAddendum: semantics.imageTerminology.addendum,
   };
 }

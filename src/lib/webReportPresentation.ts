@@ -110,7 +110,7 @@ export function getWebReportPresentation(profile: ReportProfile): WebReportPrese
     headingTitle: semantics.title,
     reportTitle: semantics.title,
     documentationLabel: dialogLabels.documentation,
-    documentationHierarchyLabel: 'Findings hierarchy (display only)',
+    documentationHierarchyLabel: 'Violations hierarchy (display only)',
     photoAddendumLabel: semantics.imageTerminology.addendum,
     imageTerminology: semantics.imageTerminology,
     professionalLabel: semantics.professionalRoleLabel,

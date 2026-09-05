@@ -1733,7 +1733,7 @@ export function ReportPreview({
                         {pIdx === 0 && (
                           <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
                             {rasBody
-                              ? rasBodySectionHeading(rasLettered, 'findings', 'Findings')
+                              ? rasBodySectionHeading(rasLettered, 'findings', 'Violations')
                               : 'Documentation Section'}
                           </h2>
                         )}
@@ -1799,12 +1799,12 @@ export function ReportPreview({
                     <div className="flex flex-col">
                       <h2 className="text-xl font-bold text-zinc-900 mb-8 uppercase tracking-widest border-b-2 border-zinc-900 pb-2">
                         {rasBody
-                          ? rasBodySectionHeading(rasLettered, 'findings', 'Findings')
+                          ? rasBodySectionHeading(rasLettered, 'findings', 'Violations')
                           : 'Documentation Section'}
                       </h2>
                       <p className="text-sm text-zinc-500 italic">
                         {rasBody
-                          ? 'No findings found for this report.'
+                          ? 'No violations found for this report.'
                           : 'No documentation records found for this project.'}
                       </p>
                     </div>

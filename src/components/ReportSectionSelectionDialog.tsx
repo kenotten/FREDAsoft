@@ -37,7 +37,7 @@ export interface ReportSectionSelectionDialogProps {
   hasFinancial: boolean;
   hasReferencedStandards: boolean;
   hasPhotoAddendum: boolean;
-  /** Assessment: Documentation. RAS: Findings. */
+  /** Assessment: Documentation. RAS: Violations. */
   documentationLabel?: string;
   /** Assessment: Photo addendum. RAS: Image Addendum / Photo Addendum. */
   photoAddendumLabel?: string;

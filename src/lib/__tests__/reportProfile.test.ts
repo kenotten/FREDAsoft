@@ -141,7 +141,7 @@ describe('RAS section lettering', () => {
     const lettered = getRasLetteredSections('inspection', { hasReferencedStandards: true });
     expect(lettered.map((s) => s.letter)).toEqual(['A', 'B', 'C']);
     expect(lettered[0]).toMatchObject({ key: 'narrative', title: 'Narrative' });
-    expect(lettered[1]).toMatchObject({ key: 'findings', title: 'Findings' });
+    expect(lettered[1]).toMatchObject({ key: 'findings', title: 'Violations' });
     expect(lettered[2]).toMatchObject({ key: 'referenced_standards' });
   });
 
@@ -158,7 +158,7 @@ describe('RAS section lettering', () => {
     const lettered = getRasLetteredSections('inspection', { hasImageAddendum: true });
     expect(lettered.map((s) => `${s.letter} ${s.title}`)).toEqual([
       'A Narrative',
-      'B Findings',
+      'B Violations',
       'C Photo Addendum',
     ]);
   });
@@ -177,14 +177,14 @@ describe('RAS section lettering', () => {
     expect(getRasLetteredSections('assessment', { hasReferencedStandards: true })).toEqual([]);
   });
 
-  it('omitting Narrative closes the letter gap so Findings is A', () => {
+  it('omitting Narrative closes the letter gap so Violations is A', () => {
     const lettered = getRasLetteredSections(
       'plan_review',
       { hasReferencedStandards: true, hasImageAddendum: true },
       { narrative: false, findings: true }
     );
     expect(lettered.map((s) => `${s.letter} ${s.title}`)).toEqual([
-      'A Findings',
+      'A Violations',
       'B Referenced Standards',
       'C Image Addendum',
     ]);

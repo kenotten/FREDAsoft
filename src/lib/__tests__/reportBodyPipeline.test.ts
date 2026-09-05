@@ -214,37 +214,37 @@ describe('normalizeReportBodySectionSelection', () => {
 });
 
 describe('RAS sequential section headings', () => {
-  it('Narrative + Findings + Standards letters A / B / C', () => {
+  it('Narrative + Violations + Standards letters A / B / C', () => {
     const lettered = getRasLetteredSections('inspection', { hasReferencedStandards: true });
     expect(lettered.map((s) => `${s.letter} ${s.title}`)).toEqual([
       'A Narrative',
-      'B Findings',
+      'B Violations',
       'C Referenced Standards',
     ]);
     expect(formatRasSectionHeading('A', 'Narrative')).toBe('A — Narrative');
-    expect(rasBodySectionHeading(lettered, 'findings', 'Documentation Section')).toBe('B — Findings');
+    expect(rasBodySectionHeading(lettered, 'findings', 'Documentation Section')).toBe('B — Violations');
     expect(rasBodyPageNumber(lettered, 'findings', 1, '1')).toBe('B1');
   });
 
-  it('Narrative + Findings + Standards + Addendum letters A / B / C / D', () => {
+  it('Narrative + Violations + Standards + Addendum letters A / B / C / D', () => {
     const lettered = getRasLetteredSections('plan_review', {
       hasReferencedStandards: true,
       hasImageAddendum: true,
     });
     expect(lettered.map((s) => `${s.letter} ${s.title}`)).toEqual([
       'A Narrative',
-      'B Findings',
+      'B Violations',
       'C Referenced Standards',
       'D Image Addendum',
     ]);
     expect(formatRasSectionPageNumber('D', 2)).toBe('D2');
   });
 
-  it('Narrative + Findings + Addendum letters A / B / C with no gap', () => {
+  it('Narrative + Violations + Addendum letters A / B / C with no gap', () => {
     const lettered = getRasLetteredSections('inspection', { hasImageAddendum: true });
     expect(lettered.map((s) => `${s.letter} ${s.title}`)).toEqual([
       'A Narrative',
-      'B Findings',
+      'B Violations',
       'C Photo Addendum',
     ]);
   });

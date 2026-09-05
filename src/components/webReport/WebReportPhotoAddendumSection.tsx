@@ -255,7 +255,7 @@ export function WebReportPhotoAddendumSection({
     ? addendumLabel ?? semantics.imageTerminology.addendum
     : 'Photo Addendum';
   const recordsLabel = ras
-    ? (documentationLabel ?? 'Findings').toLowerCase()
+    ? (documentationLabel ?? 'Violations').toLowerCase()
     : 'documentation';
   const subtitle = ras
     ? view.hasPhotos

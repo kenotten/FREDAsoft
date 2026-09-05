@@ -394,15 +394,25 @@ describe('Web Report Narrative', () => {
 });
 
 describe('Web Report terminology and identity', () => {
-  it('Plan Review uses Findings + Image; Inspection uses Findings + Photo; Assessment Documentation', () => {
-    expect(getWebReportPresentation('plan_review').documentationLabel).toBe('Findings');
+  it('Plan Review uses Violations + Image; Inspection uses Violations + Photo; Assessment Documentation', () => {
+    expect(getWebReportPresentation('plan_review').documentationLabel).toBe('Violations');
+    expect(getWebReportPresentation('plan_review').documentationHierarchyLabel).toBe(
+      'Violations hierarchy (display only)'
+    );
     expect(getWebReportPresentation('plan_review').imageTerminology.singular).toBe('Image');
     expect(getWebReportPresentation('plan_review').photoAddendumLabel).toBe('Image Addendum');
-    expect(getWebReportPresentation('inspection').documentationLabel).toBe('Findings');
+    expect(getWebReportPresentation('inspection').documentationLabel).toBe('Violations');
+    expect(getWebReportPresentation('inspection').documentationHierarchyLabel).toBe(
+      'Violations hierarchy (display only)'
+    );
     expect(getWebReportPresentation('inspection').imageTerminology.singular).toBe('Photo');
     expect(getWebReportPresentation('inspection').photoAddendumLabel).toBe('Photo Addendum');
     expect(getWebReportPresentation('assessment').documentationLabel).toBe('Documentation');
+    expect(getWebReportPresentation('assessment').documentationHierarchyLabel).toBe(
+      'Documentation hierarchy (display only)'
+    );
     expect(getWebReportPresentation('assessment').imageTerminology.singular).toBe('Photo');
+    expect(getWebReportPresentation('assessment').documentationLabel).not.toBe('Violations');
   });
 
   it('report titles are Plan Review Report / Inspection Report; Assessment heading unchanged', () => {

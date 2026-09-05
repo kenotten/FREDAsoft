@@ -191,7 +191,7 @@ export function listRasIncludedSections(
     sections.push({ key: 'narrative', title: 'Narrative' });
   }
   if (includeFindings) {
-    sections.push({ key: 'findings', title: 'Findings' });
+    sections.push({ key: 'findings', title: 'Violations' });
   }
   if (content.hasReferencedStandards) {
     sections.push({ key: 'referenced_standards', title: 'Referenced Standards' });

@@ -74,17 +74,17 @@ describe('getSelectableReportSections', () => {
     ]);
   });
 
-  it('dialog labels: Assessment Documentation / Photo addendum; RAS Findings and addendum terms', () => {
+  it('dialog labels: Assessment Documentation / Photo addendum; RAS Violations and addendum terms', () => {
     expect(getReportSectionDialogLabels('assessment')).toEqual({
       documentation: 'Documentation',
       photoAddendum: 'Photo addendum',
     });
     expect(getReportSectionDialogLabels('plan_review')).toEqual({
-      documentation: 'Findings',
+      documentation: 'Violations',
       photoAddendum: 'Image Addendum',
     });
     expect(getReportSectionDialogLabels('inspection')).toEqual({
-      documentation: 'Findings',
+      documentation: 'Violations',
       photoAddendum: 'Photo Addendum',
     });
   });
