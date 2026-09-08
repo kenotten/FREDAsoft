@@ -3,6 +3,7 @@ import type { Category, Facility, Finding, Glossary, Item, Location, Project, Pr
 import {
   filterReportProjectForPreview,
   paginatePhotoAddendumByRows,
+  formatPhotoAddendumLocationHeading,
   PHOTO_ADDENDUM_FIRST_PAGE_TITLE_COST_PX,
   PHOTO_ADDENDUM_GROUP_GAP_PX,
   PHOTO_ADDENDUM_LOCATION_HEADING_COST_PX,
@@ -91,11 +92,17 @@ describe('filterReportProjectForPreview', () => {
   });
 });
 
-type TestPhoto = { locationLabel: string; id: number };
+type TestPhoto = { locationLabel: string; locationKey?: string; id: number };
 
-function makePhotos(locationLabel: string, count: number, startId = 1): TestPhoto[] {
+function makePhotos(
+  locationLabel: string,
+  count: number,
+  startId = 1,
+  locationKey?: string
+): TestPhoto[] {
   return Array.from({ length: count }, (_, i) => ({
     locationLabel,
+    ...(locationKey ? { locationKey } : {}),
     id: startId + i,
   }));
 }
@@ -271,6 +278,8 @@ describe('paginatePhotoAddendumByRows', () => {
     expect(pages[1][0].locationLabel).toBe('B');
     expect(pages[1][0].photoRows.map((r) => r.length)).toEqual([1]);
     expect(pages[1][0].photoRows[0].map((p) => p.id)).toEqual([13]);
+    expect(pages[1][0].continued).toBe(true);
+    expect(lastBOnD1?.continued).toBe(false);
     assertNoOrphanHeadings(pages);
   });
 
@@ -285,5 +294,68 @@ describe('paginatePhotoAddendumByRows', () => {
     for (const page of pages) {
       expect(page.every((group) => group.photoRows[0].length >= 1)).toBe(true);
     }
+  });
+
+  it('does not mark a one-page location as continued', () => {
+    const pages = paginatePhotoAddendumByRows(makePhotos('MENS TOILET ROOM', 4));
+    expect(pages).toHaveLength(1);
+    expect(pages[0][0].continued).toBe(false);
+    expect(formatPhotoAddendumLocationHeading(pages[0][0].locationLabel, pages[0][0].continued)).toBe(
+      'MENS TOILET ROOM'
+    );
+  });
+
+  it('marks the second page of the same location as continued', () => {
+    const pages = paginatePhotoAddendumByRows(makePhotos('MENS TOILET ROOM', 16));
+    expect(pages).toHaveLength(2);
+    expect(pages[0][0].continued).toBe(false);
+    expect(pages[1][0].continued).toBe(true);
+    expect(formatPhotoAddendumLocationHeading(pages[1][0].locationLabel, pages[1][0].continued)).toBe(
+      'MENS TOILET ROOM (cont.)'
+    );
+  });
+
+  it('marks the third page of the same location as continued', () => {
+    const pages = paginatePhotoAddendumByRows(makePhotos('MENS TOILET ROOM', 32));
+    expect(pages).toHaveLength(3);
+    expect(pages[0][0].continued).toBe(false);
+    expect(pages[1][0].continued).toBe(true);
+    expect(pages[2][0].continued).toBe(true);
+    expect(formatPhotoAddendumLocationHeading(pages[2][0].locationLabel, pages[2][0].continued)).toBe(
+      'MENS TOILET ROOM (cont.)'
+    );
+  });
+
+  it('does not mark a new location that starts a following page as continued', () => {
+    const photos = [...makePhotos('MENS TOILET ROOM', 12, 1), ...makePhotos('WOMENS TOILET ROOM', 4, 13)];
+    const pages = paginatePhotoAddendumByRows(photos);
+    expect(pages.length).toBeGreaterThanOrEqual(2);
+    expect(pages[1][0].locationLabel).toBe('WOMENS TOILET ROOM');
+    expect(pages[1][0].continued).toBe(false);
+    expect(formatPhotoAddendumLocationHeading(pages[1][0].locationLabel, pages[1][0].continued)).toBe(
+      'WOMENS TOILET ROOM'
+    );
+  });
+
+  it('does not treat matching display names with different location keys as continuation', () => {
+    const photos = [
+      ...makePhotos('Lobby', 12, 1, 'loc-a'),
+      ...makePhotos('Lobby', 4, 13, 'loc-b'),
+    ];
+    const pages = paginatePhotoAddendumByRows(photos);
+    expect(pages.length).toBeGreaterThanOrEqual(2);
+    expect(pages[0][0].locationKey).toBe('loc-a');
+    expect(pages[0][0].continued).toBe(false);
+    expect(pages[1][0].locationKey).toBe('loc-b');
+    expect(pages[1][0].locationLabel).toBe('Lobby');
+    expect(pages[1][0].continued).toBe(false);
+  });
+});
+
+describe('formatPhotoAddendumLocationHeading', () => {
+  it('appends (cont.) only when continued is true', () => {
+    expect(formatPhotoAddendumLocationHeading('MENS TOILET ROOM')).toBe('MENS TOILET ROOM');
+    expect(formatPhotoAddendumLocationHeading('MENS TOILET ROOM', false)).toBe('MENS TOILET ROOM');
+    expect(formatPhotoAddendumLocationHeading('MENS TOILET ROOM', true)).toBe('MENS TOILET ROOM (cont.)');
   });
 });

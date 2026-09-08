@@ -790,10 +790,33 @@ export const PHOTO_ADDENDUM_ROW_GAP_PX = 8;
 /** `space-y-5` between location groups on the same D page. */
 export const PHOTO_ADDENDUM_GROUP_GAP_PX = 20;
 
+export type PhotoAddendumLocationFields = {
+  locationLabel: string;
+  /** Stable location identity when present (typically `fldLocID`). Falls back to label. */
+  locationKey?: string;
+};
+
 export type PhotoAddendumPageLocationGroup<T> = {
   locationLabel: string;
+  locationKey: string;
   photoRows: T[][];
+  /** True when this heading resumes the same location group that ended the previous D page. */
+  continued: boolean;
 };
+
+export function photoAddendumLocationIdentity<T extends PhotoAddendumLocationFields>(
+  photo: T
+): string {
+  const key = typeof photo.locationKey === 'string' ? photo.locationKey.trim() : '';
+  return key || photo.locationLabel;
+}
+
+export function formatPhotoAddendumLocationHeading(
+  locationLabel: string,
+  continued?: boolean
+): string {
+  return continued ? `${locationLabel} (cont.)` : locationLabel;
+}
 
 export function chunkItemsIntoRows<T>(items: T[], itemsPerRow: number): T[][] {
   if (items.length === 0) return [];
@@ -804,16 +827,17 @@ export function chunkItemsIntoRows<T>(items: T[], itemsPerRow: number): T[][] {
   return rows;
 }
 
-export function groupConsecutivePhotoAddendumByLocation<T extends { locationLabel: string }>(
+export function groupConsecutivePhotoAddendumByLocation<T extends PhotoAddendumLocationFields>(
   photos: T[]
-): { locationLabel: string; photos: T[] }[] {
-  const groups: { locationLabel: string; photos: T[] }[] = [];
+): { locationLabel: string; locationKey: string; photos: T[] }[] {
+  const groups: { locationLabel: string; locationKey: string; photos: T[] }[] = [];
   for (const photo of photos) {
+    const locationKey = photoAddendumLocationIdentity(photo);
     const last = groups[groups.length - 1];
-    if (last && last.locationLabel === photo.locationLabel) {
+    if (last && last.locationKey === locationKey) {
       last.photos.push(photo);
     } else {
-      groups.push({ locationLabel: photo.locationLabel, photos: [photo] });
+      groups.push({ locationLabel: photo.locationLabel, locationKey, photos: [photo] });
     }
   }
   return groups;
@@ -834,9 +858,9 @@ function photoAddendumAdditionalRowCost(): number {
 /**
  * Pack extra-photo rows onto Section D pages using a deterministic height budget.
  * Whole logical rows only; heading + first row is the minimum start unit; continuation
- * pages repeat the location heading and do not pay the D1 title cost.
+ * pages repeat the location heading with “(cont.)” and do not pay the D1 title cost.
  */
-export function paginatePhotoAddendumByRows<T extends { locationLabel: string }>(
+export function paginatePhotoAddendumByRows<T extends PhotoAddendumLocationFields>(
   photos: T[],
   photosPerRow: number = PHOTO_ADDENDUM_PHOTOS_PER_ROW
 ): PhotoAddendumPageLocationGroup<T>[][] {
@@ -855,7 +879,14 @@ export function paginatePhotoAddendumByRows<T extends { locationLabel: string }>
     usedHeight = 0;
   };
 
-  const placeStartLocation = (locationLabel: string, row: T[]) => {
+  const previousPageEndedWithLocation = (locationKey: string): boolean => {
+    if (currentPage.length > 0 || pages.length === 0) return false;
+    const lastPage = pages[pages.length - 1];
+    const lastGroup = lastPage[lastPage.length - 1];
+    return lastGroup?.locationKey === locationKey;
+  };
+
+  const placeStartLocation = (locationLabel: string, locationKey: string, row: T[]) => {
     let needsGroupGap = currentPage.length > 0;
     let cost = photoAddendumStartLocationCost(needsGroupGap);
     if (cost > remainingHeight() && currentPage.length > 0) {
@@ -863,20 +894,21 @@ export function paginatePhotoAddendumByRows<T extends { locationLabel: string }>
       needsGroupGap = false;
       cost = photoAddendumStartLocationCost(false);
     }
-    currentPage.push({ locationLabel, photoRows: [row] });
+    const continued = previousPageEndedWithLocation(locationKey);
+    currentPage.push({ locationLabel, locationKey, photoRows: [row], continued });
     usedHeight += cost;
   };
 
-  const placeAdditionalRow = (locationLabel: string, row: T[]) => {
+  const placeAdditionalRow = (locationLabel: string, locationKey: string, row: T[]) => {
     const cost = photoAddendumAdditionalRowCost();
     if (cost > remainingHeight()) {
       flushPage();
-      placeStartLocation(locationLabel, row);
+      placeStartLocation(locationLabel, locationKey, row);
       return;
     }
     const last = currentPage[currentPage.length - 1];
     if (!last) {
-      placeStartLocation(locationLabel, row);
+      placeStartLocation(locationLabel, locationKey, row);
       return;
     }
     last.photoRows.push(row);
@@ -888,11 +920,11 @@ export function paginatePhotoAddendumByRows<T extends { locationLabel: string }>
     for (let rowIndex = 0; rowIndex < locationRows.length; rowIndex++) {
       const last = currentPage[currentPage.length - 1];
       const continuingOnThisPage =
-        rowIndex > 0 && last !== undefined && last.locationLabel === group.locationLabel;
+        rowIndex > 0 && last !== undefined && last.locationKey === group.locationKey;
       if (continuingOnThisPage) {
-        placeAdditionalRow(group.locationLabel, locationRows[rowIndex]);
+        placeAdditionalRow(group.locationLabel, group.locationKey, locationRows[rowIndex]);
       } else {
-        placeStartLocation(group.locationLabel, locationRows[rowIndex]);
+        placeStartLocation(group.locationLabel, group.locationKey, locationRows[rowIndex]);
       }
     }
   }

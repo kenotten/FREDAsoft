@@ -47,6 +47,7 @@ import {
   FINANCIAL_SUBTOTAL_BORDER_STYLE,
   FINANCIAL_CATEGORY_HEADER_CELL_CLASS,
   paginatePhotoAddendumByRows,
+  formatPhotoAddendumLocationHeading,
   type PhotoAddendumPageLocationGroup
 } from '../lib/reportPreviewShared';
 import type { ReportSectionSelection } from './ReportSectionSelectionDialog';
@@ -606,15 +607,21 @@ interface PhotoAddendumRow {
   recordId: string;
   imageIndex: number;
   locationLabel: string;
+  locationKey: string;
   categoryLabel: string;
   itemLabel: string;
   recordSortIndex: number;
 }
 
-function resolveRecordLocationLabelForPhotoAddendum(record: ProjectData, locations: Location[]): string {
+function resolveRecordLocationForPhotoAddendum(
+  record: ProjectData,
+  locations: Location[]
+): { locationLabel: string; locationKey: string } {
   const loc = locations.find(l => l.fldLocID === record.fldLocation);
-  const name = loc?.fldLocName?.trim();
-  return name || 'Unknown location';
+  const locationLabel = loc?.fldLocName?.trim() || 'Unknown location';
+  const locationKey =
+    loc?.fldLocID?.trim() || String(record.fldLocation || '').trim() || locationLabel;
+  return { locationLabel, locationKey };
 }
 
 /** Same glossary/custom → category/item resolution as DocumentationCard. */
@@ -650,7 +657,7 @@ function buildSupplementalPhotoRows(
   filteredData.forEach((record, recordSortIndex) => {
     const imgs = record.fldImages;
     if (!Array.isArray(imgs) || imgs.length <= 2) return;
-    const locationLabel = resolveRecordLocationLabelForPhotoAddendum(record, locations);
+    const { locationLabel, locationKey } = resolveRecordLocationForPhotoAddendum(record, locations);
     const { categoryLabel, itemLabel } = resolveRecordCategoryItemLabelsForPhotoAddendum(
       record,
       glossary,
@@ -665,6 +672,7 @@ function buildSupplementalPhotoRows(
         recordId: record.fldPDataID,
         imageIndex: i,
         locationLabel,
+        locationKey,
         categoryLabel,
         itemLabel,
         recordSortIndex,
@@ -737,7 +745,7 @@ function PhotoAddendumPageBody({
         {groups.map((sec, si) => (
           <div key={`${sec.locationLabel}-${si}`} className="space-y-1.5 break-inside-avoid">
             <h3 className="border-b border-zinc-200 pb-0.5 text-xs font-black uppercase tracking-wide text-zinc-600">
-              {sec.locationLabel}
+              {formatPhotoAddendumLocationHeading(sec.locationLabel, sec.continued)}
             </h3>
             <div className="space-y-2">
               {sec.photoRows.map((photoRow, ri) => (
