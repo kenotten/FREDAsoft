@@ -20,6 +20,7 @@ import {
   getReportRecordSortKeys,
   type ReportRecordSortOrder
 } from './reportPreviewShared';
+import { categoryItemIdsFromProjectDataRecord } from './projectDataRecordSource';
 
 export type WebReportEnrichedRecord = ProjectData & {
   totalCost?: number;
@@ -228,9 +229,7 @@ export function resolveWebReportRecordView(
   standards: MasterStandard[]
 ): WebReportRecordView {
   const glos = resolveGlossaryRow(record, glossary);
-  const isCustom = record?.fldRecordSource === 'custom' && !glos;
-  const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
-  const itemId = glos?.fldItem || (isCustom ? record?.fldPDataItemID || '' : '');
+  const { categoryId: catId, itemId } = categoryItemIdsFromProjectDataRecord(record, glos);
   const cat = categories.find((c) => c.fldCategoryID === catId);
   const item = items.find((i) => i.fldItemID === itemId);
   const location = locations.find((l) => l.fldLocID === record.fldLocation);
@@ -276,10 +275,10 @@ export function resolveWebReportRecordDimensionIds(
   glossary: Glossary[]
 ): { catId: string; itemId: string } {
   const glos = resolveGlossaryRow(record, glossary);
-  const isCustom = record?.fldRecordSource === 'custom' && !glos;
+  const { categoryId, itemId } = categoryItemIdsFromProjectDataRecord(record, glos);
   return {
-    catId: glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '') || '__none__',
-    itemId: glos?.fldItem || (isCustom ? record?.fldPDataItemID || '' : '') || '__none__'
+    catId: categoryId || '__none__',
+    itemId: itemId || '__none__'
   };
 }
 

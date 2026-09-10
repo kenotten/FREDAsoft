@@ -18,6 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { isCustomProjectDataRecord } from '../../src/lib/projectDataRecordSource.ts';
 
 type Row = Record<string, unknown>;
 
@@ -87,13 +88,6 @@ function getGlossaryContextForNav(d: Row, glossary: Row[]): Row | null {
       return byGlos || byId;
     }) ?? null
   );
-}
-
-function isCustomProjectDataRecord(rec: Row): boolean {
-  const fldDataBlank = !String(rec.fldData ?? '').trim();
-  const hasPDataCatItem =
-    !!String(rec.fldPDataCategoryID ?? '').trim() && !!String(rec.fldPDataItemID ?? '').trim();
-  return rec.fldRecordSource === 'custom' || (fldDataBlank && hasPDataCatItem);
 }
 
 function getRecordContextForNav(d: Row, glossary: Row[]) {

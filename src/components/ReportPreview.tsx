@@ -17,6 +17,7 @@ import {
   Recommendation
 } from '../types';
 import { cn, formatMeasurement, formatCurrency } from '../lib/utils';
+import { categoryItemIdsFromProjectDataRecord } from '../lib/projectDataRecordSource';
 import { compareStandardCitations, formatStandardCitationLabel } from '../lib/standardCitationLabel';
 import { Printer, Download, X, ChevronLeft, ChevronRight, FileText, Menu, ExternalLink, FlaskConical, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
@@ -544,8 +545,7 @@ function resolveDocumentationGroup(
 ): { groupKey: string; label: string } {
   const cleanKey = (record.fldData || '').trim().toLowerCase();
   const glos = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
-  const isCustom = record?.fldRecordSource === 'custom' && !glos;
-  const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
+  const { categoryId: catId } = categoryItemIdsFromProjectDataRecord(record, glos);
   const cat = categories.find((c) => c.fldCategoryID === catId);
 
   if (recordSortOrder === 'location_category_item') {
@@ -633,9 +633,7 @@ function resolveRecordCategoryItemLabelsForPhotoAddendum(
 ): { categoryLabel: string; itemLabel: string } {
   const cleanKey = (record.fldData || '').trim().toLowerCase();
   const glos = glossary.find(g => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
-  const isCustom = record?.fldRecordSource === 'custom' && !glos;
-  const catId = glos?.fldCat || (isCustom ? (record?.fldPDataCategoryID || '') : '');
-  const itemId = glos?.fldItem || (isCustom ? (record?.fldPDataItemID || '') : '');
+  const { categoryId: catId, itemId } = categoryItemIdsFromProjectDataRecord(record, glos);
   const cat = categories.find(c => c.fldCategoryID === catId);
   const item = items.find(i => i.fldItemID === itemId);
   const categoryName = cat?.fldCategoryName?.trim();
@@ -920,9 +918,7 @@ export function ReportPreview({
     const enrichFinancialRecord = (record: ProjectData) => {
       const cleanKey = (record.fldData || '').trim().toLowerCase();
       const glos = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
-      const isCustom = record?.fldRecordSource === 'custom' && !glos;
-      const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
-      const itemId = glos?.fldItem || (isCustom ? record?.fldPDataItemID || '' : '');
+      const { categoryId: catId, itemId } = categoryItemIdsFromProjectDataRecord(record, glos);
       const cat = categories.find((c) => c.fldCategoryID === catId);
       const catName = cat?.fldCategoryName || 'Uncategorized';
       const location = locations.find((l) => l.fldLocID === record.fldLocation);
@@ -940,8 +936,7 @@ export function ReportPreview({
       filteredData.forEach((record) => {
         const cleanKey = (record.fldData || '').trim().toLowerCase();
         const glos = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
-        const isCustom = record?.fldRecordSource === 'custom' && !glos;
-        const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
+        const { categoryId: catId } = categoryItemIdsFromProjectDataRecord(record, glos);
         const cat = categories.find((c) => c.fldCategoryID === catId);
         const catName = cat?.fldCategoryName || 'Uncategorized';
         if (!groups[catName]) {
@@ -2022,9 +2017,7 @@ function CoverPairRow({
 function DocumentationCard({ record, index, glossary, standards, locations, categories, items }: { record: any, index: number, glossary: Glossary[], standards: MasterStandard[], locations: Location[], categories: Category[], items: Item[] }) {
   const cleanKey = (record.fldData || "").trim().toLowerCase();
   const glos = glossary.find(g => (g.fldGlosId || "").trim().toLowerCase() === cleanKey);
-  const isCustom = record?.fldRecordSource === 'custom' && !glos;
-  const catId = glos?.fldCat || (isCustom ? (record?.fldPDataCategoryID || '') : '');
-  const itemId = glos?.fldItem || (isCustom ? (record?.fldPDataItemID || '') : '');
+  const { categoryId: catId, itemId } = categoryItemIdsFromProjectDataRecord(record, glos);
   const cat = categories.find(c => c.fldCategoryID === catId);
   const item = items.find(i => i.fldItemID === itemId);
   const location = locations.find(l => l.fldLocID === record.fldLocation);

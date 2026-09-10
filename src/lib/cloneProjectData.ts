@@ -5,6 +5,10 @@
 
 import type { Glossary } from '../types';
 import { parseWorkProduct } from './workProduct';
+import {
+  categoryItemIdsFromProjectDataRecord,
+  isCustomProjectDataRecord
+} from './projectDataRecordSource';
 
 /** Glossary row fields used for clone lookup (canonical shape + legacy rec id alias on stored rows). */
 type GlossaryCloneLookup = Glossary & { fldRecID?: string };
@@ -65,11 +69,7 @@ export function buildProjectDataCloneSeed(
   glossary?: GlossaryCloneLookup[]
 ): ProjectDataCloneSeed {
   const fldDataStr = safeString(source.fldData);
-  const fldDataBlank = !fldDataStr;
-  const hasPDataCatItem =
-    !!safeString(source.fldPDataCategoryID) && !!safeString(source.fldPDataItemID);
-  const isCustom =
-    source.fldRecordSource === 'custom' || (fldDataBlank && hasPDataCatItem);
+  const isCustom = isCustomProjectDataRecord(source);
 
   let selections: ProjectDataCloneSeed['selections'];
   if (isCustom) {
@@ -89,10 +89,11 @@ export function buildProjectDataCloneSeed(
       const id = safeString(g.id).toLowerCase();
       return gid === targetLower || id === targetLower;
     });
+    const ids = categoryItemIdsFromProjectDataRecord(source, glos);
     selections = {
       dataEntryMode: 'glossary',
-      categoryId: safeString(glos?.fldCat),
-      itemId: safeString(glos?.fldItem),
+      categoryId: ids.categoryId,
+      itemId: ids.itemId,
       findId: safeString(glos?.fldFind),
       recId: safeString(glos?.fldRec || glos?.fldRecID),
       glosId: safeString(glos?.fldGlosId || glos?.id),

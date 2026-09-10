@@ -16,6 +16,7 @@ import {
   type AuditWarningCode,
   type ProjectAuditRecordView,
 } from '../../src/lib/projectAuditReport.ts';
+import { isCustomProjectDataRecord } from '../../src/lib/projectDataRecordSource.ts';
 
 type Row = Record<string, unknown>;
 
@@ -95,13 +96,6 @@ function parseArgs(argv: string[]) {
 async function loadCollection(name: string): Promise<Row[]> {
   const snap = await getFirestore().collection(name).get();
   return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-}
-
-function isCustomRecord(rec: Row): boolean {
-  const fldDataBlank = !String(rec.fldData ?? '').trim();
-  const hasPDataCatItem =
-    !!String(rec.fldPDataCategoryID ?? '').trim() && !!String(rec.fldPDataItemID ?? '').trim();
-  return rec.fldRecordSource === 'custom' || (fldDataBlank && hasPDataCatItem);
 }
 
 /** Detect likely fldCat typo (extra/missing char vs a library category). */
@@ -240,7 +234,7 @@ function repairHint(
     return 'Restore glossary row or clear/fix fldData pointer';
   }
   if (code === 'missing_finding_id' || code === 'missing_recommendation_id') {
-    if (isCustomRecord(raw)) {
+    if (isCustomProjectDataRecord(raw)) {
       return 'Custom record: acceptable if snapshot text present; optional master IDs for linkage only';
     }
     return 'Glossary record: link fldFind/fldRec on glossary row or master IDs on projectData';

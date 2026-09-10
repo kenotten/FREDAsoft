@@ -1949,6 +1949,8 @@ fldPDataMasterRecID
 
 Template IDs are trace fields only. They do not create glossary linkage.
 
+✅ DECIDED (glossary Category/Item fallback IDs): Glossary-backed `projectData` may also persist `fldPDataCategoryID` / `fldPDataItemID` as Category/Item path snapshots. `fldData` remains the only identity of a specific glossary row and is never assigned from a first Category+Item+Finding match. Explicit `fldRecordSource === "glossary"` is never treated as custom merely because `fldData` is blank and both PData IDs are present. Legacy records with no explicit source, blank `fldData`, and both PData IDs remain custom. Category/Item fallback applies consistently to Data Entry hydration, report grouping, report sorting, visible Category/Item labels, Financial grouping, and Web Report path identity. Fallback IDs do not invent Recommendation, Finding, citation, or cost provenance.
+
 ---
 
 ## 34. Custom Record Template Copy

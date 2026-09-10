@@ -9,6 +9,7 @@ import {
 } from './reportPreviewShared';
 import { getRecordLocator, getReportProfileSemantics, type ReportProfile } from './reportProfile';
 import { formatMeasurement } from './utils';
+import { categoryItemIdsFromProjectDataRecord } from './projectDataRecordSource';
 
 export type RasFindingCardDisplay = {
   findingText: string;
@@ -70,9 +71,7 @@ export function buildRasFindingCardDisplay(
   const semantics = getReportProfileSemantics(profile);
   const cleanKey = (record.fldData || '').trim().toLowerCase();
   const glos = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === cleanKey);
-  const isCustom = record?.fldRecordSource === 'custom' && !glos;
-  const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
-  const itemId = glos?.fldItem || (isCustom ? record?.fldPDataItemID || '' : '');
+  const { categoryId: catId, itemId } = categoryItemIdsFromProjectDataRecord(record, glos);
   const cat = categories.find((c) => c.fldCategoryID === catId);
   const item = items.find((i) => i.fldItemID === itemId);
   const locator = getRecordLocator(record, profile, locations);

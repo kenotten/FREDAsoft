@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { ProjectData } from '../../types';
 import {
   ALL_AUDIT_WARNING_CODES,
+  buildProjectAuditReport,
   countVisibleAuditWarnings,
   createDefaultWarningVisibility,
   hasMultipleUnitCostsForSameRecommendation,
@@ -194,5 +196,72 @@ describe('projectAuditReport multiple unit cost helpers', () => {
     expect(hasMultipleUnitCostsForSameRecommendation(records, 'finding', 'find-1')).toBe(
       false
     );
+  });
+});
+
+describe('audit custom vs glossary source', () => {
+  function pd(partial: Partial<ProjectData>): ProjectData {
+    return {
+      fldPDataID: 'pd-1',
+      fldPDataProject: 'proj-1',
+      fldFacility: 'fac-1',
+      fldData: '',
+      fldLocation: 'loc-1',
+      fldFindShort: 'Finding',
+      fldFindLong: 'Finding long',
+      fldRecShort: 'Rec',
+      fldRecLong: 'Rec long',
+      fldQTY: 1,
+      fldImages: [],
+      fldInspID: 'insp-1',
+      fldTimestamp: '2026-01-01T00:00:00.000Z',
+      ...partial
+    };
+  }
+
+  const masters = {
+    projectId: 'proj-1',
+    facilities: [{ fldFacID: 'fac-1', fldFacName: 'Facility', fldClient: 'c1' }],
+    locations: [
+      { fldLocID: 'loc-1', fldLocName: 'Location', fldFacID: 'fac-1', fldProjectID: 'proj-1' }
+    ],
+    categories: [{ fldCategoryID: 'cat-1', fldCategoryName: 'Toilet & Bathing Rooms' }],
+    items: [{ fldItemID: 'item-1', fldItemName: 'Entry Door', fldCatID: 'cat-1' }],
+    glossary: [],
+    findings: [],
+    resolvableFindings: [],
+    masterRecommendations: [],
+    resolvableMasterRecommendations: [],
+    standards: []
+  };
+
+  it('explicit glossary + blank fldData + PData IDs is glossary with fallback Category/Item', () => {
+    const result = buildProjectAuditReport({
+      ...masters,
+      projectData: [
+        pd({
+          fldRecordSource: 'glossary',
+          fldPDataCategoryID: 'cat-1',
+          fldPDataItemID: 'item-1'
+        })
+      ]
+    });
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0].recordSource).toBe('glossary');
+    expect(result.records[0].categoryId).toBe('cat-1');
+    expect(result.records[0].itemId).toBe('item-1');
+  });
+
+  it('legacy custom without source remains custom', () => {
+    const result = buildProjectAuditReport({
+      ...masters,
+      projectData: [
+        pd({
+          fldPDataCategoryID: 'cat-1',
+          fldPDataItemID: 'item-1'
+        })
+      ]
+    });
+    expect(result.records[0].recordSource).toBe('custom');
   });
 });

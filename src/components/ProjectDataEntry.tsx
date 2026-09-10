@@ -26,6 +26,11 @@ import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { firestoreService } from '../services/firestoreService';
 import { buildProjectDataCloneSeed, type ProjectDataCloneSeed } from '../lib/cloneProjectData';
 import {
+  categoryItemIdsFromProjectDataRecord,
+  isCustomProjectDataRecord,
+  resolveProjectDataSaveIdentity
+} from '../lib/projectDataRecordSource';
+import {
   currentWorkflowResponsibleProfessionalLabel,
   missingResponsibleProfessionalMessage,
   resolveCurrentWorkflowResponsibleProfessional,
@@ -150,15 +155,6 @@ function getGlossaryContextForNav(d: any, glossaryList: any[]) {
     const byId = String(g.id || '').trim().toLowerCase() === cleanKey;
     return byGlos || byId;
   });
-}
-
-/** True when projectData should use custom Data Entry path (not glossary-row linkage). */
-function isCustomProjectDataRecord(rec: any): boolean {
-  if (!rec) return false;
-  const fldDataBlank = !(rec.fldData || '').trim();
-  const hasPDataCatItem =
-    !!(rec.fldPDataCategoryID || '').trim() && !!(rec.fldPDataItemID || '').trim();
-  return rec.fldRecordSource === 'custom' || (fldDataBlank && hasPDataCatItem);
 }
 
 function getRecordContextForNav(d: any, glossaryList: any[]) {
@@ -1262,9 +1258,10 @@ export default function ProjectDataEntry({
       const glos = (glossary || []).find(
         (g: any) => (g.id || g.fldGlosId || '').trim().toLowerCase() === targetId
       );
+      const ids = categoryItemIdsFromProjectDataRecord(rec, glos);
       newSelections = {
-        categoryId: glos?.fldCat || '',
-        itemId: glos?.fldItem || '',
+        categoryId: ids.categoryId,
+        itemId: ids.itemId,
         findId: glos?.fldFind || '',
         recId: glos?.fldRec || glos?.fldRecID || '',
         glosId: glos?.fldGlosId || glos?.id || ''
@@ -1301,12 +1298,13 @@ export default function ProjectDataEntry({
       const glos = (glossary || []).find(
         (g: any) => (g.id || g.fldGlosId || '').trim().toLowerCase() === targetId
       );
+      const ids = categoryItemIdsFromProjectDataRecord(rec, glos);
       return {
         ...prev,
         dataEntryMode: 'glossary' as const,
         locationId: rec.fldLocation || prev.locationId,
-        categoryId: glos?.fldCat || prev.categoryId || '',
-        itemId: glos?.fldItem || prev.itemId || '',
+        categoryId: ids.categoryId || prev.categoryId || '',
+        itemId: ids.itemId || prev.itemId || '',
         findId: glos?.fldFind || prev.findId || '',
         recId: glos?.fldRec || glos?.fldRecID || prev.recId || '',
         glosId: glos?.fldGlosId || glos?.id || '',
@@ -1346,12 +1344,13 @@ export default function ProjectDataEntry({
         const glos = (glossary || []).find(
           (g: any) => (g.id || g.fldGlosId || '').trim().toLowerCase() === targetId
         );
+        const ids = categoryItemIdsFromProjectDataRecord(rec, glos);
         newSelections = {
           ...baseSelections,
           dataEntryMode: 'glossary',
           locationId: rec.fldLocation || baseSelections.locationId,
-          categoryId: glos?.fldCat || rec.fldPDataCategoryID || baseSelections.categoryId || '',
-          itemId: glos?.fldItem || rec.fldPDataItemID || baseSelections.itemId || '',
+          categoryId: ids.categoryId || baseSelections.categoryId || '',
+          itemId: ids.itemId || baseSelections.itemId || '',
           findId: glos?.fldFind || '',
           recId: glos?.fldRec || glos?.fldRecID || '',
           glosId: glos?.fldGlosId || glos?.id || '',
@@ -1787,6 +1786,12 @@ export default function ProjectDataEntry({
           activeRecord?.fldData ||
           ''
         );
+    const saveIdentity = resolveProjectDataSaveIdentity({
+      isCustomMode,
+      categoryId: selections.categoryId,
+      itemId: selections.itemId,
+      fldDataResolved
+    });
     
     isSavingRef.current = true;
     try {
@@ -1794,11 +1799,11 @@ export default function ProjectDataEntry({
         fldPDataID: finalizedId,
         fldPDataProject: selections.projectId,
         fldFacility: facility?.fldFacID || activeRecord?.fldFacility,
-        fldData: fldDataResolved,
-        fldRecordSource: isCustomMode ? 'custom' : 'glossary',
+        fldData: saveIdentity.fldData,
+        fldRecordSource: saveIdentity.fldRecordSource,
+        fldPDataCategoryID: saveIdentity.fldPDataCategoryID,
+        fldPDataItemID: saveIdentity.fldPDataItemID,
         ...(isCustomMode ? {
-          fldPDataCategoryID: selections.categoryId || '',
-          fldPDataItemID: selections.itemId || '',
           ...(customMasterFindId ? { fldPDataMasterFindID: customMasterFindId } : {}),
           ...(customMasterRecId ? { fldPDataMasterRecID: customMasterRecId } : {})
         } : {}),
@@ -2148,13 +2153,7 @@ export default function ProjectDataEntry({
       () => {
         isFormDirtyRef.current = false;
 
-        const fldDataBlank = !(activeRecord.fldData || '').trim();
-        const hasPDataCatItem =
-          !!(activeRecord.fldPDataCategoryID || '').trim() &&
-          !!(activeRecord.fldPDataItemID || '').trim();
-        const isCustom =
-          activeRecord.fldRecordSource === 'custom' ||
-          (fldDataBlank && hasPDataCatItem);
+        const isCustom = isCustomProjectDataRecord(activeRecord);
         if (isCustom) {
           setCustomMasterRecId(activeRecord.fldPDataMasterRecID || '');
           setCustomMasterFindId(activeRecord.fldPDataMasterFindID || '');
@@ -2844,12 +2843,7 @@ export default function ProjectDataEntry({
     if (!activeRecord) return undefined;
     const findingsList = Array.isArray(resolvableFindingsList) ? resolvableFindingsList : [];
 
-    const fldDataBlank = !String(activeRecord.fldData || '').trim();
-    const hasPDataCatItem =
-      !!String(activeRecord.fldPDataCategoryID || '').trim() &&
-      !!String(activeRecord.fldPDataItemID || '').trim();
-    const isCustomRecord =
-      activeRecord.fldRecordSource === 'custom' || (fldDataBlank && hasPDataCatItem);
+    const isCustomRecord = isCustomProjectDataRecord(activeRecord);
 
     if (isCustomRecord) {
       const mid =

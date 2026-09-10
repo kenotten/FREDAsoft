@@ -14,6 +14,7 @@ import {
   formatGroupedStandardCitations,
 } from './reportPreviewShared';
 import { isArchivedLibraryMaster } from './libraryMasterLifecycle';
+import { isCustomProjectDataRecord } from './projectDataRecordSource';
 
 export type AuditMode = 'finding' | 'recommendation';
 
@@ -184,13 +185,6 @@ function textsDiffer(snapshot: unknown, master: unknown): boolean {
   return s !== m;
 }
 
-function isCustomProjectDataRecord(rec: ProjectData): boolean {
-  const fldDataBlank = !(rec.fldData || '').trim();
-  const hasPDataCatItem =
-    !!(rec.fldPDataCategoryID || '').trim() && !!(rec.fldPDataItemID || '').trim();
-  return rec.fldRecordSource === 'custom' || (fldDataBlank && hasPDataCatItem);
-}
-
 function resolveGlossaryRow(record: ProjectData, glossaryByKey: Map<string, Glossary>): Glossary | undefined {
   const key = normId(record.fldData);
   if (!key) return undefined;
@@ -261,12 +255,11 @@ function resolveRecordContext(
   const glos = resolveGlossaryRow(record, glossaryByKey);
   const custom = isCustomProjectDataRecord(record);
   const hasFldData = !!(record.fldData || '').trim();
+  const sourceRaw = String(record.fldRecordSource || '').trim();
 
   let recordSource: ResolvedContext['recordSource'] = 'unknown';
-  if (record.fldRecordSource === 'custom' || custom) recordSource = 'custom';
-  else if (hasFldData && glos) recordSource = 'glossary';
-  else if (hasFldData && !glos) recordSource = 'glossary';
-  else if (!hasFldData && custom) recordSource = 'custom';
+  if (custom) recordSource = 'custom';
+  else if (sourceRaw === 'glossary' || hasFldData) recordSource = 'glossary';
 
   let categoryId = '';
   let itemId = '';
@@ -283,11 +276,9 @@ function resolveRecordContext(
     itemId = String(record.fldPDataItemID || '').trim();
     findingId = String(record.fldPDataMasterFindID || '').trim() || null;
     recommendationId = String(record.fldPDataMasterRecID || '').trim() || null;
-  } else if (glos) {
-    categoryId = String(glos.fldCat || '').trim();
-    itemId = String(glos.fldItem || '').trim();
-    findingId = String(glos.fldFind || '').trim() || null;
-    recommendationId = String(glos.fldRec || '').trim() || null;
+  } else {
+    categoryId = String(record.fldPDataCategoryID || '').trim();
+    itemId = String(record.fldPDataItemID || '').trim();
   }
 
   const cat = categoryId ? categoryById.get(normId(categoryId)) : undefined;

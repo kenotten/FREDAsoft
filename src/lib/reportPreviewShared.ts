@@ -13,6 +13,7 @@ import { compareStandardCitations, formatStandardCitationLabel, type StandardCit
 import { cn } from './utils';
 import { isRasReportProfile, type ReportProfile } from './reportProfile';
 import { getRasInspectionNarrativeFallback } from './rasInspectionNarrative';
+import { categoryItemIdsFromProjectDataRecord } from './projectDataRecordSource';
 
 export interface StandardSnapshot {
   fldStandardType: string;
@@ -51,9 +52,7 @@ export function getReportRecordSortKeys(
 ): ReportRecordSortKeys {
   const key = (record.fldData || '').trim().toLowerCase();
   const glos = glossary.find((g) => (g.fldGlosId || '').trim().toLowerCase() === key);
-  const isCustom = record?.fldRecordSource === 'custom' && !glos;
-  const catId = glos?.fldCat || (isCustom ? record?.fldPDataCategoryID || '' : '');
-  const itemId = glos?.fldItem || (isCustom ? record?.fldPDataItemID || '' : '');
+  const { categoryId: catId, itemId } = categoryItemIdsFromProjectDataRecord(record, glos);
   const findId = glos?.fldFind || '';
   const cat = categories.find((c) => c.fldCategoryID === catId);
   const item = items.find((i) => i.fldItemID === itemId);
