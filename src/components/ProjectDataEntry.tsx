@@ -72,6 +72,7 @@ import {
   findingCitationIdsFromGlossaryRow,
   workingCitationIdsAfterExplicitGlossarySelection,
   resolveGlossaryRowForRasCitationRefresh,
+  rasFindingPathCitationState,
   citationIdSetsEqual
 } from '../lib/citationStandards';
 import { toFraction, fromFraction } from '../lib/utils';
@@ -2575,13 +2576,17 @@ export default function ProjectDataEntry({
   ]);
 
   const handleRefreshRasTasReferences = () => {
-    if (!rasCitationRefreshRow) return;
-    const next = findingCitationIdsFromGlossaryRow(
-      rasCitationRefreshRow,
-      resolvableFindingsList || []
-    );
-    if (citationIdSetsEqual(fldStandards, next)) return;
-    setFldStandards(next);
+    const next = rasFindingPathCitationState({
+      preferredGlossaryId: selections.glosId || activeRecord?.fldData,
+      categoryId: selections.categoryId,
+      itemId: selections.itemId,
+      findId: selections.findId,
+      glossaryRows: glossaryRowsForDataEntry || [],
+      findingsList: resolvableFindingsList || []
+    });
+    if (!next.row) return;
+    if (citationIdSetsEqual(fldStandards, next.citationIds)) return;
+    setFldStandards(next.citationIds);
     setIsDirty(true);
   };
 
@@ -3581,7 +3586,8 @@ export default function ProjectDataEntry({
                 labelClassName="text-base font-bold text-zinc-900 leading-tight normal-case tracking-normal"
                 value={selections.findId || ''}
                 onChange={(e: any) => {
-                   const find = (findings || []).find(f => (f.id || f.fldFindID || "").toLowerCase() === (e.target.value || "").toLowerCase());
+                   const nextFindId = e.target.value;
+                   const find = (findings || []).find(f => (f.id || f.fldFindID || "").toLowerCase() === (nextFindId || "").toLowerCase());
                    if (find) {
                      setFldFindShort(find.fldFindShort);
                      setFldFindLong(find.fldFindLong);
@@ -3590,8 +3596,28 @@ export default function ProjectDataEntry({
                      }
                      setFldMeasurementUnit(find.fldUnitType || '');
                    }
+                   if (isRasProject) {
+                     const rasCitations = rasFindingPathCitationState({
+                       categoryId: selections.categoryId,
+                       itemId: selections.itemId,
+                       findId: nextFindId,
+                       glossaryRows: glossaryRowsForDataEntry || [],
+                       findingsList: resolvableFindingsList || []
+                     });
+                     if (rasCitations.row) {
+                       setFldStandards(rasCitations.citationIds);
+                       onSelectionChange({
+                         ...selections,
+                         findId: nextFindId,
+                         recId: '',
+                         glosId: rasCitations.glosId,
+                         isDirty: true
+                       });
+                       return;
+                     }
+                   }
                    clearFldStandardsBecauseNoGlossaryRow();
-                   onSelectionChange({...selections, findId: e.target.value, recId: '', glosId: '', isDirty: true});
+                   onSelectionChange({...selections, findId: nextFindId, recId: '', glosId: '', isDirty: true});
                 }}
                 selectClassName={cn('!bg-yellow-50', focusClasses)}
                 options={sortedFindingsWithContext.map((f, index) => {

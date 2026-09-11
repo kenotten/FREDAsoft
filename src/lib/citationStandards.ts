@@ -145,3 +145,32 @@ export function resolveGlossaryRowForRasCitationRefresh(args: {
   const byPath = rows.filter((g) => glossaryRowMatchesDataEntryPath(g, pathIds));
   return byPath[0];
 }
+
+/**
+ * RAS Finding-path working citations (new/changed Finding, and Refresh TAS References).
+ * Resolves an internal glossary row from cat+item+find — Recommendation is not required.
+ * Does not invent rec text, cost, or rec provenance. Does not run on open-existing snapshot.
+ */
+export function rasFindingPathCitationState(args: {
+  preferredGlossaryId?: string | null;
+  categoryId?: string;
+  itemId?: string;
+  findId?: string;
+  glossaryRows: unknown[];
+  findingsList: unknown[];
+}): { row: any | undefined; glosId: string; citationIds: string[] } {
+  const row = resolveGlossaryRowForRasCitationRefresh({
+    preferredGlossaryId: args.preferredGlossaryId,
+    categoryId: args.categoryId,
+    itemId: args.itemId,
+    findId: args.findId,
+    glossaryRows: args.glossaryRows
+  });
+  if (!row) return { row: undefined, glosId: '', citationIds: [] };
+  const glosId = String(row.fldGlosId || row.id || '').trim();
+  return {
+    row,
+    glosId,
+    citationIds: findingCitationIdsFromGlossaryRow(row, args.findingsList || [])
+  };
+}
