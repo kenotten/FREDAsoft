@@ -1,11 +1,13 @@
 # FREDAsoft Portal Stakeholder Implications
 
 **Status:** Documentation-only conceptual implications (D8). **Not implemented.**  
-**Last updated:** 2026-06-05  
+**Last updated:** 2026-09-14 (portal remains deferred; does not drive PM Core)
 **Branch context:** `d8-portal-stakeholder-implications`  
 **Audience:** Product owner (Kenneth), architecture review (Archie), auth/security/D4/D6/implementation planning
 
 > **Disclaimer:** This document clarifies **portal stakeholder visibility, submission, and review implications** for FREDAsoft RAS/TDLR workflows. It does **not** specify Firestore collections, security rules, Firebase Auth configuration, UI routes, invitation email flows, or legal compliance. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data or grant portal users operational authority by default.
+
+**Current direction (2026-09-14):** Portal remains **deferred**. It must **not** drive PM Core schema or UI. Staff-usable PM (status, dates, RAS assignment, notes, operational correspondence) does not wait on D8. See September 2026 PM restart in `docs/ARCHITECTURE_DESIGN.md`.
 
 ---
 

@@ -1,11 +1,13 @@
 # FREDAsoft TDLR Schema Sketch
 
 **Status:** Documentation-only conceptual schema sketch (D4). **Not implemented.**  
-**Last updated:** 2026-06-05  
+**Last updated:** 2026-09-14 (PM Core starts with `projects.tdlrRegistered`, not D4 collections)
 **Branch context:** `d4-tdlr-schema-sketch`  
 **Audience:** Product owner (Kenneth), architecture review (Archie), D6/D8 implementation planning
 
 > **Disclaimer:** This document sketches a **conceptual Firestore/document model** for TDLR/TABS intake, review, and linking. It does **not** specify final collection names, field names in code, security rules, migrations, indexes, scrapers, or UI. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data.
+
+**Current direction (2026-09-14):** This dual-track sketch remains useful **future** architecture. PM Core / Beta **starts with existing** `projects.tdlrRegistered` (manual nested snapshot). **D4 `tdlr*` collections are not required** before PM can ship. CAD/appraisal reference may be preserved when captured; no CAD fields are named here. See September 2026 PM restart in `docs/ARCHITECTURE_DESIGN.md`.
 
 ---
 

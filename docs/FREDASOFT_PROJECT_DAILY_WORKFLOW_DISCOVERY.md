@@ -1,13 +1,29 @@
 # FREDAsoft Project — Daily Workflow Discovery
 
-**Status:** Draft workflow discovery (Archie #11). **Not implementation.** **Not schema.** **Not UI.**  
-**Last updated:** 2026-06-05  
-**Branch context:** `archie-11-workflow-discovery`  
+**Status:** Draft workflow discovery (Archie #11). **Not implementation.** **Not schema.** **Not UI.**
+**Last updated:** 2026-09-14 (PM Core product-direction clarification)
+**Branch context:** original `archie-11-workflow-discovery`; direction update `docs/pm-core-product-direction`
 **Reviewers:** Kenneth (product owner), Kathy Rodriguez, Jessica Montalvo — **please correct, clarify, and rearrange**
 
-> **Disclaimer:** This document captures **current daily workflow and project lifecycle** vocabulary for the future FREDAsoft **Project Management** feature. It reflects product-owner and staff narrative as of Archie #11 and **does not** authorize code, Firestore schema, security rules, importers, or UI. Terminology and status lists **will change** after staff review.
+> **Disclaimer:** This document captures **current daily workflow and project lifecycle** vocabulary for FREDAsoft **Project Management**. Archie #11 narrative remains. **Current direction (2026-09-14)** is in §0 below. This file still does **not** authorize code, Firestore schema, security rules, importers, or UI.
 
 **Source:** Kenneth workflow narrative (Archie #11); grounded in `docs/FREDASOFT_PROJECT_IMPLEMENTATION_READINESS_PLAN.md` and Archie #10 D1–D8 discovery docs.
+
+---
+
+## 0. Current direction (2026-09-14)
+
+Daily vocabulary in later sections remains useful. Implementation priority and a few identity rules are now explicit:
+
+| Topic | Current direction |
+|-------|-------------------|
+| **TABS Owner** | Exact TABS/TDLR Owner text is the **official registered-project Owner** for that project. Do not silently replace it with a FREDA canonical stakeholder. |
+| **Canonical Owner matching** | **Not required** for PM Core or registered-project identity. Matching remains optional later. |
+| **CAD / appraisal district** | Preserve applicable appraisal-district owner-validation / reference information **when captured**. Not a legal conclusion. Production does **not** currently store CAD fields; no schema invented here. |
+| **Client ≠ Owner** | Unchanged. Client is billing/portfolio. Owner is the registered property party (TABS as-recorded for RAS work). |
+| **Stakeholder matching** | Useful for aliases/search/reuse; **not required** to open, track, assign RAS, date, note, or correspond. Zero matches is valid. |
+| **Correspondence** | Required for early staff usability (PM Core). Near-term: template → merge exact TABS + operational fields → PDF → staff emails manually → log sent. No in-app email send required. |
+| **First slice** | PM shell over **existing production Projects**, not TDLR link-review first. See readiness plan Current direction. |
 
 ---
 
@@ -64,7 +80,7 @@ FREDAsoft should anticipate **all** of the following entry paths (not one defaul
 | Concept | Role in daily work | FREDAsoft posture (draft) |
 |---------|-------------------|---------------------------|
 | **Client** | Paying customer; OCG business relationship | Canonical **Client** anchor; portal/billing scope **candidate** (D8) |
-| **Owner** | Legally responsible party; official correspondence often required | **Owner** project party; distinct from Client unless explicitly linked (D5) |
+| **Owner** | Legally responsible party; official correspondence often required | **TABS as-recorded Owner** is official for the registered project (**2026-09-14**). Distinct from Client. Canonical Owner **party/match is optional**, not required for PM Core (D5 current direction). |
 | **Registrant** | Who filed on TABS (may be design professional) | **Source-field only** until staff links a contact/stakeholder |
 | **Design professional** | Often registers **on behalf of** owner | **Design Firm** / contact party; not automatic Owner |
 | **Owner agent / designated agent** | Authorized to act for owner on TDLR matters | **Agent** party; correspondence recipient **candidate** (D7) |
@@ -244,6 +260,8 @@ Align long-term with D4 **`tdlrAuditEvents`** and operational audit—not the sa
 
 ## 12. Correspondence and Communication
 
+**2026-09-14:** Operational staff letters in this section are **PM Core** (manual email + sent log). D7 TDLR proof/TABS letter products remain later. Production FREDAsoft does not yet contain the letter engine.
+
 ### Common correspondence types
 
 | Type | Examples |
@@ -353,9 +371,9 @@ Lovable prototype and Access are **vocabulary mines**, not port targets (`APP_DI
 | TDLR hydration is valuable but not the only entry path | Support **OCG # without TABS #** and non-TDLR-first preliminary paths |
 | Spreadsheet replacement is the pain point | Even a **thin queue + dates + assignment** surface may deliver more daily value than link-review alone |
 
-**Still explicit non-goals for first slice:** portal, SMS, full correspondence generation, scraper, full D2 six-screen queue, auto-create canonical records from TDLR.
+**Still explicit non-goals for the first *code* slice (PM shell, 2026-09-14):** portal, SMS, in-app email send, scraper, full D2 six-screen queue, auto-create canonical records from TDLR, stakeholder matching as a gate. **Operational correspondence is in PM Core** (later Core slice, not the first shell) — do not treat “full correspondence generation” as a distant Phase 6 non-goal.
 
-**Proposed sequencing question:** Phase 3 = **(A)** TDLR link review only, **(B)** intake shell only, or **(C)** thin intake shell **+** manual TDLR snapshot link on same Project (§19).
+**Proposed sequencing (resolved 2026-09-14):** staff-usable PM Core first (shell → status/dates/assignment → TABS panel → notes → correspondence), then reporting bridge, then richer intake/matching/D2/portal. Historical A/B/C question is closed: **intake/PM shell over existing Projects**, not TDLR-link-review-only.
 
 ---
 
@@ -370,7 +388,7 @@ Staff and Archie should resolve before schema refinement and vertical-slice codi
 5. What correspondence must be **official-record** and **owner-visible**?  
 6. What notes are **internal-only** vs **official-record**?  
 7. What **payment fields** are required for v1?  
-8. Should the first buildable vertical slice shift from **TDLR source link review only** to **project intake shell + source link review**?  
+8. ~~Should the first buildable vertical slice shift from **TDLR source link review only** to **project intake shell + source link review**?~~ **Resolved 2026-09-14:** PM shell over existing Projects first; TDLR link review later.
 9. Which **existing FREDAsoft screen** (if any) hosts the first admin queue?  
 10. How do **OCG project #** and **TABS #** relate on the Project record before/after registration?
 

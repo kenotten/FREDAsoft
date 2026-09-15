@@ -1,11 +1,13 @@
 # FREDAsoft TDLR Review Workflow
 
 **Status:** Documentation-only workflow and wireframe spec (D2). **Not implemented.**  
-**Last updated:** 2026-06-05  
+**Last updated:** 2026-09-14 (PM Core: D2 is future, not a prerequisite)
 **Branch context:** `d2-tdlr-review-workflow-wireframes`  
 **Audience:** Product owner (Kenneth), architecture review (Archie), D3/D4/D6/D8 planning
 
 > **Disclaimer:** This document defines **review workflow steps**, **wireframe-level screen sections**, and **reviewer action outcomes** for TDLR/TABS intake. It does **not** specify Firestore collections, security rules, React components, scrapers, or application code. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data.
+
+**Current direction (2026-09-14):** This D2 six-screen review flow remains **valid future architecture**. It is **not** a prerequisite for staff-usable PM Core. Matching screens are optional later; exact TABS values may be used with zero canonical matches. See `docs/ARCHITECTURE_DESIGN.md` September 2026 PM restart.
 
 ---
 

@@ -1,11 +1,28 @@
 # FREDAsoft Correspondence Requirements Crosswalk
 
-**Status:** Documentation-only conceptual crosswalk (D7). **Not implemented.**  
-**Last updated:** 2026-06-05  
-**Branch context:** `d7-correspondence-requirements-crosswalk`  
+**Status:** Documentation-only conceptual crosswalk (D7). **Not implemented.**
+**Last updated:** 2026-09-14 (operational correspondence promoted to PM Core)
+**Branch context:** original `d7-correspondence-requirements-crosswalk`; direction update `docs/pm-core-product-direction`
 **Audience:** Product owner (Kenneth), architecture review (Archie), D4/D6/D8/implementation planning
 
-> **Disclaimer:** This document clarifies **correspondence artifact families**, **recipient concepts**, and **boundaries vs RAS report instances** for FREDAsoft RAS/TDLR workflows. It does **not** specify Firestore collections, security rules, letter templates, PDF rendering, e-signature, scrapers, UI, or legal compliance. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data or operational correspondence records.
+> **Disclaimer:** This document clarifies **correspondence artifact families**, **recipient concepts**, and **boundaries vs RAS report instances**. It does **not** specify Firestore collections, security rules, letter templates, PDF rendering, e-signature, scrapers, UI, or legal compliance. It does **not** collapse TDLR/TABS source data into FREDAsoft canonical data.
+
+---
+
+## Current direction (2026-09-14)
+
+Distinguish two correspondence tracks:
+
+| Track | Examples | PM Core? |
+|-------|----------|----------|
+| **1. Operational staff correspondence** | Plan Review Complete; Notice of Inspection Due; Inspection scheduling; Plan Review / Inspection cover letters; similar daily Kathy/Jessica letters | **Yes — PM Core** |
+| **2. D7 / TDLR evidence correspondence** | Proof of Submission/Inspection, Request for Inspection, TABS Letters/Notifications, Notice of Substantial Compliance, designated-agent forms as **source evidence** | **Later** (still no auto-create from TDLR status) |
+
+**Operational lifecycle (Core):** choose template → merge project + **exact TABS** fields → review/edit → generate PDF → record recipient (TABS strings; matching not required) → staff **manually emails** → mark/log sent → show in project history. In-app email send is **not** required for Core.
+
+**Production FREDAsoft today** does **not** contain a correspondence engine (no templates, sent log, or letter PDF pipeline in this repo). Previously demonstrated template / correspondence-record / PDF behavior lives in **external Lovable/RASware** work. Future FREDAsoft work may reuse useful concepts/templates; it must not assume production code already exists or copy external schema blindly.
+
+Recipients for Core letters use as-recorded TABS values (typically Owner) plus optional Client; staff chooses. Canonical stakeholder match is not required.
 
 ---
 
@@ -37,13 +54,14 @@ This is a **D7 conceptual crosswalk**, not implementation, template design, sche
 
 | Topic | Note |
 |-------|------|
-| **Firestore schema** | Deferred to **D4** and later implementation phases |
-| **Template generation** | Future phase—merge fields not finalized here |
+| **Firestore schema** | Deferred until a correspondence implementation slice is approved |
+| **Template generation** | **PM Core** for operational staff letters (2026-09-14). D7 TDLR proof/TABS letter automation remains later. Merge fields not finalized here. |
 | **Letter rendering / PDF pipeline** | Separate from inspection **Report Preview** / Web Report |
 | **E-signature workflow** | Not in scope |
 | **Scraper / import code** | Deferred to **D6** |
 | **Legal interpretation** | Official TDLR/RAS sources must be verified separately |
 | **Automatic correspondence creation from TDLR status** | **Not assumed** — see Recommended Product Posture |
+| **In-app email send** | Not required for PM Core (manual email + sent log is acceptable) |
 
 ---
 
@@ -180,7 +198,7 @@ Future **operational correspondence** (templates, sent records, merge snapshots)
 | **CP-3** | Keep **proof, notice, and request forms** distinct from **RAS plan review / inspection report deliverables** (**D3**). |
 | **CP-4** | **Require staff review** before linking recipients or promoting source document refs to operational correspondence records. |
 | **CP-5** | **Preserve as-recorded source artifacts** even when no FREDAsoft correspondence record is created—the TDLR track is complete without a letter mirror. |
-| **CP-6** | Treat **template generation and PDF letter rendering** as a **later phase**—separate pipeline from Report Preview / Web Report. |
+| **CP-6** | **Operational staff letters** (Plan Review Complete, inspection-due, cover letters, etc.): template + PDF + manual-email + sent log belong in **PM Core** (2026-09-14). Pipeline remains **separate** from Report Preview / Web Report. **D7 TDLR proof / TABS letter products** remain a later phase. Production FREDAsoft does not yet contain this engine. |
 | **CP-7** | **Avoid legal interpretation** in app copy, merge fields, or milestone triggers until primary sources are reviewed and product owner confirms wording. |
 | **CP-8** | **No auto-draft correspondence** from TDLR status alone; **current assumption: no** (**D2** / **D3** carry-forward). |
 

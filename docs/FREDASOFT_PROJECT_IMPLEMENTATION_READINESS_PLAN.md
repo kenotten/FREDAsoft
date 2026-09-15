@@ -1,11 +1,11 @@
 # FREDAsoft Project — Implementation Readiness Plan
 
-**Status:** Documentation-only planning checkpoint (Archie #11). **Not implementation.**  
-**Last updated:** 2026-06-05  
-**Branch context:** `archie-11-implementation-readiness`  
+**Status:** Documentation-only planning checkpoint (Archie #11). **Not implementation.**
+**Last updated:** 2026-09-14 (PM Core product-direction supersession)
+**Branch context:** original `archie-11-implementation-readiness`; direction update `docs/pm-core-product-direction`
 **Audience:** Product owner (Kenneth), architecture review (Archie), implementation planning
 
-> **Disclaimer:** This document defines a **recommended implementation sequence** and **first vertical slice** after the Archie #10 D1–D8 discovery chain. It does **not** authorize code, Firestore schema, security rules, scrapers, importers, migrations, or UI delivery.
+> **Disclaimer:** This document originally defined a **recommended implementation sequence** and **first vertical slice** after the Archie #10 D1–D8 discovery chain. The June 2026 sequence below remains **historical context**. **Current direction (2026-09-14)** is recorded in the section immediately after the Durable Architecture Rule. This file still does **not** authorize code, Firestore schema, security rules, scrapers, importers, migrations, or UI delivery.
 
 ---
 
@@ -43,7 +43,37 @@ Carry forward unchanged from Archie #10:
 
 ---
 
-## Recommended Implementation Sequence
+## Current direction (2026-09-14) — supersedes first-slice / phase order below
+
+**What stays durable:** Dual-track TDLR/TABS as-recorded source; FREDAsoft never silently corrects or normalizes TABS values; candidate matches and portal/canonical updates still require explicit staff review; nothing is auto-created from TDLR status alone.
+
+**What changed:** Staff-usable **PM Core** now precedes TDLR link-review implementation, D4 source-track collections, stakeholder matching, and portal. Correspondence is **in** PM Core, not a later non-goal. Matching is **non-blocking** (a valid project may have zero canonical stakeholder matches). Canonical Owner matching is **not** required for registered-project identity.
+
+Authoritative architecture summary: `docs/ARCHITECTURE_DESIGN.md` ✅ DECIDED (September 2026 PM restart).
+
+### Current implementation sequence (not calendar dates)
+
+0. Documentation reconciliation (this update)
+1. Production PM shell over existing `projects`
+2. Status + service scope + Plan Review / Inspection RAS + due dates
+3. TABS source panel / minimal source maintenance (`tdlrRegistered`; CAD/appraisal reference when captured — schema later)
+4. Notes / activity
+5. Operational correspondence (template → PDF → manual email → sent log)
+6. Project → work-product / reporting bridge (issued snapshots)
+7. Richer TABS intake / import
+8. Optional stakeholder matching / aliases
+9. Expanded TDLR review automation (D2)
+10. Portal (D8)
+
+### First production code slice (documented, not implemented here)
+
+**PM shell over existing projects:** authenticated staff open PM, list/search real production Projects (name, OCG #, TABS #, Client), open Overview showing existing Client, Facility, OCG #, TABS #, Plan Review RAS, Inspection RAS, existing dates, exact TABS Owner, exact TABS Design Firm. Zero stakeholder matches required. No new collection if avoidable. No Data Entry / report behavior changes.
+
+The June 2026 “first buildable vertical slice” (manual TDLR snapshot + Project link review) remains a **later** slice (sequence item 9 / historical Phase 3), not the next build.
+
+---
+
+## Recommended Implementation Sequence (historical — June 2026)
 
 Phases are **sequential in intent**; each should ship as **one small branch / slice** with lint/build and manual verification before merge.
 
@@ -61,9 +91,11 @@ Phases are **sequential in intent**; each should ship as **one small branch / sl
 
 ---
 
-## Recommended First Buildable Vertical Slice
+## Recommended First Buildable Vertical Slice (historical — June 2026)
 
-**Scope:** **Manual TDLR source snapshot + Project link review** (Phase 3).
+> **Superseded as the next build (2026-09-14).** Current first code slice is the **PM shell over existing projects** (see Current direction above). This section remains the original Phase 3 rationale for a later TDLR link-review slice.
+
+**Scope:** **Manual TDLR source snapshot + Project link review** (historical Phase 3).
 
 | In scope | Out of scope (this slice) |
 |----------|---------------------------|
@@ -77,14 +109,16 @@ Phases are **sequential in intent**; each should ship as **one small branch / sl
 
 ---
 
-## Explicit Non-Goals — First Implementation Slice
+## Explicit Non-Goals — First Implementation Slice (historical — June 2026)
 
-- No **automatic canonical Project creation** from TDLR data  
-- No **automatic stakeholder / contact creation**  
-- No **portal account** creation or invitation  
-- No **correspondence** generation or templates  
-- No **report instance** auto-creation from TDLR status or milestones  
-- No **scraper / importer** in the first slice  
+The following non-goals applied to the **historical Phase 3 TDLR link-review slice**. **2026-09-14:** operational staff correspondence is **in** PM Core (still no auto-create from TDLR status; still no in-app email send for Core). Stakeholder matching remains a non-goal for the first PM shell. Portal, scraper, and auto-create from TDLR remain non-goals.
+
+- No **automatic canonical Project creation** from TDLR data
+- No **automatic stakeholder / contact creation**
+- No **portal account** creation or invitation
+- No **correspondence** generation or templates *(historical Phase 3 only — superseded for PM Core)*
+- No **report instance** auto-creation from TDLR status or milestones
+- No **scraper / importer** in the first slice
 - No **security rules** or migration batch writes without dry-run review and explicit approval  
 
 ---
@@ -109,7 +143,7 @@ Before substantial implementation, add a **short staff workflow discovery** docu
 - **Do not clone** the old Access app—but **mine** it for workflow language, statuses, report types, review queues, and pain points.  
 - Use that vocabulary to validate Phase 3 wireframes and Phase 2 schema boundaries against **actual daily work**, not prototype tables alone.
 
-Then proceed: **Phase 1 (this plan) → workflow discovery doc → Phase 2 schema refinement → Phase 3 vertical slice.**
+Then proceed: **historical June 2026 close** was Phase 1 → workflow discovery → Phase 2 schema → Phase 3 TDLR link review. **Current (2026-09-14):** docs reconcile → PM shell over existing Projects (see Current direction).
 
 ---
 
@@ -123,14 +157,14 @@ Then proceed: **Phase 1 (this plan) → workflow discovery doc → Phase 2 schem
 | `docs/FREDASOFT_PROJECT_FIELD_LEVEL_MAPPING.md` | D1 — field concepts and reviewer actions |
 | `docs/FREDASOFT_PROJECT_TDLR_REVIEW_WORKFLOW.md` | D2 — target review flow |
 | `docs/FREDASOFT_PROJECT_TDLR_SCHEMA_SKETCH.md` | D4 — source-track sketch |
-| `docs/FREDASOFT_PROJECT_RAS_REPORT_INSTANCE_CROSSWALK.md` | D3 — defer to Phase 6 |
-| `docs/FREDASOFT_PROJECT_CORRESPONDENCE_REQUIREMENTS_CROSSWALK.md` | D7 — defer to Phase 6 |
-| `docs/FREDASOFT_PROJECT_PORTAL_STAKEHOLDER_IMPLICATIONS.md` | D8 — defer to Phase 7 |
-| `docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md` | D5 — party/canonical model |
-| `docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md` | D6 — Phase 4+ |
+| `docs/FREDASOFT_PROJECT_RAS_REPORT_INSTANCE_CROSSWALK.md` | D3 — reporting bridge after PM Core |
+| `docs/FREDASOFT_PROJECT_CORRESPONDENCE_REQUIREMENTS_CROSSWALK.md` | D7 — operational staff letters in PM Core; TDLR proof/TABS evidence later |
+| `docs/FREDASOFT_PROJECT_PORTAL_STAKEHOLDER_IMPLICATIONS.md` | D8 — still deferred (portal) |
+| `docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md` | D5 — party/canonical model; matching non-blocking |
+| `docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md` | D6 — later richer intake |
 | `docs/reference/TDLR_RAS_TABS_SOURCE_INDEX.md` | Source catalog |
 | `docs/FREDASOFT_PROJECT_APP_DISCOVERY.md` | Prototype context; not porting target |
-| `docs/CONVERT_TO_RAS.md` | RAS report instances; Phase 6+ |
+| `docs/CONVERT_TO_RAS.md` | RAS report instances; reporting bridge after PM Core |
 
 ---
 

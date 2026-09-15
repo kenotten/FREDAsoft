@@ -1,8 +1,8 @@
 # FREDAsoft Project — Stakeholder Model (D5 Discovery)
 
 **Status:** Documentation-only decision/discovery (D5). **Not implemented.**
-**Last updated:** 2026-08-28 (Beta RAS / Assessment data model)
-**Branch context:** `docs-ras-beta-model`
+**Last updated:** 2026-09-14 (PM Core: matching non-blocking; TABS Owner official)
+**Branch context:** original `docs-ras-beta-model`; direction update `docs/pm-core-product-direction`
 **Audience:** Product owner (Kenneth), architecture review (Archie), implementation planning
 
 > **Disclaimer:** This document defines **requirement candidates**, **workflow candidates**, and **UI references** for FREDAsoft Project stakeholder modeling. It does **not** specify Firestore collections, security rules, migrations, importers, or application code. It does **not** port Lovable/Supabase prototype code or schema. Official **TDLR/TABS** legal requirements are **not asserted here** unless separately sourced (see §18).
@@ -44,6 +44,23 @@ This doc completes discovery phase **D5** (see **`docs/FREDASOFT_PROJECT_APP_DIS
 - **Requirement candidate** — capability or field worth evaluating  
 - **Workflow candidate** — step sequence worth evaluating  
 - **UI reference** — layout/interaction pattern from prototype worth evaluating (not code to copy)
+
+---
+
+## 0a. Current direction (2026-09-14) — matching is non-blocking
+
+The canonical stakeholder / alias / project-party architecture in this document **remains** for future use. It is **not** a prerequisite for PM Core.
+
+| Topic | Current direction |
+|-------|-------------------|
+| **TABS party strings** | Exact as-recorded names (Owner, Design Firm, etc.) stay authoritative on the **source record** for that project. Canonical names never replace them. Example: “ABC Architects” and “A.B.C. Architects” remain distinct TABS values even if staff later alias them. |
+| **Matching** | Optional. Useful for aliases, search, reuse, analytics, shared contacts. **Not required** to open/track/assign/date/note/correspond or to use TABS values. Zero matches is a valid PM Project. |
+| **Owner** | Official registered-project Owner = exact TABS Owner. Canonical Owner matching is **not** required for identity in PM Core. Do not silently substitute another FREDA stakeholder. Preserve CAD/appraisal-district reference **when captured** (no CAD schema here; production does not currently store CAD). Product/architecture decision — not a legal conclusion. |
+| **Client** | Unchanged: billing / portfolio / portal anchor. **Client ≠ Owner.** |
+| **Project roles vs TDLR roles** | Unchanged: assigned Plan Review / Inspection RAS are operational; TABS RAS-firm text is source. |
+| **Future matching** | Still valuable later for architects, design firms, RAS firms, contractors, tenants, agents, and others. |
+
+RAS report addressee remains **`tdlrRegistered.owner`** (as-recorded), not a canonical Owner name.
 
 ---
 
@@ -271,6 +288,8 @@ Discovery §14 Q2 and §15 establish that **canonical stakeholders are separate 
 | **C — Project-type split** | Assessment uses Client anchor; RAS emphasizes Owner anchor | Not adopted as a data-model split; RAS **addressee** still follows Owner even if the portfolio anchor is Client |
 
 **✅ DECIDED:** Treat **Client** as **billing / portfolio / portal anchor**, and **Owner** as the **registered property party**. Same real-world org may appear as both with an explicit **same-as** link—not an automatic merge.
+
+**2026-09-14 clarification:** The registered property party for a TABS project is the **exact TABS Owner string** (plus CAD/appraisal reference when captured). An optional canonical Owner stakeholder and same-as link may still exist later; they are **not** required for PM Core identity and must **not** overwrite TABS Owner.
 
 **RAS reporting:**
 

@@ -1,13 +1,29 @@
 # FREDAsoft Project Management — Wireframe / Prototype Plan
 
-**Status:** Wireframe/prototype planning only. **Not implementation.**  
-**Last updated:** 2026-06-09  
-**Branch context:** `archie-11-pm-wireframe-plan`  
+**Status:** Wireframe/prototype planning only. **Not production implementation.**
+**Last updated:** 2026-09-14 (prototype marked historical; PM Core direction)
+**Branch context:** original `archie-11-pm-wireframe-plan`; direction update `docs/pm-core-product-direction`
 **Audience:** Kenneth, Kathy Rodriguez, Jessica Montalvo, OCG RASes, architecture review (Archie)
 
-> **Hard boundaries for any prototype built from this plan:**  
-> **No real data.** **No Firebase reads.** **No Firebase writes.** **No auth changes.** **No storage uploads.** **No TDLR/TABS live calls.** **No production implementation.**  
+> **Hard boundaries for any prototype built from this plan:**
+> **No real data.** **No Firebase reads.** **No Firebase writes.** **No auth changes.** **No storage uploads.** **No TDLR/TABS live calls.** **No production implementation.**
 > The prototype exists **only** to test workflow understanding.
+
+---
+
+## 0. Current direction (2026-09-14) — prototype is historical
+
+`src/pm-prototype/` and this plan are **mock workflow validation**. They must **not** be converted into production architecture or Firestore.
+
+| Topic | Current production direction |
+|-------|------------------------------|
+| **Stakeholder matching screens** | Useful mock. **Not** a required PM Core / v1 path. Exact TABS source is usable with **zero** canonical matches. |
+| **Correspondence** | Planned in this wireframe (screen 4.11) but **never implemented** in the prototype. Production PM Core **does** require operational correspondence (template → PDF → manual email → sent log). Do not infer “not built in mock ⇒ deferred forever.” |
+| **RAS assignment** | Prototype used one `assignedRas`. Production already has **Plan Review RAS** and **Inspection RAS** (`fldPlanReviewRas` / `fldInspectionRas`) — use those. |
+| **Owner** | Mock “FREDA project role Owner” plus matching is optional later. Official registered Owner = exact TABS Owner. |
+| **First production slice** | PM shell over **existing** production Projects — not this mock click path and not a Firestore port of mock state. |
+
+Durable dual-track rule still applies: source suggestions never overwrite TABS or canonical data, even in mock UX.
 
 ---
 
@@ -364,7 +380,8 @@ Prototype feedback **does not** authorize backend work; it informs the next plan
 - SMS or email automation  
 - Real document storage or virus scan  
 - Live TDLR/TABS integration or scraping (D6)  
-- Full correspondence template engine (D7)  
+- Full correspondence template engine (D7 TDLR proof/TABS letter automation)
+- **Prototype-era:** treating mock correspondence as production; production PM Core still needs operational staff letters (see §0)
 - Full RBAC permission matrix  
 - Automatic creation of reports, correspondence, or stakeholders from TDLR  
 - Porting legacy Access app screens  

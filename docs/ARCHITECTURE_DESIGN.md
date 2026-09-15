@@ -121,10 +121,12 @@ Agreed sequencing (intentionally separates product clarification from implementa
 4. Reach **FREDA PM Beta** by the **end of August 2026**.
 5. Return to deferred engineering work in `docs/MAINTENANCE_BACKLOG.md`, including **Performance Phase 1 – Reduce Unnecessary React Re-renders**.
 
-Current phase label (technical stabilization context; does not override the roadmap above):
+**Superseded for calendar and first-build order (2026-09-14):** The end-of-August 2026 PM Beta date is **historical**. Library freeze completed; FREDA PM resumes as **staff-usable PM Core** (TABS as-recorded source, matching non-blocking, correspondence in Core). See ✅ DECIDED (September 2026 PM restart) below. Dual-track TDLR architecture is unchanged.
+
+Current phase label (technical stabilization context; does not override the September 2026 PM restart):
 
 ```text
-Data Integrity Stabilization → Library usability (limited) → FREDA PM Beta
+Library usability (limited, largely complete) → FREDA PM Core
 ```
 
 Recent completed areas:
@@ -2462,6 +2464,22 @@ Add a concise future phase section covering:
 ✅ DECIDED (Project discovery domain clarification - documentation only): Product-owner follow-up in **`docs/FREDASOFT_PROJECT_APP_DISCOVERY.md` §15** documents architecture implications: **TDLR/TABS source records** preserved as-recorded (legal/source) separately from **FREDAsoft canonical records**; matching/linking is explicit; FREDAsoft **never overwrites/corrects TDLR source data** (hydration creates draft operational records for staff review and explicit linking); TDLR **scraping/extraction** as a separate logged/reviewed pipeline; **correspondence PDF letters** separate from inspection **reporting workflows**; **client portal** implications (progress, project info, reports, client-submitted master-data updates with likely approval). No Firestore schema, rules, or app implementation in this phase.
 
 ✅ DECIDED (D5 Project stakeholder model - documentation only): **`docs/FREDASOFT_PROJECT_STAKEHOLDER_MODEL.md`** documents dual-track **TDLR snapshot vs canonical stakeholder** model, **project party** roles, **stakeholder entity types** (organization, individual, sole proprietor, unknown), and separate **stakeholder / contact / user / assignment** concepts; **Client vs Owner** decision space (default: separate); user **roles deferred** to later auth design. No Firestore schema, rules, migration, or app implementation in this phase.
+
+✅ DECIDED (September 2026 PM restart — documentation only, 2026-09-14): Staff-usable **PM Core** precedes TDLR link-review, stakeholder matching, D4 source-track collections, and portal. Dual-track rule is unchanged: TDLR/TABS values are **legal/as-recorded**; FREDAsoft never silently corrects or normalizes them; they stay distinct from FREDA operational/canonical data.
+
+**Three layers:** (1) TABS/TDLR source record (exact strings, including Owner and Design Firm); (2) FREDA operational Project (Client, Facility, OCG #, status, scope, RAS assignment, dates, notes, correspondence); (3) optional canonical stakeholder directory (aliases/search/reuse — **non-blocking**; zero matches is valid).
+
+**Owner / CAD:** Official registered-project Owner = exact TABS Owner. Canonical Owner matching is **not** required for PM Core identity. Preserve appraisal-district / CAD owner-validation **reference data when captured**. No CAD Firestore fields are invented here; production does not currently store CAD. Product/architecture decision — not a legal conclusion. **Client ≠ Owner.**
+
+**Correspondence:** Operational staff letters (Plan Review Complete, inspection-due, scheduling, cover letters) are **PM Core**: template → merge project + exact TABS fields → review → PDF → record recipient → staff emails manually → log sent. In-app email is not required. D7 proof/TABS evidence artifacts remain later. Production FREDAsoft does not yet contain a correspondence engine; prior template/PDF demonstration is **external Lovable/RASware**, not this repo.
+
+**Sequence (not dates):** docs reconcile → PM shell over existing Projects → status/scope/assignment/due dates → TABS source panel → notes → correspondence → Project→work-product reporting bridge → richer TABS intake → optional matching → D2 automation → portal.
+
+**First code slice (not implemented in this docs update):** PM shell over existing production `projects` — list/search (name, OCG #, TABS #, Client); Overview with Client, Facility, OCG #, TABS #, Plan Review RAS, Inspection RAS, existing dates, exact TABS Owner and Design Firm; zero matches required; no new collection if avoidable; no Data Entry/report behavior change.
+
+**Reporting bridge (after PM Core):** historical reports/work products must **snapshot** official facts at issuance so later PM edits do not silently change issued reports. Live `tdlrRegistered` on `projects` is not a substitute for issued-report snapshots.
+
+Detail lives in the PM docs (`IMPLEMENTATION_READINESS_PLAN`, daily workflow, wireframe plan, D5, D7). No Firestore schema, rules, UI, or prototype changes in this documentation task.
 
 ✅ DECIDED (D6 TDLR/TABS extraction pipeline - documentation only): **`docs/FREDASOFT_PROJECT_TDLR_EXTRACTION_PIPELINE.md`** sketches a future extraction pipeline: user enters TABS number → retrieve TDLR/TABS sources → preserve **as-recorded source snapshots** separately from FREDAsoft canonical data → suggest candidate matches/drafts → **staff review** approves explicit links/aliases (no auto-merge, no overwrite of TDLR source or canonical records). EAB205N = primary intended registration-field source; TABS UI captures = implementation shape (reconcile before implementation). No scraper, Firestore schema, credentials, or app code in this phase.
 
