@@ -9,3 +9,6 @@ coverage/
 
 # Local maintenance report outputs
 reports/
+
+# Local real-world reference data — never commit
+local-reference-data/
