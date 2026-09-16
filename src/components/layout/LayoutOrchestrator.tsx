@@ -20,7 +20,8 @@ import {
   Hash,
   Loader2,
   Layers,
-  ClipboardCheck
+  ClipboardCheck,
+  Briefcase
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { FREDASOFT_DRAFT_LOCAL_STORAGE_KEY } from '../../lib/storageKeys';
@@ -406,6 +407,10 @@ export function LayoutOrchestrator(props: LayoutOrchestratorProps) {
         <aside className="w-64 bg-white border-r border-zinc-200 flex flex-col">
           <div className="p-6 border-b border-zinc-100"><img src={FREDAsoftLogo} alt="Logo" className="h-8 w-auto" /></div>
           <nav className="flex-1 p-4 overflow-y-auto">
+            <NavSection label="Project Management">
+              <NavItem active={activeTab === 'pm'} onClick={() => handleGuardedTabSwitch('pm')} icon={<Briefcase size={18} />} label="Projects" />
+            </NavSection>
+
             <NavSection label="Project Data">
               <NavItem active={activeTab === 'data'} onClick={() => handleGuardedTabSwitch('data')} icon={<ClipboardList size={18} />} label="Project Data Entry" />
               <NavItem active={activeTab === 'explorer'} onClick={() => handleGuardedTabSwitch('explorer')} icon={<Table size={18} />} label="Data Explorer" />

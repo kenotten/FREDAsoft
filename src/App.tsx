@@ -120,6 +120,7 @@ const tabNames: Record<string, string> = {
   setup: 'Setup',
   dashboard: 'Dashboard',
   portfolio: 'Portfolio',
+  pm: 'Project Management',
   maintenance: 'Glossary Builder',
   glossary_explorer: 'Glossary Explorer',
   standards_manager: 'Standards Manager',

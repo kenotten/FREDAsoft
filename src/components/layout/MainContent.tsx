@@ -1,5 +1,6 @@
 import React from 'react';
 import { PortfolioView } from '../portfolio/PortfolioView';
+import { ProjectManagementView } from '../pm/ProjectManagementView';
 import { DashboardView } from '../dashboard/DashboardView';
 import ProjectDataEntry from '../ProjectDataEntry';
 import { DataExplorer } from '../DataExplorer';
@@ -110,6 +111,14 @@ export const MainContent: React.FC<MainContentProps> = (props) => {
         activeTab === 'library_manager' || activeTab === 'sequence_manager' ? 'p-0' : 'p-8'
       )}
     >
+      {activeTab === 'pm' && (
+        <ProjectManagementView
+          projects={projects}
+          clients={clients}
+          facilities={facilities}
+          inspectors={inspectors}
+        />
+      )}
       {activeTab === 'setup' && (
         <PortfolioView 
           selectionProps={selectionProps}
